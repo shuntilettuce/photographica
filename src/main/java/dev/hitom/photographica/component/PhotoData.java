@@ -1,0 +1,75 @@
+package dev.hitom.photographica.component;
+
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.network.codec.PacketCodec;
+import net.minecraft.util.Uuids;
+
+import java.util.UUID;
+
+/**
+ * Metadata stored on a photo item. The actual PNG lives on disk at
+ * <gameDir>/photographica/photos/<id>.png — keyed by {@link #id()}.
+ */
+public record PhotoData(
+		UUID id,
+		String photographer,
+		long worldTime,
+		String dimension,
+		int x,
+		int y,
+		int z,
+		CameraSettings cameraAtCapture
+) {
+	public static final Codec<PhotoData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+			Uuids.CODEC.fieldOf("id").forGetter(PhotoData::id),
+			Codec.STRING.fieldOf("photographer").forGetter(PhotoData::photographer),
+			Codec.LONG.fieldOf("world_time").forGetter(PhotoData::worldTime),
+			Codec.STRING.fieldOf("dimension").forGetter(PhotoData::dimension),
+			Codec.INT.fieldOf("x").forGetter(PhotoData::x),
+			Codec.INT.fieldOf("y").forGetter(PhotoData::y),
+			Codec.INT.fieldOf("z").forGetter(PhotoData::z),
+			CameraSettings.CODEC.fieldOf("camera").forGetter(PhotoData::cameraAtCapture)
+	).apply(instance, PhotoData::new));
+
+	public static final PacketCodec<ByteBuf, PhotoData> PACKET_CODEC = new PacketCodec<>() {
+		@Override
+		public PhotoData decode(ByteBuf buf) {
+			long hi = buf.readLong();
+			long lo = buf.readLong();
+			UUID id = new UUID(hi, lo);
+			int nameLen = buf.readInt();
+			byte[] nameBytes = new byte[nameLen];
+			buf.readBytes(nameBytes);
+			String photographer = new String(nameBytes, java.nio.charset.StandardCharsets.UTF_8);
+			long worldTime = buf.readLong();
+			int dimLen = buf.readInt();
+			byte[] dimBytes = new byte[dimLen];
+			buf.readBytes(dimBytes);
+			String dimension = new String(dimBytes, java.nio.charset.StandardCharsets.UTF_8);
+			int x = buf.readInt();
+			int y = buf.readInt();
+			int z = buf.readInt();
+			CameraSettings camera = CameraSettings.PACKET_CODEC.decode(buf);
+			return new PhotoData(id, photographer, worldTime, dimension, x, y, z, camera);
+		}
+
+		@Override
+		public void encode(ByteBuf buf, PhotoData v) {
+			buf.writeLong(v.id.getMostSignificantBits());
+			buf.writeLong(v.id.getLeastSignificantBits());
+			byte[] name = v.photographer.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+			buf.writeInt(name.length);
+			buf.writeBytes(name);
+			buf.writeLong(v.worldTime);
+			byte[] dim = v.dimension.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+			buf.writeInt(dim.length);
+			buf.writeBytes(dim);
+			buf.writeInt(v.x);
+			buf.writeInt(v.y);
+			buf.writeInt(v.z);
+			CameraSettings.PACKET_CODEC.encode(buf, v.cameraAtCapture);
+		}
+	};
+}

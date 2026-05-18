@@ -1,0 +1,11 @@
+{
+	"required": true,
+	"package": "dev.hitom.photographica.mixin.client",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"GameRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

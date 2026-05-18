@@ -1,0 +1,28 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# VS Code
+.vscode/
+
+# Fabric Loom cache
+.loom/
+
+# Run directory (server/client data)
+run/
+
+# OS
+.DS_Store
+Thumbs.db

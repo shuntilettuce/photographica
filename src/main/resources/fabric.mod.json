@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "photographica",
+	"version": "${version}",
+	"name": "Photographica",
+	"description": "リアルカメラ感覚で遊べる撮影Mod。フィルム/デジタル/交換レンズ対応。",
+	"authors": ["hitom"],
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"dev.hitom.photographica.Photographica"
+		],
+		"client": [
+			"dev.hitom.photographica.client.PhotographicaClient"
+		]
+	},
+	"mixins": [
+		"photographica.mixins.json",
+		{
+			"config": "photographica.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.16.0",
+		"fabric-api": "*",
+		"minecraft": "~1.21.1",
+		"java": ">=21"
+	}
+}
