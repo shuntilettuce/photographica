@@ -44,10 +44,10 @@ public class PhotoItem extends Item {
 			return;
 		}
 		tooltip.add(Text.literal("撮影: " + data.photographer()).formatted(Formatting.GRAY));
-		tooltip.add(Text.literal(String.format("F%.1f  ISO%d  ×%.1f",
+		tooltip.add(Text.literal(String.format("F%.1f  ISO%d  %dmm",
 				data.cameraAtCapture().aperture(),
 				data.cameraAtCapture().iso(),
-				data.cameraAtCapture().zoom()))
+				data.cameraAtCapture().focalLengthMm()))
 				.formatted(Formatting.DARK_GRAY));
 		tooltip.add(Text.literal(String.format("[%s] (%d, %d, %d)",
 				data.dimension(), data.x(), data.y(), data.z()))

@@ -25,7 +25,6 @@ public class CameraScreen extends Screen {
 	};
 	private static final List<Integer> ISOS = List.of(100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600);
 	private static final List<Float> FOCUS_VALUES = List.of(0.3f, 0.5f, 1.0f, 2.0f, 3.0f, 5.0f, 10.0f, 20.0f, 50.0f, 999.0f);
-	private static final List<Float> ZOOMS = List.of(1.0f, 1.5f, 2.0f, 3.0f, 5.0f, 7.0f, 10.0f);
 
 	private final ItemStack stack;
 	private CameraSettings settings;
@@ -48,18 +47,19 @@ public class CameraScreen extends Screen {
 				step -> {
 					int idx = clampStep(APERTURES.indexOf(settings.aperture()), step, APERTURES.size());
 					settings = withAperture(APERTURES.get(idx));
-				});
+				}, true);
 
 		addRow(cx, top + row++ * 22, "シャッター",
 				() -> SHUTTERS[clampIdx(settings.shutterSpeedIdx(), SHUTTERS.length)],
-				step -> settings = withShutter(clampStep(settings.shutterSpeedIdx(), step, SHUTTERS.length)));
+				step -> settings = withShutter(clampStep(settings.shutterSpeedIdx(), step, SHUTTERS.length)),
+				true);
 
 		addRow(cx, top + row++ * 22, "ISO感度",
 				() -> "ISO " + ISOS.get(clampIdx(ISOS.indexOf(settings.iso()), ISOS.size())),
 				step -> {
 					int idx = clampStep(ISOS.indexOf(settings.iso()), step, ISOS.size());
 					settings = withIso(ISOS.get(idx));
-				});
+				}, true);
 
 		addRow(cx, top + row++ * 22, "フォーカス",
 				() -> formatFocus(settings.focusDistance()),
@@ -67,19 +67,33 @@ public class CameraScreen extends Screen {
 					int curIdx = nearestIdxFloat(FOCUS_VALUES, settings.focusDistance());
 					int idx = clampStep(curIdx, step, FOCUS_VALUES.size());
 					settings = withFocus(FOCUS_VALUES.get(idx));
-				});
+				}, true);
 
-		addRow(cx, top + row++ * 22, "ズーム",
-				() -> "×" + formatFloat(settings.zoom()),
+		// Focal length row — only editable for zoom lenses. Shows "—" if no lens.
+		boolean focalEditable = LensKind.isZoom(settings.lensType());
+		addRow(cx, top + row++ * 22, "焦点距離",
+				() -> {
+					if (!LensKind.hasLens(settings.lensType())) return "—";
+					return settings.focalLengthMm() + "mm";
+				},
 				step -> {
-					int curIdx = nearestIdxFloat(ZOOMS, settings.zoom());
-					int idx = clampStep(curIdx, step, ZOOMS.size());
-					settings = withZoom(ZOOMS.get(idx));
-				});
+					if (!LensKind.isZoom(settings.lensType())) return;
+					List<Integer> stops = LensKind.focalLengthStops(settings.lensType());
+					int curIdx = stops.indexOf(settings.focalLengthMm());
+					if (curIdx < 0) curIdx = 0;
+					int newIdx = clampStep(curIdx, step, stops.size());
+					settings = withFocalLength(stops.get(newIdx));
+				}, focalEditable);
 
 		addRow(cx, top + row++ * 22, "レンズ",
 				() -> LensKind.displayName(settings.lensType()),
-				step -> settings = withLens(clampStep(settings.lensType(), step, LensKind.COUNT)));
+				step -> {
+					int newLens = clampStep(settings.lensType(), step, LensKind.COUNT);
+					int newFocal = LensKind.hasLens(newLens)
+							? LensKind.clampFocalLength(newLens, settings.focalLengthMm())
+							: LensKind.defaultFocalLength(newLens);
+					settings = withLensAndFocal(newLens, newFocal);
+				}, true);
 
 		addDrawableChild(ButtonWidget.builder(Text.literal("閉じる"), b -> close())
 				.dimensions(cx - 50, top + row * 22 + 14, 100, 20)
@@ -87,15 +101,23 @@ public class CameraScreen extends Screen {
 	}
 
 	private void addRow(int cx, int y, String label, java.util.function.Supplier<String> value,
-	                    java.util.function.IntConsumer step) {
-		addDrawableChild(ButtonWidget.builder(Text.literal("◀"), b -> { step.accept(-1); dirty = true; clearAndInit(); })
-				.dimensions(cx - 30, y, 20, 20).build());
+	                    java.util.function.IntConsumer step, boolean editable) {
+		ButtonWidget left = ButtonWidget.builder(Text.literal("◀"),
+						b -> { step.accept(-1); dirty = true; clearAndInit(); })
+				.dimensions(cx - 30, y, 20, 20).build();
+		left.active = editable;
+		addDrawableChild(left);
+
 		ButtonWidget center = ButtonWidget.builder(Text.literal(label + ": " + value.get()), b -> {})
 				.dimensions(cx - 8, y, 140, 20).build();
 		center.active = false;
 		addDrawableChild(center);
-		addDrawableChild(ButtonWidget.builder(Text.literal("▶"), b -> { step.accept(1); dirty = true; clearAndInit(); })
-				.dimensions(cx + 134, y, 20, 20).build());
+
+		ButtonWidget right = ButtonWidget.builder(Text.literal("▶"),
+						b -> { step.accept(1); dirty = true; clearAndInit(); })
+				.dimensions(cx + 134, y, 20, 20).build();
+		right.active = editable;
+		addDrawableChild(right);
 	}
 
 	@Override
@@ -152,32 +174,32 @@ public class CameraScreen extends Screen {
 
 	private CameraSettings withAperture(float v) {
 		return new CameraSettings(v, settings.shutterSpeedIdx(), settings.iso(),
-				settings.focusDistance(), settings.zoom(), settings.lensType(),
+				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots());
 	}
 	private CameraSettings withShutter(int v) {
 		return new CameraSettings(settings.aperture(), v, settings.iso(),
-				settings.focusDistance(), settings.zoom(), settings.lensType(),
+				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots());
 	}
 	private CameraSettings withIso(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), v,
-				settings.focusDistance(), settings.zoom(), settings.lensType(),
+				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots());
 	}
 	private CameraSettings withFocus(float v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
-				v, settings.zoom(), settings.lensType(),
+				v, settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots());
 	}
-	private CameraSettings withZoom(float v) {
+	private CameraSettings withFocalLength(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), v, settings.lensType(),
 				settings.filmType(), settings.remainingShots());
 	}
-	private CameraSettings withLens(int v) {
+	private CameraSettings withLensAndFocal(int lens, int focal) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
-				settings.focusDistance(), settings.zoom(), v,
+				settings.focusDistance(), focal, lens,
 				settings.filmType(), settings.remainingShots());
 	}
 }

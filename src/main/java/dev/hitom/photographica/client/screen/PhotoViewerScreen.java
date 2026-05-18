@@ -16,23 +16,21 @@ import net.minecraft.util.Identifier;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 
 /**
- * Displays a captured photo. Loads the PNG from
- * <gameDir>/photographica/photos/<uuid>.png on first open and caches the
- * registered texture by UUID.
+ * Displays a captured photo. The PNG is loaded from
+ * <gameDir>/photographica/photos/<uuid>.png and resampled (box filter) so the
+ * texture resolution matches the on-screen physical pixel size — that way the
+ * GPU samples it at 1:1 and the photo stays crisp regardless of GUI scale.
+ * The texture is regenerated whenever init() runs (open / window resize).
  */
 @Environment(EnvType.CLIENT)
 public class PhotoViewerScreen extends Screen {
-	private record CachedImage(Identifier id, int width, int height) {}
-
-	private static final Map<UUID, CachedImage> CACHE = new HashMap<>();
+	private record LoadedImage(Identifier id, int texW, int texH, int guiW, int guiH) {}
 
 	private final PhotoData data;
-	private CachedImage image;
+	private LoadedImage image;
 	private boolean missing = false;
 
 	public PhotoViewerScreen(PhotoData data) {
@@ -42,18 +40,18 @@ public class PhotoViewerScreen extends Screen {
 
 	@Override
 	protected void init() {
-		ensureLoaded();
+		// Regenerate the texture on every init (covers initial open and window resize).
+		image = null;
+		missing = false;
+		loadImage();
 
 		addDrawableChild(ButtonWidget.builder(Text.literal("閉じる"), b -> close())
 				.dimensions(width / 2 - 40, height - 24, 80, 20)
 				.build());
 	}
 
-	private void ensureLoaded() {
+	private void loadImage() {
 		UUID id = data.id();
-		image = CACHE.get(id);
-		if (image != null || missing) return;
-
 		MinecraftClient mc = MinecraftClient.getInstance();
 		File file = new File(mc.runDirectory, "photographica/photos/" + id + ".png");
 		if (!file.isFile()) {
@@ -62,23 +60,104 @@ public class PhotoViewerScreen extends Screen {
 			return;
 		}
 
+		NativeImage original = null;
+		NativeImage forTexture = null;
 		try (FileInputStream fis = new FileInputStream(file)) {
-			NativeImage native_ = NativeImage.read(fis);
-			NativeImageBackedTexture tex = new NativeImageBackedTexture(native_);
+			original = NativeImage.read(fis);
+
+			// GUI display size (constrained to 90% width, 78% height)
+			float aspect = (float) original.getWidth() / original.getHeight();
+			int maxGuiW = Math.max(16, (int) (this.width * 0.9f));
+			int maxGuiH = Math.max(16, (int) (this.height * 0.78f));
+			int guiW, guiH;
+			if (maxGuiW / aspect <= maxGuiH) {
+				guiW = maxGuiW;
+				guiH = Math.max(1, (int) (maxGuiW / aspect));
+			} else {
+				guiH = maxGuiH;
+				guiW = Math.max(1, (int) (maxGuiH * aspect));
+			}
+
+			// Physical pixel size after GUI scale matrix is applied
+			double sf = mc.getWindow().getScaleFactor();
+			int physW = Math.max(1, (int) Math.round(guiW * sf));
+			int physH = Math.max(1, (int) Math.round(guiH * sf));
+
+			if (physW >= original.getWidth()) {
+				// Upscale case — use source as-is, let LINEAR filter handle bilinear interp
+				forTexture = original;
+				original = null;
+				physW = forTexture.getWidth();
+				physH = forTexture.getHeight();
+			} else {
+				forTexture = boxResample(original, physW, physH);
+			}
+
+			NativeImageBackedTexture tex = new NativeImageBackedTexture(forTexture);
+			tex.setFilter(true, false);
 			String safeId = id.toString().replace('-', '_').toLowerCase();
 			Identifier texId = Identifier.of(Photographica.MOD_ID, "photo/" + safeId);
 			mc.getTextureManager().registerTexture(texId, tex);
-			image = new CachedImage(texId, native_.getWidth(), native_.getHeight());
-			CACHE.put(id, image);
+			// Ownership of forTexture transferred to the texture; null it out so
+			// the cleanup block below doesn't double-close it.
+			forTexture = null;
+
+			image = new LoadedImage(texId, physW, physH, guiW, guiH);
 		} catch (IOException e) {
 			Photographica.LOGGER.error("Failed to load photo {}", id, e);
 			missing = true;
+		} finally {
+			if (forTexture != null) forTexture.close();
+			if (original != null) original.close();
 		}
+	}
+
+	private static NativeImage boxResample(NativeImage src, int dw, int dh) {
+		int sw = src.getWidth();
+		int sh = src.getHeight();
+		NativeImage dst = new NativeImage(dw, dh, false);
+		float xScale = (float) sw / dw;
+		float yScale = (float) sh / dh;
+		for (int y = 0; y < dh; y++) {
+			int sy0 = (int) Math.floor(y * yScale);
+			int sy1 = Math.min(sh, (int) Math.ceil((y + 1) * yScale));
+			if (sy1 <= sy0) sy1 = sy0 + 1;
+			for (int x = 0; x < dw; x++) {
+				int sx0 = (int) Math.floor(x * xScale);
+				int sx1 = Math.min(sw, (int) Math.ceil((x + 1) * xScale));
+				if (sx1 <= sx0) sx1 = sx0 + 1;
+				long ra = 0, ga = 0, ba = 0, aa = 0;
+				int n = 0;
+				for (int sy = sy0; sy < sy1; sy++) {
+					for (int sx = sx0; sx < sx1; sx++) {
+						int c = src.getColor(sx, sy);
+						aa += (c >>> 24) & 0xFF;
+						ba += (c >>> 16) & 0xFF;
+						ga += (c >>> 8) & 0xFF;
+						ra += c & 0xFF;
+						n++;
+					}
+				}
+				int color = (((int) (aa / n)) << 24)
+						| (((int) (ba / n)) << 16)
+						| (((int) (ga / n)) << 8)
+						| ((int) (ra / n));
+				dst.setColor(x, y, color);
+			}
+		}
+		return dst;
+	}
+
+	@Override
+	public void renderBackground(DrawContext context, int mouseX, int mouseY, float deltaTicks) {
+		// Override to no-op — the inherited renderBackground calls applyBlur which
+		// would blur both the world AND our already-drawn photo via super.render().
+		// We draw our own simple darken in render() instead.
 	}
 
 	@Override
 	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-		this.renderBackground(ctx, mouseX, mouseY, delta);
+		ctx.fill(0, 0, this.width, this.height, 0xC0101010);
 
 		if (missing) {
 			ctx.drawCenteredTextWithShadow(textRenderer,
@@ -96,11 +175,8 @@ public class PhotoViewerScreen extends Screen {
 	}
 
 	private void renderImage(DrawContext ctx) {
-		float scaleW = (width * 0.9f) / image.width;
-		float scaleH = (height * 0.78f) / image.height;
-		float scale = Math.min(scaleW, scaleH);
-		int dw = Math.max(1, (int) (image.width * scale));
-		int dh = Math.max(1, (int) (image.height * scale));
+		int dw = image.guiW;
+		int dh = image.guiH;
 		int dx = (width - dw) / 2;
 		int dy = (height - dh) / 2 - 8;
 
@@ -109,15 +185,15 @@ public class PhotoViewerScreen extends Screen {
 		ctx.fill(dx - 1, dy - 1, dx + dw + 1, dy + dh + 1, 0xFF000000);
 
 		ctx.drawTexture(image.id, dx, dy, dw, dh, 0f, 0f,
-				image.width, image.height, image.width, image.height);
+				image.texW, image.texH, image.texW, image.texH);
 	}
 
 	private void renderMetadata(DrawContext ctx) {
 		String header = "撮影者: " + data.photographer();
-		String exposure = String.format("F%.1f  ISO%d  ×%.1f",
+		String exposure = String.format("F%.1f  ISO%d  %dmm",
 				data.cameraAtCapture().aperture(),
 				data.cameraAtCapture().iso(),
-				data.cameraAtCapture().zoom());
+				data.cameraAtCapture().focalLengthMm());
 		String location = String.format("%s (%d, %d, %d)",
 				data.dimension(), data.x(), data.y(), data.z());
 

@@ -26,3 +26,7 @@ run/
 # OS
 .DS_Store
 Thumbs.db
+
+# Smoke test logs
+client.log
+server.log

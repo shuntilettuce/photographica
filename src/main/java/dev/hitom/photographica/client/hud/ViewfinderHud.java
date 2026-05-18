@@ -1,6 +1,5 @@
 package dev.hitom.photographica.client.hud;
 
-import dev.hitom.photographica.client.PhotoCapture;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
@@ -37,7 +36,7 @@ public final class ViewfinderHud {
 
 	public static void render(DrawContext ctx, RenderTickCounter tickCounter) {
 		MinecraftClient mc = MinecraftClient.getInstance();
-		if (mc.player == null || mc.options.hudHidden || PhotoCapture.capturing) return;
+		if (mc.player == null || mc.options.hudHidden) return;
 
 		ItemStack stack = mc.player.getMainHandStack();
 		boolean offhand = false;
@@ -101,11 +100,13 @@ public final class ViewfinderHud {
 
 		// Settings readout (bottom of frame)
 		TextRenderer tr = mc.textRenderer;
-		String exposure = String.format("F%s · %s · ISO%d · ×%s",
+		boolean hasLens = LensKind.hasLens(s.lensType());
+		String focalPart = hasLens ? (s.focalLengthMm() + "mm") : "レンズなし";
+		String exposure = String.format("F%s · %s · ISO%d · %s",
 				formatFloat(s.aperture()),
 				SHUTTERS[clampIdx(s.shutterSpeedIdx(), SHUTTERS.length)],
 				s.iso(),
-				formatFloat(s.zoom()));
+				focalPart);
 		ctx.drawTextWithShadow(tr, Text.literal(exposure), fx + 6, fy2 - tr.fontHeight - 4, COLOR_TEXT);
 
 		// Lens label (top-left of frame)
@@ -116,6 +117,18 @@ public final class ViewfinderHud {
 		String hand = offhand ? "OFF" : "MAIN";
 		int handW = tr.getWidth(hand);
 		ctx.drawTextWithShadow(tr, Text.literal(hand), fx2 - handW - 6, fy + 4, COLOR_TEXT_DIM);
+
+		// Big "no lens" warning centered in the frame.
+		if (!hasLens) {
+			String warn = "⚠ レンズが取り付けられていません";
+			int ww = tr.getWidth(warn);
+			ctx.drawTextWithShadow(tr, Text.literal(warn),
+					(fx + fx2 - ww) / 2, fy + frameH / 2 - tr.fontHeight - 2, 0xFFFF5555);
+			String hint = "shift + 右クリックで設定 → レンズ";
+			int hw = tr.getWidth(hint);
+			ctx.drawTextWithShadow(tr, Text.literal(hint),
+					(fx + fx2 - hw) / 2, fy + frameH / 2 + 4, COLOR_TEXT_DIM);
+		}
 	}
 
 	/**
