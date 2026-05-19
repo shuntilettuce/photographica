@@ -7,7 +7,7 @@ import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.MapColor;
-import net.minecraft.block.enums.Instrument;
+import net.minecraft.block.enums.NoteBlockInstrument;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroups;
@@ -23,7 +23,7 @@ public final class ModBlocks {
             Identifier.of(Photographica.MOD_ID, "camera_stand"),
             new CameraStandBlock(AbstractBlock.Settings.create()
                     .mapColor(MapColor.STONE_GRAY)
-                    .instrument(Instrument.BASEDRUM)
+                    .instrument(NoteBlockInstrument.BASEDRUM)
                     .requiresTool()
                     .strength(2.5f))
     );
@@ -33,7 +33,7 @@ public final class ModBlocks {
             Identifier.of(Photographica.MOD_ID, "darkroom"),
             new DarkroomBlock(AbstractBlock.Settings.create()
                     .mapColor(MapColor.STONE_GRAY)
-                    .instrument(Instrument.BASEDRUM)
+                    .instrument(NoteBlockInstrument.BASEDRUM)
                     .requiresTool()
                     .strength(2.5f))
     );

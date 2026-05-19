@@ -1,5 +1,6 @@
 package dev.hitom.photographica.block;
 
+import com.mojang.serialization.MapCodec;
 import dev.hitom.photographica.block.entity.DarkroomBlockEntity;
 import net.minecraft.block.BlockRenderType;
 import net.minecraft.block.BlockState;
@@ -8,7 +9,6 @@ import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityTicker;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.ItemScatterer;
 import net.minecraft.util.hit.BlockHitResult;
@@ -18,8 +18,15 @@ import org.jetbrains.annotations.Nullable;
 
 public class DarkroomBlock extends BlockWithEntity {
 
+    public static final MapCodec<DarkroomBlock> CODEC = createCodec(DarkroomBlock::new);
+
     public DarkroomBlock(Settings settings) {
         super(settings);
+    }
+
+    @Override
+    protected MapCodec<? extends BlockWithEntity> getCodec() {
+        return CODEC;
     }
 
     @Override
@@ -55,7 +62,7 @@ public class DarkroomBlock extends BlockWithEntity {
         if (!state.isOf(newState.getBlock())) {
             BlockEntity be = world.getBlockEntity(pos);
             if (be instanceof DarkroomBlockEntity darkroom) {
-                ItemScatterer.scatter(world, pos, darkroom);
+                ItemScatterer.spawn(world, pos, darkroom);
                 world.updateComparators(pos, this);
             }
         }

@@ -15,5 +15,7 @@
 	"screen.photographica.camera": "Camera Settings",
 	"key.photographica.camera_settings": "Open Camera Settings",
 	"key.photographica.wind_film": "Wind Film",
-	"category.photographica": "Photographica"
+	"category.photographica": "Photographica",
+	"block.photographica.camera_stand": "Camera Stand",
+	"block.photographica.darkroom": "Portable Darkroom"
 }

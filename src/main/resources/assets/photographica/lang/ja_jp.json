@@ -15,5 +15,7 @@
 	"screen.photographica.camera": "カメラ設定",
 	"key.photographica.camera_settings": "カメラ設定を開く",
 	"key.photographica.wind_film": "フィルムを巻き上げ",
-	"category.photographica": "Photographica"
+	"category.photographica": "Photographica",
+	"block.photographica.camera_stand": "カメラスタンド",
+	"block.photographica.darkroom": "ポータブル暗室"
 }

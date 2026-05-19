@@ -2,14 +2,18 @@ package dev.hitom.photographica.client;
 
 import dev.hitom.photographica.client.hud.ViewfinderHud;
 import dev.hitom.photographica.client.screen.CameraScreen;
+import dev.hitom.photographica.client.screen.CameraStandScreen;
+import dev.hitom.photographica.client.screen.DarkroomScreen;
 import dev.hitom.photographica.client.screen.FilmCameraScreen;
 import dev.hitom.photographica.client.screen.PhotoViewerScreen;
+import dev.hitom.photographica.registry.ModScreenHandlers;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.item.PhotoItem;
 import dev.hitom.photographica.network.WindFilmPayload;
 import net.fabricmc.api.ClientModInitializer;
+import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -40,6 +44,9 @@ public class PhotographicaClient implements ClientModInitializer {
 
 		PhotoItem.clientOpenViewer = data ->
 				MinecraftClient.getInstance().setScreen(new PhotoViewerScreen(data));
+
+		HandledScreens.register(ModScreenHandlers.CAMERA_STAND, CameraStandScreen::new);
+		HandledScreens.register(ModScreenHandlers.DARKROOM, DarkroomScreen::new);
 
 		// Settings key (unbound by default).
 		KeyBinding settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(

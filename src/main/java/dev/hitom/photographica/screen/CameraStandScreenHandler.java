@@ -130,7 +130,7 @@ public class CameraStandScreenHandler extends ScreenHandler {
                 if (!(filmStack.getItem() instanceof FilmRollItem fr)) return true;
 
                 FilmRollData fresh = filmStack.getOrDefault(ModDataComponents.FILM_ROLL,
-                        FilmRollData.freshRoll(fr.filmType));
+                        FilmRollData.freshRoll(fr.filmType()));
                 FilmCameraItem.setFilm(cameraStack, fresh.withWound(true));
 
                 CameraSettings cur = FilmCameraItem.getSettings(cameraStack);

@@ -15,7 +15,10 @@ import dev.hitom.photographica.network.TakeFilmPhotoPayload;
 import dev.hitom.photographica.network.UnloadFilmPayload;
 import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
 import dev.hitom.photographica.network.WindFilmPayload;
+import dev.hitom.photographica.registry.ModBlockEntities;
+import dev.hitom.photographica.registry.ModBlocks;
 import dev.hitom.photographica.registry.ModItems;
+import dev.hitom.photographica.registry.ModScreenHandlers;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -42,6 +45,9 @@ public class Photographica implements ModInitializer {
 	public void onInitialize() {
 		ModDataComponents.register();
 		ModItems.register();
+		ModBlocks.register();
+		ModBlockEntities.register();
+		ModScreenHandlers.register();
 
 		if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
 			registerDevGiveCommand();
