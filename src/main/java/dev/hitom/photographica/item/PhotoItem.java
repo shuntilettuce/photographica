@@ -43,6 +43,9 @@ public class PhotoItem extends Item {
 			tooltip.add(Text.literal("(未現像)").formatted(Formatting.GRAY, Formatting.ITALIC));
 			return;
 		}
+		if (data.fogged()) {
+			tooltip.add(Text.literal("⚠ 光被り").formatted(Formatting.RED));
+		}
 		tooltip.add(Text.literal("撮影: " + data.photographer()).formatted(Formatting.GRAY));
 		tooltip.add(Text.literal(String.format("F%.1f  ISO%d  %dmm",
 				data.cameraAtCapture().aperture(),

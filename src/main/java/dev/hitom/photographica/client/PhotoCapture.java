@@ -222,8 +222,12 @@ public final class PhotoCapture {
 		double s    = settings.iso();
 
 		// Exposure multiplier relative to the reference (F5.6 · 1/60 · ISO 400).
-		// mult > 1 → overexposed; mult < 1 → underexposed.
 		float mult = (float) (t * 60.0 * ((5.6 / n) * (5.6 / n)) * (s / 400.0));
+
+		// Reciprocity failure: film loses sensitivity at long exposures (>= 1s).
+		if (FilmKind.isFilm(settings.filmType()) && t >= 1.0) {
+			mult *= reciprocityFactor(t);
+		}
 
 		int  w   = src.getWidth();
 		int  h   = src.getHeight();
@@ -232,9 +236,17 @@ public final class PhotoCapture {
 		float vig = apertureToVignette((float) n);
 
 		float noiseSigma = isoToNoiseSigma((int) s);
-		// Film stocks have a baseline grain even at low ISO — bump sigma when filmType > 0.
 		boolean filmStock = FilmKind.isFilm(settings.filmType());
-		if (filmStock) noiseSigma = Math.max(noiseSigma, 4.5f);
+		if (filmStock) {
+			// Each film stock has a characteristic baseline grain.
+			float baseGrain = switch (settings.filmType()) {
+				case FilmKind.COLOR_100    -> 1.5f;  // fine-grain slide stock
+				case FilmKind.BW_400       -> 5.5f;  // B&W: slightly more visible grain structure
+				case FilmKind.COLOR_1600   -> 9.0f;  // push-processed look
+				default                   -> 4.5f;  // COLOR_400 / COLOR_400_24
+			};
+			noiseSigma = Math.max(noiseSigma, baseGrain);
+		}
 		Random rng = new Random();
 
 		NativeImage pass1 = new NativeImage(w, h, false);
@@ -253,10 +265,26 @@ public final class PhotoCapture {
 
 				// Pass 1a': Film stock tonal & colour signature.
 				if (filmStock) {
-					// Slight warm bias (R↑, B↓), soft shadow lift, gentle highlight compression.
-					red   = filmTone(red,   1.05f);
-					green = filmTone(green, 1.00f);
-					blue  = filmTone(blue,  0.94f);
+					int ft = settings.filmType();
+					if (FilmKind.isBW(ft)) {
+						// Desaturate using luminance weights, then boost contrast.
+						int lum = clampCh((int)(red * 0.299f + green * 0.587f + blue * 0.114f));
+						lum = bwContrast(lum);
+						red = lum; green = lum; blue = lum;
+					} else if (ft == FilmKind.COLOR_100) {
+						// ISO 100: slightly cool/neutral, higher saturation, shadow lift
+						red   = filmTone(red,   1.02f);
+						green = filmTone(green, 1.02f);
+						blue  = filmTone(blue,  1.00f);
+						red   = boostSaturationChannel(red,   green, blue,  1.12f);
+						green = boostSaturationChannel(green, red,   blue,  1.08f);
+						blue  = boostSaturationChannel(blue,  red,   green, 1.10f);
+					} else {
+						// COLOR_400, COLOR_400_24, COLOR_1600: classic warm negative
+						red   = filmTone(red,   1.05f);
+						green = filmTone(green, 1.00f);
+						blue  = filmTone(blue,  0.94f);
+					}
 				}
 
 				// Pass 1b: Vignetting — quadratic falloff, normalised so corners = vigStr
@@ -336,6 +364,37 @@ public final class PhotoCapture {
 			f = 180.0f + 70.0f * (1.0f - (float) Math.exp(-ex / 70.0f));
 		}
 		return clampCh(Math.round(f));
+	}
+
+	/**
+	 * Reciprocity failure factor: film loses effective sensitivity on long exposures.
+	 * Returns a multiplier < 1.0 that further dims the image.
+	 * Reference: approximate Schwarzschild p-values for color negative film.
+	 */
+	private static float reciprocityFactor(double tSeconds) {
+		if (tSeconds < 1.0)  return 1.0f;
+		if (tSeconds < 2.0)  return 0.90f; // ~0.15 stop
+		if (tSeconds < 4.0)  return 0.79f; // ~0.33 stop
+		if (tSeconds < 8.0)  return 0.65f; // ~0.62 stop
+		if (tSeconds < 15.0) return 0.50f; // 1 stop
+		return 0.35f;                       // 30s: ~1.5 stops
+	}
+
+	/** B&W contrast S-curve: lifts midtones, crushes shadows, clips highlights. */
+	private static int bwContrast(int v) {
+		float f = v / 255.0f;
+		// Sigmoid-like: increased contrast around mid-grey
+		f = (float) (1.0 / (1.0 + Math.exp(-8.0 * (f - 0.5))));
+		return clampCh(Math.round(f * 255.0f));
+	}
+
+	/**
+	 * Nudge one channel away from the average (boosts saturation for that channel).
+	 * factor > 1 increases distance from average, < 1 desaturates.
+	 */
+	private static int boostSaturationChannel(int ch, int ch2, int ch3, float factor) {
+		int avg = (ch + ch2 + ch3) / 3;
+		return clampCh(avg + (int)((ch - avg) * factor));
 	}
 
 	/** Exposure scaling with film-like highlight rolloff above ~78% brightness. */

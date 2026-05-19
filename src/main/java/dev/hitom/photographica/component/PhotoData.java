@@ -11,6 +11,10 @@ import java.util.UUID;
 /**
  * Metadata stored on a photo item. The actual PNG lives on disk at
  * <gameDir>/photographica/photos/<id>.png — keyed by {@link #id()}.
+ *
+ * fogged: true when the film was exposed to light during loading/unloading or
+ *         when developed under non-zero light level. The viewer renders a
+ *         white-wash overlay instead of (or over) the normal image.
  */
 public record PhotoData(
 		UUID id,
@@ -20,8 +24,19 @@ public record PhotoData(
 		int x,
 		int y,
 		int z,
-		CameraSettings cameraAtCapture
+		CameraSettings cameraAtCapture,
+		boolean fogged
 ) {
+	/** Convenience constructor — backwards-compat, fogged = false. */
+	public PhotoData(UUID id, String photographer, long worldTime, String dimension,
+	                 int x, int y, int z, CameraSettings cameraAtCapture) {
+		this(id, photographer, worldTime, dimension, x, y, z, cameraAtCapture, false);
+	}
+
+	public PhotoData withFogged(boolean f) {
+		return new PhotoData(id, photographer, worldTime, dimension, x, y, z, cameraAtCapture, f);
+	}
+
 	public static final Codec<PhotoData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			Uuids.CODEC.fieldOf("id").forGetter(PhotoData::id),
 			Codec.STRING.fieldOf("photographer").forGetter(PhotoData::photographer),
@@ -30,7 +45,8 @@ public record PhotoData(
 			Codec.INT.fieldOf("x").forGetter(PhotoData::x),
 			Codec.INT.fieldOf("y").forGetter(PhotoData::y),
 			Codec.INT.fieldOf("z").forGetter(PhotoData::z),
-			CameraSettings.CODEC.fieldOf("camera").forGetter(PhotoData::cameraAtCapture)
+			CameraSettings.CODEC.fieldOf("camera").forGetter(PhotoData::cameraAtCapture),
+			Codec.BOOL.optionalFieldOf("fogged", false).forGetter(PhotoData::fogged)
 	).apply(instance, PhotoData::new));
 
 	public static final PacketCodec<ByteBuf, PhotoData> PACKET_CODEC = new PacketCodec<>() {
@@ -52,7 +68,8 @@ public record PhotoData(
 			int y = buf.readInt();
 			int z = buf.readInt();
 			CameraSettings camera = CameraSettings.PACKET_CODEC.decode(buf);
-			return new PhotoData(id, photographer, worldTime, dimension, x, y, z, camera);
+			boolean fogged = buf.readBoolean();
+			return new PhotoData(id, photographer, worldTime, dimension, x, y, z, camera, fogged);
 		}
 
 		@Override
@@ -70,6 +87,7 @@ public record PhotoData(
 			buf.writeInt(v.y);
 			buf.writeInt(v.z);
 			CameraSettings.PACKET_CODEC.encode(buf, v.cameraAtCapture);
+			buf.writeBoolean(v.fogged);
 		}
 	};
 }

@@ -19,6 +19,7 @@ import dev.hitom.photographica.registry.ModItems;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -160,12 +161,20 @@ public class Photographica implements ModInitializer {
 					player.sendMessage(Text.literal("フィルムが装填されていません"), true);
 					return;
 				}
+				// Opening the back in light fogs all latent frames.
+				ServerWorld world = player.getServerWorld();
+				int light = world.getLightLevel(player.getBlockPos());
+				if (light > 0 && !film.isEmpty()) {
+					film = film.withFoggedExposures();
+					player.sendMessage(Text.literal("§c光が入りました — 撮影済みのフレームが感光しました"), true);
+					player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.6f);
+				}
 				ItemStack out;
 				if (film.isEmpty()) {
 					// Unused roll → return as fresh FilmRoll
-					out = FilmRollItem.stackOf(ModItems.FILM_ROLL_COLOR, film.filmType());
+					out = filmRollItemForType(film.filmType());
 				} else {
-					// Has exposures → return as ExposedFilm (regardless of fully exposed or not)
+					// Has exposures → return as ExposedFilm
 					out = new ItemStack(ModItems.EXPOSED_FILM);
 					out.set(ModDataComponents.FILM_ROLL, film);
 				}
@@ -174,7 +183,9 @@ public class Photographica implements ModInitializer {
 					player.dropItem(out, false);
 				}
 				player.playSound(SoundEvents.ITEM_BUNDLE_REMOVE_ONE, 0.6f, 1.0f);
-				player.sendMessage(Text.literal("フィルムを取り出しました"), true);
+				if (light == 0 || film.isEmpty()) {
+					player.sendMessage(Text.literal("フィルムを取り出しました"), true);
+				}
 			});
 		});
 
@@ -183,37 +194,64 @@ public class Photographica implements ModInitializer {
 			context.server().execute(() -> {
 				ServerWorld world = player.getServerWorld();
 				BlockPos pos = player.getBlockPos();
-				int light = world.getLightLevel(pos);
-				if (light > 0) {
-					player.sendMessage(Text.literal("§c明るすぎます — 暗闇 (光量 0) でなければ現像できません"), true);
-					player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.7f, 0.7f);
-					return;
-				}
+				boolean inLight = world.getLightLevel(pos) > 0;
 				PlayerInventory inv = player.getInventory();
 				for (int i = 0; i < inv.size(); i++) {
 					ItemStack s = inv.getStack(i);
-					if (s.getItem() == ModItems.EXPOSED_FILM) {
-						FilmRollData film = s.get(ModDataComponents.FILM_ROLL);
-						if (film == null || film.exposures().isEmpty()) continue;
-						int developed = 0;
-						for (PhotoData entry : film.exposures()) {
-							ItemStack photo = new ItemStack(ModItems.PHOTO);
-							photo.set(ModDataComponents.PHOTO_DATA, entry);
-							if (!player.getInventory().insertStack(photo)) {
-								player.dropItem(photo, false);
-							}
-							developed++;
+					if (s.getItem() != ModItems.EXPOSED_FILM) continue;
+					FilmRollData film = s.get(ModDataComponents.FILM_ROLL);
+					if (film == null || film.exposures().isEmpty()) continue;
+					int developed = 0;
+					for (PhotoData entry : film.exposures()) {
+						PhotoData photo = inLight ? entry.withFogged(true) : entry;
+						ItemStack photoStack = new ItemStack(ModItems.PHOTO);
+						photoStack.set(ModDataComponents.PHOTO_DATA, photo);
+						if (!player.getInventory().insertStack(photoStack)) {
+							player.dropItem(photoStack, false);
 						}
-						s.decrement(1);
+						developed++;
+					}
+					s.decrement(1);
+					// Damage the developer tank in the player's hand.
+					damageDeveloperTank(player);
+					if (inLight) {
+						player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.6f);
+						player.sendMessage(Text.literal("§c光が入りました — " + developed + " 枚が被りました"), true);
+					} else {
 						player.playSound(SoundEvents.BLOCK_BREWING_STAND_BREW, 0.8f, 1.0f);
 						player.sendMessage(Text.literal("§b現像完了: " + developed + " 枚"), true);
-						return;
 					}
+					return;
 				}
 				player.sendMessage(Text.literal("現像する未現像フィルムがありません"), true);
 			});
 		});
 
 		LOGGER.info("Photographica initialized.");
+	}
+
+	/** Finds and damages the developer tank in the player's main or off hand by 1. */
+	private static void damageDeveloperTank(ServerPlayerEntity player) {
+		ItemStack main = player.getStackInHand(Hand.MAIN_HAND);
+		if (main.getItem() instanceof dev.hitom.photographica.item.DeveloperTankItem) {
+			main.damage(1, player, EquipmentSlot.MAINHAND);
+			return;
+		}
+		ItemStack off = player.getStackInHand(Hand.OFF_HAND);
+		if (off.getItem() instanceof dev.hitom.photographica.item.DeveloperTankItem) {
+			off.damage(1, player, EquipmentSlot.OFFHAND);
+		}
+	}
+
+	/** Returns the correct FilmRollItem stack for a given filmType when unloading an unused roll. */
+	private static ItemStack filmRollItemForType(int filmType) {
+		net.minecraft.item.Item rollItem = switch (filmType) {
+			case dev.hitom.photographica.component.FilmKind.COLOR_100    -> ModItems.FILM_ROLL_COLOR_100;
+			case dev.hitom.photographica.component.FilmKind.COLOR_1600   -> ModItems.FILM_ROLL_COLOR_1600;
+			case dev.hitom.photographica.component.FilmKind.BW_400       -> ModItems.FILM_ROLL_BW;
+			case dev.hitom.photographica.component.FilmKind.COLOR_400_24 -> ModItems.FILM_ROLL_COLOR_24;
+			default                                                       -> ModItems.FILM_ROLL_COLOR;
+		};
+		return FilmRollItem.stackOf(rollItem, filmType);
 	}
 }

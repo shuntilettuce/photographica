@@ -52,6 +52,15 @@ public record FilmRollData(
 		return new FilmRollData(filmType, totalExposures, usedExposures, w, exposures);
 	}
 
+	/** Returns a new instance with every existing exposure marked as fogged (light leak). */
+	public FilmRollData withFoggedExposures() {
+		if (exposures.isEmpty()) return this;
+		List<PhotoData> fogged = new ArrayList<>(exposures.size());
+		for (PhotoData e : exposures) fogged.add(e.withFogged(true));
+		return new FilmRollData(filmType, totalExposures, usedExposures, wound,
+				Collections.unmodifiableList(fogged));
+	}
+
 	public static final Codec<FilmRollData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			Codec.INT.fieldOf("film_type").forGetter(FilmRollData::filmType),
 			Codec.INT.fieldOf("total_exposures").forGetter(FilmRollData::totalExposures),

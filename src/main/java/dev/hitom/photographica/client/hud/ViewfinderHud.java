@@ -152,11 +152,13 @@ public final class ViewfinderHud {
 				filmLabel = "フィルム未装填";
 				color = 0xFFFF5555;
 			} else if (film.isExposed()) {
-				filmLabel = "EXP " + film.usedExposures() + "/" + film.totalExposures() + " 撮影済";
+				// All frames used — show total count to match real camera
+				filmLabel = "■ " + film.usedExposures() + "/" + film.totalExposures() + " 撮影済";
 				color = 0xFFFFCC00;
 			} else {
-				String wind = film.wound() ? "§a●" : "§c○";
-				filmLabel = wind + "§r EXP " + film.usedExposures() + "/" + film.totalExposures();
+				// Frame counter: show current frame number (shots taken so far)
+				String wind = film.wound() ? "§a●§r" : "§c○§r";
+				filmLabel = wind + " " + film.usedExposures() + "/" + film.totalExposures();
 				color = 0xFFFFFFFF;
 			}
 			int fw = tr.getWidth(Text.literal(filmLabel));

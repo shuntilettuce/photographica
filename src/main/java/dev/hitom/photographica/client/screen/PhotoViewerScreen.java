@@ -186,6 +186,14 @@ public class PhotoViewerScreen extends Screen {
 
 		ctx.drawTexture(image.id, dx, dy, dw, dh, 0f, 0f,
 				image.texW, image.texH, image.texW, image.texH);
+
+		// Fogging overlay — washes out photos exposed to light during handling/development.
+		if (data.fogged()) {
+			ctx.fill(dx, dy, dx + dw, dy + dh, 0xC8FFFFFF);
+			ctx.drawCenteredTextWithShadow(textRenderer,
+					net.minecraft.text.Text.literal("§c光被り"),
+					dx + dw / 2, dy + dh / 2 - 4, 0xFFFF4444);
+		}
 	}
 
 	private void renderMetadata(DrawContext ctx) {
