@@ -2,18 +2,24 @@ package dev.hitom.photographica.client;
 
 import dev.hitom.photographica.client.hud.ViewfinderHud;
 import dev.hitom.photographica.client.screen.CameraScreen;
+import dev.hitom.photographica.client.screen.FilmCameraScreen;
 import dev.hitom.photographica.client.screen.PhotoViewerScreen;
 import dev.hitom.photographica.item.CameraItem;
+import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.PhotoItem;
+import dev.hitom.photographica.network.WindFilmPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.item.ItemStack;
+import net.minecraft.sound.SoundEvents;
 import org.lwjgl.glfw.GLFW;
 
 public class PhotographicaClient implements ClientModInitializer {
@@ -22,32 +28,63 @@ public class PhotographicaClient implements ClientModInitializer {
 		CameraItem.clientOpenScreen = stack ->
 				MinecraftClient.getInstance().setScreen(new CameraScreen(stack));
 		CameraItem.clientTakePhoto = PhotoCapture::take;
+
+		FilmCameraItem.clientOpenScreen = stack ->
+				MinecraftClient.getInstance().setScreen(new FilmCameraScreen(stack));
+		FilmCameraItem.clientTakePhoto = PhotoCapture::take;
+
 		PhotoItem.clientOpenViewer = data ->
 				MinecraftClient.getInstance().setScreen(new PhotoViewerScreen(data));
 
-		// G key (rebindable) → open camera settings screen while holding a camera
+		// Settings key (unbound by default).
 		KeyBinding settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.camera_settings",
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				"category.photographica"
 		));
+		// Wind-film key (unbound by default).
+		KeyBinding windKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.wind_film",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_UNKNOWN,
+				"category.photographica"
+		));
+
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
-			if (!settingsKey.wasPressed() || client.player == null) return;
-			ItemStack stack = client.player.getMainHandStack();
-			if (!(stack.getItem() instanceof CameraItem)) {
-				stack = client.player.getOffHandStack();
-				if (!(stack.getItem() instanceof CameraItem)) return;
+			if (client.player == null) return;
+			if (settingsKey.wasPressed()) {
+				ItemStack stack = client.player.getMainHandStack();
+				if (stack.getItem() instanceof CameraItem) {
+					CameraItem.clientOpenScreen.accept(stack);
+				} else if (stack.getItem() instanceof FilmCameraItem) {
+					FilmCameraItem.clientOpenScreen.accept(stack);
+				} else {
+					stack = client.player.getOffHandStack();
+					if (stack.getItem() instanceof CameraItem) {
+						CameraItem.clientOpenScreen.accept(stack);
+					} else if (stack.getItem() instanceof FilmCameraItem) {
+						FilmCameraItem.clientOpenScreen.accept(stack);
+					}
+				}
 			}
-			CameraItem.clientOpenScreen.accept(stack);
+			if (windKey.wasPressed()) {
+				ItemStack stack = client.player.getMainHandStack();
+				if (!(stack.getItem() instanceof FilmCameraItem)) {
+					stack = client.player.getOffHandStack();
+				}
+				if (stack.getItem() instanceof FilmCameraItem) {
+					ClientPlayNetworking.send(new WindFilmPayload());
+					client.getSoundManager().play(PositionedSoundInstance.master(
+							SoundEvents.BLOCK_LEVER_CLICK, 0.7f, 1.6f));
+				}
+			}
 		});
 
-		// Viewfinder draws first, then the shutter flash overlay sits on top.
 		HudRenderCallback.EVENT.register(ViewfinderHud::render);
 		HudRenderCallback.EVENT.register((ctx, tick) -> {
 			long now = System.currentTimeMillis();
 
-			// Mirror-down click after mirror-up
 			if (PhotoCapture.secondClickAtMs > 0 && now >= PhotoCapture.secondClickAtMs) {
 				PhotoCapture.playMirrorDownClick();
 				PhotoCapture.secondClickAtMs = 0;
@@ -56,12 +93,10 @@ public class PhotographicaClient implements ClientModInitializer {
 			int sw = ctx.getScaledWindowWidth();
 			int sh = ctx.getScaledWindowHeight();
 
-			// Mirror-up: full black
 			if (now < PhotoCapture.mirrorEndMs) {
 				ctx.fill(0, 0, sw, sh, 0xFF000000);
 				return;
 			}
-			// Flash: white fading from start of flash window to flashEndMs
 			if (now < PhotoCapture.flashEndMs) {
 				long duration = PhotoCapture.flashEndMs - PhotoCapture.mirrorEndMs;
 				if (duration > 0) {
@@ -75,9 +110,6 @@ public class PhotographicaClient implements ClientModInitializer {
 			}
 		});
 
-		// Capture must happen before the hand and HUD render, so we hook into
-		// the end of the world render phase. The framebuffer at that point has
-		// only the world drawn.
 		WorldRenderEvents.LAST.register(ctx -> PhotoCapture.onWorldRenderEnd());
 	}
 }

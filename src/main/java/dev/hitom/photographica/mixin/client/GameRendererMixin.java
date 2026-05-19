@@ -3,6 +3,7 @@ package dev.hitom.photographica.mixin.client;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
+import dev.hitom.photographica.item.FilmCameraItem;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
@@ -39,12 +40,14 @@ public class GameRendererMixin {
 		if (!player.isSneaking()) return;
 
 		ItemStack stack = player.getMainHandStack();
-		if (!(stack.getItem() instanceof CameraItem)) {
+		if (!isCamera(stack)) {
 			stack = player.getOffHandStack();
-			if (!(stack.getItem() instanceof CameraItem)) return;
+			if (!isCamera(stack)) return;
 		}
 
-		CameraSettings settings = CameraItem.getSettings(stack);
+		CameraSettings settings = stack.getItem() instanceof FilmCameraItem
+				? FilmCameraItem.getSettings(stack)
+				: CameraItem.getSettings(stack);
 		if (!LensKind.hasLens(settings.lensType())) return;
 
 		int f = settings.focalLengthMm();
@@ -52,5 +55,9 @@ public class GameRendererMixin {
 
 		double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
 		cir.setReturnValue(vFovDegrees);
+	}
+
+	private static boolean isCamera(ItemStack stack) {
+		return stack.getItem() instanceof CameraItem || stack.getItem() instanceof FilmCameraItem;
 	}
 }

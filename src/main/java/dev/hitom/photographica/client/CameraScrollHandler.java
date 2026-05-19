@@ -3,6 +3,7 @@ package dev.hitom.photographica.client;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
+import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -37,12 +38,14 @@ public final class CameraScrollHandler {
 		if (!mc.player.isSneaking()) return false;
 
 		ItemStack stack = mc.player.getMainHandStack();
-		if (!(stack.getItem() instanceof CameraItem)) {
+		if (!isCamera(stack)) {
 			stack = mc.player.getOffHandStack();
-			if (!(stack.getItem() instanceof CameraItem)) return false;
+			if (!isCamera(stack)) return false;
 		}
 
-		CameraSettings s = CameraItem.getSettings(stack);
+		CameraSettings s = stack.getItem() instanceof FilmCameraItem
+				? FilmCameraItem.getSettings(stack)
+				: CameraItem.getSettings(stack);
 		int dir = delta > 0 ? 1 : -1;
 
 		long win = mc.getWindow().getHandle();
@@ -52,9 +55,17 @@ public final class CameraScrollHandler {
 		CameraSettings updated = ctrl ? adjustAperture(s, dir) : adjustFocalLength(s, dir);
 		if (updated == s) return true; // already at limit, still consume
 
-		CameraItem.setSettings(stack, updated);
+		if (stack.getItem() instanceof FilmCameraItem) {
+			FilmCameraItem.setSettings(stack, updated);
+		} else {
+			CameraItem.setSettings(stack, updated);
+		}
 		ClientPlayNetworking.send(new UpdateCameraSettingsPayload(updated));
 		return true;
+	}
+
+	private static boolean isCamera(ItemStack stack) {
+		return stack.getItem() instanceof CameraItem || stack.getItem() instanceof FilmCameraItem;
 	}
 
 	/**

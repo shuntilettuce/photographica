@@ -2,9 +2,13 @@ package dev.hitom.photographica.client;
 
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.component.CameraSettings;
+import dev.hitom.photographica.component.FilmKind;
+import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
+import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.network.CreatePhotoPayload;
+import dev.hitom.photographica.network.TakeFilmPhotoPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -60,17 +64,45 @@ public final class PhotoCapture {
 	 */
 	public static volatile float lastSceneDepthBlocks = 10.0f;
 
+	/** True if the next capture should be routed through the film-camera flow (TakeFilmPhotoPayload). */
+	private static volatile boolean pendingIsFilm = false;
+
 	/** Called when the player presses the shutter (game thread). */
 	public static void take(ItemStack cameraStack) {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.world == null || mc.player == null) return;
 
-		CameraSettings settings = CameraItem.getSettings(cameraStack);
+		boolean isFilm = cameraStack.getItem() instanceof FilmCameraItem;
+		CameraSettings settings = isFilm
+				? FilmCameraItem.getSettings(cameraStack)
+				: CameraItem.getSettings(cameraStack);
+
 		if (!LensKind.hasLens(settings.lensType())) {
 			mc.player.sendMessage(Text.literal("⚠ レンズが取り付けられていません"), true);
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
 			return;
+		}
+
+		// Film-camera prerequisites: must have film, must be wound, must have frames left.
+		if (isFilm) {
+			FilmRollData film = FilmCameraItem.getFilm(cameraStack);
+			if (film.totalExposures() == 0) {
+				mc.player.sendMessage(Text.literal("⚠ フィルムが装填されていません"), true);
+				mc.getSoundManager().play(PositionedSoundInstance.master(
+						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.5f, 0.7f));
+				return;
+			}
+			if (film.isExposed()) {
+				mc.player.sendMessage(Text.literal("⚠ フィルム使用済み — 現像してください"), true);
+				return;
+			}
+			if (!film.wound()) {
+				mc.player.sendMessage(Text.literal("⚠ フィルムを巻き上げてください"), true);
+				mc.getSoundManager().play(PositionedSoundInstance.master(
+						SoundEvents.BLOCK_LEVER_CLICK, 0.5f, 0.9f));
+				return;
+			}
 		}
 
 		long now = System.currentTimeMillis();
@@ -80,14 +112,20 @@ public final class PhotoCapture {
 
 		pendingSettings = settings;
 		pendingId = UUID.randomUUID();
+		pendingIsFilm = isFilm;
 
 		mirrorEndMs = now + MIRROR_DURATION_MS;
 		flashEndMs = now + FLASH_TOTAL_MS;
 		secondClickAtMs = now + MIRROR_DOWN_DELAY_MS;
 
-		// Mirror-up / shutter-open click.
-		mc.getSoundManager().play(PositionedSoundInstance.master(
-				SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 1.5f, 0.9f));
+		// Shutter click — heavier and more mechanical on a film SLR.
+		if (isFilm) {
+			mc.getSoundManager().play(PositionedSoundInstance.master(
+					SoundEvents.BLOCK_PISTON_CONTRACT, 1.2f, 1.4f));
+		} else {
+			mc.getSoundManager().play(PositionedSoundInstance.master(
+					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 1.5f, 0.9f));
+		}
 	}
 
 	/** Called from WorldRenderEvents.LAST every frame; performs the capture if pending. */
@@ -101,8 +139,10 @@ public final class PhotoCapture {
 		if (pendingId == null) return;
 		UUID id = pendingId;
 		CameraSettings settings = pendingSettings;
+		boolean isFilm = pendingIsFilm;
 		pendingId = null;
 		pendingSettings = null;
+		pendingIsFilm = false;
 
 		// Read the full depth buffer when DoF will be applied.
 		float[] linearDepth = null;
@@ -141,10 +181,16 @@ public final class PhotoCapture {
 			raw.close();
 		}
 
-		ClientPlayNetworking.send(new CreatePhotoPayload(id, settings));
-
-		if (mc.player != null) {
-			mc.player.sendMessage(Text.literal("📸 撮影"), true);
+		if (isFilm) {
+			ClientPlayNetworking.send(new TakeFilmPhotoPayload(id, settings));
+			if (mc.player != null) {
+				mc.player.sendMessage(Text.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), true);
+			}
+		} else {
+			ClientPlayNetworking.send(new CreatePhotoPayload(id, settings));
+			if (mc.player != null) {
+				mc.player.sendMessage(Text.literal("📸 撮影"), true);
+			}
 		}
 	}
 
@@ -186,6 +232,9 @@ public final class PhotoCapture {
 		float vig = apertureToVignette((float) n);
 
 		float noiseSigma = isoToNoiseSigma((int) s);
+		// Film stocks have a baseline grain even at low ISO — bump sigma when filmType > 0.
+		boolean filmStock = FilmKind.isFilm(settings.filmType());
+		if (filmStock) noiseSigma = Math.max(noiseSigma, 4.5f);
 		Random rng = new Random();
 
 		NativeImage pass1 = new NativeImage(w, h, false);
@@ -201,6 +250,14 @@ public final class PhotoCapture {
 				red   = applyExposure(red,   mult);
 				green = applyExposure(green, mult);
 				blue  = applyExposure(blue,  mult);
+
+				// Pass 1a': Film stock tonal & colour signature.
+				if (filmStock) {
+					// Slight warm bias (R↑, B↓), soft shadow lift, gentle highlight compression.
+					red   = filmTone(red,   1.05f);
+					green = filmTone(green, 1.00f);
+					blue  = filmTone(blue,  0.94f);
+				}
 
 				// Pass 1b: Vignetting — quadratic falloff, normalised so corners = vigStr
 				float dx = (x - cx) / cx;
@@ -259,6 +316,28 @@ public final class PhotoCapture {
 		return pass4;
 	}
 
+	/**
+	 * Per-channel film tonal mapping: lifts the deepest shadows, softens highlights,
+	 * applies a colour-channel multiplier for the film's warm/cool bias.
+	 *
+	 *   shadow lift  : low values get a small additive bias (films never go true black)
+	 *   highlight    : a soft asymptote prevents harsh clipping (negative-style rolloff)
+	 *   colour bias  : per-channel gain (warm films boost red, cool films boost blue)
+	 */
+	private static int filmTone(int v, float channelGain) {
+		float f = v;
+		// Shadow lift: f' = f + 6*(1 - f/255), nudges very dark pixels up.
+		f += 6.0f * (1.0f - f / 255.0f);
+		// Channel bias.
+		f *= channelGain;
+		// Soft highlight rolloff above 180.
+		if (f > 180.0f) {
+			float ex = f - 180.0f;
+			f = 180.0f + 70.0f * (1.0f - (float) Math.exp(-ex / 70.0f));
+		}
+		return clampCh(Math.round(f));
+	}
+
 	/** Exposure scaling with film-like highlight rolloff above ~78% brightness. */
 	private static int applyExposure(int v, float mult) {
 		float f = v * mult;
@@ -304,6 +383,10 @@ public final class PhotoCapture {
 
 	private static int clampCh(int v) {
 		return Math.max(0, Math.min(255, v));
+	}
+
+	private static boolean isAnyCamera(ItemStack stack) {
+		return stack.getItem() instanceof CameraItem || stack.getItem() instanceof FilmCameraItem;
 	}
 
 	/** Horizontal motion blur — simulates camera shake during long exposures. */
@@ -401,9 +484,9 @@ public final class PhotoCapture {
 	private static void updateCenterDepth(MinecraftClient mc, Framebuffer fb) {
 		if (mc.player == null || !mc.player.isSneaking()) return;
 		ItemStack hand = mc.player.getMainHandStack();
-		if (!(hand.getItem() instanceof CameraItem)) {
+		if (!isAnyCamera(hand)) {
 			hand = mc.player.getOffHandStack();
-			if (!(hand.getItem() instanceof CameraItem)) return;
+			if (!isAnyCamera(hand)) return;
 		}
 		fb.beginWrite(false);
 		int cx = fb.textureWidth  / 2;

@@ -27,6 +27,15 @@ public final class ModDataComponents {
 					.build()
 	);
 
+	public static final ComponentType<FilmRollData> FILM_ROLL = Registry.register(
+			Registries.DATA_COMPONENT_TYPE,
+			Identifier.of(Photographica.MOD_ID, "film_roll"),
+			ComponentType.<FilmRollData>builder()
+					.codec(FilmRollData.CODEC)
+					.packetCodec(FilmRollData.PACKET_CODEC)
+					.build()
+	);
+
 	public static void register() {
 		// Class init is enough; this method just forces it.
 	}

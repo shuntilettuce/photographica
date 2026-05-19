@@ -1,8 +1,11 @@
 package dev.hitom.photographica.client.hud;
 
 import dev.hitom.photographica.component.CameraSettings;
+import dev.hitom.photographica.component.FilmKind;
+import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
+import dev.hitom.photographica.item.FilmCameraItem;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
@@ -42,15 +45,17 @@ public final class ViewfinderHud {
 
 		ItemStack stack = mc.player.getMainHandStack();
 		boolean offhand = false;
-		if (!(stack.getItem() instanceof CameraItem)) {
+		if (!isCamera(stack)) {
 			stack = mc.player.getOffHandStack();
 			offhand = true;
-			if (!(stack.getItem() instanceof CameraItem)) return;
+			if (!isCamera(stack)) return;
 		}
 		// Hide while a screen (camera GUI / inventory) is open
 		if (mc.currentScreen != null) return;
 
-		CameraSettings s = CameraItem.getSettings(stack);
+		boolean isFilm = stack.getItem() instanceof FilmCameraItem;
+		CameraSettings s = isFilm ? FilmCameraItem.getSettings(stack) : CameraItem.getSettings(stack);
+		FilmRollData film = isFilm ? FilmCameraItem.getFilm(stack) : null;
 
 		int sw = ctx.getScaledWindowWidth();
 		int sh = ctx.getScaledWindowHeight();
@@ -138,6 +143,33 @@ public final class ViewfinderHud {
 		String hand = offhand ? "OFF" : "MAIN";
 		int handW = tr.getWidth(hand);
 		ctx.drawTextWithShadow(tr, Text.literal(hand), fx2 - handW - 6, fy + 4, COLOR_TEXT_DIM);
+
+		// Film state — frame counter and wind indicator (top-right of frame, below hand label)
+		if (isFilm && film != null) {
+			String filmLabel;
+			int color;
+			if (film.totalExposures() == 0) {
+				filmLabel = "フィルム未装填";
+				color = 0xFFFF5555;
+			} else if (film.isExposed()) {
+				filmLabel = "EXP " + film.usedExposures() + "/" + film.totalExposures() + " 撮影済";
+				color = 0xFFFFCC00;
+			} else {
+				String wind = film.wound() ? "§a●" : "§c○";
+				filmLabel = wind + "§r EXP " + film.usedExposures() + "/" + film.totalExposures();
+				color = 0xFFFFFFFF;
+			}
+			int fw = tr.getWidth(Text.literal(filmLabel));
+			ctx.drawTextWithShadow(tr, Text.literal(filmLabel),
+					fx2 - fw - 6, fy + 4 + tr.fontHeight + 2, color);
+
+			if (film.totalExposures() > 0 && !film.isExposed() && !film.wound()) {
+				String w = "⚠ 巻き上げてください";
+				int ww = tr.getWidth(w);
+				ctx.drawTextWithShadow(tr, Text.literal(w),
+						(fx + fx2 - ww) / 2, fy2 - tr.fontHeight - 32, 0xFFFFAA00);
+			}
+		}
 
 		// Big "no lens" warning centered in the frame.
 		if (!hasLens) {
@@ -227,6 +259,10 @@ public final class ViewfinderHud {
 		if (diff <= tolerance)           return 0xFF00E000; // green: in focus
 		if (diff <= tolerance * 2.5f)    return 0xFFFFCC00; // yellow: close
 		return 0xFFFF4444;                                   // red: out of focus
+	}
+
+	private static boolean isCamera(ItemStack stack) {
+		return stack.getItem() instanceof CameraItem || stack.getItem() instanceof FilmCameraItem;
 	}
 
 	private static int clampIdx(int idx, int len) {
