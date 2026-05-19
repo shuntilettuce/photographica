@@ -18,7 +18,9 @@ import dev.hitom.photographica.network.WindFilmPayload;
 import dev.hitom.photographica.registry.ModItems;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
@@ -28,6 +30,7 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.GameMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +42,10 @@ public class Photographica implements ModInitializer {
 	public void onInitialize() {
 		ModDataComponents.register();
 		ModItems.register();
+
+		if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+			registerDevGiveCommand();
+		}
 
 		PayloadTypeRegistry.playC2S().register(UpdateCameraSettingsPayload.ID, UpdateCameraSettingsPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(CreatePhotoPayload.ID,         CreatePhotoPayload.CODEC);
@@ -241,6 +248,29 @@ public class Photographica implements ModInitializer {
 		if (off.getItem() instanceof dev.hitom.photographica.item.DeveloperTankItem) {
 			off.damage(1, player, EquipmentSlot.OFFHAND);
 		}
+	}
+
+	private static void registerDevGiveCommand() {
+		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+			ServerPlayerEntity player = handler.player;
+			if (player.getInventory().getStack(0).isEmpty()) {
+				player.changeGameMode(GameMode.CREATIVE);
+				PlayerInventory inv = player.getInventory();
+				inv.setStack(0, new ItemStack(ModItems.FILM_CAMERA));
+				inv.setStack(1, new ItemStack(ModItems.FILM_ROLL_COLOR));
+				inv.setStack(2, new ItemStack(ModItems.FILM_ROLL_COLOR_100));
+				inv.setStack(3, new ItemStack(ModItems.FILM_ROLL_COLOR_1600));
+				inv.setStack(4, new ItemStack(ModItems.FILM_ROLL_BW));
+				inv.setStack(5, new ItemStack(ModItems.FILM_ROLL_COLOR_24));
+				ItemStack tank = new ItemStack(ModItems.DEVELOPER_TANK);
+				inv.setStack(6, tank);
+				inv.setStack(7, new ItemStack(ModItems.CAMERA));
+				player.sendMessage(Text.literal("§a[Dev] Photographica test items given! Game mode: Creative"), false);
+				// Set daytime so the world is visible
+				server.getCommandManager().executeWithPrefix(
+						server.getCommandSource(), "time set day");
+			}
+		});
 	}
 
 	/** Returns the correct FilmRollItem stack for a given filmType when unloading an unused roll. */
