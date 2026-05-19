@@ -6,6 +6,7 @@ import dev.hitom.photographica.client.screen.FilmCameraScreen;
 import dev.hitom.photographica.client.screen.PhotoViewerScreen;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
+import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.item.PhotoItem;
 import dev.hitom.photographica.network.WindFilmPayload;
 import net.fabricmc.api.ClientModInitializer;
@@ -28,6 +29,10 @@ public class PhotographicaClient implements ClientModInitializer {
 		CameraItem.clientOpenScreen = stack ->
 				MinecraftClient.getInstance().setScreen(new CameraScreen(stack));
 		CameraItem.clientTakePhoto = PhotoCapture::take;
+
+		MirrorlessCameraItem.clientOpenScreen = stack ->
+				MinecraftClient.getInstance().setScreen(new CameraScreen(stack));
+		MirrorlessCameraItem.clientTakePhoto = PhotoCapture::take;
 
 		FilmCameraItem.clientOpenScreen = stack ->
 				MinecraftClient.getInstance().setScreen(new FilmCameraScreen(stack));
@@ -56,17 +61,8 @@ public class PhotographicaClient implements ClientModInitializer {
 			if (client.player == null) return;
 			if (settingsKey.wasPressed()) {
 				ItemStack stack = client.player.getMainHandStack();
-				if (stack.getItem() instanceof CameraItem) {
-					CameraItem.clientOpenScreen.accept(stack);
-				} else if (stack.getItem() instanceof FilmCameraItem) {
-					FilmCameraItem.clientOpenScreen.accept(stack);
-				} else {
-					stack = client.player.getOffHandStack();
-					if (stack.getItem() instanceof CameraItem) {
-						CameraItem.clientOpenScreen.accept(stack);
-					} else if (stack.getItem() instanceof FilmCameraItem) {
-						FilmCameraItem.clientOpenScreen.accept(stack);
-					}
+				if (!openCameraScreen(stack)) {
+					openCameraScreen(client.player.getOffHandStack());
 				}
 			}
 			if (windKey.wasPressed()) {
@@ -112,5 +108,22 @@ public class PhotographicaClient implements ClientModInitializer {
 		});
 
 		WorldRenderEvents.LAST.register(ctx -> PhotoCapture.onWorldRenderEnd());
+	}
+
+	/** Opens the settings screen for whichever camera type is in the given stack. */
+	private static boolean openCameraScreen(ItemStack stack) {
+		if (stack.getItem() instanceof MirrorlessCameraItem) {
+			MirrorlessCameraItem.clientOpenScreen.accept(stack);
+			return true;
+		}
+		if (stack.getItem() instanceof CameraItem) {
+			CameraItem.clientOpenScreen.accept(stack);
+			return true;
+		}
+		if (stack.getItem() instanceof FilmCameraItem) {
+			FilmCameraItem.clientOpenScreen.accept(stack);
+			return true;
+		}
+		return false;
 	}
 }

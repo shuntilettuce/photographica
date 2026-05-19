@@ -9,6 +9,7 @@ import dev.hitom.photographica.item.ExposedFilmItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.FilmRollItem;
 import dev.hitom.photographica.item.LensItem;
+import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.item.PhotoItem;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.item.Item;
@@ -22,6 +23,7 @@ public final class ModItems {
 
 	public static final Item CAMERA             = reg("camera",              new CameraItem(new Item.Settings()));
 	public static final Item FILM_CAMERA        = reg("film_camera",         new FilmCameraItem(new Item.Settings()));
+	public static final Item MIRRORLESS_CAMERA  = reg("mirrorless_camera",   new MirrorlessCameraItem(new Item.Settings()));
 	public static final Item LENS_PRIME_50      = reg("lens_prime_50mm",     new LensItem(new Item.Settings(), LensKind.PRIME_50MM));
 	public static final Item LENS_ZOOM_24_70    = reg("lens_zoom_24_70mm",   new LensItem(new Item.Settings(), LensKind.ZOOM_24_70));
 	public static final Item PHOTO              = reg("photo",               new PhotoItem(new Item.Settings()));
@@ -42,6 +44,7 @@ public final class ModItems {
 	public static void register() {
 		ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> {
 			entries.add(CAMERA);
+			entries.add(MIRRORLESS_CAMERA);
 			entries.add(FILM_CAMERA);
 			entries.add(LENS_PRIME_50);
 			entries.add(LENS_ZOOM_24_70);

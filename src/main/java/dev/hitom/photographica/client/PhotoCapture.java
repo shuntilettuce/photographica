@@ -7,6 +7,7 @@ import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
+import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.network.CreatePhotoPayload;
 import dev.hitom.photographica.network.TakeFilmPhotoPayload;
 import net.fabricmc.api.EnvType;
@@ -114,14 +115,24 @@ public final class PhotoCapture {
 		pendingId = UUID.randomUUID();
 		pendingIsFilm = isFilm;
 
-		mirrorEndMs = now + MIRROR_DURATION_MS;
+		boolean isMirrorless = cameraStack.getItem() instanceof MirrorlessCameraItem;
+		if (isMirrorless) {
+			// Electronic shutter: no mirror blackout, just a brief exposure flash.
+			mirrorEndMs = now;
+			secondClickAtMs = 0;
+		} else {
+			mirrorEndMs = now + MIRROR_DURATION_MS;
+			secondClickAtMs = now + MIRROR_DOWN_DELAY_MS;
+		}
 		flashEndMs = now + FLASH_TOTAL_MS;
-		secondClickAtMs = now + MIRROR_DOWN_DELAY_MS;
 
-		// Shutter click — heavier and more mechanical on a film SLR.
+		// Shutter sound — mechanical SLR / mirrorless / film SLR.
 		if (isFilm) {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_PISTON_CONTRACT, 1.2f, 1.4f));
+		} else if (isMirrorless) {
+			mc.getSoundManager().play(PositionedSoundInstance.master(
+					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 0.6f, 1.8f));
 		} else {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 1.5f, 0.9f));

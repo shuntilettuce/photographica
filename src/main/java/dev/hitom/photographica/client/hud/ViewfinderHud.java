@@ -6,6 +6,7 @@ import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
+import dev.hitom.photographica.item.MirrorlessCameraItem;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
@@ -79,6 +80,12 @@ public final class ViewfinderHud {
 		ctx.fill(0, fy, fx, fy2, COLOR_BEZEL);
 		ctx.fill(fx2, fy, sw, fy2, COLOR_BEZEL);
 
+		// Mirrorless EVF: live preview of exposure and vignette inside the frame.
+		boolean isMirrorless = stack.getItem() instanceof MirrorlessCameraItem;
+		if (isMirrorless) {
+			renderEvfPreview(ctx, s, fx, fy, fx2, fy2);
+		}
+
 		// Corner brackets (L-shapes)
 		int bl = 14;  // bracket length
 		int bt = 2;   // bracket thickness
@@ -148,10 +155,12 @@ public final class ViewfinderHud {
 		int modeLabelY = fy + 4 + tr.fontHeight * 2 + 4;
 		ctx.drawTextWithShadow(tr, Text.literal(modeStr), fx + 6, modeLabelY, 0xFFCCCCFF);
 
-		// Hand indicator (top-right)
-		String hand = offhand ? "OFF" : "MAIN";
-		int handW = tr.getWidth(hand);
-		ctx.drawTextWithShadow(tr, Text.literal(hand), fx2 - handW - 6, fy + 4, COLOR_TEXT_DIM);
+		// Hand indicator (top-right). Mirrorless shows "EVF" badge before the hand label.
+		String handLabel = offhand ? "OFF" : "MAIN";
+		String handPrefix = isMirrorless ? "§bEVF §r" : "";
+		String handFull = handPrefix + handLabel;
+		int handW = tr.getWidth(Text.literal(handFull));
+		ctx.drawTextWithShadow(tr, Text.literal(handFull), fx2 - handW - 6, fy + 4, COLOR_TEXT_DIM);
 
 		// Film state — frame counter and wind indicator (top-right of frame, below hand label)
 		if (isFilm && film != null) {
@@ -270,6 +279,65 @@ public final class ViewfinderHud {
 		if (diff <= tolerance)           return 0xFF00E000; // green: in focus
 		if (diff <= tolerance * 2.5f)    return 0xFFFFCC00; // yellow: close
 		return 0xFFFF4444;                                   // red: out of focus
+	}
+
+	/**
+	 * EVF live preview overlays for mirrorless cameras.
+	 *
+	 * Two layers rendered inside the frame:
+	 *   1. Exposure tint — black (underexposed) or white (overexposed) fill whose
+	 *      opacity scales with EV deviation from zero.  Dead-zone ±0.5 EV.
+	 *   2. Lens vignette — stepped dark gradient from all four edges; strength
+	 *      mirrors the same aperture → vignette mapping used in the capture pipeline.
+	 */
+	private static void renderEvfPreview(DrawContext ctx, CameraSettings s,
+	                                     int fx, int fy, int fx2, int fy2) {
+		// --- Exposure tint ---
+		double ev = s.evDeviation();
+		double absEv = Math.abs(ev);
+		if (absEv > 0.5) {
+			double excess = Math.min(absEv - 0.5, 6.5);
+			int alpha = (int) (excess * 22);
+			alpha = Math.min(180, alpha);
+			int tintColor = ev > 0
+					? ((alpha << 24) | 0x00FFFFFF)  // white = overexposed
+					: (alpha << 24);                 // black = underexposed
+			ctx.fill(fx, fy, fx2, fy2, tintColor);
+		}
+
+		// --- Vignette ---
+		float vigStr = evfVignetteStrength(s.aperture());
+		if (vigStr > 0.01f) {
+			int fw = fx2 - fx;
+			int fh = fy2 - fy;
+			// 8 bands from outermost (b=0) to innermost (b=7). Each band is a thin strip
+			// along every edge; opacity decreases toward center. Corners accumulate all
+			// overlapping bands and become the darkest area, matching real lens vignetting.
+			for (int b = 0; b < 8; b++) {
+				float t = (float) (8 - b) / 8.0f;        // 1.0 → 0.125
+				int alpha = (int) (vigStr * 110 * t * t);
+				if (alpha < 1) continue;
+				int vc = (alpha << 24) & 0xFF000000;
+				int bw = (8 - b) * fw / 32;
+				int bh = (8 - b) * fh / 32;
+				ctx.fill(fx,        fy, fx + bw,  fy2, vc);  // left
+				ctx.fill(fx2 - bw, fy, fx2,       fy2, vc);  // right
+				ctx.fill(fx,        fy, fx2, fy + bh,  vc);  // top
+				ctx.fill(fx,  fy2 - bh, fx2, fy2,      vc);  // bottom
+			}
+		}
+	}
+
+	/** Vignette strength for EVF live preview. */
+	private static float evfVignetteStrength(float aperture) {
+		if (aperture <= 1.4f) return 0.90f;
+		if (aperture <= 2.0f) return 0.72f;
+		if (aperture <= 2.8f) return 0.55f;
+		if (aperture <= 4.0f) return 0.38f;
+		if (aperture <= 5.6f) return 0.22f;
+		if (aperture <= 8.0f) return 0.11f;
+		if (aperture <= 11.0f) return 0.05f;
+		return 0.02f;
 	}
 
 	private static boolean isCamera(ItemStack stack) {
