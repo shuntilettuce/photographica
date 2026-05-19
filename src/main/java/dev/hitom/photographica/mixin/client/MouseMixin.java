@@ -16,6 +16,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(Mouse.class)
 public class MouseMixin {
+	// Tracks whether lockCursor() was called more recently than unlockCursor(),
+	// so the isCursorLocked override only applies when the game actually wants
+	// the cursor captured (in-game) rather than free (main menu / GUI screens).
+	private static boolean photographica$wantsLock = false;
+
 	@Inject(method = "onMouseScroll", at = @At("HEAD"), cancellable = true)
 	private void photographica$onMouseScroll(long window, double horizontal, double vertical,
 	                                         CallbackInfo ci) {
@@ -24,12 +29,23 @@ public class MouseMixin {
 		}
 	}
 
+	@Inject(method = "lockCursor", at = @At("HEAD"))
+	private void photographica$onLockCursor(CallbackInfo ci) {
+		photographica$wantsLock = true;
+	}
+
+	@Inject(method = "unlockCursor", at = @At("HEAD"))
+	private void photographica$onUnlockCursor(CallbackInfo ci) {
+		photographica$wantsLock = false;
+	}
+
 	// In Xvfb dev environments GLFW cursor capture never succeeds, so the game
-	// stays in "click to play" state indefinitely. Force-report locked so that
-	// keyboard bindings (chat, commands, etc.) are processed normally.
+	// stays in "click to play" state indefinitely. Force-report locked only when
+	// the game actually called lockCursor(), so the main menu remains interactive.
 	@Inject(method = "isCursorLocked", at = @At("RETURN"), cancellable = true)
 	private void photographica$forceLockedInDev(CallbackInfoReturnable<Boolean> cir) {
-		if (FabricLoader.getInstance().isDevelopmentEnvironment() && !cir.getReturnValue()) {
+		if (FabricLoader.getInstance().isDevelopmentEnvironment()
+				&& photographica$wantsLock && !cir.getReturnValue()) {
 			cir.setReturnValue(true);
 		}
 	}
