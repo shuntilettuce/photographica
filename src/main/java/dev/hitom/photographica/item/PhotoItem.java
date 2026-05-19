@@ -6,6 +6,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.tooltip.TooltipType;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
@@ -37,12 +38,26 @@ public class PhotoItem extends Item {
 	}
 
 	@Override
+	public Text getName(ItemStack stack) {
+		PhotoData data = stack.get(ModDataComponents.PHOTO_DATA);
+		if (data != null && data.cameraAtCapture().isFilm()) {
+			return Text.translatable(getTranslationKey(stack)).formatted(Formatting.GOLD);
+		}
+		return super.getName(stack);
+	}
+
+	@Override
 	public void appendTooltip(ItemStack stack, TooltipContext context, List<Text> tooltip, TooltipType type) {
 		PhotoData data = stack.get(ModDataComponents.PHOTO_DATA);
 		if (data == null) {
 			tooltip.add(Text.literal("(未現像)").formatted(Formatting.GRAY, Formatting.ITALIC));
 			return;
 		}
+		boolean isFilm = data.cameraAtCapture().isFilm();
+		MutableText badge = isFilm
+				? Text.literal("[ フィルム写真 ]").formatted(Formatting.GOLD)
+				: Text.literal("[ デジタル写真 ]").formatted(Formatting.AQUA);
+		tooltip.add(badge);
 		if (data.fogged()) {
 			tooltip.add(Text.literal("⚠ 光被り").formatted(Formatting.RED));
 		}

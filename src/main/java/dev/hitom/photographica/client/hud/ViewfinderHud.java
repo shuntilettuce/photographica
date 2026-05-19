@@ -127,11 +127,14 @@ public final class ViewfinderHud {
 		// Exposure meter — horizontal scale centred in the frame, ±3 EV range
 		renderExposureMeter(ctx, s, fx, fx2, fy2);
 
-		// Scroll hint (bottom-right, inside frame)
+		// Scroll hint (bottom-right, inside frame) — two lines
 		boolean isZoom = dev.hitom.photographica.component.LensKind.isZoom(s.lensType());
-		String hint = isZoom ? "⟳ zoom  Ctrl⟳ F値" : "Ctrl⟳ F値";
-		int hintW = tr.getWidth(hint);
-		ctx.drawTextWithShadow(tr, Text.literal(hint), fx2 - hintW - 6, fy2 - tr.fontHeight - 14, 0x80FFFFFF);
+		String hint1 = isZoom ? "⟳ zoom  Ctrl⟳ F値  Shift⟳ SS" : "Ctrl⟳ F値  Shift⟳ SS";
+		String hint2 = "Alt⟳ ISO  Ctrl+Shift⟳ MF距離";
+		int hint1W = tr.getWidth(hint1);
+		int hint2W = tr.getWidth(hint2);
+		ctx.drawTextWithShadow(tr, Text.literal(hint1), fx2 - hint1W - 6, fy2 - tr.fontHeight * 2 - 16, 0x80FFFFFF);
+		ctx.drawTextWithShadow(tr, Text.literal(hint2), fx2 - hint2W - 6, fy2 - tr.fontHeight - 14, 0x80FFFFFF);
 
 		// Lens label (top-left of frame)
 		ctx.drawTextWithShadow(tr, Text.literal(LensKind.displayName(s.lensType())),
