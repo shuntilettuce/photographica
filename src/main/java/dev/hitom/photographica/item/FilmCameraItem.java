@@ -37,7 +37,8 @@ public class FilmCameraItem extends Item {
 		// applies film grading even before a roll is loaded for the first time.
 		return s != null ? s : new CameraSettings(
 				5.6f, 10, FilmKind.isoOf(FilmKind.COLOR_400),
-				5.0f, 50, 1, FilmKind.COLOR_400, 0);
+				5.0f, 50, 1, FilmKind.COLOR_400, 0,
+				CameraSettings.EXP_M, CameraSettings.FOCUS_MF);
 	}
 
 	public static void setSettings(ItemStack stack, CameraSettings settings) {

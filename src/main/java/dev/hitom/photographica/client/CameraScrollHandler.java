@@ -81,7 +81,8 @@ public final class CameraScrollHandler {
 		if (newIdx == idx) return s;
 		return new CameraSettings(s.aperture(), s.shutterSpeedIdx(), s.iso(),
 				s.focusDistance(), stops.get(newIdx), s.lensType(),
-				s.filmType(), s.remainingShots());
+				s.filmType(), s.remainingShots(),
+				s.exposureMode(), s.focusMode());
 	}
 
 	/**
@@ -96,7 +97,8 @@ public final class CameraScrollHandler {
 		if (newIdx == idx) return s;
 		return new CameraSettings(APERTURES.get(newIdx), s.shutterSpeedIdx(), s.iso(),
 				s.focusDistance(), s.focalLengthMm(), s.lensType(),
-				s.filmType(), s.remainingShots());
+				s.filmType(), s.remainingShots(),
+				s.exposureMode(), s.focusMode());
 	}
 
 	private static int nearestIdx(List<Float> list, float v) {

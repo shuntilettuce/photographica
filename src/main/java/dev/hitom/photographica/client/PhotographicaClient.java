@@ -52,6 +52,7 @@ public class PhotographicaClient implements ClientModInitializer {
 		));
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			AutoCamera.tick(client);
 			if (client.player == null) return;
 			if (settingsKey.wasPressed()) {
 				ItemStack stack = client.player.getMainHandStack();

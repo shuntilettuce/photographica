@@ -68,7 +68,8 @@ public class Photographica implements ModInitializer {
 					CameraSettings safe = new CameraSettings(
 							incoming.aperture(), incoming.shutterSpeedIdx(), lockedIso,
 							incoming.focusDistance(), incoming.focalLengthMm(), incoming.lensType(),
-							incoming.filmType(), incoming.remainingShots());
+							incoming.filmType(), incoming.remainingShots(),
+							incoming.exposureMode(), incoming.focusMode());
 					FilmCameraItem.setSettings(stack, safe);
 				}
 			});
@@ -147,7 +148,8 @@ public class Photographica implements ModInitializer {
 						FilmCameraItem.setSettings(camera, new CameraSettings(
 								cur.aperture(), cur.shutterSpeedIdx(), FilmKind.isoOf(fresh.filmType()),
 								cur.focusDistance(), cur.focalLengthMm(), cur.lensType(),
-								fresh.filmType(), fresh.totalExposures()));
+								fresh.filmType(), fresh.totalExposures(),
+								cur.exposureMode(), cur.focusMode()));
 						s.decrement(1);
 						player.playSound(SoundEvents.BLOCK_DISPENSER_DISPENSE, 0.6f, 1.2f);
 						player.sendMessage(Text.literal("フィルムを装填しました"), true);

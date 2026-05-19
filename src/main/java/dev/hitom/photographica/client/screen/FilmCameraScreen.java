@@ -35,6 +35,9 @@ public class FilmCameraScreen extends Screen {
 	};
 	private static final List<Float> FOCUS_VALUES = List.of(0.3f, 0.5f, 1.0f, 2.0f, 3.0f, 5.0f, 10.0f, 20.0f, 50.0f, 999.0f);
 
+	private static final String[] EXP_MODE_LABELS  = {"M", "Av", "Tv", "P"};
+	private static final String[] FOCUS_MODE_LABELS = {"MF", "AF", "MOB"};
+
 	private final ItemStack stack;
 	private CameraSettings settings;
 	private boolean dirty = false;
@@ -48,33 +51,42 @@ public class FilmCameraScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = width / 2;
-		int top = height / 2 - 100;
+		int top = height / 2 - 110;
 		int row = 0;
 
+		// Aperture — disabled when auto controls it (Tv or P)
+		boolean apAuto = settings.exposureMode() == CameraSettings.EXP_TV
+				|| settings.exposureMode() == CameraSettings.EXP_P;
 		addRow(cx, top + row++ * 22, "絞り",
-				() -> "F" + formatFloat(settings.aperture()),
+				() -> apAuto ? "AUTO" : "F" + formatFloat(settings.aperture()),
 				step -> {
 					int idx = clampStep(APERTURES.indexOf(settings.aperture()), step, APERTURES.size());
 					settings = withAperture(APERTURES.get(idx));
-				}, true);
+				}, !apAuto);
 
+		// Shutter — disabled when auto controls it (Av or P)
+		boolean ssAuto = settings.exposureMode() == CameraSettings.EXP_AV
+				|| settings.exposureMode() == CameraSettings.EXP_P;
 		addRow(cx, top + row++ * 22, "シャッター",
-				() -> SHUTTERS[clampIdx(settings.shutterSpeedIdx(), SHUTTERS.length)],
+				() -> ssAuto ? "AUTO" : SHUTTERS[clampIdx(settings.shutterSpeedIdx(), SHUTTERS.length)],
 				step -> settings = withShutter(clampStep(settings.shutterSpeedIdx(), step, SHUTTERS.length)),
-				true);
+				!ssAuto);
 
 		// ISO is film-locked → display only.
 		addRow(cx, top + row++ * 22, "ISO (フィルム)",
 				() -> "ISO " + settings.iso() + " §8(固定)",
 				step -> {}, false);
 
+		// Focus distance — disabled when AF or MOB
+		boolean focusAuto = settings.focusMode() != CameraSettings.FOCUS_MF;
+		String focusAutoLabel = settings.focusMode() == CameraSettings.FOCUS_MOB ? "MOB" : "AF";
 		addRow(cx, top + row++ * 22, "フォーカス",
-				() -> formatFocus(settings.focusDistance()),
+				() -> focusAuto ? focusAutoLabel : formatFocus(settings.focusDistance()),
 				step -> {
 					int curIdx = nearestIdxFloat(FOCUS_VALUES, settings.focusDistance());
 					int idx = clampStep(curIdx, step, FOCUS_VALUES.size());
 					settings = withFocus(FOCUS_VALUES.get(idx));
-				}, true);
+				}, !focusAuto);
 
 		boolean focalEditable = LensKind.isZoom(settings.lensType());
 		addRow(cx, top + row++ * 22, "焦点距離",
@@ -98,10 +110,22 @@ public class FilmCameraScreen extends Screen {
 					settings = withLensAndFocal(newLens, newFocal);
 				}, true);
 
+		// Exposure mode row (M / Av / Tv / P)
+		addRow(cx, top + row++ * 22, "露出モード",
+				() -> EXP_MODE_LABELS[Math.max(0, Math.min(EXP_MODE_LABELS.length - 1, settings.exposureMode()))],
+				step -> settings = withExposureMode(clampStep(settings.exposureMode(), step, EXP_MODE_LABELS.length)),
+				true);
+
+		// Focus mode row (MF / AF / MOB)
+		addRow(cx, top + row++ * 22, "フォーカスモード",
+				() -> FOCUS_MODE_LABELS[Math.max(0, Math.min(FOCUS_MODE_LABELS.length - 1, settings.focusMode()))],
+				step -> settings = withFocusMode(clampStep(settings.focusMode(), step, FOCUS_MODE_LABELS.length)),
+				true);
+
 		// Load / Unload film buttons.
 		FilmRollData film = FilmCameraItem.getFilm(stack);
 		boolean loaded = film.totalExposures() > 0;
-		int btnY = top + row * 22 + 18;
+		int btnY = top + row * 22 + 14;
 		addDrawableChild(ButtonWidget.builder(
 				Text.literal(loaded ? "フィルム取り出し" : "フィルム装填"),
 				b -> {
@@ -141,7 +165,7 @@ public class FilmCameraScreen extends Screen {
 	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		this.renderBackground(ctx, mouseX, mouseY, delta);
 		super.render(ctx, mouseX, mouseY, delta);
-		ctx.drawCenteredTextWithShadow(textRenderer, this.title, width / 2, height / 2 - 120, 0xFFFFFF);
+		ctx.drawCenteredTextWithShadow(textRenderer, this.title, width / 2, height / 2 - 130, 0xFFFFFF);
 
 		FilmRollData film = FilmCameraItem.getFilm(stack);
 		String status;
@@ -156,7 +180,7 @@ public class FilmCameraScreen extends Screen {
 					+ " §7・ " + wound;
 		}
 		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status),
-				width / 2, height / 2 - 108, 0xFFFFFF);
+				width / 2, height / 2 - 118, 0xFFFFFF);
 	}
 
 	@Override
@@ -207,26 +231,43 @@ public class FilmCameraScreen extends Screen {
 	private CameraSettings withAperture(float v) {
 		return new CameraSettings(v, settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
-				settings.filmType(), settings.remainingShots());
+				settings.filmType(), settings.remainingShots(),
+				settings.exposureMode(), settings.focusMode());
 	}
 	private CameraSettings withShutter(int v) {
 		return new CameraSettings(settings.aperture(), v, settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
-				settings.filmType(), settings.remainingShots());
+				settings.filmType(), settings.remainingShots(),
+				settings.exposureMode(), settings.focusMode());
 	}
 	private CameraSettings withFocus(float v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				v, settings.focalLengthMm(), settings.lensType(),
-				settings.filmType(), settings.remainingShots());
+				settings.filmType(), settings.remainingShots(),
+				settings.exposureMode(), settings.focusMode());
 	}
 	private CameraSettings withFocalLength(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), v, settings.lensType(),
-				settings.filmType(), settings.remainingShots());
+				settings.filmType(), settings.remainingShots(),
+				settings.exposureMode(), settings.focusMode());
 	}
 	private CameraSettings withLensAndFocal(int lens, int focal) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), focal, lens,
-				settings.filmType(), settings.remainingShots());
+				settings.filmType(), settings.remainingShots(),
+				settings.exposureMode(), settings.focusMode());
+	}
+	private CameraSettings withExposureMode(int v) {
+		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
+				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
+				settings.filmType(), settings.remainingShots(),
+				v, settings.focusMode());
+	}
+	private CameraSettings withFocusMode(int v) {
+		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
+				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
+				settings.filmType(), settings.remainingShots(),
+				settings.exposureMode(), v);
 	}
 }

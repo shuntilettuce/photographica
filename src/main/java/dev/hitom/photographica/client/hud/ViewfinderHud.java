@@ -139,6 +139,15 @@ public final class ViewfinderHud {
 			}
 		}
 
+		// Exposure / focus mode indicator (e.g. "Av | AF") — top-left, below lens name
+		String[] expLabels   = {"M", "Av", "Tv", "P"};
+		String[] focusLabels = {"MF", "AF", "MOB"};
+		String expLabel   = expLabels[Math.max(0, Math.min(expLabels.length - 1, s.exposureMode()))];
+		String focusLabel = focusLabels[Math.max(0, Math.min(focusLabels.length - 1, s.focusMode()))];
+		String modeStr = expLabel + " | " + focusLabel;
+		int modeLabelY = fy + 4 + tr.fontHeight * 2 + 4;
+		ctx.drawTextWithShadow(tr, Text.literal(modeStr), fx + 6, modeLabelY, 0xFFCCCCFF);
+
 		// Hand indicator (top-right)
 		String hand = offhand ? "OFF" : "MAIN";
 		int handW = tr.getWidth(hand);
