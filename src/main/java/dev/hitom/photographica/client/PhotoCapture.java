@@ -19,8 +19,11 @@ import net.minecraft.text.Text;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.FloatBuffer;
 import java.util.Random;
 import java.util.UUID;
+import org.lwjgl.BufferUtils;
+import org.lwjgl.opengl.GL11;
 
 /**
  * Photo capture pipeline. The screenshot is taken at WorldRenderEvents.LAST so
@@ -49,6 +52,13 @@ public final class PhotoCapture {
 	public static volatile long mirrorEndMs = 0L;
 	public static volatile long flashEndMs = 0L;
 	public static volatile long secondClickAtMs = 0L;
+
+	/**
+	 * Linear depth (in blocks) at the centre of the screen, updated every frame
+	 * during WorldRenderEvents.LAST while the camera is held. Read by ViewfinderHud
+	 * to colour the focus reticle.
+	 */
+	public static volatile float lastSceneDepthBlocks = 10.0f;
 
 	/** Called when the player presses the shutter (game thread). */
 	public static void take(ItemStack cameraStack) {
@@ -82,14 +92,28 @@ public final class PhotoCapture {
 
 	/** Called from WorldRenderEvents.LAST every frame; performs the capture if pending. */
 	public static void onWorldRenderEnd() {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		Framebuffer fb = mc.getFramebuffer();
+
+		// Update centre-pixel depth for the viewfinder focus indicator (cheap: 1 pixel).
+		updateCenterDepth(mc, fb);
+
 		if (pendingId == null) return;
 		UUID id = pendingId;
 		CameraSettings settings = pendingSettings;
 		pendingId = null;
 		pendingSettings = null;
 
-		MinecraftClient mc = MinecraftClient.getInstance();
-		Framebuffer fb = mc.getFramebuffer();
+		// Read the full depth buffer when DoF will be applied.
+		float[] linearDepth = null;
+		int fbW = fb.textureWidth;
+		int fbH = fb.textureHeight;
+		if (LensKind.hasLens(settings.lensType())
+				&& settings.aperture() <= 5.6f
+				&& settings.focusDistance() < 999.0f) {
+			linearDepth = readLinearDepth(fb, fbW, fbH);
+		}
+
 		NativeImage raw = ScreenshotRecorder.takeScreenshot(fb);
 
 		NativeImage cropped = null;
@@ -98,7 +122,7 @@ public final class PhotoCapture {
 		try {
 			cropped = cropTo3to2(raw);
 			downsampled = boxDownsample(cropped, 1280);
-			processed = applyPhotographicEffects(downsampled, settings);
+			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH);
 			File dir = new File(mc.runDirectory, "photographica/photos");
 			if (!dir.exists() && !dir.mkdirs()) {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
@@ -135,17 +159,18 @@ public final class PhotoCapture {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Applies physically-motivated photographic effects in four passes:
-	 *   1. Exposure scaling + highlight rolloff (aperture / SS / ISO triangle)
-	 *   2. Lens vignetting (aperture-dependent peripheral darkening)
+	 * Applies physically-motivated photographic effects:
+	 *   1. Exposure scaling + highlight rolloff
+	 *   2. Lens vignetting
 	 *   3. ISO grain / chroma noise
-	 *   4. Motion blur (shutter speeds ≤ 1/30 s)
-	 *   5. Diffraction softening (f/16 and narrower)
+	 *   4. Depth-of-field blur  (when linearDepth != null and aperture ≤ f/5.6)
+	 *   5. Motion blur          (shutters ≤ 1/30 s)
+	 *   6. Diffraction softening (f/16+)
 	 *
-	 * Returns a NEW NativeImage; the caller is responsible for closing it.
-	 * The src image is NOT modified and NOT closed.
+	 * Returns a NEW NativeImage; src is NOT modified or closed.
 	 */
-	private static NativeImage applyPhotographicEffects(NativeImage src, CameraSettings settings) {
+	private static NativeImage applyPhotographicEffects(NativeImage src, CameraSettings settings,
+	                                                    float[] linearDepth, int fbW, int fbH) {
 		double t    = settings.shutterSeconds();
 		double n    = settings.aperture();
 		double s    = settings.iso();
@@ -204,25 +229,34 @@ public final class PhotoCapture {
 			}
 		}
 
-		// Pass 2: Motion blur (slow shutters — simulates hand-camera shake)
+		// Pass 2: Depth-of-field blur
 		NativeImage pass2;
-		if (t >= 1.0 / 30.0) {
-			pass2 = applyMotionBlur(pass1, t, w, h);
+		if (linearDepth != null && n <= 5.6 && settings.focusDistance() < 999.0f) {
+			pass2 = applyDepthOfField(pass1, settings, linearDepth, w, h, fbW, fbH);
 			pass1.close();
 		} else {
 			pass2 = pass1;
 		}
 
-		// Pass 3: Diffraction softening at narrow apertures (f/16+)
+		// Pass 3: Motion blur (slow shutters — simulates hand-camera shake)
 		NativeImage pass3;
-		if (n >= 16.0) {
-			pass3 = applyBoxBlur3x3(pass2, w, h);
+		if (t >= 1.0 / 30.0) {
+			pass3 = applyMotionBlur(pass2, t, w, h);
 			pass2.close();
 		} else {
 			pass3 = pass2;
 		}
 
-		return pass3;
+		// Pass 4: Diffraction softening at narrow apertures (f/16+)
+		NativeImage pass4;
+		if (n >= 16.0) {
+			pass4 = applyBoxBlur3x3(pass3, w, h);
+			pass3.close();
+		} else {
+			pass4 = pass3;
+		}
+
+		return pass4;
 	}
 
 	/** Exposure scaling with film-like highlight rolloff above ~78% brightness. */
@@ -327,6 +361,182 @@ public final class PhotoCapture {
 				dst.setColor(x, y,
 						(((int)(aa / 9)) << 24) | (((int)(ba / 9)) << 16)
 						| (((int)(ga / 9)) << 8) | (int)(ra / 9));
+			}
+		}
+		return dst;
+	}
+
+	// -------------------------------------------------------------------------
+	// Depth-of-field
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Reads the depth buffer from the currently-bound framebuffer and returns a
+	 * float array of linear depth values (in blocks).  Index layout: OpenGL
+	 * convention (Y=0 at bottom), matching glReadPixels output directly.
+	 *
+	 * Near/far clip values are Minecraft defaults (0.05 / 512 blocks).
+	 */
+	private static float[] readLinearDepth(Framebuffer fb, int fbW, int fbH) {
+		fb.beginWrite(false); // binds the FBO
+		FloatBuffer buf = BufferUtils.createFloatBuffer(fbW * fbH);
+		GL11.glReadPixels(0, 0, fbW, fbH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
+
+		final float near = 0.05f;
+		final float far  = 512.0f;
+		float[] depth = new float[fbW * fbH];
+		for (int i = 0; i < depth.length; i++) {
+			float d   = buf.get(i);
+			float ndc = 2.0f * d - 1.0f;
+			depth[i]  = 2.0f * near * far / (far + near - ndc * (far - near));
+		}
+		return depth;
+	}
+
+	/**
+	 * Samples the single centre pixel of the depth buffer and stores the linear
+	 * depth in {@link #lastSceneDepthBlocks} for the viewfinder HUD.
+	 * Only updates when the player is sneaking with a camera.
+	 */
+	private static void updateCenterDepth(MinecraftClient mc, Framebuffer fb) {
+		if (mc.player == null || !mc.player.isSneaking()) return;
+		ItemStack hand = mc.player.getMainHandStack();
+		if (!(hand.getItem() instanceof CameraItem)) {
+			hand = mc.player.getOffHandStack();
+			if (!(hand.getItem() instanceof CameraItem)) return;
+		}
+		fb.beginWrite(false);
+		int cx = fb.textureWidth  / 2;
+		int cy = fb.textureHeight / 2; // OpenGL Y=0 is bottom → centre is fine
+		FloatBuffer buf = BufferUtils.createFloatBuffer(1);
+		GL11.glReadPixels(cx, cy, 1, 1, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
+		float d   = buf.get(0);
+		float ndc = 2.0f * d - 1.0f;
+		final float near = 0.05f;
+		final float far  = 512.0f;
+		lastSceneDepthBlocks = 2.0f * near * far / (far + near - ndc * (far - near));
+	}
+
+	/**
+	 * Depth-of-field blur.
+	 *
+	 * For each image pixel the circle-of-confusion (CoC) radius is derived from
+	 * the depth buffer and the focus distance / aperture settings:
+	 *
+	 *   maxBlurPx  = 80 / aperture²          (wider aperture → larger blur)
+	 *   coc(front) = (1 − depth/focus) × max  (foreground: linear increase)
+	 *   coc(back)  = (r−1)/(r) × max          (background: asymptotic at max)
+	 *                where r = depth/focus
+	 *
+	 * A single separable box-blur at maxBlurPx is blended against the sharp
+	 * image using t = coc/maxBlurPx per pixel.
+	 */
+	private static NativeImage applyDepthOfField(NativeImage src, CameraSettings settings,
+	                                              float[] linearDepth,
+	                                              int iw, int ih, int fbW, int fbH) {
+		float aperture  = settings.aperture();
+		float focusDist = settings.focusDistance();
+
+		// Maximum blur radius in pixels (at 1280px wide image).
+		float maxBlurPx = 80.0f / (aperture * aperture);
+		int   maxR      = Math.max(1, (int) Math.ceil(maxBlurPx));
+
+		// Pre-compute per-pixel CoC radii using depth buffer.
+		float[] cocMap = new float[iw * ih];
+		for (int iy = 0; iy < ih; iy++) {
+			for (int ix = 0; ix < iw; ix++) {
+				// Map image pixel → framebuffer pixel (approximate; crop is centred).
+				int fx    = Math.max(0, Math.min(fbW - 1, ix * fbW / iw));
+				// NativeImage Y=0 top, OpenGL Y=0 bottom → flip fy.
+				int fy_gl = Math.max(0, Math.min(fbH - 1, fbH - 1 - (iy * fbH / ih)));
+				float depth = linearDepth[fy_gl * fbW + fx];
+
+				float coc;
+				float r = depth / focusDist;
+				if (depth <= focusDist) {
+					coc = (1.0f - r) * maxBlurPx;          // foreground
+				} else {
+					float bg = r - 1.0f;
+					coc = (bg / (1.0f + bg)) * maxBlurPx;  // background (asymptotic)
+				}
+				cocMap[iy * iw + ix] = Math.min(coc, maxBlurPx);
+			}
+		}
+
+		// Separable box blur at maxR (H then V pass).
+		NativeImage hBlur = applyHBoxBlur(src, maxR, iw, ih);
+		NativeImage blurred = applyVBoxBlur(hBlur, maxR, iw, ih);
+		hBlur.close();
+
+		// Blend sharp + blurred per pixel.
+		NativeImage result = new NativeImage(iw, ih, false);
+		for (int iy = 0; iy < ih; iy++) {
+			for (int ix = 0; ix < iw; ix++) {
+				float t  = cocMap[iy * iw + ix] / maxBlurPx; // 0=sharp, 1=fully blurred
+				int   cs = src.getColor(ix, iy);
+				int   cb = blurred.getColor(ix, iy);
+				int ra = lerpCh((cs >>> 24) & 0xFF, (cb >>> 24) & 0xFF, t);
+				int bl = lerpCh((cs >>> 16) & 0xFF, (cb >>> 16) & 0xFF, t);
+				int gr = lerpCh((cs >>>  8) & 0xFF, (cb >>>  8) & 0xFF, t);
+				int rd = lerpCh( cs         & 0xFF,  cb         & 0xFF, t);
+				result.setColor(ix, iy, (ra << 24) | (bl << 16) | (gr << 8) | rd);
+			}
+		}
+		blurred.close();
+		return result;
+	}
+
+	private static int lerpCh(int a, int b, float t) {
+		return clampCh(Math.round(a + (b - a) * t));
+	}
+
+	/** Horizontal separable box blur. */
+	private static NativeImage applyHBoxBlur(NativeImage src, int radius, int w, int h) {
+		NativeImage dst = new NativeImage(w, h, false);
+		int diam = radius * 2 + 1;
+		for (int y = 0; y < h; y++) {
+			// Sliding-window accumulator (fast O(N) per row).
+			long ra = 0, ga = 0, ba = 0, aa = 0;
+			for (int dx = -radius; dx <= radius; dx++) {
+				int c = src.getColor(Math.max(0, Math.min(w - 1, dx)), y);
+				aa += (c >>> 24) & 0xFF; ba += (c >>> 16) & 0xFF;
+				ga += (c >>>  8) & 0xFF; ra +=  c         & 0xFF;
+			}
+			for (int x = 0; x < w; x++) {
+				dst.setColor(x, y, (((int)(aa/diam))<<24)|(((int)(ba/diam))<<16)
+						|(((int)(ga/diam))<<8)|(int)(ra/diam));
+				// Slide: remove left pixel, add right pixel.
+				int rem = src.getColor(Math.max(0, x - radius), y);
+				aa -= (rem >>> 24) & 0xFF; ba -= (rem >>> 16) & 0xFF;
+				ga -= (rem >>>  8) & 0xFF; ra -=  rem         & 0xFF;
+				int add = src.getColor(Math.min(w - 1, x + radius + 1), y);
+				aa += (add >>> 24) & 0xFF; ba += (add >>> 16) & 0xFF;
+				ga += (add >>>  8) & 0xFF; ra +=  add         & 0xFF;
+			}
+		}
+		return dst;
+	}
+
+	/** Vertical separable box blur. */
+	private static NativeImage applyVBoxBlur(NativeImage src, int radius, int w, int h) {
+		NativeImage dst = new NativeImage(w, h, false);
+		int diam = radius * 2 + 1;
+		for (int x = 0; x < w; x++) {
+			long ra = 0, ga = 0, ba = 0, aa = 0;
+			for (int dy = -radius; dy <= radius; dy++) {
+				int c = src.getColor(x, Math.max(0, Math.min(h - 1, dy)));
+				aa += (c >>> 24) & 0xFF; ba += (c >>> 16) & 0xFF;
+				ga += (c >>>  8) & 0xFF; ra +=  c         & 0xFF;
+			}
+			for (int y = 0; y < h; y++) {
+				dst.setColor(x, y, (((int)(aa/diam))<<24)|(((int)(ba/diam))<<16)
+						|(((int)(ga/diam))<<8)|(int)(ra/diam));
+				int rem = src.getColor(x, Math.max(0, y - radius));
+				aa -= (rem >>> 24) & 0xFF; ba -= (rem >>> 16) & 0xFF;
+				ga -= (rem >>>  8) & 0xFF; ra -=  rem         & 0xFF;
+				int add = src.getColor(x, Math.min(h - 1, y + radius + 1));
+				aa += (add >>> 24) & 0xFF; ba += (add >>> 16) & 0xFF;
+				ga += (add >>>  8) & 0xFF; ra +=  add         & 0xFF;
 			}
 		}
 		return dst;

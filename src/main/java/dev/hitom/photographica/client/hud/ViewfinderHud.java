@@ -92,13 +92,14 @@ public final class ViewfinderHud {
 		ctx.fill(fx + 4, t1y, fx2 - 4, t1y + 1, COLOR_GRID);
 		ctx.fill(fx + 4, t2y, fx2 - 4, t2y + 1, COLOR_GRID);
 
-		// Center focus reticle (broken crosshair)
+		// Center focus reticle — colour reflects whether the scene centre is in focus.
 		int cx = sw / 2;
 		int cy = sh / 2;
-		ctx.fill(cx - 10, cy, cx - 3, cy + 1, COLOR_FRAME);
-		ctx.fill(cx + 3, cy, cx + 10, cy + 1, COLOR_FRAME);
-		ctx.fill(cx, cy - 10, cx + 1, cy - 3, COLOR_FRAME);
-		ctx.fill(cx, cy + 3, cx + 1, cy + 10, COLOR_FRAME);
+		int reticleColor = focusReticleColor(s);
+		ctx.fill(cx - 10, cy, cx - 3, cy + 1, reticleColor);
+		ctx.fill(cx + 3, cy, cx + 10, cy + 1, reticleColor);
+		ctx.fill(cx, cy - 10, cx + 1, cy - 3, reticleColor);
+		ctx.fill(cx, cy + 3, cx + 1, cy + 10, reticleColor);
 
 		// Settings readout (bottom of frame) — shifted up to leave room for the exposure meter
 		TextRenderer tr = mc.textRenderer;
@@ -203,6 +204,29 @@ public final class ViewfinderHud {
 		int vy1 = dy > 0 ? ay : ay - len;
 		int vy2 = dy > 0 ? ay + len : ay;
 		ctx.fill(vx1, vy1, vx2, vy2, color);
+	}
+
+	/**
+	 * Reticle colour based on how well the scene centre aligns with the focus distance.
+	 * Uses the depth sampled by PhotoCapture.updateCenterDepth() each frame.
+	 *
+	 *   Green  : within DoF zone   (depth ≈ focusDist, scaled by aperture)
+	 *   Yellow : moderately off
+	 *   White  : lens not attached, or aperture too narrow to matter (f/8+)
+	 */
+	private static int focusReticleColor(dev.hitom.photographica.component.CameraSettings s) {
+		if (!dev.hitom.photographica.component.LensKind.hasLens(s.lensType())) return COLOR_FRAME;
+		if (s.aperture() >= 8.0f) return COLOR_FRAME; // deep DoF, colour unnecessary
+		float focus = s.focusDistance();
+		if (focus >= 999.0f) return COLOR_FRAME;       // infinity focus
+
+		float sceneDepth = dev.hitom.photographica.client.PhotoCapture.lastSceneDepthBlocks;
+		// DoF tolerance: wider aperture → tighter zone (real cameras behave this way)
+		float tolerance = focus * s.aperture() * 0.08f;
+		float diff = Math.abs(sceneDepth - focus);
+		if (diff <= tolerance)           return 0xFF00E000; // green: in focus
+		if (diff <= tolerance * 2.5f)    return 0xFFFFCC00; // yellow: close
+		return 0xFFFF4444;                                   // red: out of focus
 	}
 
 	private static int clampIdx(int idx, int len) {
