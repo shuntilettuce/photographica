@@ -30,3 +30,6 @@ Thumbs.db
 # Smoke test logs
 client.log
 server.log
+
+# Stray class files from build
+net/
