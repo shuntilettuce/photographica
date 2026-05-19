@@ -3,5 +3,7 @@
 	"item.photographica.lens_prime_50mm": "50mm Prime Lens",
 	"item.photographica.lens_zoom_24_70mm": "24-70mm Zoom Lens",
 	"item.photographica.photo": "Photo",
-	"screen.photographica.camera": "Camera Settings"
+	"screen.photographica.camera": "Camera Settings",
+	"key.photographica.camera_settings": "Open Camera Settings",
+	"category.photographica": "Photographica"
 }

@@ -6,9 +6,15 @@ import dev.hitom.photographica.client.screen.PhotoViewerScreen;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.PhotoItem;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
+import net.minecraft.item.ItemStack;
+import org.lwjgl.glfw.GLFW;
 
 public class PhotographicaClient implements ClientModInitializer {
 	@Override
@@ -18,6 +24,23 @@ public class PhotographicaClient implements ClientModInitializer {
 		CameraItem.clientTakePhoto = PhotoCapture::take;
 		PhotoItem.clientOpenViewer = data ->
 				MinecraftClient.getInstance().setScreen(new PhotoViewerScreen(data));
+
+		// G key (rebindable) → open camera settings screen while holding a camera
+		KeyBinding settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.camera_settings",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_G,
+				"category.photographica"
+		));
+		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			if (!settingsKey.wasPressed() || client.player == null) return;
+			ItemStack stack = client.player.getMainHandStack();
+			if (!(stack.getItem() instanceof CameraItem)) {
+				stack = client.player.getOffHandStack();
+				if (!(stack.getItem() instanceof CameraItem)) return;
+			}
+			CameraItem.clientOpenScreen.accept(stack);
+		});
 
 		// Viewfinder draws first, then the shutter flash overlay sits on top.
 		HudRenderCallback.EVENT.register(ViewfinderHud::render);

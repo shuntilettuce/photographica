@@ -35,6 +35,8 @@ public class GameRendererMixin {
 	                                            CallbackInfoReturnable<Double> cir) {
 		PlayerEntity player = MinecraftClient.getInstance().player;
 		if (player == null) return;
+		// FOV change (focal length) only applies while the viewfinder is active
+		if (!player.isSneaking()) return;
 
 		ItemStack stack = player.getMainHandStack();
 		if (!(stack.getItem() instanceof CameraItem)) {

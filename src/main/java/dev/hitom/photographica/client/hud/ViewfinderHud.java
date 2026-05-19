@@ -37,6 +37,8 @@ public final class ViewfinderHud {
 	public static void render(DrawContext ctx, RenderTickCounter tickCounter) {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.player == null || mc.options.hudHidden) return;
+		// Viewfinder only active while the player holds Shift
+		if (!mc.player.isSneaking()) return;
 
 		ItemStack stack = mc.player.getMainHandStack();
 		boolean offhand = false;
@@ -112,6 +114,12 @@ public final class ViewfinderHud {
 		// Exposure meter — horizontal scale centred in the frame, ±3 EV range
 		renderExposureMeter(ctx, s, fx, fx2, fy2);
 
+		// Scroll hint (bottom-right, inside frame)
+		boolean isZoom = dev.hitom.photographica.component.LensKind.isZoom(s.lensType());
+		String hint = isZoom ? "⟳ zoom  Ctrl⟳ F値" : "Ctrl⟳ F値";
+		int hintW = tr.getWidth(hint);
+		ctx.drawTextWithShadow(tr, Text.literal(hint), fx2 - hintW - 6, fy2 - tr.fontHeight - 14, 0x80FFFFFF);
+
 		// Lens label (top-left of frame)
 		ctx.drawTextWithShadow(tr, Text.literal(LensKind.displayName(s.lensType())),
 				fx + 6, fy + 4, COLOR_TEXT_DIM);
@@ -136,9 +144,9 @@ public final class ViewfinderHud {
 			int ww = tr.getWidth(warn);
 			ctx.drawTextWithShadow(tr, Text.literal(warn),
 					(fx + fx2 - ww) / 2, fy + frameH / 2 - tr.fontHeight - 2, 0xFFFF5555);
-			String hint = "shift + 右クリックで設定 → レンズ";
-			int hw = tr.getWidth(hint);
-			ctx.drawTextWithShadow(tr, Text.literal(hint),
+			String lensHint = "G キーで設定 → レンズ";
+			int hw = tr.getWidth(lensHint);
+			ctx.drawTextWithShadow(tr, Text.literal(lensHint),
 					(fx + fx2 - hw) / 2, fy + frameH / 2 + 4, COLOR_TEXT_DIM);
 		}
 	}
