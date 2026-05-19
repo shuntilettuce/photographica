@@ -73,4 +73,26 @@ public record CameraSettings(
 	public boolean isFilm() {
 		return filmType != 0;
 	}
+
+	private static final double[] SHUTTER_SECONDS = {
+			30.0, 15.0, 8.0, 4.0, 2.0, 1.0,
+			0.5, 0.25, 0.125, 1.0 / 15, 1.0 / 30, 1.0 / 60,
+			1.0 / 125, 1.0 / 250, 1.0 / 500, 1.0 / 1000, 1.0 / 2000, 1.0 / 4000
+	};
+
+	/** Shutter open time in seconds. */
+	public double shutterSeconds() {
+		return SHUTTER_SECONDS[Math.max(0, Math.min(SHUTTER_SECONDS.length - 1, shutterSpeedIdx))];
+	}
+
+	/**
+	 * EV deviation from the reference exposure (F5.6 · 1/60 · ISO 400).
+	 * Positive = overexposed, negative = underexposed.
+	 */
+	public double evDeviation() {
+		double mult = shutterSeconds() * 60.0
+				* ((5.6 / aperture) * (5.6 / aperture))
+				* (iso / 400.0);
+		return Math.log(mult) / Math.log(2.0);
+	}
 }

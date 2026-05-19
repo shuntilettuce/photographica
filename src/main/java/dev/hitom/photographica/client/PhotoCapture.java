@@ -19,6 +19,7 @@ import net.minecraft.text.Text;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -93,24 +94,24 @@ public final class PhotoCapture {
 
 		NativeImage cropped = null;
 		NativeImage downsampled = null;
+		NativeImage processed = null;
 		try {
 			cropped = cropTo3to2(raw);
-			// Box-filter downsample to a sensible save size — at the display sizes the
-			// viewer typically uses (~1200–1300 physical px wide), saving at 1280
-			// puts the displayed image at near-1:1 with the source, so it stays crisp.
 			downsampled = boxDownsample(cropped, 1280);
+			processed = applyPhotographicEffects(downsampled, settings);
 			File dir = new File(mc.runDirectory, "photographica/photos");
 			if (!dir.exists() && !dir.mkdirs()) {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 				return;
 			}
 			File outFile = new File(dir, id + ".png");
-			downsampled.writeTo(outFile);
+			processed.writeTo(outFile);
 			Photographica.LOGGER.info("Photo saved: {} ({}x{})",
-					outFile.getAbsolutePath(), downsampled.getWidth(), downsampled.getHeight());
+					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
 		} catch (IOException e) {
 			Photographica.LOGGER.error("Photo capture failed", e);
 		} finally {
+			if (processed != null) processed.close();
 			if (downsampled != null && downsampled != cropped && downsampled != raw) downsampled.close();
 			if (cropped != null && cropped != raw) cropped.close();
 			raw.close();
@@ -127,6 +128,208 @@ public final class PhotoCapture {
 	public static void playMirrorDownClick() {
 		MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(
 				SoundEvents.BLOCK_TRIPWIRE_CLICK_OFF, 1.3f, 1.0f));
+	}
+
+	// -------------------------------------------------------------------------
+	// Photographic image effects
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Applies physically-motivated photographic effects in four passes:
+	 *   1. Exposure scaling + highlight rolloff (aperture / SS / ISO triangle)
+	 *   2. Lens vignetting (aperture-dependent peripheral darkening)
+	 *   3. ISO grain / chroma noise
+	 *   4. Motion blur (shutter speeds ≤ 1/30 s)
+	 *   5. Diffraction softening (f/16 and narrower)
+	 *
+	 * Returns a NEW NativeImage; the caller is responsible for closing it.
+	 * The src image is NOT modified and NOT closed.
+	 */
+	private static NativeImage applyPhotographicEffects(NativeImage src, CameraSettings settings) {
+		double t    = settings.shutterSeconds();
+		double n    = settings.aperture();
+		double s    = settings.iso();
+
+		// Exposure multiplier relative to the reference (F5.6 · 1/60 · ISO 400).
+		// mult > 1 → overexposed; mult < 1 → underexposed.
+		float mult = (float) (t * 60.0 * ((5.6 / n) * (5.6 / n)) * (s / 400.0));
+
+		int  w   = src.getWidth();
+		int  h   = src.getHeight();
+		float cx  = w * 0.5f;
+		float cy  = h * 0.5f;
+		float vig = apertureToVignette((float) n);
+
+		float noiseSigma = isoToNoiseSigma((int) s);
+		Random rng = new Random();
+
+		NativeImage pass1 = new NativeImage(w, h, false);
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				int color = src.getColor(x, y);
+				int a     = (color >>> 24) & 0xFF;
+				int blue  = (color >>> 16) & 0xFF;
+				int green = (color >>>  8) & 0xFF;
+				int red   =  color         & 0xFF;
+
+				// Pass 1a: Exposure (with smooth film-like highlight rolloff)
+				red   = applyExposure(red,   mult);
+				green = applyExposure(green, mult);
+				blue  = applyExposure(blue,  mult);
+
+				// Pass 1b: Vignetting — quadratic falloff, normalised so corners = vigStr
+				float dx = (x - cx) / cx;
+				float dy = (y - cy) / cy;
+				// (dx²+dy²)*0.5 maps to 1.0 at corners
+				float vFactor = Math.max(0.0f, 1.0f - vig * (dx * dx + dy * dy) * 0.5f);
+				red   = clampCh((int)(red   * vFactor));
+				green = clampCh((int)(green * vFactor));
+				blue  = clampCh((int)(blue  * vFactor));
+
+				// Pass 1c: ISO grain (luminance + chroma at high ISO)
+				if (noiseSigma > 0.5f) {
+					int lum = gaussNoise(rng, noiseSigma);
+					red   = clampCh(red   + lum);
+					green = clampCh(green + lum);
+					blue  = clampCh(blue  + lum);
+					if (s >= 1600) {
+						float col = noiseSigma * 0.30f;
+						red   = clampCh(red   + gaussNoise(rng, col));
+						green = clampCh(green + gaussNoise(rng, col));
+						blue  = clampCh(blue  + gaussNoise(rng, col));
+					}
+				}
+
+				pass1.setColor(x, y, (a << 24) | (blue << 16) | (green << 8) | red);
+			}
+		}
+
+		// Pass 2: Motion blur (slow shutters — simulates hand-camera shake)
+		NativeImage pass2;
+		if (t >= 1.0 / 30.0) {
+			pass2 = applyMotionBlur(pass1, t, w, h);
+			pass1.close();
+		} else {
+			pass2 = pass1;
+		}
+
+		// Pass 3: Diffraction softening at narrow apertures (f/16+)
+		NativeImage pass3;
+		if (n >= 16.0) {
+			pass3 = applyBoxBlur3x3(pass2, w, h);
+			pass2.close();
+		} else {
+			pass3 = pass2;
+		}
+
+		return pass3;
+	}
+
+	/** Exposure scaling with film-like highlight rolloff above ~78% brightness. */
+	private static int applyExposure(int v, float mult) {
+		float f = v * mult;
+		if (f > 200.0f) {
+			float excess = f - 200.0f;
+			f = 200.0f + 55.0f * (1.0f - (float) Math.exp(-excess / 55.0f));
+		}
+		return clampCh((int) f);
+	}
+
+	/** ISO → luminance noise sigma (in pixel-level units 0–255). */
+	private static float isoToNoiseSigma(int iso) {
+		if (iso <=   100) return  0.0f;
+		if (iso <=   200) return  1.5f;
+		if (iso <=   400) return  3.0f;
+		if (iso <=   800) return  6.0f;
+		if (iso <=  1600) return 11.0f;
+		if (iso <=  3200) return 18.0f;
+		if (iso <=  6400) return 28.0f;
+		if (iso <= 12800) return 42.0f;
+		return 60.0f; // ISO 25600
+	}
+
+	/** Aperture → vignette strength (0 = no vignetting, 1 = severe). */
+	private static float apertureToVignette(float aperture) {
+		if (aperture <=  1.4f) return 0.70f;
+		if (aperture <=  2.0f) return 0.55f;
+		if (aperture <=  2.8f) return 0.40f;
+		if (aperture <=  4.0f) return 0.25f;
+		if (aperture <=  5.6f) return 0.15f;
+		if (aperture <=  8.0f) return 0.08f;
+		if (aperture <= 11.0f) return 0.05f;
+		return 0.03f;
+	}
+
+	/** Box-Muller Gaussian noise sample with the given standard deviation. */
+	private static int gaussNoise(Random rng, float sigma) {
+		double u1 = Math.max(1e-10, rng.nextDouble());
+		double u2 = rng.nextDouble();
+		double z  = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+		return (int) Math.round(z * sigma);
+	}
+
+	private static int clampCh(int v) {
+		return Math.max(0, Math.min(255, v));
+	}
+
+	/** Horizontal motion blur — simulates camera shake during long exposures. */
+	private static NativeImage applyMotionBlur(NativeImage src, double t, int w, int h) {
+		int radius;
+		if      (t >= 8.0)   radius = 60;
+		else if (t >= 4.0)   radius = 45;
+		else if (t >= 2.0)   radius = 32;
+		else if (t >= 1.0)   radius = 22;
+		else if (t >= 0.5)   radius = 14;
+		else if (t >= 0.25)  radius = 9;
+		else if (t >= 0.125) radius = 5;
+		else                 radius = 3; // 1/30 s
+		radius = Math.min(radius, w / 12);
+
+		NativeImage dst = new NativeImage(w, h, false);
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				long ra = 0, ga = 0, ba = 0, aa = 0;
+				int n = 0;
+				for (int dx = -radius; dx <= radius; dx++) {
+					int sx = Math.max(0, Math.min(w - 1, x + dx));
+					int c  = src.getColor(sx, y);
+					aa += (c >>> 24) & 0xFF;
+					ba += (c >>> 16) & 0xFF;
+					ga += (c >>>  8) & 0xFF;
+					ra +=  c         & 0xFF;
+					n++;
+				}
+				dst.setColor(x, y,
+						(((int)(aa / n)) << 24) | (((int)(ba / n)) << 16)
+						| (((int)(ga / n)) << 8) | (int)(ra / n));
+			}
+		}
+		return dst;
+	}
+
+	/** 3×3 box blur used to simulate diffraction softening at f/16+. */
+	private static NativeImage applyBoxBlur3x3(NativeImage src, int w, int h) {
+		NativeImage dst = new NativeImage(w, h, false);
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				long ra = 0, ga = 0, ba = 0, aa = 0;
+				for (int dy = -1; dy <= 1; dy++) {
+					for (int dx = -1; dx <= 1; dx++) {
+						int c = src.getColor(
+								Math.max(0, Math.min(w - 1, x + dx)),
+								Math.max(0, Math.min(h - 1, y + dy)));
+						aa += (c >>> 24) & 0xFF;
+						ba += (c >>> 16) & 0xFF;
+						ga += (c >>>  8) & 0xFF;
+						ra +=  c         & 0xFF;
+					}
+				}
+				dst.setColor(x, y,
+						(((int)(aa / 9)) << 24) | (((int)(ba / 9)) << 16)
+						| (((int)(ga / 9)) << 8) | (int)(ra / 9));
+			}
+		}
+		return dst;
 	}
 
 	/** Box-filter downsample to a max width (preserving aspect). Returns src if already small enough. */
