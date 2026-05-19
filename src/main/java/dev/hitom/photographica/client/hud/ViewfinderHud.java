@@ -144,7 +144,7 @@ public final class ViewfinderHud {
 			int ww = tr.getWidth(warn);
 			ctx.drawTextWithShadow(tr, Text.literal(warn),
 					(fx + fx2 - ww) / 2, fy + frameH / 2 - tr.fontHeight - 2, 0xFFFF5555);
-			String lensHint = "G キーで設定 → レンズ";
+			String lensHint = "操作設定でキーを割り当てて → レンズ";
 			int hw = tr.getWidth(lensHint);
 			ctx.drawTextWithShadow(tr, Text.literal(lensHint),
 					(fx + fx2 - hw) / 2, fy + frameH / 2 + 4, COLOR_TEXT_DIM);

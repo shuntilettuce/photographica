@@ -29,7 +29,7 @@ public class PhotographicaClient implements ClientModInitializer {
 		KeyBinding settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.camera_settings",
 				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_G,
+				GLFW.GLFW_KEY_UNKNOWN,
 				"category.photographica"
 		));
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
