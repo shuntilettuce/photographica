@@ -30,7 +30,13 @@ public class DarkroomScreen extends HandledScreen<DarkroomScreenHandler> {
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("現像"),
                 b -> this.client.interactionManager.clickButton(this.handler.syncId, 0)
-        ).dimensions(x + 60, y + 58, 56, 16).build());
+        ).dimensions(x + 7, y + 78, 70, 16).build());
+
+        // フィルム取り出し button
+        this.addDrawableChild(ButtonWidget.builder(
+                Text.literal("カメラから取り出し"),
+                b -> this.client.interactionManager.clickButton(this.handler.syncId, 1)
+        ).dimensions(x + 90, y + 78, 80, 16).build());
     }
 
     @Override
@@ -55,6 +61,7 @@ public class DarkroomScreen extends HandledScreen<DarkroomScreenHandler> {
         context.drawText(this.textRenderer, Text.literal("フィルム2"), x + 54,  y + 24, 0x404040, false);
         context.drawText(this.textRenderer, Text.literal("フィルム3"), x + 90,  y + 24, 0x404040, false);
         context.drawText(this.textRenderer, Text.literal("現像液"),    x + 128, y + 24, 0x404040, false);
+        context.drawText(this.textRenderer, Text.literal("フィルムカメラ"), x + 62, y + 48, 0x404040, false);
     }
 
     @Override

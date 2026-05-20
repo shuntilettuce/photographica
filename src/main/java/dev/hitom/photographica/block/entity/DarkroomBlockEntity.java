@@ -20,7 +20,7 @@ import org.jetbrains.annotations.Nullable;
 
 public class DarkroomBlockEntity extends BlockEntity implements Inventory, NamedScreenHandlerFactory {
 
-    private final DefaultedList<ItemStack> inventory = DefaultedList.ofSize(4, ItemStack.EMPTY);
+    private final DefaultedList<ItemStack> inventory = DefaultedList.ofSize(5, ItemStack.EMPTY);
 
     public DarkroomBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.DARKROOM, pos, state);
@@ -37,9 +37,7 @@ public class DarkroomBlockEntity extends BlockEntity implements Inventory, Named
     }
 
     @Override
-    public int size() {
-        return inventory.size();
-    }
+    public int size() { return inventory.size(); }
 
     @Override
     public boolean isEmpty() {

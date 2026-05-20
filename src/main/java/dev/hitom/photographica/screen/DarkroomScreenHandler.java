@@ -5,6 +5,7 @@ import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.item.DeveloperTankItem;
 import dev.hitom.photographica.item.DevelopedFilmItem;
 import dev.hitom.photographica.item.ExposedFilmItem;
+import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.registry.ModItems;
 import dev.hitom.photographica.registry.ModScreenHandlers;
 import net.minecraft.entity.player.PlayerEntity;
@@ -21,13 +22,13 @@ public class DarkroomScreenHandler extends ScreenHandler {
 
     /** Client-side constructor (called via ScreenHandlerType). */
     public DarkroomScreenHandler(int syncId, PlayerInventory playerInventory) {
-        this(syncId, playerInventory, new SimpleInventory(4));
+        this(syncId, playerInventory, new SimpleInventory(5));
     }
 
     /** Server-side constructor. */
     public DarkroomScreenHandler(int syncId, PlayerInventory playerInventory, Inventory inventory) {
         super(ModScreenHandlers.DARKROOM, syncId);
-        checkSize(inventory, 4);
+        checkSize(inventory, 5);
         this.inventory = inventory;
         inventory.onOpen(playerInventory.player);
 
@@ -48,6 +49,14 @@ public class DarkroomScreenHandler extends ScreenHandler {
             @Override
             public boolean canInsert(ItemStack stack) {
                 return stack.getItem() instanceof DeveloperTankItem;
+            }
+        });
+
+        // Slot 4: Film camera slot (x=80, y=58) — extract film without fogging
+        addSlot(new Slot(inventory, 4, 80, 58) {
+            @Override
+            public boolean canInsert(ItemStack stack) {
+                return stack.getItem() instanceof FilmCameraItem;
             }
         });
 
@@ -130,6 +139,23 @@ public class DarkroomScreenHandler extends ScreenHandler {
 
             return true;
         }
+        // button 1: フィルムカメラからフィルムを取り出す（感光なし）
+        if (id == 1) {
+            ItemStack cameraStack = inventory.getStack(4);
+            if (cameraStack.isEmpty() || !(cameraStack.getItem() instanceof FilmCameraItem)) return true;
+            FilmRollData film = FilmCameraItem.getFilm(cameraStack);
+            if (film.totalExposures() == 0) return true;
+
+            // Create ExposedFilm — no light check (darkroom is always safe)
+            ItemStack out = new ItemStack(ModItems.EXPOSED_FILM);
+            out.set(ModDataComponents.FILM_ROLL, film);
+            FilmCameraItem.setFilm(cameraStack, FilmRollData.EMPTY.withWound(false));
+            inventory.markDirty();
+            if (!player.getInventory().insertStack(out)) {
+                player.dropItem(out, false);
+            }
+            return true;
+        }
         return false;
     }
 
@@ -141,9 +167,9 @@ public class DarkroomScreenHandler extends ScreenHandler {
             ItemStack stack = slot.getStack();
             result = stack.copy();
 
-            if (slotIndex < 4) {
+            if (slotIndex < 5) {
                 // From block entity to player inventory
-                if (!insertItem(stack, 4, this.slots.size(), true)) {
+                if (!insertItem(stack, 5, this.slots.size(), true)) {
                     return ItemStack.EMPTY;
                 }
             } else {
@@ -154,6 +180,10 @@ public class DarkroomScreenHandler extends ScreenHandler {
                     }
                 } else if (stack.getItem() instanceof DeveloperTankItem) {
                     if (!insertItem(stack, 3, 4, false)) {
+                        return ItemStack.EMPTY;
+                    }
+                } else if (stack.getItem() instanceof FilmCameraItem) {
+                    if (!insertItem(stack, 4, 5, false)) {
                         return ItemStack.EMPTY;
                     }
                 } else {
