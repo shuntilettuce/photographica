@@ -55,7 +55,7 @@ public class FilmCameraScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = width / 2;
-		int top = height / 2 - 118;
+		int top = height / 2 - 88;
 		int row = 0;
 
 		// Aperture — disabled when auto controls it (Tv or P)
@@ -185,7 +185,7 @@ public class FilmCameraScreen extends Screen {
 
 		// Draw dark panel background
 		int cx = width / 2;
-		int top = height / 2 - 118;
+		int top = height / 2 - 88;
 		int panelW = 320;
 		int panelH = 258;
 		int px = cx - panelW / 2;
