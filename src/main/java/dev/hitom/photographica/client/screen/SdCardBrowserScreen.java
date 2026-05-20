@@ -1,6 +1,7 @@
 package dev.hitom.photographica.client.screen;
 
 import dev.hitom.photographica.Photographica;
+import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.component.PhotoData;
 import dev.hitom.photographica.component.SdCardData;
 import dev.hitom.photographica.network.DeleteSdPhotoPayload;
@@ -193,6 +194,10 @@ public class SdCardBrowserScreen extends Screen {
 
         // Notify server
         ClientPlayNetworking.send(new DeleteSdPhotoPayload(photoId));
+
+        // Optimistic client-side update so CameraScreen reads fresh data on return
+        SdCardData current = cameraStack.getOrDefault(ModDataComponents.SD_CARD, SdCardData.EMPTY);
+        cameraStack.set(ModDataComponents.SD_CARD, current.withoutPhoto(photoId));
 
         // Update local list and clamp index
         photos.remove(index);
