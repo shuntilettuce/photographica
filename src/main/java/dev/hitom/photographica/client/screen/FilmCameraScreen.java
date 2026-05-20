@@ -16,7 +16,6 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 
@@ -48,7 +47,6 @@ public class FilmCameraScreen extends Screen {
 	private final ItemStack stack;
 	private CameraSettings settings;
 	private boolean dirty = false;
-	private boolean pickingFilm = false;
 
 	public FilmCameraScreen(ItemStack stack) {
 		super(Text.literal("フィルムカメラ"));
@@ -138,70 +136,40 @@ public class FilmCameraScreen extends Screen {
 		boolean loaded = film.totalExposures() > 0;
 		int btnY = top + row * 22 + 14;
 
-		if (!loaded && pickingFilm) {
-			// Film-type picker: show one button per available type, then cancel.
-			Map<Integer, Integer> available = availableFilmTypes();
-			List<Integer> types = new ArrayList<>(available.keySet());
-			int n = types.size();
-			// Layout: up to 3 per row, 64px wide each with 3px gap.
-			int colW = 64, gap = 3;
-			int rowCount = (n + 2) / 3;
-			for (int i = 0; i < n; i++) {
-				int ft = types.get(i);
-				int col = i % 3, r = i / 3;
-				int bx = cx - 99 + col * (colW + gap);
-				int by = btnY + r * (20 + 4);
-				int count = available.get(ft);
-				String label = FilmKind.displayName(ft) + " ×" + count;
-				int finalFt = ft;
-				addDrawableChild(SafelightButton.primary(bx, by, colW,
-						Text.literal(label),
-						b -> {
-							ClientPlayNetworking.send(new LoadFilmPayload(finalFt));
+		addDrawableChild(SafelightButton.of(cx - 105, btnY, 100,
+				Text.literal(loaded ? "フィルム取り出し" : "フィルム装填"),
+				b -> {
+					if (loaded) {
+						ClientPlayNetworking.send(new UnloadFilmPayload());
+						close();
+					} else {
+						Map<Integer, Integer> available = availableFilmTypes();
+						if (available.size() == 1) {
+							int ft = available.keySet().iterator().next();
+							ClientPlayNetworking.send(new LoadFilmPayload(ft));
 							close();
-						}));
-			}
-			int cancelRow = rowCount;
-			addDrawableChild(SafelightButton.ghost(cx - 50, btnY + cancelRow * (20 + 4), 100,
-					Text.literal("キャンセル"),
-					b -> { pickingFilm = false; clearAndInit(); }));
-		} else {
-			addDrawableChild(SafelightButton.of(cx - 105, btnY, 100,
-					Text.literal(loaded ? "フィルム取り出し" : "フィルム装填"),
-					b -> {
-						if (loaded) {
-							ClientPlayNetworking.send(new UnloadFilmPayload());
-							close();
+						} else if (available.size() > 1) {
+							flushDirty();
+							client.setScreen(new FilmPickerScreen(this, available));
 						} else {
-							Map<Integer, Integer> available = availableFilmTypes();
-							if (available.size() == 1) {
-								int ft = available.keySet().iterator().next();
-								ClientPlayNetworking.send(new LoadFilmPayload(ft));
-								close();
-							} else if (available.size() > 1) {
-								pickingFilm = true;
-								clearAndInit();
-							} else {
-								// No film — let server send the error message
-								ClientPlayNetworking.send(new LoadFilmPayload(0));
-								close();
-							}
+							ClientPlayNetworking.send(new LoadFilmPayload(0));
+							close();
 						}
-					}));
+					}
+				}));
 
-			String autoWindLabel = settings.autoWind() ? "自動巻上げ: §aON" : "自動巻上げ: §cOFF";
-			addDrawableChild(SafelightButton.ghost(cx - 105, btnY + 24, 210,
-					Text.literal(autoWindLabel),
-					b -> {
-						settings = settings.withAutoWind(!settings.autoWind());
-						dirty = true;
-						clearAndInit();
-					}));
+		String autoWindLabel = settings.autoWind() ? "自動巻上げ: §aON" : "自動巻上げ: §cOFF";
+		addDrawableChild(SafelightButton.ghost(cx - 105, btnY + 24, 210,
+				Text.literal(autoWindLabel),
+				b -> {
+					settings = settings.withAutoWind(!settings.autoWind());
+					dirty = true;
+					clearAndInit();
+				}));
 
-			addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
-					Text.literal("閉じる"),
-					b -> close()));
-		}
+		addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
+				Text.literal("閉じる"),
+				b -> close()));
 	}
 
 	private void addRow(int cx, int y, String label, java.util.function.Supplier<String> value,
@@ -269,12 +237,18 @@ public class FilmCameraScreen extends Screen {
 		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("FILM CAMERA"), cx, py + 6, GuiHelper.CREAM);
 	}
 
-	@Override
-	public void close() {
+	/** Sends pending settings to the server without closing the screen. */
+	private void flushDirty() {
 		if (dirty) {
 			FilmCameraItem.setSettings(stack, settings);
 			ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
+			dirty = false;
 		}
+	}
+
+	@Override
+	public void close() {
+		flushDirty();
 		super.close();
 	}
 
