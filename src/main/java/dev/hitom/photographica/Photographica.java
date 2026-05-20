@@ -214,7 +214,7 @@ public class Photographica implements ModInitializer {
 					out = new ItemStack(ModItems.EXPOSED_FILM);
 					out.set(ModDataComponents.FILM_ROLL, film);
 				}
-				FilmCameraItem.setFilm(camera, FilmRollData.EMPTY.withWound(false));
+				camera.remove(ModDataComponents.FILM_ROLL);
 				if (!player.getInventory().insertStack(out)) {
 					player.dropItem(out, false);
 				}

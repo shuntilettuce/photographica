@@ -154,7 +154,7 @@ public class DarkroomScreenHandler extends ScreenHandler {
             FilmRollData film = FilmCameraItem.getFilm(cameraStack);
             if (film.totalExposures() == 0) return true;
 
-            FilmCameraItem.setFilm(cameraStack, FilmRollData.EMPTY.withWound(false));
+            cameraStack.remove(ModDataComponents.FILM_ROLL);
             inventory.markDirty();
 
             ItemStack tankStack = inventory.getStack(3);
