@@ -155,7 +155,7 @@ public class CameraScreen extends Screen {
 		// Draw dark panel background
 		int cx = width / 2;
 		int top = height / 2 - 100;
-		int panelW = 248;
+		int panelW = 320;
 		int panelH = 210;
 		int px = cx - panelW / 2;
 		int py = top - 16;
@@ -170,7 +170,7 @@ public class CameraScreen extends Screen {
 		super.render(ctx, mouseX, mouseY, delta);
 
 		// Title text
-		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("CAMERA SETTINGS"), cx, py + 6, GuiHelper.FRAME_LO);
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("CAMERA SETTINGS"), cx, py + 6, GuiHelper.CREAM);
 	}
 
 	@Override

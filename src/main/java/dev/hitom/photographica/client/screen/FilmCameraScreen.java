@@ -55,7 +55,7 @@ public class FilmCameraScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = width / 2;
-		int top = height / 2 - 110;
+		int top = height / 2 - 118;
 		int row = 0;
 
 		// Aperture — disabled when auto controls it (Tv or P)
@@ -182,9 +182,9 @@ public class FilmCameraScreen extends Screen {
 
 		// Draw dark panel background
 		int cx = width / 2;
-		int top = height / 2 - 110;
-		int panelW = 248;
-		int panelH = 222;
+		int top = height / 2 - 118;
+		int panelW = 320;
+		int panelH = 258;
 		int px = cx - panelW / 2;
 		int py = top - 16;
 		GuiHelper.drawPanel(ctx, px, py, panelW, panelH);
@@ -195,12 +195,7 @@ public class FilmCameraScreen extends Screen {
 		// Rule below nameplate
 		GuiHelper.drawRule(ctx, px + 6, py + 17, panelW - 12);
 
-		super.render(ctx, mouseX, mouseY, delta);
-
-		// Title text
-		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("FILM CAMERA"), cx, py + 6, GuiHelper.FRAME_LO);
-
-		// Film status
+		// Film status — drawn ABOVE the buttons
 		FilmRollData film = FilmCameraItem.getFilm(stack);
 		String status;
 		int statusColor;
@@ -217,7 +212,12 @@ public class FilmCameraScreen extends Screen {
 					+ "  ·  " + wound;
 			statusColor = GuiHelper.CREAM;
 		}
-		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, py + 208, statusColor);
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, py + 194, statusColor);
+
+		super.render(ctx, mouseX, mouseY, delta);
+
+		// Title text on nameplate
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("FILM CAMERA"), cx, py + 6, GuiHelper.CREAM);
 	}
 
 	@Override
