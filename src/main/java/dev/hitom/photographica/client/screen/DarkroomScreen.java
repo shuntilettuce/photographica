@@ -22,50 +22,53 @@ public class DarkroomScreen extends HandledScreen<DarkroomScreenHandler> {
     protected void init() {
         super.init();
         this.titleX = (this.backgroundWidth - this.textRenderer.getWidth(this.title)) / 2;
-
-        int x = this.x;
-        int y = this.y;
-
-        // 現像 button
+        this.playerInventoryTitleY = 94;
+        int x = this.x, y = this.y;
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("現像"),
                 b -> this.client.interactionManager.clickButton(this.handler.syncId, 0)
-        ).dimensions(x + 7, y + 78, 70, 16).build());
-
-        // フィルム取り出し button
+        ).dimensions(x + 7, y + 72, 70, 16).build());
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("カメラから取り出し"),
                 b -> this.client.interactionManager.clickButton(this.handler.syncId, 1)
-        ).dimensions(x + 90, y + 78, 80, 16).build());
+        ).dimensions(x + 90, y + 72, 79, 16).build());
     }
 
     @Override
-    protected void drawBackground(DrawContext context, float delta, int mouseX, int mouseY) {
-        int x = this.x;
-        int y = this.y;
-        context.fill(x, y, x + backgroundWidth, y + backgroundHeight, 0xC0000000);
-        context.fill(x + 1, y + 1, x + backgroundWidth - 1, y + backgroundHeight - 1, 0xFF8B8B8B);
+    protected void drawBackground(DrawContext ctx, float delta, int mouseX, int mouseY) {
+        int x = this.x, y = this.y, w = backgroundWidth, h = backgroundHeight;
+        GuiHelper.drawPanel(ctx, x, y, w, h);
+        GuiHelper.drawSeparator(ctx, x + 7, y + 90, w - 14);
+        // Film slots row
+        GuiHelper.drawSlotBox(ctx, x + 26, y + 26);
+        GuiHelper.drawSlotBox(ctx, x + 62, y + 26);
+        GuiHelper.drawSlotBox(ctx, x + 98, y + 26);
+        // Developer tank slot
+        GuiHelper.drawSlotBox(ctx, x + 134, y + 26);
+        // Camera slot
+        GuiHelper.drawSlotBox(ctx, x + 80, y + 52);
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
-        super.render(context, mouseX, mouseY, delta);
-        this.drawMouseoverTooltip(context, mouseX, mouseY);
-
-        int x = this.x;
-        int y = this.y;
-
-        // Slot labels
-        context.drawText(this.textRenderer, Text.literal("フィルム1"), x + 18,  y + 24, 0x404040, false);
-        context.drawText(this.textRenderer, Text.literal("フィルム2"), x + 54,  y + 24, 0x404040, false);
-        context.drawText(this.textRenderer, Text.literal("フィルム3"), x + 90,  y + 24, 0x404040, false);
-        context.drawText(this.textRenderer, Text.literal("現像液"),    x + 128, y + 24, 0x404040, false);
-        context.drawText(this.textRenderer, Text.literal("フィルムカメラ"), x + 62, y + 48, 0x404040, false);
+    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+        this.renderBackground(ctx, mouseX, mouseY, delta);
+        super.render(ctx, mouseX, mouseY, delta);
+        this.drawMouseoverTooltip(ctx, mouseX, mouseY);
     }
 
     @Override
-    protected void drawForeground(DrawContext context, int mouseX, int mouseY) {
-        context.drawText(this.textRenderer, this.title, this.titleX, this.titleY, 0x404040, false);
+    protected void drawForeground(DrawContext ctx, int mouseX, int mouseY) {
+        ctx.drawText(this.textRenderer, this.title, this.titleX, this.titleY, GuiHelper.TEXT_DARK, false);
+        ctx.drawText(this.textRenderer, this.playerInventoryTitle, this.playerInventoryTitleX, this.playerInventoryTitleY, GuiHelper.TEXT_DARK, false);
+        drawCentered(ctx, "フィルム1",     26, 16);
+        drawCentered(ctx, "フィルム2",     62, 16);
+        drawCentered(ctx, "フィルム3",     98, 16);
+        drawCentered(ctx, "現像液",       134, 16);
+        drawCentered(ctx, "フィルムカメラ",  80, 42);
+    }
+
+    private void drawCentered(DrawContext ctx, String text, int slotX, int y) {
+        int tx = slotX + 8 - this.textRenderer.getWidth(text) / 2;
+        ctx.drawText(this.textRenderer, Text.literal(text), tx, y, GuiHelper.TEXT_DARK, false);
     }
 }

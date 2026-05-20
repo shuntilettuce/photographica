@@ -18,65 +18,60 @@ public class EnlargerScreen extends HandledScreen<EnlargerScreenHandler> {
     public EnlargerScreen(EnlargerScreenHandler handler, PlayerInventory playerInventory, Text title) {
         super(handler, playerInventory, title);
         this.backgroundWidth = 176;
-        this.backgroundHeight = 186;
+        this.backgroundHeight = 172;
     }
 
     @Override
     protected void init() {
         super.init();
         this.titleX = (this.backgroundWidth - this.textRenderer.getWidth(this.title)) / 2;
-
-        int x = this.x;
-        int y = this.y;
-
-        // 引き伸ばし button (all)
+        int x = this.x, y = this.y;
         this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("引き伸ばし"),
+                Text.literal("全フレーム焼付"),
                 b -> this.client.interactionManager.clickButton(this.handler.syncId, 0)
-        ).dimensions(x + 20, y + 58, 60, 16).build());
-
-        // 1枚 button
+        ).dimensions(x + 7, y + 58, 80, 16).build());
         this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("1枚"),
+                Text.literal("1枚のみ"),
                 b -> this.client.interactionManager.clickButton(this.handler.syncId, 1)
-        ).dimensions(x + 95, y + 58, 60, 16).build());
+        ).dimensions(x + 94, y + 58, 75, 16).build());
     }
 
     @Override
-    protected void drawBackground(DrawContext context, float delta, int mouseX, int mouseY) {
-        int x = this.x;
-        int y = this.y;
-        context.fill(x, y, x + backgroundWidth, y + backgroundHeight, 0xC0000000);
-        context.fill(x + 1, y + 1, x + backgroundWidth - 1, y + backgroundHeight - 1, 0xFF8B8B8B);
+    protected void drawBackground(DrawContext ctx, float delta, int mouseX, int mouseY) {
+        int x = this.x, y = this.y, w = backgroundWidth, h = backgroundHeight;
+        GuiHelper.drawPanel(ctx, x, y, w, h);
+        GuiHelper.drawSeparator(ctx, x + 7, y + 76, w - 14);
+        GuiHelper.drawSlotBox(ctx, x + 44, y + 35);
+        GuiHelper.drawSlotBox(ctx, x + 80, y + 35);
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
-        super.render(context, mouseX, mouseY, delta);
-        this.drawMouseoverTooltip(context, mouseX, mouseY);
+    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+        this.renderBackground(ctx, mouseX, mouseY, delta);
+        super.render(ctx, mouseX, mouseY, delta);
+        this.drawMouseoverTooltip(ctx, mouseX, mouseY);
+    }
 
-        int x = this.x;
-        int y = this.y;
+    @Override
+    protected void drawForeground(DrawContext ctx, int mouseX, int mouseY) {
+        ctx.drawText(this.textRenderer, this.title, this.titleX, this.titleY, GuiHelper.TEXT_DARK, false);
+        ctx.drawText(this.textRenderer, this.playerInventoryTitle, this.playerInventoryTitleX, this.playerInventoryTitleY, GuiHelper.TEXT_DARK, false);
+        drawCentered(ctx, "ネガ",   44, 25);
+        drawCentered(ctx, "印画紙", 80, 25);
 
-        // Slot labels
-        context.drawText(this.textRenderer, Text.literal("ネガ"),   x + 38, y + 24, 0x404040, false);
-        context.drawText(this.textRenderer, Text.literal("印画紙"), x + 70, y + 24, 0x404040, false);
-
-        // Film exposure count
-        ItemStack filmStack = this.handler.getSlot(0).getStack();
-        if (!filmStack.isEmpty() && filmStack.contains(ModDataComponents.FILM_ROLL)) {
-            FilmRollData film = filmStack.get(ModDataComponents.FILM_ROLL);
-            if (film != null) {
-                context.drawText(this.textRenderer,
-                        Text.literal("§e" + film.exposures().size() + "枚"),
-                        x + 110, y + 35, 0xFFFFFF, false);
+        ItemStack film = this.handler.getSlot(0).getStack();
+        if (!film.isEmpty() && film.contains(ModDataComponents.FILM_ROLL)) {
+            FilmRollData data = film.get(ModDataComponents.FILM_ROLL);
+            if (data != null && !data.exposures().isEmpty()) {
+                String count = data.exposures().size() + "枚";
+                ctx.drawText(this.textRenderer, Text.literal("§e" + count),
+                        44 + 8 - this.textRenderer.getWidth(count) / 2, 35, 0xFFFFFF, false);
             }
         }
     }
 
-    @Override
-    protected void drawForeground(DrawContext context, int mouseX, int mouseY) {
-        context.drawText(this.textRenderer, this.title, this.titleX, this.titleY, 0x404040, false);
+    private void drawCentered(DrawContext ctx, String text, int slotX, int y) {
+        int tx = slotX + 8 - this.textRenderer.getWidth(text) / 2;
+        ctx.drawText(this.textRenderer, Text.literal(text), tx, y, GuiHelper.TEXT_DARK, false);
     }
 }

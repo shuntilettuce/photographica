@@ -36,7 +36,7 @@ public class DarkroomScreenHandler extends ScreenHandler {
         int[] filmX = {26, 62, 98};
         for (int i = 0; i < 3; i++) {
             final int slotIdx = i;
-            addSlot(new Slot(inventory, slotIdx, filmX[i], 35) {
+            addSlot(new Slot(inventory, slotIdx, filmX[i], 26) {
                 @Override
                 public boolean canInsert(ItemStack stack) {
                     return stack.getItem() instanceof ExposedFilmItem;
@@ -45,7 +45,7 @@ public class DarkroomScreenHandler extends ScreenHandler {
         }
 
         // Slot 3: DeveloperTank slot (x=134, y=35)
-        addSlot(new Slot(inventory, 3, 134, 35) {
+        addSlot(new Slot(inventory, 3, 134, 26) {
             @Override
             public boolean canInsert(ItemStack stack) {
                 return stack.getItem() instanceof DeveloperTankItem;
@@ -53,7 +53,7 @@ public class DarkroomScreenHandler extends ScreenHandler {
         });
 
         // Slot 4: Film camera slot (x=80, y=58) — extract film without fogging
-        addSlot(new Slot(inventory, 4, 80, 58) {
+        addSlot(new Slot(inventory, 4, 80, 52) {
             @Override
             public boolean canInsert(ItemStack stack) {
                 return stack.getItem() instanceof FilmCameraItem;
@@ -63,12 +63,12 @@ public class DarkroomScreenHandler extends ScreenHandler {
         // Player inventory (3 rows × 9)
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 84 + row * 18));
+                addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 100 + row * 18));
             }
         }
         // Player hotbar
         for (int col = 0; col < 9; col++) {
-            addSlot(new Slot(playerInventory, col, 8 + col * 18, 142));
+            addSlot(new Slot(playerInventory, col, 8 + col * 18, 158));
         }
     }
 

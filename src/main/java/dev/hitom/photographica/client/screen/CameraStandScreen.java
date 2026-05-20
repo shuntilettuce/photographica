@@ -14,34 +14,23 @@ public class CameraStandScreen extends HandledScreen<CameraStandScreenHandler> {
 
     public CameraStandScreen(CameraStandScreenHandler handler, PlayerInventory playerInventory, Text title) {
         super(handler, playerInventory, title);
-        // Use a taller background to fit all slots and buttons
         this.backgroundWidth = 176;
-        this.backgroundHeight = 186;
+        this.backgroundHeight = 172;
     }
 
     @Override
     protected void init() {
         super.init();
-        // Center title
         this.titleX = (this.backgroundWidth - this.textRenderer.getWidth(this.title)) / 2;
-
-        int x = this.x;
-        int y = this.y;
-
-        // Action buttons below the three slots
-        // レンズ装着 button
+        int x = this.x, y = this.y;
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("レンズ装着"),
                 b -> this.client.interactionManager.clickButton(this.handler.syncId, 0)
         ).dimensions(x + 7, y + 58, 55, 16).build());
-
-        // 装填 button
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("装填"),
                 b -> this.client.interactionManager.clickButton(this.handler.syncId, 1)
         ).dimensions(x + 65, y + 58, 46, 16).build());
-
-        // 取り出し button
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("取り出し"),
                 b -> this.client.interactionManager.clickButton(this.handler.syncId, 2)
@@ -49,32 +38,33 @@ public class CameraStandScreen extends HandledScreen<CameraStandScreenHandler> {
     }
 
     @Override
-    protected void drawBackground(DrawContext context, float delta, int mouseX, int mouseY) {
-        int x = this.x;
-        int y = this.y;
-        // Draw a dark panel as background
-        context.fill(x, y, x + backgroundWidth, y + backgroundHeight, 0xC0000000);
-        context.fill(x + 1, y + 1, x + backgroundWidth - 1, y + backgroundHeight - 1, 0xFF8B8B8B);
+    protected void drawBackground(DrawContext ctx, float delta, int mouseX, int mouseY) {
+        int x = this.x, y = this.y, w = backgroundWidth, h = backgroundHeight;
+        GuiHelper.drawPanel(ctx, x, y, w, h);
+        GuiHelper.drawSeparator(ctx, x + 7, y + 76, w - 14);
+        GuiHelper.drawSlotBox(ctx, x + 35, y + 35);
+        GuiHelper.drawSlotBox(ctx, x + 71, y + 35);
+        GuiHelper.drawSlotBox(ctx, x + 107, y + 35);
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
-        super.render(context, mouseX, mouseY, delta);
-        this.drawMouseoverTooltip(context, mouseX, mouseY);
-
-        int x = this.x;
-        int y = this.y;
-
-        // Draw slot labels above each slot
-        context.drawText(this.textRenderer, Text.literal("カメラ"),  x + 26,  y + 24, 0x404040, false);
-        context.drawText(this.textRenderer, Text.literal("レンズ"), x + 62,  y + 24, 0x404040, false);
-        context.drawText(this.textRenderer, Text.literal("フィルム/SD"), x + 92, y + 24, 0x404040, false);
+    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+        this.renderBackground(ctx, mouseX, mouseY, delta);
+        super.render(ctx, mouseX, mouseY, delta);
+        this.drawMouseoverTooltip(ctx, mouseX, mouseY);
     }
 
     @Override
-    protected void drawForeground(DrawContext context, int mouseX, int mouseY) {
-        // Title at top
-        context.drawText(this.textRenderer, this.title, this.titleX, this.titleY, 0x404040, false);
+    protected void drawForeground(DrawContext ctx, int mouseX, int mouseY) {
+        ctx.drawText(this.textRenderer, this.title, this.titleX, this.titleY, GuiHelper.TEXT_DARK, false);
+        ctx.drawText(this.textRenderer, this.playerInventoryTitle, this.playerInventoryTitleX, this.playerInventoryTitleY, GuiHelper.TEXT_DARK, false);
+        drawCentered(ctx, "カメラ",     35, 25);
+        drawCentered(ctx, "レンズ",     71, 25);
+        drawCentered(ctx, "フィルム/SD", 107, 25);
+    }
+
+    private void drawCentered(DrawContext ctx, String text, int slotX, int y) {
+        int tx = slotX + 8 - this.textRenderer.getWidth(text) / 2;
+        ctx.drawText(this.textRenderer, Text.literal(text), tx, y, GuiHelper.TEXT_DARK, false);
     }
 }
