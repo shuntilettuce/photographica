@@ -59,6 +59,14 @@ public class PrinterScreenHandler extends ScreenHandler {
         }
     }
 
+
+    @Override
+    public void onClosed(PlayerEntity player) {
+        super.onClosed(player);
+        this.inventory.onClose(player);
+        dropInventory(player, this.inventory);
+    }
+
     @Override
     public boolean canUse(PlayerEntity player) {
         return inventory.canPlayerUse(player);

@@ -62,6 +62,9 @@ public class DarkroomScreen extends HandledScreen<DarkroomScreenHandler> {
         // Rule above buttons
         GuiHelper.drawRule(ctx, x + 6, y + 70, w - 12);
 
+        // Player inventory slots
+        GuiHelper.drawPlayerInventory(ctx, x, y, 106, 164);
+
         // Nameplate
         GuiHelper.drawNameplate(ctx, x + 6, y + 93, 164);
     }
@@ -101,6 +104,6 @@ public class DarkroomScreen extends HandledScreen<DarkroomScreenHandler> {
         // Nameplate text
         ctx.drawCenteredTextWithShadow(textRenderer,
                 Text.literal("DR-1 · 35MM CHEMICAL BATH"),
-                backgroundWidth / 2, 95, GuiHelper.FRAME_LO);
+                backgroundWidth / 2, 95, GuiHelper.CREAM_DIM);
     }
 }

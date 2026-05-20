@@ -51,6 +51,9 @@ public class CameraStandScreen extends HandledScreen<CameraStandScreenHandler> {
         // Nameplate
         GuiHelper.drawNameplate(ctx, x + 6, y + 80, 164);
 
+        // Player inventory slots
+        GuiHelper.drawPlayerInventory(ctx, x, y, 94, 152);
+
         // Slots (absolute screen coords, ix/iy = inner 16×16 top-left)
         GuiHelper.drawSlot(ctx, x + 35, y + 35);
         GuiHelper.drawSlot(ctx, x + 71, y + 35);
@@ -82,7 +85,7 @@ public class CameraStandScreen extends HandledScreen<CameraStandScreenHandler> {
         // Nameplate text (centered in brass strip, foreground coords)
         ctx.drawCenteredTextWithShadow(textRenderer,
                 Text.literal("PHOTOGRAPHICA · TRIPOD HEAD"),
-                backgroundWidth / 2, 82, GuiHelper.FRAME_LO);
+                backgroundWidth / 2, 82, GuiHelper.CREAM_DIM);
 
     }
 }

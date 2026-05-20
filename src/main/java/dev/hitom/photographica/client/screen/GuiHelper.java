@@ -132,4 +132,16 @@ class GuiHelper {
     static void drawSlotBox(DrawContext ctx, int x, int y) {
         drawSlot(ctx, x, y);
     }
+
+    // ── Player inventory slot grid (36 slots: 3×9 main + 9 hotbar) ───────────────
+    static void drawPlayerInventory(DrawContext ctx, int panelX, int panelY, int invY, int hotbarY) {
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                drawSlot(ctx, panelX + 8 + col * 18, panelY + invY + row * 18);
+            }
+        }
+        for (int col = 0; col < 9; col++) {
+            drawSlot(ctx, panelX + 8 + col * 18, panelY + hotbarY);
+        }
+    }
 }

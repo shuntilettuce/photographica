@@ -49,6 +49,9 @@ public class PrinterScreen extends HandledScreen<PrinterScreenHandler> {
         // Right of paper slot: QUEUE LCD showing photo count
         GuiHelper.drawLcd(ctx, x + 102, y + 44, 32, 9);
 
+        // Player inventory slots
+        GuiHelper.drawPlayerInventory(ctx, x, y, 94, 152);
+
         // Slots: SD at (44,35), PAPER at (80,35)
         GuiHelper.drawSlot(ctx, x + 44, y + 35);
         GuiHelper.drawSlot(ctx, x + 80, y + 35);
@@ -102,7 +105,7 @@ public class PrinterScreen extends HandledScreen<PrinterScreenHandler> {
         // Nameplate text
         ctx.drawCenteredTextWithShadow(textRenderer,
                 Text.literal("P-7 · DYE SUBLIMATION"),
-                backgroundWidth / 2, 82, GuiHelper.FRAME_LO);
+                backgroundWidth / 2, 82, GuiHelper.CREAM_DIM);
 
     }
 }
