@@ -1,5 +1,6 @@
 package dev.hitom.photographica.mixin.client;
 
+import dev.hitom.photographica.client.PhotoCapture;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
@@ -7,11 +8,13 @@ import dev.hitom.photographica.item.FilmCameraItem;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
@@ -55,6 +58,20 @@ public class GameRendererMixin {
 
 		double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
 		cir.setReturnValue(vFovDegrees);
+	}
+
+	/**
+	 * Fires after renderWorld() returns inside render(), at which point Iris (if present)
+	 * has already composited its pipeline output into mc.getFramebuffer(). This is the
+	 * correct time to take a screenshot that includes shader post-processing.
+	 * WorldRenderEvents.LAST fires *before* Iris composites, so it cannot be used for capture.
+	 */
+	@Inject(method = "render(Lnet/minecraft/client/render/RenderTickCounter;Z)V",
+			at = @At(value = "INVOKE",
+					target = "Lnet/minecraft/client/render/GameRenderer;renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
+					shift = At.Shift.AFTER))
+	private void photographica$captureAfterComposite(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
+		PhotoCapture.captureIfPending();
 	}
 
 	private static boolean isCamera(ItemStack stack) {

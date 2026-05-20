@@ -161,15 +161,24 @@ public final class PhotoCapture {
 		}
 	}
 
-	/** Called from WorldRenderEvents.LAST every frame; performs the capture if pending. */
+	/**
+	 * Called from WorldRenderEvents.LAST every frame.
+	 * Only updates the centre-pixel depth for the viewfinder HUD — does NOT capture.
+	 * Actual capture happens in {@link #captureIfPending()}, invoked from GameRendererMixin
+	 * after renderWorld() returns so that Iris has composited its output first.
+	 */
 	public static void onWorldRenderEnd() {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		updateCenterDepth(mc, mc.getFramebuffer());
+	}
+
+	/** Called from GameRendererMixin after GameRenderer.renderWorld() returns. At this point
+	 *  Iris (if present) has already blitted its pipeline output to mc.getFramebuffer(). */
+	public static void captureIfPending() {
+		if (pendingId == null) return;
 		MinecraftClient mc = MinecraftClient.getInstance();
 		Framebuffer fb = mc.getFramebuffer();
 
-		// Update centre-pixel depth for the viewfinder focus indicator (cheap: 1 pixel).
-		updateCenterDepth(mc, fb);
-
-		if (pendingId == null) return;
 		UUID id = pendingId;
 		CameraSettings settings = pendingSettings;
 		boolean isFilm = pendingIsFilm;

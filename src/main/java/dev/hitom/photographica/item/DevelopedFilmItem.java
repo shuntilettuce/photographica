@@ -3,17 +3,34 @@ package dev.hitom.photographica.item;
 import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.component.PhotoData;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.Hand;
+import net.minecraft.util.TypedActionResult;
+import net.minecraft.world.World;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 public class DevelopedFilmItem extends Item {
+    /** Wired by client init to open the film strip preview screen. */
+    public static Consumer<ItemStack> clientOpenFilmStrip = stack -> {};
+
     public DevelopedFilmItem(Settings settings) {
         super(settings.maxCount(1));
+    }
+
+    @Override
+    public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
+        ItemStack stack = user.getStackInHand(hand);
+        if (world.isClient) {
+            clientOpenFilmStrip.accept(stack);
+        }
+        return TypedActionResult.success(stack, world.isClient);
     }
 
     @Override

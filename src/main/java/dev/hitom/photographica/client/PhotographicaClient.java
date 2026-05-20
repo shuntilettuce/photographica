@@ -5,10 +5,12 @@ import dev.hitom.photographica.client.screen.CameraScreen;
 import dev.hitom.photographica.client.screen.DarkroomScreen;
 import dev.hitom.photographica.client.screen.EnlargerScreen;
 import dev.hitom.photographica.client.screen.FilmCameraScreen;
+import dev.hitom.photographica.client.screen.FilmStripScreen;
 import dev.hitom.photographica.client.screen.PhotoViewerScreen;
 import dev.hitom.photographica.client.screen.PrinterScreen;
 import dev.hitom.photographica.registry.ModScreenHandlers;
 import dev.hitom.photographica.item.CameraItem;
+import dev.hitom.photographica.item.DevelopedFilmItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.item.PhotoItem;
@@ -47,6 +49,9 @@ public class PhotographicaClient implements ClientModInitializer {
 
 		PhotoItem.clientOpenViewer = data ->
 				MinecraftClient.getInstance().setScreen(new PhotoViewerScreen(data));
+
+		DevelopedFilmItem.clientOpenFilmStrip = stack ->
+				MinecraftClient.getInstance().setScreen(new FilmStripScreen(stack));
 
 		HandledScreens.register(ModScreenHandlers.DARKROOM, DarkroomScreen::new);
 		HandledScreens.register(ModScreenHandlers.PRINTER, PrinterScreen::new);
