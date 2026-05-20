@@ -139,18 +139,37 @@ public class DarkroomScreenHandler extends ScreenHandler {
 
             return true;
         }
-        // button 1: フィルムカメラからフィルムを取り出す（感光なし）
+        // button 1: カメラから取り出し＋現像（現像液タンクがあればネガに直結）
         if (id == 1) {
             ItemStack cameraStack = inventory.getStack(4);
             if (cameraStack.isEmpty() || !(cameraStack.getItem() instanceof FilmCameraItem)) return true;
             FilmRollData film = FilmCameraItem.getFilm(cameraStack);
             if (film.totalExposures() == 0) return true;
 
-            // Create ExposedFilm — no light check (darkroom is always safe)
-            ItemStack out = new ItemStack(ModItems.EXPOSED_FILM);
-            out.set(ModDataComponents.FILM_ROLL, film);
             FilmCameraItem.setFilm(cameraStack, FilmRollData.EMPTY.withWound(false));
             inventory.markDirty();
+
+            ItemStack tankStack = inventory.getStack(3);
+            boolean hasTank = !tankStack.isEmpty()
+                    && tankStack.getItem() instanceof DeveloperTankItem
+                    && tankStack.getDamage() < tankStack.getMaxDamage();
+
+            ItemStack out;
+            if (hasTank) {
+                // Develop directly — darkroom has no light so no fogging
+                out = new ItemStack(ModItems.DEVELOPED_FILM);
+                out.set(ModDataComponents.FILM_ROLL, film);
+                tankStack.setDamage(tankStack.getDamage() + 1);
+                if (tankStack.getDamage() >= tankStack.getMaxDamage()) {
+                    inventory.setStack(3, ItemStack.EMPTY);
+                }
+                inventory.markDirty();
+            } else {
+                // No tank — extract as exposed film only
+                out = new ItemStack(ModItems.EXPOSED_FILM);
+                out.set(ModDataComponents.FILM_ROLL, film);
+            }
+
             if (!player.getInventory().insertStack(out)) {
                 player.dropItem(out, false);
             }

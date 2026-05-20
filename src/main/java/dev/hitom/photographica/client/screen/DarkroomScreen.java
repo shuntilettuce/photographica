@@ -29,7 +29,7 @@ public class DarkroomScreen extends HandledScreen<DarkroomScreenHandler> {
                 b -> this.client.interactionManager.clickButton(this.handler.syncId, 0)
         ).dimensions(x + 7, y + 72, 70, 16).build());
         this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("カメラから取り出し"),
+                Text.literal("カメラから現像"),
                 b -> this.client.interactionManager.clickButton(this.handler.syncId, 1)
         ).dimensions(x + 90, y + 72, 79, 16).build());
     }
