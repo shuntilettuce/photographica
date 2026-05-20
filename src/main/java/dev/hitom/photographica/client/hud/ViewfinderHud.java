@@ -6,13 +6,12 @@ import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
+import dev.hitom.photographica.client.EvfPeakingEffect;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
-import dev.hitom.photographica.mixin.client.GameRendererAccessor;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gl.PostEffectProcessor;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.item.ItemStack;
@@ -79,10 +78,10 @@ public final class ViewfinderHud {
 		int fx2 = fx + frameW;
 		int fy2 = fy + frameH;
 
-		// Mirrorless EVF: apply DoF blur to the rendered world BEFORE drawing any overlay.
+		// Mirrorless EVF: apply focus peaking BEFORE drawing any overlay.
 		boolean isMirrorless = stack.getItem() instanceof MirrorlessCameraItem;
 		if (isMirrorless) {
-			applyEvfDofBlur(mc, s, tickCounter);
+			EvfPeakingEffect.apply(mc, s.aperture(), tickCounter);
 		}
 
 		// Bezels (dim outside frame)
@@ -215,53 +214,6 @@ public final class ViewfinderHud {
 			ctx.drawTextWithShadow(tr, Text.literal(lensHint),
 					(fx + fx2 - hw) / 2, fy + frameH / 2 + 4, COLOR_TEXT_DIM);
 		}
-	}
-
-	/**
-	 * Applies a Gaussian blur to the framebuffer simulating shallow depth-of-field
-	 * on the mirrorless EVF. Blur radius scales with aperture (wider = more blur)
-	 * and focus distance (closer focus = stronger background blur).
-	 * Called BEFORE any overlay elements are drawn so the UI stays crisp.
-	 */
-	private static void applyEvfDofBlur(MinecraftClient mc, CameraSettings s, RenderTickCounter tickCounter) {
-		float blurRadius = evfDofBlurRadius(s);
-		if (blurRadius < 0.5f) return;
-
-		PostEffectProcessor pp = ((GameRendererAccessor) mc.gameRenderer).getBlurPostProcessor();
-		if (pp == null) return;
-
-		pp.setUniforms("Radius", blurRadius);
-		pp.render(tickCounter.getLastFrameDuration());
-		// Re-bind the main framebuffer so subsequent HUD drawing goes to the right target.
-		mc.getFramebuffer().beginWrite(false);
-	}
-
-	/**
-	 * Blur radius for the EVF DoF simulation.
-	 * Formula: radius ∝ (1/f-number), amplified by how close the focus is set.
-	 * At f/8+ the DoF is deep enough that no blur is applied.
-	 */
-	private static float evfDofBlurRadius(CameraSettings s) {
-		float aperture = s.aperture();
-		if (aperture >= 8.0f) return 0f;
-
-		// Base radius: inversely proportional to f-number, scaled to ~8px at f/1.4
-		float base = Math.min(8.0f, 11.2f / aperture - 1.0f);  // f/1.4→7.0  f/5.6→1.0  f/8→0.4→clamp
-		if (base < 0.5f) return 0f;
-
-		// Focus distance multiplier: close focus = full blur; infinity = reduced
-		float focus = s.focusDistance();
-		float focusMult;
-		if (focus >= 999.0f) {
-			focusMult = 0.25f; // focused at infinity — background nearly sharp
-		} else if (focus <= 1.0f) {
-			focusMult = 1.0f;  // macro / portrait distance — full bokeh
-		} else {
-			// Gentle falloff between 1m and 50m
-			focusMult = Math.max(0.25f, 1.0f - (float) Math.log10(focus) / 2.0f);
-		}
-
-		return base * focusMult;
 	}
 
 	/**
