@@ -8,6 +8,7 @@ import net.minecraft.network.codec.PacketCodec;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 public record SdCardData(List<PhotoData> photos, int capacity) {
     public static final int DEFAULT_CAPACITY = 64;
@@ -48,5 +49,11 @@ public record SdCardData(List<PhotoData> photos, int capacity) {
 
     public SdCardData withoutPhotos() {
         return new SdCardData(List.of(), capacity);
+    }
+
+    public SdCardData withoutPhoto(UUID id) {
+        List<PhotoData> newList = new ArrayList<>(photos);
+        newList.removeIf(p -> p.id().equals(id));
+        return new SdCardData(Collections.unmodifiableList(newList), capacity);
     }
 }

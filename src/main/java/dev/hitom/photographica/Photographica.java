@@ -12,6 +12,7 @@ import dev.hitom.photographica.item.FilmRollItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.item.SdCardItem;
 import dev.hitom.photographica.network.CreatePhotoPayload;
+import dev.hitom.photographica.network.DeleteSdPhotoPayload;
 import dev.hitom.photographica.network.DevelopFilmPayload;
 import dev.hitom.photographica.network.LoadFilmPayload;
 import dev.hitom.photographica.network.LoadSdCardPayload;
@@ -67,6 +68,7 @@ public class Photographica implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(DevelopFilmPayload.ID,          DevelopFilmPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(LoadSdCardPayload.ID,          LoadSdCardPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(UnloadSdCardPayload.ID,        UnloadSdCardPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(DeleteSdPhotoPayload.ID,       DeleteSdPhotoPayload.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(UpdateCameraSettingsPayload.ID, (payload, context) -> {
 			context.server().execute(() -> {
@@ -307,6 +309,20 @@ public class Photographica implements ModInitializer {
 					player.dropItem(sdStack, false);
 				}
 				player.sendMessage(Text.literal("SDカードを取り出しました"), true);
+			});
+		});
+
+		ServerPlayNetworking.registerGlobalReceiver(DeleteSdPhotoPayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> {
+				for (Hand hand : Hand.values()) {
+					ItemStack s = player.getStackInHand(hand);
+					if (!(s.getItem() instanceof CameraItem) && !(s.getItem() instanceof MirrorlessCameraItem)) continue;
+					SdCardData sd = s.get(ModDataComponents.SD_CARD);
+					if (sd == null) continue;
+					s.set(ModDataComponents.SD_CARD, sd.withoutPhoto(payload.photoId()));
+					return;
+				}
 			});
 		});
 

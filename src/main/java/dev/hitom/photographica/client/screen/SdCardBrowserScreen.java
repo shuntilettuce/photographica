@@ -3,8 +3,10 @@ package dev.hitom.photographica.client.screen;
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.component.PhotoData;
 import dev.hitom.photographica.component.SdCardData;
+import dev.hitom.photographica.network.DeleteSdPhotoPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -17,7 +19,9 @@ import net.minecraft.util.Identifier;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Playback screen for browsing photos stored on an SD card inside a camera.
@@ -43,7 +47,7 @@ public class SdCardBrowserScreen extends Screen {
 
     private final ItemStack cameraStack;
     private final Screen parent;
-    private final List<PhotoData> photos;
+    private final List<PhotoData> photos;  // mutable local copy
     private int index = 0;
 
     private ThumbImage thumb = null;
@@ -54,7 +58,7 @@ public class SdCardBrowserScreen extends Screen {
         super(Text.literal("SD CARD"));
         this.cameraStack = cameraStack;
         this.parent = parent;
-        this.photos = sdData.photos();
+        this.photos = new ArrayList<>(sdData.photos());
     }
 
     @Override
@@ -79,12 +83,15 @@ public class SdCardBrowserScreen extends Screen {
         addDrawableChild(SafelightButton.of(cx + 5, navY, 100,
                 Text.literal("NEXT ▶"), b -> navigate(1)));
 
-        // Full-screen view + back
+        // Full-screen view / delete / back  (3 buttons, each 64px wide)
         int btnY = py + PANEL_H - 28;
-        addDrawableChild(SafelightButton.primary(cx - 105, btnY, 100,
-                Text.literal("全画面で見る"),
+        addDrawableChild(SafelightButton.primary(cx - 99, btnY, 64,
+                Text.literal("全画面"),
                 b -> client.setScreen(new PhotoViewerScreen(photos.get(index), this))));
-        addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
+        addDrawableChild(SafelightButton.of(cx - 32, btnY, 64,
+                Text.literal("削除"),
+                b -> deleteCurrentPhoto()));
+        addDrawableChild(SafelightButton.ghost(cx + 35, btnY, 64,
                 Text.literal("← 戻る"), b -> close()));
     }
 
@@ -165,6 +172,33 @@ public class SdCardBrowserScreen extends Screen {
     @Override
     public void close() {
         client.setScreen(parent);
+    }
+
+    private void deleteCurrentPhoto() {
+        if (photos.isEmpty()) return;
+        PhotoData p = photos.get(index);
+        UUID photoId = p.id();
+
+        // Delete PNG from disk
+        MinecraftClient mc = MinecraftClient.getInstance();
+        File file = new File(mc.runDirectory, "photographica/photos/" + photoId + ".png");
+        file.delete();
+
+        // Release cached thumbnail texture
+        if (thumb != null && loadedForIndex == index) {
+            mc.getTextureManager().destroyTexture(thumb.id());
+            thumb = null;
+            loadedForIndex = -1;
+        }
+
+        // Notify server
+        ClientPlayNetworking.send(new DeleteSdPhotoPayload(photoId));
+
+        // Update local list and clamp index
+        photos.remove(index);
+        index = Math.max(0, Math.min(photos.size() - 1, index));
+
+        clearAndInit();
     }
 
     // -------------------------------------------------------------------------

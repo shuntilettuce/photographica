@@ -616,12 +616,27 @@ public final class PhotoCapture {
 		float maxBlurPx = 80.0f / (aperture * aperture);
 		int   maxR      = Math.max(1, (int) Math.ceil(maxBlurPx));
 
+		// Reconstruct the crop window that cropTo3to2 used, so image pixels map to the
+		// correct framebuffer pixels when sampling the depth buffer.
+		int croppedW, croppedH, cropOffX, cropOffY;
+		if ((float) fbW / fbH > 1.5f) {        // wider than 3:2 → sides cropped
+			croppedH = fbH;
+			croppedW = Math.round(fbH * 1.5f);
+			cropOffX = (fbW - croppedW) / 2;
+			cropOffY = 0;
+		} else {                                // taller than 3:2 → top/bottom cropped
+			croppedW = fbW;
+			croppedH = Math.round(fbW / 1.5f);
+			cropOffX = 0;
+			cropOffY = (fbH - croppedH) / 2;
+		}
+
 		// Per-pixel CoC (Circle of Confusion) in image pixels.
 		float[] cocMap = new float[iw * ih];
 		for (int iy = 0; iy < ih; iy++) {
 			for (int ix = 0; ix < iw; ix++) {
-				int fx    = Math.max(0, Math.min(fbW - 1, ix * fbW / iw));
-				int fy_gl = Math.max(0, Math.min(fbH - 1, fbH - 1 - (iy * fbH / ih)));
+				int fx    = Math.max(0, Math.min(fbW - 1, cropOffX + ix * croppedW / iw));
+				int fy_gl = Math.max(0, Math.min(fbH - 1, fbH - 1 - (cropOffY + iy * croppedH / ih)));
 				float depth = linearDepth[fy_gl * fbW + fx];
 				float r   = depth / focusDist;
 				float coc = (depth <= focusDist)
