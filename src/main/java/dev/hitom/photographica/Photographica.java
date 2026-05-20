@@ -5,14 +5,19 @@ import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.component.PhotoData;
+import dev.hitom.photographica.component.SdCardData;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.FilmRollItem;
+import dev.hitom.photographica.item.MirrorlessCameraItem;
+import dev.hitom.photographica.item.SdCardItem;
 import dev.hitom.photographica.network.CreatePhotoPayload;
 import dev.hitom.photographica.network.DevelopFilmPayload;
 import dev.hitom.photographica.network.LoadFilmPayload;
+import dev.hitom.photographica.network.LoadSdCardPayload;
 import dev.hitom.photographica.network.TakeFilmPhotoPayload;
 import dev.hitom.photographica.network.UnloadFilmPayload;
+import dev.hitom.photographica.network.UnloadSdCardPayload;
 import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
 import dev.hitom.photographica.network.WindFilmPayload;
 import dev.hitom.photographica.registry.ModBlockEntities;
@@ -60,6 +65,8 @@ public class Photographica implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(LoadFilmPayload.ID,             LoadFilmPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(UnloadFilmPayload.ID,           UnloadFilmPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(DevelopFilmPayload.ID,          DevelopFilmPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(LoadSdCardPayload.ID,          LoadSdCardPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(UnloadSdCardPayload.ID,        UnloadSdCardPayload.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(UpdateCameraSettingsPayload.ID, (payload, context) -> {
 			context.server().execute(() -> {
@@ -85,16 +92,26 @@ public class Photographica implements ModInitializer {
 			ServerPlayerEntity player = context.player();
 			context.server().execute(() -> {
 				ItemStack camera = player.getStackInHand(Hand.MAIN_HAND);
-				if (!(camera.getItem() instanceof CameraItem)) return;
+				if (!(camera.getItem() instanceof CameraItem) && !(camera.getItem() instanceof MirrorlessCameraItem)) return;
 				ServerWorld world = player.getServerWorld();
 				BlockPos pos = player.getBlockPos();
-				ItemStack photo = new ItemStack(ModItems.PHOTO);
-				photo.set(ModDataComponents.PHOTO_DATA, new PhotoData(
+				PhotoData photoData = new PhotoData(
 						payload.id(), player.getName().getString(), world.getTime(),
 						world.getRegistryKey().getValue().toString(),
 						pos.getX(), pos.getY(), pos.getZ(),
 						payload.settings()
-				));
+				);
+				// If the camera has an SD card loaded, store the photo on it
+				if (camera.contains(ModDataComponents.SD_CARD)) {
+					SdCardData sd = camera.get(ModDataComponents.SD_CARD);
+					if (sd != null && !sd.isFull()) {
+						camera.set(ModDataComponents.SD_CARD, sd.withPhoto(photoData));
+						return;
+					}
+				}
+				// Otherwise create a Photo item
+				ItemStack photo = new ItemStack(ModItems.PHOTO);
+				photo.set(ModDataComponents.PHOTO_DATA, photoData);
 				if (!player.getInventory().insertStack(photo)) {
 					player.dropItem(photo, false);
 				}
@@ -216,29 +233,76 @@ public class Photographica implements ModInitializer {
 					if (s.getItem() != ModItems.EXPOSED_FILM) continue;
 					FilmRollData film = s.get(ModDataComponents.FILM_ROLL);
 					if (film == null || film.exposures().isEmpty()) continue;
-					int developed = 0;
-					for (PhotoData entry : film.exposures()) {
-						PhotoData photo = inLight ? entry.withFogged(true) : entry;
-						ItemStack photoStack = new ItemStack(ModItems.PHOTO);
-						photoStack.set(ModDataComponents.PHOTO_DATA, photo);
-						if (!player.getInventory().insertStack(photoStack)) {
-							player.dropItem(photoStack, false);
-						}
-						developed++;
+					int count = film.exposures().size();
+					FilmRollData processedFilm = inLight ? film.withFoggedExposures() : film;
+					ItemStack developedStack = new ItemStack(ModItems.DEVELOPED_FILM);
+					developedStack.set(ModDataComponents.FILM_ROLL, processedFilm);
+					if (!player.getInventory().insertStack(developedStack)) {
+						player.dropItem(developedStack, false);
 					}
 					s.decrement(1);
 					// Damage the developer tank in the player's hand.
 					damageDeveloperTank(player);
 					if (inLight) {
 						player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.6f);
-						player.sendMessage(Text.literal("§c光が入りました — " + developed + " 枚が被りました"), true);
+						player.sendMessage(Text.literal("§c光が入りました — " + count + " 枚が被りました"), true);
 					} else {
 						player.playSound(SoundEvents.BLOCK_BREWING_STAND_BREW, 0.8f, 1.0f);
-						player.sendMessage(Text.literal("§b現像完了: " + developed + " 枚"), true);
+						player.sendMessage(Text.literal("§b現像済ネガを作成しました: " + count + " 枚"), true);
 					}
 					return;
 				}
 				player.sendMessage(Text.literal("現像する未現像フィルムがありません"), true);
+			});
+		});
+
+		ServerPlayNetworking.registerGlobalReceiver(LoadSdCardPayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> {
+				ItemStack camera = player.getStackInHand(Hand.MAIN_HAND);
+				if (!(camera.getItem() instanceof CameraItem) && !(camera.getItem() instanceof MirrorlessCameraItem)) {
+					player.sendMessage(Text.literal("デジタルカメラを手に持ってください"), true);
+					return;
+				}
+				if (camera.contains(ModDataComponents.SD_CARD)) {
+					player.sendMessage(Text.literal("既にSDカードが装填されています"), true);
+					return;
+				}
+				PlayerInventory inv = player.getInventory();
+				for (int i = 0; i < inv.size(); i++) {
+					ItemStack s = inv.getStack(i);
+					if (s.getItem() instanceof SdCardItem) {
+						SdCardData sdData = s.getOrDefault(ModDataComponents.SD_CARD, SdCardData.EMPTY);
+						camera.set(ModDataComponents.SD_CARD, sdData);
+						s.decrement(1);
+						player.sendMessage(Text.literal("SDカードを装填しました"), true);
+						return;
+					}
+				}
+				player.sendMessage(Text.literal("SDカードが見当たりません"), true);
+			});
+		});
+
+		ServerPlayNetworking.registerGlobalReceiver(UnloadSdCardPayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> {
+				ItemStack camera = player.getStackInHand(Hand.MAIN_HAND);
+				if (!(camera.getItem() instanceof CameraItem) && !(camera.getItem() instanceof MirrorlessCameraItem)) {
+					player.sendMessage(Text.literal("デジタルカメラを手に持ってください"), true);
+					return;
+				}
+				if (!camera.contains(ModDataComponents.SD_CARD)) {
+					player.sendMessage(Text.literal("SDカードが装填されていません"), true);
+					return;
+				}
+				SdCardData sdData = camera.get(ModDataComponents.SD_CARD);
+				camera.remove(ModDataComponents.SD_CARD);
+				ItemStack sdStack = new ItemStack(ModItems.SD_CARD);
+				sdStack.set(ModDataComponents.SD_CARD, sdData != null ? sdData : SdCardData.EMPTY);
+				if (!player.getInventory().insertStack(sdStack)) {
+					player.dropItem(sdStack, false);
+				}
+				player.sendMessage(Text.literal("SDカードを取り出しました"), true);
 			});
 		});
 
@@ -273,6 +337,10 @@ public class Photographica implements ModInitializer {
 				ItemStack tank = new ItemStack(ModItems.DEVELOPER_TANK);
 				inv.setStack(6, tank);
 				inv.setStack(7, new ItemStack(ModItems.CAMERA));
+				inv.setStack(8, new ItemStack(ModItems.SD_CARD));
+				inv.setStack(9, new ItemStack(ModItems.PHOTO_PAPER, 36));
+				inv.setStack(10, new ItemStack(ModItems.LENS_PRIME_35));
+				inv.setStack(11, new ItemStack(ModItems.LENS_PRIME_85));
 				player.sendMessage(Text.literal("§a[Dev] Photographica test items given! Game mode: Creative"), false);
 				// Set daytime so the world is visible
 				server.getCommandManager().executeWithPrefix(

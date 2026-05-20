@@ -36,6 +36,15 @@ public final class ModDataComponents {
 					.build()
 	);
 
+	public static final ComponentType<SdCardData> SD_CARD = Registry.register(
+			Registries.DATA_COMPONENT_TYPE,
+			Identifier.of(Photographica.MOD_ID, "sd_card"),
+			ComponentType.<SdCardData>builder()
+					.codec(SdCardData.CODEC)
+					.packetCodec(SdCardData.PACKET_CODEC)
+					.build()
+	);
+
 	public static void register() {
 		// Class init is enough; this method just forces it.
 	}

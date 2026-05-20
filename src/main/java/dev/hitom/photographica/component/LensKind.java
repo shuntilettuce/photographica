@@ -10,8 +10,13 @@ public final class LensKind {
 	public static final int NONE = 0;
 	public static final int PRIME_50MM = 1;
 	public static final int ZOOM_24_70 = 2;
+	public static final int PRIME_35MM   = 3;  // 35mm wide prime
+	public static final int PRIME_85MM   = 4;  // 85mm portrait prime
+	public static final int PRIME_14MM   = 5;  // 14mm ultra-wide prime
+	public static final int ZOOM_70_200  = 6;  // 70-200mm telephoto zoom
+	public static final int MACRO_100    = 7;  // 100mm macro
 
-	public static final int COUNT = 3;
+	public static final int COUNT = 8;
 
 	private LensKind() {}
 
@@ -20,14 +25,19 @@ public final class LensKind {
 	}
 
 	public static boolean isZoom(int lensType) {
-		return lensType == ZOOM_24_70;
+		return lensType == ZOOM_24_70 || lensType == ZOOM_70_200;
 	}
 
 	/** Discrete focal length stops the lens snaps to. Single element for prime lenses. */
 	public static List<Integer> focalLengthStops(int lensType) {
 		return switch (lensType) {
-			case PRIME_50MM -> List.of(50);
-			case ZOOM_24_70 -> List.of(24, 28, 35, 50, 70);
+			case PRIME_50MM  -> List.of(50);
+			case ZOOM_24_70  -> List.of(24, 28, 35, 50, 70);
+			case PRIME_35MM  -> List.of(35);
+			case PRIME_85MM  -> List.of(85);
+			case PRIME_14MM  -> List.of(14);
+			case ZOOM_70_200 -> List.of(70, 85, 100, 135, 200);
+			case MACRO_100   -> List.of(100);
 			default -> List.of(50);
 		};
 	}
@@ -35,8 +45,13 @@ public final class LensKind {
 	/** Default focal length when a lens is attached. */
 	public static int defaultFocalLength(int lensType) {
 		return switch (lensType) {
-			case ZOOM_24_70 -> 35;
-			case PRIME_50MM -> 50;
+			case ZOOM_24_70  -> 35;
+			case PRIME_50MM  -> 50;
+			case PRIME_35MM  -> 35;
+			case PRIME_85MM  -> 85;
+			case PRIME_14MM  -> 14;
+			case ZOOM_70_200 -> 135;
+			case MACRO_100   -> 100;
 			default -> 50;
 		};
 	}
@@ -58,8 +73,13 @@ public final class LensKind {
 
 	public static String displayName(int lensType) {
 		return switch (lensType) {
-			case PRIME_50MM -> "50mm 単焦点";
-			case ZOOM_24_70 -> "24-70mm ズーム";
+			case PRIME_50MM  -> "50mm 単焦点";
+			case ZOOM_24_70  -> "24-70mm ズーム";
+			case PRIME_35MM  -> "35mm 単焦点";
+			case PRIME_85MM  -> "85mm 単焦点";
+			case PRIME_14MM  -> "14mm 超広角";
+			case ZOOM_70_200 -> "70-200mm ズーム";
+			case MACRO_100   -> "100mm マクロ";
 			default -> "レンズなし";
 		};
 	}

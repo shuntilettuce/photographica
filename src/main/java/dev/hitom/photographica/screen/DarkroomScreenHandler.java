@@ -2,8 +2,8 @@ package dev.hitom.photographica.screen;
 
 import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.PhotoData;
 import dev.hitom.photographica.item.DeveloperTankItem;
+import dev.hitom.photographica.item.DevelopedFilmItem;
 import dev.hitom.photographica.item.ExposedFilmItem;
 import dev.hitom.photographica.registry.ModItems;
 import dev.hitom.photographica.registry.ModScreenHandlers;
@@ -99,14 +99,12 @@ public class DarkroomScreenHandler extends ScreenHandler {
                     continue;
                 }
 
-                // Develop each frame
-                for (PhotoData entry : film.exposures()) {
-                    PhotoData photo = inLight ? entry.withFogged(true) : entry;
-                    ItemStack photoStack = new ItemStack(ModItems.PHOTO);
-                    photoStack.set(ModDataComponents.PHOTO_DATA, photo);
-                    if (!player.getInventory().insertStack(photoStack)) {
-                        player.dropItem(photoStack, false);
-                    }
+                // Develop film: create DevelopedFilm item
+                FilmRollData processedFilm = inLight ? film.withFoggedExposures() : film;
+                ItemStack developedStack = new ItemStack(ModItems.DEVELOPED_FILM);
+                developedStack.set(ModDataComponents.FILM_ROLL, processedFilm);
+                if (!player.getInventory().insertStack(developedStack)) {
+                    player.dropItem(developedStack, false);
                 }
 
                 // Remove film from slot

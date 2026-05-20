@@ -4,13 +4,17 @@ import dev.hitom.photographica.client.hud.ViewfinderHud;
 import dev.hitom.photographica.client.screen.CameraScreen;
 import dev.hitom.photographica.client.screen.CameraStandScreen;
 import dev.hitom.photographica.client.screen.DarkroomScreen;
+import dev.hitom.photographica.client.screen.EnlargerScreen;
 import dev.hitom.photographica.client.screen.FilmCameraScreen;
 import dev.hitom.photographica.client.screen.PhotoViewerScreen;
+import dev.hitom.photographica.client.screen.PrinterScreen;
 import dev.hitom.photographica.registry.ModScreenHandlers;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.item.PhotoItem;
+import dev.hitom.photographica.network.LoadSdCardPayload;
+import dev.hitom.photographica.network.UnloadSdCardPayload;
 import dev.hitom.photographica.network.WindFilmPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
@@ -47,6 +51,8 @@ public class PhotographicaClient implements ClientModInitializer {
 
 		HandledScreens.register(ModScreenHandlers.CAMERA_STAND, CameraStandScreen::new);
 		HandledScreens.register(ModScreenHandlers.DARKROOM, DarkroomScreen::new);
+		HandledScreens.register(ModScreenHandlers.PRINTER, PrinterScreen::new);
+		HandledScreens.register(ModScreenHandlers.ENLARGER, EnlargerScreen::new);
 
 		// Settings key (unbound by default).
 		KeyBinding settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
@@ -58,6 +64,20 @@ public class PhotographicaClient implements ClientModInitializer {
 		// Wind-film key (unbound by default).
 		KeyBinding windKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.wind_film",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_UNKNOWN,
+				"category.photographica"
+		));
+		// Load SD card key (unbound by default).
+		KeyBinding loadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.load_sd_card",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_UNKNOWN,
+				"category.photographica"
+		));
+		// Unload SD card key (unbound by default).
+		KeyBinding unloadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.unload_sd_card",
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				"category.photographica"
@@ -82,6 +102,12 @@ public class PhotographicaClient implements ClientModInitializer {
 					client.getSoundManager().play(PositionedSoundInstance.master(
 							SoundEvents.BLOCK_LEVER_CLICK, 0.7f, 1.6f));
 				}
+			}
+			if (loadSdCardKey.wasPressed()) {
+				ClientPlayNetworking.send(new LoadSdCardPayload());
+			}
+			if (unloadSdCardKey.wasPressed()) {
+				ClientPlayNetworking.send(new UnloadSdCardPayload());
 			}
 		});
 

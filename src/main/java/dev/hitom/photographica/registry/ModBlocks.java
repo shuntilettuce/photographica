@@ -3,6 +3,8 @@ package dev.hitom.photographica.registry;
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.block.CameraStandBlock;
 import dev.hitom.photographica.block.DarkroomBlock;
+import dev.hitom.photographica.block.EnlargerBlock;
+import dev.hitom.photographica.block.PrinterBlock;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
@@ -38,6 +40,26 @@ public final class ModBlocks {
                     .strength(2.5f))
     );
 
+    public static final Block PRINTER = Registry.register(
+            Registries.BLOCK,
+            Identifier.of(Photographica.MOD_ID, "printer"),
+            new PrinterBlock(AbstractBlock.Settings.create()
+                    .mapColor(MapColor.IRON_GRAY)
+                    .instrument(NoteBlockInstrument.IRON_XYLOPHONE)
+                    .requiresTool()
+                    .strength(3.0f))
+    );
+
+    public static final Block ENLARGER = Registry.register(
+            Registries.BLOCK,
+            Identifier.of(Photographica.MOD_ID, "enlarger"),
+            new EnlargerBlock(AbstractBlock.Settings.create()
+                    .mapColor(MapColor.OAK_TAN)
+                    .instrument(NoteBlockInstrument.BASS)
+                    .requiresTool()
+                    .strength(2.5f))
+    );
+
     public static void register() {
         // Register BlockItems
         Registry.register(Registries.ITEM,
@@ -46,11 +68,19 @@ public final class ModBlocks {
         Registry.register(Registries.ITEM,
                 Identifier.of(Photographica.MOD_ID, "darkroom"),
                 new BlockItem(DARKROOM, new Item.Settings()));
+        Registry.register(Registries.ITEM,
+                Identifier.of(Photographica.MOD_ID, "printer"),
+                new BlockItem(PRINTER, new Item.Settings()));
+        Registry.register(Registries.ITEM,
+                Identifier.of(Photographica.MOD_ID, "enlarger"),
+                new BlockItem(ENLARGER, new Item.Settings()));
 
         // Add to creative tab
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> {
             entries.add(CAMERA_STAND.asItem());
             entries.add(DARKROOM.asItem());
+            entries.add(PRINTER.asItem());
+            entries.add(ENLARGER.asItem());
         });
     }
 }
