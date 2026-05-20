@@ -44,7 +44,7 @@ public record CameraSettings(
 	public static final int FOCUS_MOB = 2;
 
 	public static final CameraSettings DEFAULT = new CameraSettings(
-			5.6f, 10, 400, 5.0f, 50, LensKind.PRIME_50MM, 0, 0, EXP_M, FOCUS_MF, false
+			5.6f, 10, 400, 5.0f, 50, LensKind.NONE, 0, 0, EXP_M, FOCUS_MF, false
 	);
 
 	public static final Codec<CameraSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(

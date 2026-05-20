@@ -68,6 +68,9 @@ public final class PhotoCapture {
 	/** True if the next capture should be routed through the film-camera flow (TakeFilmPhotoPayload). */
 	private static volatile boolean pendingIsFilm = false;
 
+	/** Returns true when a capture is queued for the current frame (used to suppress the block outline). */
+	public static boolean isCapturePending() { return pendingId != null; }
+
 	/** Called when the player presses the shutter (game thread). */
 	public static void take(ItemStack cameraStack) {
 		MinecraftClient mc = MinecraftClient.getInstance();

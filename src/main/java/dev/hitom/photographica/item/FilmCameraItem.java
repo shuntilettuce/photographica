@@ -42,7 +42,7 @@ public class FilmCameraItem extends Item {
 		// applies film grading even before a roll is loaded for the first time.
 		return s != null ? s : new CameraSettings(
 				5.6f, 10, FilmKind.isoOf(FilmKind.COLOR_400),
-				5.0f, 50, 1, FilmKind.COLOR_400, 0,
+				5.0f, 50, LensKind.NONE, FilmKind.COLOR_400, 0,
 				CameraSettings.EXP_M, CameraSettings.FOCUS_MF, false);
 	}
 
@@ -52,7 +52,7 @@ public class FilmCameraItem extends Item {
 
 	public static FilmRollData getFilm(ItemStack stack) {
 		FilmRollData f = stack.get(ModDataComponents.FILM_ROLL);
-		return f != null ? f : FilmRollData.EMPTY.withWound(false);
+		return f != null ? f : new FilmRollData(FilmKind.COLOR_400, 0, 0, false, List.of());
 	}
 
 	public static void setFilm(ItemStack stack, FilmRollData film) {

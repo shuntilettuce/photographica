@@ -5,19 +5,23 @@ import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.FilmCameraItem;
+import dev.hitom.photographica.item.LensItem;
 import dev.hitom.photographica.network.LoadFilmPayload;
 import dev.hitom.photographica.network.UnloadFilmPayload;
 import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeSet;
 
 /**
  * Settings screen for the film camera. Same row layout as the DSLR screen but
@@ -103,7 +107,10 @@ public class FilmCameraScreen extends Screen {
 		addRow(cx, top + row++ * 22, "レンズ",
 				() -> LensKind.displayName(settings.lensType()),
 				step -> {
-					int newLens = clampStep(settings.lensType(), step, LensKind.COUNT);
+					List<Integer> available = availableLensKinds();
+					int curIdx = available.indexOf(settings.lensType());
+					if (curIdx < 0) curIdx = 0;
+					int newLens = available.get(clampStep(curIdx, step, available.size()));
 					int newFocal = LensKind.hasLens(newLens)
 							? LensKind.clampFocalLength(newLens, settings.focalLengthMm())
 							: LensKind.defaultFocalLength(newLens);
@@ -197,6 +204,23 @@ public class FilmCameraScreen extends Screen {
 			ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
 		}
 		super.close();
+	}
+
+	/** Returns lens kind IDs available to the player: always NONE + current + any LensItem in inventory. */
+	private List<Integer> availableLensKinds() {
+		TreeSet<Integer> kinds = new TreeSet<>();
+		kinds.add(LensKind.NONE);
+		kinds.add(settings.lensType());
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player != null) {
+			for (ItemStack s : mc.player.getInventory().main) {
+				if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
+			}
+			for (ItemStack s : mc.player.getInventory().offHand) {
+				if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
+			}
+		}
+		return new ArrayList<>(kinds);
 	}
 
 	// ---------- helpers ----------
