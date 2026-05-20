@@ -133,7 +133,7 @@ public class FilmCameraScreen extends Screen {
 		FilmRollData film = FilmCameraItem.getFilm(stack);
 		boolean loaded = film.totalExposures() > 0;
 		int btnY = top + row * 22 + 14;
-		addDrawableChild(ButtonWidget.builder(
+		addDrawableChild(SafelightButton.of(cx - 105, btnY, 100,
 				Text.literal(loaded ? "フィルム取り出し" : "フィルム装填"),
 				b -> {
 					if (loaded) {
@@ -142,35 +142,36 @@ public class FilmCameraScreen extends Screen {
 						ClientPlayNetworking.send(new LoadFilmPayload());
 					}
 					close();
-				}).dimensions(cx - 105, btnY, 100, 20).build());
+				}));
 
 		String autoWindLabel = settings.autoWind() ? "自動巻上げ: §aON" : "自動巻上げ: §cOFF";
-		addDrawableChild(ButtonWidget.builder(Text.literal(autoWindLabel), b -> {
-			settings = settings.withAutoWind(!settings.autoWind());
-			dirty = true;
-			clearAndInit();
-		}).dimensions(cx - 105, btnY + 24, 210, 20).build());
+		addDrawableChild(SafelightButton.ghost(cx - 105, btnY + 24, 210,
+				Text.literal(autoWindLabel),
+				b -> {
+					settings = settings.withAutoWind(!settings.autoWind());
+					dirty = true;
+					clearAndInit();
+				}));
 
-		addDrawableChild(ButtonWidget.builder(Text.literal("閉じる"), b -> close())
-				.dimensions(cx + 5, btnY, 100, 20).build());
+		addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
+				Text.literal("閉じる"),
+				b -> close()));
 	}
 
 	private void addRow(int cx, int y, String label, java.util.function.Supplier<String> value,
 	                    java.util.function.IntConsumer step, boolean editable) {
-		ButtonWidget left = ButtonWidget.builder(Text.literal("◀"),
-						b -> { step.accept(-1); dirty = true; clearAndInit(); })
-				.dimensions(cx - 30, y, 20, 20).build();
+		SafelightButton left = SafelightButton.of(cx - 30, y, 20, Text.literal("◀"),
+				b -> { step.accept(-1); dirty = true; clearAndInit(); });
 		left.active = editable;
 		addDrawableChild(left);
 
-		ButtonWidget center = ButtonWidget.builder(Text.literal(label + ": " + value.get()), b -> {})
-				.dimensions(cx - 8, y, 140, 20).build();
+		SafelightButton center = SafelightButton.ghost(cx - 8, y, 140,
+				Text.literal(label + ": " + value.get()), b -> {});
 		center.active = false;
 		addDrawableChild(center);
 
-		ButtonWidget right = ButtonWidget.builder(Text.literal("▶"),
-						b -> { step.accept(1); dirty = true; clearAndInit(); })
-				.dimensions(cx + 134, y, 20, 20).build();
+		SafelightButton right = SafelightButton.of(cx + 134, y, 20, Text.literal("▶"),
+				b -> { step.accept(1); dirty = true; clearAndInit(); });
 		right.active = editable;
 		addDrawableChild(right);
 	}
@@ -178,23 +179,45 @@ public class FilmCameraScreen extends Screen {
 	@Override
 	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		this.renderBackground(ctx, mouseX, mouseY, delta);
-		super.render(ctx, mouseX, mouseY, delta);
-		ctx.drawCenteredTextWithShadow(textRenderer, this.title, width / 2, height / 2 - 130, 0xFFFFFF);
 
+		// Draw dark panel background
+		int cx = width / 2;
+		int top = height / 2 - 110;
+		int panelW = 248;
+		int panelH = 222;
+		int px = cx - panelW / 2;
+		int py = top - 16;
+		GuiHelper.drawPanel(ctx, px, py, panelW, panelH);
+
+		// Nameplate at top of panel
+		GuiHelper.drawNameplate(ctx, px + 6, py + 5, panelW - 12);
+
+		// Rule below nameplate
+		GuiHelper.drawRule(ctx, px + 6, py + 17, panelW - 12);
+
+		super.render(ctx, mouseX, mouseY, delta);
+
+		// Title text
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("FILM CAMERA"), cx, py + 6, GuiHelper.FRAME_LO);
+
+		// Film status
 		FilmRollData film = FilmCameraItem.getFilm(stack);
 		String status;
+		int statusColor;
 		if (film.totalExposures() == 0) {
-			status = "§7フィルム未装填";
+			status = "NO FILM LOADED";
+			statusColor = GuiHelper.CREAM_FAINT;
 		} else if (film.isExposed()) {
-			status = "§e使用済 " + film.usedExposures() + "/" + film.totalExposures() + " 枚 — 取り出して現像";
+			status = "EXPOSED  " + film.usedExposures() + "/" + film.totalExposures() + "  —  DEVELOP";
+			statusColor = GuiHelper.EMBER;
 		} else {
-			String wound = film.wound() ? "§a巻上済" : "§c要巻上";
-			status = "§f" + FilmKind.displayName(film.filmType())
-					+ " §7・ §f" + film.usedExposures() + "/" + film.totalExposures()
-					+ " §7・ " + wound;
+			String wound = film.wound() ? "WOUND" : "WIND ON";
+			status = FilmKind.displayName(film.filmType())
+					+ "  ·  " + film.usedExposures() + "/" + film.totalExposures()
+					+ "  ·  " + wound;
+			statusColor = GuiHelper.CREAM;
 		}
-		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status),
-				width / 2, height / 2 - 118, 0xFFFFFF);
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, py + 208, statusColor);
 	}
 
 	@Override

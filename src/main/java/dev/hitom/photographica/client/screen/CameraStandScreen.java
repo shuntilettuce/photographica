@@ -5,7 +5,6 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.text.Text;
 
@@ -14,37 +13,48 @@ public class CameraStandScreen extends HandledScreen<CameraStandScreenHandler> {
 
     public CameraStandScreen(CameraStandScreenHandler handler, PlayerInventory playerInventory, Text title) {
         super(handler, playerInventory, title);
-        this.backgroundWidth = 176;
+        this.backgroundWidth  = 176;
         this.backgroundHeight = 172;
     }
 
     @Override
     protected void init() {
         super.init();
-        this.titleX = (this.backgroundWidth - this.textRenderer.getWidth(this.title)) / 2;
         int x = this.x, y = this.y;
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("レンズ装着"),
-                b -> this.client.interactionManager.clickButton(this.handler.syncId, 0)
-        ).dimensions(x + 7, y + 58, 55, 16).build());
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("装填"),
-                b -> this.client.interactionManager.clickButton(this.handler.syncId, 1)
-        ).dimensions(x + 65, y + 58, 46, 16).build());
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("取り出し"),
-                b -> this.client.interactionManager.clickButton(this.handler.syncId, 2)
-        ).dimensions(x + 114, y + 58, 55, 16).build());
+        addDrawableChild(SafelightButton.of(x + 6, y + 58, 52, Text.literal("MOUNT"),
+                b -> this.client.interactionManager.clickButton(this.handler.syncId, 0)));
+        addDrawableChild(SafelightButton.primary(x + 62, y + 58, 52, Text.literal("LOAD"),
+                b -> this.client.interactionManager.clickButton(this.handler.syncId, 1)));
+        addDrawableChild(SafelightButton.ghost(x + 118, y + 58, 52, Text.literal("EJECT"),
+                b -> this.client.interactionManager.clickButton(this.handler.syncId, 2)));
     }
 
     @Override
     protected void drawBackground(DrawContext ctx, float delta, int mouseX, int mouseY) {
         int x = this.x, y = this.y, w = backgroundWidth, h = backgroundHeight;
+
+        // Main panel
         GuiHelper.drawPanel(ctx, x, y, w, h);
-        GuiHelper.drawSeparator(ctx, x + 7, y + 76, w - 14);
-        GuiHelper.drawSlotBox(ctx, x + 35, y + 35);
-        GuiHelper.drawSlotBox(ctx, x + 71, y + 35);
-        GuiHelper.drawSlotBox(ctx, x + 107, y + 35);
+
+        // Horizontal rule at y=14
+        GuiHelper.drawRule(ctx, x + 6, y + 14, w - 12);
+
+        // LCD background: w=36, h=9 at top-right
+        GuiHelper.drawLcd(ctx, x + w - 42, y + 3, 36, 9);
+
+        // Coupling lines between slots (two-row, BRASS_DIM then BRASS)
+        ctx.fill(x + 52, y + 42, x + 70, y + 43, GuiHelper.BRASS_DIM);
+        ctx.fill(x + 52, y + 43, x + 70, y + 44, GuiHelper.BRASS);
+        ctx.fill(x + 88, y + 42, x + 106, y + 43, GuiHelper.BRASS_DIM);
+        ctx.fill(x + 88, y + 43, x + 106, y + 44, GuiHelper.BRASS);
+
+        // Nameplate
+        GuiHelper.drawNameplate(ctx, x + 6, y + 80, 164);
+
+        // Slots (absolute screen coords, ix/iy = inner 16×16 top-left)
+        GuiHelper.drawSlot(ctx, x + 35, y + 35);
+        GuiHelper.drawSlot(ctx, x + 71, y + 35);
+        GuiHelper.drawSlot(ctx, x + 107, y + 35);
     }
 
     @Override
@@ -56,15 +66,26 @@ public class CameraStandScreen extends HandledScreen<CameraStandScreenHandler> {
 
     @Override
     protected void drawForeground(DrawContext ctx, int mouseX, int mouseY) {
-        ctx.drawText(this.textRenderer, this.title, this.titleX, this.titleY, GuiHelper.TEXT_DARK, false);
-        ctx.drawText(this.textRenderer, this.playerInventoryTitle, this.playerInventoryTitleX, this.playerInventoryTitleY, GuiHelper.TEXT_DARK, false);
-        drawCentered(ctx, "カメラ",     35, 25);
-        drawCentered(ctx, "レンズ",     71, 25);
-        drawCentered(ctx, "フィルム/SD", 107, 25);
-    }
+        // Safelight pip (3×3) at (3,5) then title
+        ctx.fill(3, 5, 6, 8, GuiHelper.SAFELIGHT);
+        ctx.drawText(textRenderer, Text.literal("CAMERA STAND"), 9, 5, GuiHelper.CREAM, false);
 
-    private void drawCentered(DrawContext ctx, String text, int slotX, int y) {
-        int tx = slotX + 8 - this.textRenderer.getWidth(text) / 2;
-        ctx.drawText(this.textRenderer, Text.literal(text), tx, y, GuiHelper.TEXT_DARK, false);
+        // LCD text "·READY·"
+        ctx.drawText(textRenderer, Text.literal("·READY·"),
+                backgroundWidth - 41, 4, GuiHelper.SAFELIGHT, false);
+
+        // Slot labels (BRASS_BRIGHT, above slots)
+        ctx.drawText(textRenderer, Text.literal("BODY"),    34, 24, GuiHelper.BRASS_BRIGHT, false);
+        ctx.drawText(textRenderer, Text.literal("LENS"),    70, 24, GuiHelper.BRASS_BRIGHT, false);
+        ctx.drawText(textRenderer, Text.literal("FILM/SD"), 100, 24, GuiHelper.BRASS_BRIGHT, false);
+
+        // Nameplate text (centered in brass strip, foreground coords)
+        ctx.drawCenteredTextWithShadow(textRenderer,
+                Text.literal("PHOTOGRAPHICA · TRIPOD HEAD"),
+                backgroundWidth / 2, 82, GuiHelper.FRAME_LO);
+
+        // Player inventory label
+        ctx.drawText(textRenderer, Text.literal("INVENTORY"),
+                playerInventoryTitleX, playerInventoryTitleY, GuiHelper.CREAM_DIM, false);
     }
 }

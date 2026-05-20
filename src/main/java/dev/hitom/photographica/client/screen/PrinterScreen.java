@@ -7,7 +7,6 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
@@ -17,32 +16,50 @@ public class PrinterScreen extends HandledScreen<PrinterScreenHandler> {
 
     public PrinterScreen(PrinterScreenHandler handler, PlayerInventory playerInventory, Text title) {
         super(handler, playerInventory, title);
-        this.backgroundWidth = 176;
+        this.backgroundWidth  = 176;
         this.backgroundHeight = 172;
     }
 
     @Override
     protected void init() {
         super.init();
-        this.titleX = (this.backgroundWidth - this.textRenderer.getWidth(this.title)) / 2;
         int x = this.x, y = this.y;
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("全プリント"),
-                b -> this.client.interactionManager.clickButton(this.handler.syncId, 0)
-        ).dimensions(x + 7, y + 58, 80, 16).build());
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("1枚プリント"),
-                b -> this.client.interactionManager.clickButton(this.handler.syncId, 1)
-        ).dimensions(x + 94, y + 58, 75, 16).build());
+        addDrawableChild(SafelightButton.primary(x + 6, y + 58, 80, Text.literal("PRINT ALL"),
+                b -> this.client.interactionManager.clickButton(this.handler.syncId, 0)));
+        addDrawableChild(SafelightButton.of(x + 90, y + 58, 80, Text.literal("SINGLE"),
+                b -> this.client.interactionManager.clickButton(this.handler.syncId, 1)));
     }
 
     @Override
     protected void drawBackground(DrawContext ctx, float delta, int mouseX, int mouseY) {
         int x = this.x, y = this.y, w = backgroundWidth, h = backgroundHeight;
+
         GuiHelper.drawPanel(ctx, x, y, w, h);
-        GuiHelper.drawSeparator(ctx, x + 7, y + 76, w - 14);
-        GuiHelper.drawSlotBox(ctx, x + 44, y + 35);
-        GuiHelper.drawSlotBox(ctx, x + 80, y + 35);
+
+        // Rule at y=14
+        GuiHelper.drawRule(ctx, x + 6, y + 14, w - 12);
+
+        // LCD background top-right (format display)
+        GuiHelper.drawLcd(ctx, x + w - 42, y + 3, 36, 9);
+
+        // Left mini-LCDs: USB-C and A6
+        GuiHelper.drawLcd(ctx, x + 6, y + 36, 32, 9);
+        GuiHelper.drawLcd(ctx, x + 6, y + 46, 32, 9);
+
+        // Right of paper slot: QUEUE LCD showing photo count
+        GuiHelper.drawLcd(ctx, x + 102, y + 44, 32, 9);
+
+        // Slots: SD at (44,35), PAPER at (80,35)
+        GuiHelper.drawSlot(ctx, x + 44, y + 35);
+        GuiHelper.drawSlot(ctx, x + 80, y + 35);
+
+        // Data transfer arrows between slots (ember color, at y=42)
+        ctx.fill(x + 62, y + 41, x + 79, y + 42, GuiHelper.EMBER_DIM);
+        ctx.fill(x + 62, y + 43, x + 79, y + 44, GuiHelper.EMBER);
+        ctx.fill(x + 62, y + 45, x + 79, y + 46, GuiHelper.EMBER_DIM);
+
+        // Nameplate
+        GuiHelper.drawNameplate(ctx, x + 6, y + 80, 164);
     }
 
     @Override
@@ -54,24 +71,41 @@ public class PrinterScreen extends HandledScreen<PrinterScreenHandler> {
 
     @Override
     protected void drawForeground(DrawContext ctx, int mouseX, int mouseY) {
-        ctx.drawText(this.textRenderer, this.title, this.titleX, this.titleY, GuiHelper.TEXT_DARK, false);
-        ctx.drawText(this.textRenderer, this.playerInventoryTitle, this.playerInventoryTitleX, this.playerInventoryTitleY, GuiHelper.TEXT_DARK, false);
-        drawCentered(ctx, "SDカード", 44, 25);
-        drawCentered(ctx, "印画紙",   80, 25);
+        // Pip + title
+        ctx.fill(3, 5, 6, 8, GuiHelper.SAFELIGHT);
+        ctx.drawText(textRenderer, Text.literal("PRINTER"), 9, 5, GuiHelper.CREAM, false);
 
+        // LCD text top-right (format)
+        ctx.drawText(textRenderer, Text.literal("JPG"), backgroundWidth - 41, 4, GuiHelper.EMBER, false);
+
+        // Left mini-LCD labels
+        ctx.drawText(textRenderer, Text.literal("USB-C"), 8, 37, GuiHelper.SAFELIGHT, false);
+        ctx.drawText(textRenderer, Text.literal("A6"),    8, 47, GuiHelper.EMBER,     false);
+
+        // Slot labels (BRASS_BRIGHT, above slots)
+        ctx.drawText(textRenderer, Text.literal("SD"),    38, 24, GuiHelper.BRASS_BRIGHT, false);
+        ctx.drawText(textRenderer, Text.literal("PAPER"), 74, 24, GuiHelper.BRASS_BRIGHT, false);
+
+        // Right of paper slot: queue label + photo count
+        ctx.drawText(textRenderer, Text.literal("QUEUE"), 102, 36, GuiHelper.CREAM_DIM, false);
+
+        // Photo count from SD card
         ItemStack sd = this.handler.getSlot(0).getStack();
         if (!sd.isEmpty() && sd.contains(ModDataComponents.SD_CARD)) {
             SdCardData data = sd.getOrDefault(ModDataComponents.SD_CARD, SdCardData.EMPTY);
             if (!data.isEmpty()) {
-                String count = data.photos().size() + "枚";
-                ctx.drawText(this.textRenderer, Text.literal("§e" + count),
-                        44 + 8 - this.textRenderer.getWidth(count) / 2, 35, 0xFFFFFF, false);
+                String count = data.photos().size() + "ph";
+                ctx.drawText(textRenderer, Text.literal(count), 104, 45, GuiHelper.EMBER, false);
             }
         }
-    }
 
-    private void drawCentered(DrawContext ctx, String text, int slotX, int y) {
-        int tx = slotX + 8 - this.textRenderer.getWidth(text) / 2;
-        ctx.drawText(this.textRenderer, Text.literal(text), tx, y, GuiHelper.TEXT_DARK, false);
+        // Nameplate text
+        ctx.drawCenteredTextWithShadow(textRenderer,
+                Text.literal("P-7 · DYE SUBLIMATION"),
+                backgroundWidth / 2, 82, GuiHelper.FRAME_LO);
+
+        // Player inventory label
+        ctx.drawText(textRenderer, Text.literal("INVENTORY"),
+                playerInventoryTitleX, playerInventoryTitleY, GuiHelper.CREAM_DIM, false);
     }
 }

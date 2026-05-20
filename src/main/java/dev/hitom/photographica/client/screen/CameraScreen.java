@@ -11,7 +11,6 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 
@@ -126,27 +125,25 @@ public class CameraScreen extends Screen {
 				step -> settings = withFocusMode(clampStep(settings.focusMode(), step, FOCUS_MODE_LABELS.length)),
 				true);
 
-		addDrawableChild(ButtonWidget.builder(Text.literal("閉じる"), b -> close())
-				.dimensions(cx - 50, top + row * 22 + 14, 100, 20)
-				.build());
+		addDrawableChild(SafelightButton.ghost(cx - 50, top + row * 22 + 14, 100,
+				Text.literal("閉じる"),
+				b -> close()));
 	}
 
 	private void addRow(int cx, int y, String label, java.util.function.Supplier<String> value,
 	                    java.util.function.IntConsumer step, boolean editable) {
-		ButtonWidget left = ButtonWidget.builder(Text.literal("◀"),
-						b -> { step.accept(-1); dirty = true; clearAndInit(); })
-				.dimensions(cx - 30, y, 20, 20).build();
+		SafelightButton left = SafelightButton.of(cx - 30, y, 20, Text.literal("◀"),
+				b -> { step.accept(-1); dirty = true; clearAndInit(); });
 		left.active = editable;
 		addDrawableChild(left);
 
-		ButtonWidget center = ButtonWidget.builder(Text.literal(label + ": " + value.get()), b -> {})
-				.dimensions(cx - 8, y, 140, 20).build();
+		SafelightButton center = SafelightButton.ghost(cx - 8, y, 140,
+				Text.literal(label + ": " + value.get()), b -> {});
 		center.active = false;
 		addDrawableChild(center);
 
-		ButtonWidget right = ButtonWidget.builder(Text.literal("▶"),
-						b -> { step.accept(1); dirty = true; clearAndInit(); })
-				.dimensions(cx + 134, y, 20, 20).build();
+		SafelightButton right = SafelightButton.of(cx + 134, y, 20, Text.literal("▶"),
+				b -> { step.accept(1); dirty = true; clearAndInit(); });
 		right.active = editable;
 		addDrawableChild(right);
 	}
@@ -154,8 +151,26 @@ public class CameraScreen extends Screen {
 	@Override
 	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		this.renderBackground(ctx, mouseX, mouseY, delta);
+
+		// Draw dark panel background
+		int cx = width / 2;
+		int top = height / 2 - 100;
+		int panelW = 248;
+		int panelH = 210;
+		int px = cx - panelW / 2;
+		int py = top - 16;
+		GuiHelper.drawPanel(ctx, px, py, panelW, panelH);
+
+		// Nameplate at top of panel
+		GuiHelper.drawNameplate(ctx, px + 6, py + 5, panelW - 12);
+
+		// Rule below nameplate
+		GuiHelper.drawRule(ctx, px + 6, py + 17, panelW - 12);
+
 		super.render(ctx, mouseX, mouseY, delta);
-		ctx.drawCenteredTextWithShadow(textRenderer, this.title, width / 2, height / 2 - 120, 0xFFFFFF);
+
+		// Title text
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("CAMERA SETTINGS"), cx, py + 6, GuiHelper.FRAME_LO);
 	}
 
 	@Override

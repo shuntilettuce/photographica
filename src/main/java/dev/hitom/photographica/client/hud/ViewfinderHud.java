@@ -31,12 +31,15 @@ public final class ViewfinderHud {
 			"1/125", "1/250", "1/500", "1/1000", "1/2000", "1/4000"
 	};
 
-	private static final int COLOR_BEZEL = 0xB0000000;
-	private static final int COLOR_FRAME = 0xFFFFFFFF;
+	private static final int COLOR_BEZEL    = 0xB8000000;
+	private static final int COLOR_FRAME    = 0xFFFFFFFF;
 	private static final int COLOR_FRAME_DIM = 0xFFC0C0C0;
-	private static final int COLOR_TEXT = 0xFFFFFFFF;
-	private static final int COLOR_TEXT_DIM = 0xFFB0B0B0;
-	private static final int COLOR_GRID = 0x60FFFFFF;
+	private static final int COLOR_TEXT     = 0xFFE8DCC4; // CREAM
+	private static final int COLOR_TEXT_DIM = 0xFF9A8D72; // CREAM_DIM
+	private static final int COLOR_GRID     = 0x60FFFFFF;
+	// Safelight design palette (for meter and reticle)
+	private static final int SAFELIGHT      = 0xFFC2362B;
+	private static final int EMBER          = 0xFFE08A3C;
 
 	public static void render(DrawContext ctx, RenderTickCounter tickCounter) {
 		MinecraftClient mc = MinecraftClient.getInstance();
@@ -87,7 +90,7 @@ public final class ViewfinderHud {
 		}
 
 		// Corner brackets (L-shapes)
-		int bl = 14;  // bracket length
+		int bl = 20;  // bracket length
 		int bt = 2;   // bracket thickness
 		drawBracket(ctx, fx, fy, bl, bt, +1, +1, COLOR_FRAME);
 		drawBracket(ctx, fx2, fy, bl, bt, -1, +1, COLOR_FRAME);
@@ -238,7 +241,7 @@ public final class ViewfinderHud {
 		float clamped  = (float) Math.max(-3.5, Math.min(3.5, evDev));
 		int ptrX       = meterCx + (int)(clamped * pixPerEv);
 		double absEv   = Math.abs(evDev);
-		int ptrColor   = absEv <= 0.7 ? 0xFF00E000 : absEv <= 1.7 ? 0xFFFFCC00 : 0xFFFF4444;
+		int ptrColor   = absEv <= 2.0 ? EMBER : SAFELIGHT;
 		ctx.fill(ptrX - 1, baseY - 7, ptrX + 2, baseY + 2, ptrColor);
 	}
 
@@ -279,9 +282,9 @@ public final class ViewfinderHud {
 		// DoF tolerance: wider aperture → tighter zone (real cameras behave this way)
 		float tolerance = focus * s.aperture() * 0.08f;
 		float diff = Math.abs(sceneDepth - focus);
-		if (diff <= tolerance)           return 0xFF00E000; // green: in focus
-		if (diff <= tolerance * 2.5f)    return 0xFFFFCC00; // yellow: close
-		return 0xFFFF4444;                                   // red: out of focus
+		if (diff <= tolerance)           return 0xFF7CE67C; // green: in focus
+		if (diff <= tolerance * 2.5f)    return 0xFFFFCC44; // yellow: close
+		return 0xFFE04040;                                   // red: out of focus
 	}
 
 	/**
