@@ -2,6 +2,8 @@ package dev.hitom.photographica.client.screen;
 
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.LensKind;
+import dev.hitom.photographica.component.ModDataComponents;
+import dev.hitom.photographica.component.SdCardData;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.LensItem;
 import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
@@ -125,9 +127,25 @@ public class CameraScreen extends Screen {
 				step -> settings = withFocusMode(clampStep(settings.focusMode(), step, FOCUS_MODE_LABELS.length)),
 				true);
 
-		addDrawableChild(SafelightButton.ghost(cx - 50, top + row * 22 + 14, 100,
-				Text.literal("閉じる"),
-				b -> close()));
+		int btnY = top + row * 22 + 14;
+		SdCardData sdData = stack.getOrDefault(ModDataComponents.SD_CARD, SdCardData.EMPTY);
+		if (!sdData.isEmpty()) {
+			addDrawableChild(SafelightButton.primary(cx - 105, btnY, 100,
+					Text.literal("SDカード (" + sdData.photos().size() + ")"),
+					b -> {
+						if (dirty) {
+							CameraItem.setSettings(stack, settings);
+							ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
+							dirty = false;
+						}
+						client.setScreen(new SdCardBrowserScreen(stack, sdData, this));
+					}));
+			addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
+					Text.literal("閉じる"), b -> close()));
+		} else {
+			addDrawableChild(SafelightButton.ghost(cx - 50, btnY, 100,
+					Text.literal("閉じる"), b -> close()));
+		}
 	}
 
 	private void addRow(int cx, int y, String label, java.util.function.Supplier<String> value,

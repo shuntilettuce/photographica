@@ -30,12 +30,18 @@ public class PhotoViewerScreen extends Screen {
 	private record LoadedImage(Identifier id, int texW, int texH, int guiW, int guiH) {}
 
 	private final PhotoData data;
+	private final net.minecraft.client.gui.screen.Screen parent;
 	private LoadedImage image;
 	private boolean missing = false;
 
 	public PhotoViewerScreen(PhotoData data) {
+		this(data, null);
+	}
+
+	public PhotoViewerScreen(PhotoData data, net.minecraft.client.gui.screen.Screen parent) {
 		super(Text.literal("Photo"));
 		this.data = data;
+		this.parent = parent;
 	}
 
 	@Override
@@ -45,9 +51,9 @@ public class PhotoViewerScreen extends Screen {
 		missing = false;
 		loadImage();
 
-		addDrawableChild(ButtonWidget.builder(Text.literal("閉じる"), b -> close())
-				.dimensions(width / 2 - 40, height - 24, 80, 20)
-				.build());
+		addDrawableChild(SafelightButton.ghost(width / 2 - 40, height - 24, 80,
+				Text.literal(parent != null ? "← 戻る" : "閉じる"),
+				b -> close()));
 	}
 
 	private void loadImage() {
@@ -208,6 +214,15 @@ public class PhotoViewerScreen extends Screen {
 		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(header), width / 2, 6, 0xFFFFFFFF);
 		ctx.drawTextWithShadow(textRenderer, Text.literal(exposure), 8, height - 40, 0xFFB0B0B0);
 		ctx.drawTextWithShadow(textRenderer, Text.literal(location), 8, height - 28, 0xFF808080);
+	}
+
+	@Override
+	public void close() {
+		if (parent != null) {
+			MinecraftClient.getInstance().setScreen(parent);
+		} else {
+			super.close();
+		}
 	}
 
 	@Override
