@@ -26,7 +26,6 @@
 	"key.photographica.load_sd_card": "Load SD Card",
 	"key.photographica.unload_sd_card": "Unload SD Card",
 	"category.photographica": "Photographica",
-	"block.photographica.camera_stand": "Camera Stand",
 	"block.photographica.darkroom": "Portable Darkroom",
 	"block.photographica.printer": "Printer",
 	"block.photographica.enlarger": "Enlarger"

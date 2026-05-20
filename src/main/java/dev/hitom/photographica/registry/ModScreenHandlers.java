@@ -1,7 +1,6 @@
 package dev.hitom.photographica.registry;
 
 import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.screen.CameraStandScreenHandler;
 import dev.hitom.photographica.screen.DarkroomScreenHandler;
 import dev.hitom.photographica.screen.EnlargerScreenHandler;
 import dev.hitom.photographica.screen.PrinterScreenHandler;
@@ -17,13 +16,6 @@ import net.minecraft.util.math.BlockPos;
 
 public final class ModScreenHandlers {
     private ModScreenHandlers() {}
-
-    public static final ScreenHandlerType<CameraStandScreenHandler> CAMERA_STAND =
-            Registry.register(
-                    Registries.SCREEN_HANDLER,
-                    Identifier.of(Photographica.MOD_ID, "camera_stand"),
-                    new ScreenHandlerType<>(CameraStandScreenHandler::new, FeatureSet.empty())
-            );
 
     public static final ScreenHandlerType<DarkroomScreenHandler> DARKROOM =
             Registry.register(

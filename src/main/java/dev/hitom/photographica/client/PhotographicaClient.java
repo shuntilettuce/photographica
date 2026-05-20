@@ -2,7 +2,6 @@ package dev.hitom.photographica.client;
 
 import dev.hitom.photographica.client.hud.ViewfinderHud;
 import dev.hitom.photographica.client.screen.CameraScreen;
-import dev.hitom.photographica.client.screen.CameraStandScreen;
 import dev.hitom.photographica.client.screen.DarkroomScreen;
 import dev.hitom.photographica.client.screen.EnlargerScreen;
 import dev.hitom.photographica.client.screen.FilmCameraScreen;
@@ -49,7 +48,6 @@ public class PhotographicaClient implements ClientModInitializer {
 		PhotoItem.clientOpenViewer = data ->
 				MinecraftClient.getInstance().setScreen(new PhotoViewerScreen(data));
 
-		HandledScreens.register(ModScreenHandlers.CAMERA_STAND, CameraStandScreen::new);
 		HandledScreens.register(ModScreenHandlers.DARKROOM, DarkroomScreen::new);
 		HandledScreens.register(ModScreenHandlers.PRINTER, PrinterScreen::new);
 		HandledScreens.register(ModScreenHandlers.ENLARGER, EnlargerScreen::new);

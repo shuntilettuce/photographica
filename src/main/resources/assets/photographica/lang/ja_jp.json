@@ -26,7 +26,6 @@
 	"key.photographica.load_sd_card": "SDカードを装填",
 	"key.photographica.unload_sd_card": "SDカードを取り出し",
 	"category.photographica": "Photographica",
-	"block.photographica.camera_stand": "カメラスタンド",
 	"block.photographica.darkroom": "ポータブル暗室",
 	"block.photographica.printer": "プリンター",
 	"block.photographica.enlarger": "引き伸ばし機"

@@ -1,7 +1,6 @@
 package dev.hitom.photographica.registry;
 
 import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.block.CameraStandBlock;
 import dev.hitom.photographica.block.DarkroomBlock;
 import dev.hitom.photographica.block.EnlargerBlock;
 import dev.hitom.photographica.block.PrinterBlock;
@@ -19,16 +18,6 @@ import net.minecraft.util.Identifier;
 
 public final class ModBlocks {
     private ModBlocks() {}
-
-    public static final Block CAMERA_STAND = Registry.register(
-            Registries.BLOCK,
-            Identifier.of(Photographica.MOD_ID, "camera_stand"),
-            new CameraStandBlock(AbstractBlock.Settings.create()
-                    .mapColor(MapColor.STONE_GRAY)
-                    .instrument(NoteBlockInstrument.BASEDRUM)
-                    .requiresTool()
-                    .strength(2.5f))
-    );
 
     public static final Block DARKROOM = Registry.register(
             Registries.BLOCK,
@@ -63,9 +52,6 @@ public final class ModBlocks {
     public static void register() {
         // Register BlockItems
         Registry.register(Registries.ITEM,
-                Identifier.of(Photographica.MOD_ID, "camera_stand"),
-                new BlockItem(CAMERA_STAND, new Item.Settings()));
-        Registry.register(Registries.ITEM,
                 Identifier.of(Photographica.MOD_ID, "darkroom"),
                 new BlockItem(DARKROOM, new Item.Settings()));
         Registry.register(Registries.ITEM,
@@ -77,7 +63,6 @@ public final class ModBlocks {
 
         // Add to creative tab
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> {
-            entries.add(CAMERA_STAND.asItem());
             entries.add(DARKROOM.asItem());
             entries.add(PRINTER.asItem());
             entries.add(ENLARGER.asItem());
