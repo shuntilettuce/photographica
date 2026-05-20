@@ -20,9 +20,10 @@ import java.util.Map;
 @Environment(EnvType.CLIENT)
 public class FilmPickerScreen extends Screen {
 
-    private static final int PANEL_W = 240;
-    private static final int ROW_H   = 24;
-    private static final int PAD     = 10;
+    private static final int PANEL_W  = 240;
+    private static final int HEADER_H = 26;  // nameplate + rule + breathing room
+    private static final int ROW_H    = 32;  // slot height; button is 20px, leaving 12px gap
+    private static final int PAD      = 10;  // left/right and bottom padding
 
     private final Screen parent;
     // filmType → total count in inventory
@@ -36,15 +37,18 @@ public class FilmPickerScreen extends Screen {
         this.types     = List.copyOf(available.keySet());
     }
 
+    private int panelH() {
+        return HEADER_H + types.size() * ROW_H + 6 + ROW_H + PAD;
+    }
+
     @Override
     protected void init() {
-        int panelH = PAD + types.size() * ROW_H + 6 + ROW_H + PAD;
         int px = width  / 2 - PANEL_W / 2;
-        int py = height / 2 - panelH / 2;
+        int py = height / 2 - panelH() / 2;
         int bx = px + PAD;
         int bw = PANEL_W - PAD * 2;
 
-        int y = py + PAD;
+        int y = py + HEADER_H;
         for (int ft : types) {
             int count = available.get(ft);
             String iso   = "ISO" + FilmKind.isoOf(ft);
@@ -55,7 +59,7 @@ public class FilmPickerScreen extends Screen {
                     Text.literal(label),
                     b -> {
                         ClientPlayNetworking.send(new LoadFilmPayload(finalFt));
-                        client.setScreen(null); // close everything, camera screen already sent dirty
+                        client.setScreen(null);
                     }));
             y += ROW_H;
         }
@@ -71,14 +75,13 @@ public class FilmPickerScreen extends Screen {
 
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-        int panelH = PAD + types.size() * ROW_H + 6 + ROW_H + PAD;
         int px = width  / 2 - PANEL_W / 2;
-        int py = height / 2 - panelH / 2;
+        int py = height / 2 - panelH() / 2;
 
         // Dim the parent screen behind the panel
         ctx.fill(0, 0, width, height, 0x88000000);
 
-        GuiHelper.drawPanel(ctx, px, py, PANEL_W, panelH);
+        GuiHelper.drawPanel(ctx, px, py, PANEL_W, panelH());
         GuiHelper.drawNameplate(ctx, px + 6, py + 5, PANEL_W - 12);
         GuiHelper.drawRule(ctx, px + 6, py + 17, PANEL_W - 12);
         ctx.drawCenteredTextWithShadow(textRenderer,
