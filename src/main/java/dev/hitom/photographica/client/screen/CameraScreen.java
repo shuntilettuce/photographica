@@ -149,8 +149,10 @@ public class CameraScreen extends Screen {
 	}
 
 	@Override
+	public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {}
+
 	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-		ctx.fill(0, 0, this.width, this.height, 0xC0101010);
+		ctx.fill(0, 0, this.width, this.height, 0xFF101010);
 
 		// Draw dark panel background
 		int cx = width / 2;
