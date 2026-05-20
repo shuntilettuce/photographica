@@ -226,7 +226,7 @@ public class Photographica implements ModInitializer {
 			context.server().execute(() -> {
 				ServerWorld world = player.getServerWorld();
 				BlockPos pos = player.getBlockPos();
-				boolean inLight = world.getLightLevel(pos) >= 7;
+				boolean inLight = world.getLightLevel(pos) > 7;
 				PlayerInventory inv = player.getInventory();
 				for (int i = 0; i < inv.size(); i++) {
 					ItemStack s = inv.getStack(i);

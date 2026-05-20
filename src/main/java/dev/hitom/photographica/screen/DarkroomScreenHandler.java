@@ -86,7 +86,7 @@ public class DarkroomScreenHandler extends ScreenHandler {
                 return true;
             }
 
-            boolean inLight = player.getWorld().getLightLevel(player.getBlockPos()) >= 7;
+            boolean inLight = player.getWorld().getLightLevel(player.getBlockPos()) > 7;
             int tanksUsed = 0;
 
             for (int i = 0; i < 3; i++) {
