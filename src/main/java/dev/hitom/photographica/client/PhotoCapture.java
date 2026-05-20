@@ -5,6 +5,8 @@ import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.LensKind;
+import dev.hitom.photographica.component.ModDataComponents;
+import dev.hitom.photographica.component.SdCardData;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
@@ -86,6 +88,23 @@ public final class PhotoCapture {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
 			return;
+		}
+
+		// Digital cameras require an SD card to save photos.
+		if (!isFilm) {
+			if (!cameraStack.contains(ModDataComponents.SD_CARD)) {
+				mc.player.sendMessage(Text.literal("⚠ SDカードが装填されていません"), true);
+				mc.getSoundManager().play(PositionedSoundInstance.master(
+						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
+				return;
+			}
+			SdCardData sd = cameraStack.get(ModDataComponents.SD_CARD);
+			if (sd != null && sd.isFull()) {
+				mc.player.sendMessage(Text.literal("⚠ SDカードがいっぱいです"), true);
+				mc.getSoundManager().play(PositionedSoundInstance.master(
+						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
+				return;
+			}
 		}
 
 		// Film-camera prerequisites: must have film, must be wound, must have frames left.

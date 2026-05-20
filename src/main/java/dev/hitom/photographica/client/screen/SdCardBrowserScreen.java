@@ -1,23 +1,32 @@
 package dev.hitom.photographica.client.screen;
 
+import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.component.PhotoData;
 import dev.hitom.photographica.component.SdCardData;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.texture.NativeImage;
+import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.List;
 
 /**
  * Playback screen for browsing photos stored on an SD card inside a camera.
- * Prev/Next to cycle through photos; "全画面" opens PhotoViewerScreen with
- * this screen as the parent so the back button returns here.
+ * Shows a thumbnail + metadata. Prev/Next to cycle; "全画面" opens PhotoViewerScreen.
  */
 @Environment(EnvType.CLIENT)
 public class SdCardBrowserScreen extends Screen {
+
+    private record ThumbImage(Identifier id, int texW, int texH, int guiW, int guiH) {}
 
     private static final String[] SHUTTERS = {
             "30\"", "15\"", "8\"", "4\"", "2\"", "1\"",
@@ -25,10 +34,21 @@ public class SdCardBrowserScreen extends Screen {
             "1/125", "1/250", "1/500", "1/1000", "1/2000", "1/4000"
     };
 
+    // Panel dimensions
+    private static final int PANEL_W = 320;
+    private static final int PANEL_H = 264;
+    // Thumbnail display constraints (in GUI pixels)
+    private static final int THUMB_MAX_W = 288;
+    private static final int THUMB_MAX_H = 144;
+
     private final ItemStack cameraStack;
     private final Screen parent;
     private final List<PhotoData> photos;
     private int index = 0;
+
+    private ThumbImage thumb = null;
+    private boolean thumbMissing = false;
+    private int loadedForIndex = -1;
 
     public SdCardBrowserScreen(ItemStack cameraStack, SdCardData sdData, Screen parent) {
         super(Text.literal("SD CARD"));
@@ -39,31 +59,38 @@ public class SdCardBrowserScreen extends Screen {
 
     @Override
     protected void init() {
+        if (!photos.isEmpty() && loadedForIndex != index) {
+            loadThumb(photos.get(index));
+        }
+
         int cx = width / 2;
-        int panelH = 220;
-        int py = (height - panelH) / 2;
-        int top = py + 30; // below nameplate area
+        int py = (height - PANEL_H) / 2;
 
         if (photos.isEmpty()) {
-            addDrawableChild(SafelightButton.ghost(cx - 50, py + panelH - 30, 100,
+            addDrawableChild(SafelightButton.ghost(cx - 50, py + PANEL_H - 28, 100,
                     Text.literal("← 戻る"), b -> close()));
             return;
         }
 
-        // Prev / Next navigation
-        addDrawableChild(SafelightButton.of(cx - 60, top, 50,
-                Text.literal("◀ PREV"), b -> { index = Math.max(0, index - 1); clearAndInit(); }));
-        addDrawableChild(SafelightButton.of(cx + 10, top, 50,
-                Text.literal("NEXT ▶"), b -> { index = Math.min(photos.size() - 1, index + 1); clearAndInit(); }));
+        // Prev / Next
+        int navY = py + PANEL_H - 56;
+        addDrawableChild(SafelightButton.of(cx - 105, navY, 100,
+                Text.literal("◀ PREV"), b -> navigate(-1)));
+        addDrawableChild(SafelightButton.of(cx + 5, navY, 100,
+                Text.literal("NEXT ▶"), b -> navigate(1)));
 
-        // Full-screen view button
-        addDrawableChild(SafelightButton.primary(cx - 105, py + panelH - 56, 100,
+        // Full-screen view + back
+        int btnY = py + PANEL_H - 28;
+        addDrawableChild(SafelightButton.primary(cx - 105, btnY, 100,
                 Text.literal("全画面で見る"),
                 b -> client.setScreen(new PhotoViewerScreen(photos.get(index), this))));
-
-        // Back button
-        addDrawableChild(SafelightButton.ghost(cx + 5, py + panelH - 56, 100,
+        addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
                 Text.literal("← 戻る"), b -> close()));
+    }
+
+    private void navigate(int dir) {
+        index = Math.max(0, Math.min(photos.size() - 1, index + dir));
+        clearAndInit();
     }
 
     @Override
@@ -74,58 +101,62 @@ public class SdCardBrowserScreen extends Screen {
         ctx.fill(0, 0, this.width, this.height, 0xFF101010);
 
         int cx = width / 2;
-        int panelW = 320;
-        int panelH = 220;
-        int px = cx - panelW / 2;
-        int py = (height - panelH) / 2;
+        int px = cx - PANEL_W / 2;
+        int py = (height - PANEL_H) / 2;
 
-        GuiHelper.drawPanel(ctx, px, py, panelW, panelH);
-        GuiHelper.drawNameplate(ctx, px + 6, py + 5, panelW - 12);
-        GuiHelper.drawRule(ctx, px + 6, py + 17, panelW - 12);
-
+        GuiHelper.drawPanel(ctx, px, py, PANEL_W, PANEL_H);
+        GuiHelper.drawNameplate(ctx, px + 6, py + 5, PANEL_W - 12);
+        GuiHelper.drawRule(ctx, px + 6, py + 17, PANEL_W - 12);
         ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("SD CARD"), cx, py + 6, GuiHelper.CREAM);
 
         if (photos.isEmpty()) {
             ctx.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("NO PHOTOS"), cx, py + panelH / 2 - 5, GuiHelper.CREAM_FAINT);
+                    Text.literal("NO PHOTOS"), cx, py + PANEL_H / 2 - 5, GuiHelper.CREAM_FAINT);
             super.render(ctx, mouseX, mouseY, delta);
             return;
         }
 
-        int top = py + 30;
+        // Thumbnail area: starts at py+22, max height THUMB_MAX_H
+        int thumbAreaTop = py + 22;
+        if (thumbMissing) {
+            ctx.fill(cx - THUMB_MAX_W / 2, thumbAreaTop,
+                    cx + THUMB_MAX_W / 2, thumbAreaTop + THUMB_MAX_H, 0xFF1A1510);
+            ctx.drawCenteredTextWithShadow(textRenderer,
+                    Text.literal("[ NO FILE ]"),
+                    cx, thumbAreaTop + THUMB_MAX_H / 2 - 4, GuiHelper.CREAM_FAINT);
+        } else if (thumb != null) {
+            int tx = cx - thumb.guiW() / 2;
+            int ty = thumbAreaTop + (THUMB_MAX_H - thumb.guiH()) / 2;
+            // Thin frame around thumbnail
+            ctx.fill(tx - 1, ty - 1, tx + thumb.guiW() + 1, ty + thumb.guiH() + 1, 0xFF9B6F30);
+            ctx.drawTexture(thumb.id(), tx, ty, thumb.guiW(), thumb.guiH(),
+                    0f, 0f, thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH());
+        }
+
+        // Metadata block below thumbnail
         PhotoData p = photos.get(index);
+        int metaY = py + 22 + THUMB_MAX_H + 4;
+        int lineH = textRenderer.fontHeight + 2;
 
-        // Index counter centered between prev/next buttons
+        // Index counter
         String counter = (index + 1) + " / " + photos.size();
-        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(counter), cx, top + 6, GuiHelper.CREAM);
-
-        // Metadata block
-        int infoY = top + 30;
-        int lineH = textRenderer.fontHeight + 3;
-
-        ctx.drawCenteredTextWithShadow(textRenderer,
-                Text.literal("撮影者: " + p.photographer()),
-                cx, infoY, GuiHelper.CREAM);
-        infoY += lineH;
+        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(counter), cx, metaY, GuiHelper.CREAM);
+        metaY += lineH;
 
         String exposure = String.format("F%.1f  %s  ISO%d  %dmm",
                 p.cameraAtCapture().aperture(),
                 shutterLabel(p.cameraAtCapture().shutterSpeedIdx()),
                 p.cameraAtCapture().iso(),
                 p.cameraAtCapture().focalLengthMm());
-        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(exposure),
-                cx, infoY, GuiHelper.BRASS_BRIGHT);
-        infoY += lineH;
+        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(exposure), cx, metaY, GuiHelper.BRASS_BRIGHT);
+        metaY += lineH;
 
-        String loc = String.format("%s  (%d, %d, %d)",
-                shortDim(p.dimension()), p.x(), p.y(), p.z());
-        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(loc),
-                cx, infoY, GuiHelper.CREAM_DIM);
-        infoY += lineH;
+        String loc = shortDim(p.dimension()) + "  (" + p.x() + ", " + p.y() + ", " + p.z() + ")";
+        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(loc), cx, metaY, GuiHelper.CREAM_DIM);
 
         if (p.fogged()) {
-            ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("⚠ 光被り"),
-                    cx, infoY, GuiHelper.EMBER);
+            metaY += lineH;
+            ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("⚠ 光被り"), cx, metaY, GuiHelper.EMBER);
         }
 
         super.render(ctx, mouseX, mouseY, delta);
@@ -136,6 +167,100 @@ public class SdCardBrowserScreen extends Screen {
         client.setScreen(parent);
     }
 
+    // -------------------------------------------------------------------------
+    // Thumbnail loading
+    // -------------------------------------------------------------------------
+
+    private void loadThumb(PhotoData data) {
+        thumb = null;
+        thumbMissing = false;
+        loadedForIndex = index;
+
+        MinecraftClient mc = MinecraftClient.getInstance();
+        File file = new File(mc.runDirectory, "photographica/photos/" + data.id() + ".png");
+        if (!file.isFile()) {
+            thumbMissing = true;
+            return;
+        }
+
+        NativeImage original = null;
+        NativeImage forTexture = null;
+        try (FileInputStream fis = new FileInputStream(file)) {
+            original = NativeImage.read(fis);
+
+            float aspect = (float) original.getWidth() / original.getHeight();
+            int guiW, guiH;
+            if (THUMB_MAX_W / aspect <= THUMB_MAX_H) {
+                guiW = THUMB_MAX_W;
+                guiH = Math.max(1, (int) (THUMB_MAX_W / aspect));
+            } else {
+                guiH = THUMB_MAX_H;
+                guiW = Math.max(1, (int) (THUMB_MAX_H * aspect));
+            }
+
+            double sf = mc.getWindow().getScaleFactor();
+            int physW = Math.max(1, (int) Math.round(guiW * sf));
+            int physH = Math.max(1, (int) Math.round(guiH * sf));
+
+            if (physW >= original.getWidth()) {
+                forTexture = original;
+                original = null;
+                physW = forTexture.getWidth();
+                physH = forTexture.getHeight();
+            } else {
+                forTexture = boxResample(original, physW, physH);
+            }
+
+            NativeImageBackedTexture tex = new NativeImageBackedTexture(forTexture);
+            tex.setFilter(true, false);
+            String safeId = data.id().toString().replace('-', '_').toLowerCase();
+            Identifier texId = Identifier.of(Photographica.MOD_ID, "thumb/" + safeId);
+            mc.getTextureManager().registerTexture(texId, tex);
+            forTexture = null;
+
+            thumb = new ThumbImage(texId, physW, physH, guiW, guiH);
+        } catch (IOException e) {
+            Photographica.LOGGER.error("Failed to load thumbnail {}", data.id(), e);
+            thumbMissing = true;
+        } finally {
+            if (forTexture != null) forTexture.close();
+            if (original != null) original.close();
+        }
+    }
+
+    private static NativeImage boxResample(NativeImage src, int dw, int dh) {
+        int sw = src.getWidth(), sh = src.getHeight();
+        NativeImage dst = new NativeImage(dw, dh, false);
+        float xScale = (float) sw / dw;
+        float yScale = (float) sh / dh;
+        for (int y = 0; y < dh; y++) {
+            int sy0 = (int) Math.floor(y * yScale);
+            int sy1 = Math.min(sh, (int) Math.ceil((y + 1) * yScale));
+            if (sy1 <= sy0) sy1 = sy0 + 1;
+            for (int x = 0; x < dw; x++) {
+                int sx0 = (int) Math.floor(x * xScale);
+                int sx1 = Math.min(sw, (int) Math.ceil((x + 1) * xScale));
+                if (sx1 <= sx0) sx1 = sx0 + 1;
+                long ra = 0, ga = 0, ba = 0, aa = 0;
+                int n = 0;
+                for (int sy = sy0; sy < sy1; sy++)
+                    for (int sx = sx0; sx < sx1; sx++) {
+                        int c = src.getColor(sx, sy);
+                        aa += (c >>> 24) & 0xFF; ba += (c >>> 16) & 0xFF;
+                        ga += (c >>>  8) & 0xFF; ra +=  c         & 0xFF;
+                        n++;
+                    }
+                dst.setColor(x, y, (((int)(aa/n))<<24)|(((int)(ba/n))<<16)
+                        |(((int)(ga/n))<<8)|((int)(ra/n)));
+            }
+        }
+        return dst;
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
     private static String shutterLabel(int idx) {
         if (idx < 0) return SHUTTERS[0];
         if (idx >= SHUTTERS.length) return SHUTTERS[SHUTTERS.length - 1];
@@ -144,7 +269,6 @@ public class SdCardBrowserScreen extends Screen {
 
     private static String shortDim(String dim) {
         if (dim == null) return "?";
-        // "minecraft:overworld" → "overworld"
         int colon = dim.lastIndexOf(':');
         return colon >= 0 ? dim.substring(colon + 1) : dim;
     }
