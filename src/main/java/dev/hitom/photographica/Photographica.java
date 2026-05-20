@@ -167,7 +167,7 @@ public class Photographica implements ModInitializer {
 				PlayerInventory inv = player.getInventory();
 				for (int i = 0; i < inv.size(); i++) {
 					ItemStack s = inv.getStack(i);
-					if (s.getItem() instanceof FilmRollItem fr) {
+					if (s.getItem() instanceof FilmRollItem fr && fr.filmType() == payload.filmType()) {
 						FilmRollData fresh = s.getOrDefault(ModDataComponents.FILM_ROLL,
 								FilmRollData.freshRoll(fr.filmType()));
 						// Loaded films start wound (ready to shoot).

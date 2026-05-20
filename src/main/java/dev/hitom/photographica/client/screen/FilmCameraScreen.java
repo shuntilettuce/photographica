@@ -5,6 +5,7 @@ import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.FilmCameraItem;
+import dev.hitom.photographica.item.FilmRollItem;
 import dev.hitom.photographica.item.LensItem;
 import dev.hitom.photographica.network.LoadFilmPayload;
 import dev.hitom.photographica.network.UnloadFilmPayload;
@@ -20,7 +21,9 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeSet;
 
 /**
@@ -45,6 +48,7 @@ public class FilmCameraScreen extends Screen {
 	private final ItemStack stack;
 	private CameraSettings settings;
 	private boolean dirty = false;
+	private boolean pickingFilm = false;
 
 	public FilmCameraScreen(ItemStack stack) {
 		super(Text.literal("フィルムカメラ"));
@@ -133,29 +137,71 @@ public class FilmCameraScreen extends Screen {
 		FilmRollData film = FilmCameraItem.getFilm(stack);
 		boolean loaded = film.totalExposures() > 0;
 		int btnY = top + row * 22 + 14;
-		addDrawableChild(SafelightButton.of(cx - 105, btnY, 100,
-				Text.literal(loaded ? "フィルム取り出し" : "フィルム装填"),
-				b -> {
-					if (loaded) {
-						ClientPlayNetworking.send(new UnloadFilmPayload());
-					} else {
-						ClientPlayNetworking.send(new LoadFilmPayload());
-					}
-					close();
-				}));
 
-		String autoWindLabel = settings.autoWind() ? "自動巻上げ: §aON" : "自動巻上げ: §cOFF";
-		addDrawableChild(SafelightButton.ghost(cx - 105, btnY + 24, 210,
-				Text.literal(autoWindLabel),
-				b -> {
-					settings = settings.withAutoWind(!settings.autoWind());
-					dirty = true;
-					clearAndInit();
-				}));
+		if (!loaded && pickingFilm) {
+			// Film-type picker: show one button per available type, then cancel.
+			Map<Integer, Integer> available = availableFilmTypes();
+			List<Integer> types = new ArrayList<>(available.keySet());
+			int n = types.size();
+			// Layout: up to 3 per row, 64px wide each with 3px gap.
+			int colW = 64, gap = 3;
+			int rowCount = (n + 2) / 3;
+			for (int i = 0; i < n; i++) {
+				int ft = types.get(i);
+				int col = i % 3, r = i / 3;
+				int bx = cx - 99 + col * (colW + gap);
+				int by = btnY + r * (20 + 4);
+				int count = available.get(ft);
+				String label = FilmKind.displayName(ft) + " ×" + count;
+				int finalFt = ft;
+				addDrawableChild(SafelightButton.primary(bx, by, colW,
+						Text.literal(label),
+						b -> {
+							ClientPlayNetworking.send(new LoadFilmPayload(finalFt));
+							close();
+						}));
+			}
+			int cancelRow = rowCount;
+			addDrawableChild(SafelightButton.ghost(cx - 50, btnY + cancelRow * (20 + 4), 100,
+					Text.literal("キャンセル"),
+					b -> { pickingFilm = false; clearAndInit(); }));
+		} else {
+			addDrawableChild(SafelightButton.of(cx - 105, btnY, 100,
+					Text.literal(loaded ? "フィルム取り出し" : "フィルム装填"),
+					b -> {
+						if (loaded) {
+							ClientPlayNetworking.send(new UnloadFilmPayload());
+							close();
+						} else {
+							Map<Integer, Integer> available = availableFilmTypes();
+							if (available.size() == 1) {
+								int ft = available.keySet().iterator().next();
+								ClientPlayNetworking.send(new LoadFilmPayload(ft));
+								close();
+							} else if (available.size() > 1) {
+								pickingFilm = true;
+								clearAndInit();
+							} else {
+								// No film — let server send the error message
+								ClientPlayNetworking.send(new LoadFilmPayload(0));
+								close();
+							}
+						}
+					}));
 
-		addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
-				Text.literal("閉じる"),
-				b -> close()));
+			String autoWindLabel = settings.autoWind() ? "自動巻上げ: §aON" : "自動巻上げ: §cOFF";
+			addDrawableChild(SafelightButton.ghost(cx - 105, btnY + 24, 210,
+					Text.literal(autoWindLabel),
+					b -> {
+						settings = settings.withAutoWind(!settings.autoWind());
+						dirty = true;
+						clearAndInit();
+					}));
+
+			addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
+					Text.literal("閉じる"),
+					b -> close()));
+		}
 	}
 
 	private void addRow(int cx, int y, String label, java.util.function.Supplier<String> value,
@@ -230,6 +276,22 @@ public class FilmCameraScreen extends Screen {
 			ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
 		}
 		super.close();
+	}
+
+	/** Returns filmType → count for each film roll type found in the player's inventory. */
+	private Map<Integer, Integer> availableFilmTypes() {
+		Map<Integer, Integer> result = new LinkedHashMap<>();
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player == null) return result;
+		for (ItemStack s : mc.player.getInventory().main) {
+			if (s.getItem() instanceof FilmRollItem fr)
+				result.merge(fr.filmType(), s.getCount(), Integer::sum);
+		}
+		for (ItemStack s : mc.player.getInventory().offHand) {
+			if (s.getItem() instanceof FilmRollItem fr)
+				result.merge(fr.filmType(), s.getCount(), Integer::sum);
+		}
+		return result;
 	}
 
 	/** Returns lens kind IDs available to the player: always NONE + current + any LensItem in inventory. */
