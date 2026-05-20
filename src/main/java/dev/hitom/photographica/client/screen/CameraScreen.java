@@ -158,7 +158,7 @@ public class CameraScreen extends Screen {
 		int cx = width / 2;
 		int top = height / 2 - 70;
 		int panelW = 320;
-		int panelH = 210;
+		int panelH = 234;
 		int px = cx - panelW / 2;
 		int py = top - 16;
 		GuiHelper.drawPanel(ctx, px, py, panelW, panelH);
