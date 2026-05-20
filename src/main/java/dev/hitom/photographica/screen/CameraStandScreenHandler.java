@@ -69,12 +69,12 @@ public class CameraStandScreenHandler extends ScreenHandler {
         // Player inventory (3 rows × 9)
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 84 + row * 18));
+                addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 94 + row * 18));
             }
         }
         // Player hotbar
         for (int col = 0; col < 9; col++) {
-            addSlot(new Slot(playerInventory, col, 8 + col * 18, 142));
+            addSlot(new Slot(playerInventory, col, 8 + col * 18, 152));
         }
     }
 

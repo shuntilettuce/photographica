@@ -17,7 +17,7 @@ public class PrinterScreen extends HandledScreen<PrinterScreenHandler> {
     public PrinterScreen(PrinterScreenHandler handler, PlayerInventory playerInventory, Text title) {
         super(handler, playerInventory, title);
         this.backgroundWidth  = 176;
-        this.backgroundHeight = 172;
+        this.backgroundHeight = 176;
     }
 
     @Override
@@ -104,8 +104,5 @@ public class PrinterScreen extends HandledScreen<PrinterScreenHandler> {
                 Text.literal("P-7 · DYE SUBLIMATION"),
                 backgroundWidth / 2, 82, GuiHelper.FRAME_LO);
 
-        // Player inventory label
-        ctx.drawText(textRenderer, Text.literal("INVENTORY"),
-                playerInventoryTitleX, playerInventoryTitleY, GuiHelper.CREAM_DIM, false);
     }
 }

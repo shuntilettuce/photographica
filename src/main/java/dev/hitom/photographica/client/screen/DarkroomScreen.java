@@ -20,7 +20,7 @@ public class DarkroomScreen extends HandledScreen<DarkroomScreenHandler> {
     @Override
     protected void init() {
         super.init();
-        this.playerInventoryTitleY = 94;
+        
         int x = this.x, y = this.y;
         addDrawableChild(SafelightButton.of(x + 6, y + 72, 80, Text.literal("DEVELOP"),
                 b -> this.client.interactionManager.clickButton(this.handler.syncId, 0)));
@@ -102,9 +102,5 @@ public class DarkroomScreen extends HandledScreen<DarkroomScreenHandler> {
         ctx.drawCenteredTextWithShadow(textRenderer,
                 Text.literal("DR-1 · 35MM CHEMICAL BATH"),
                 backgroundWidth / 2, 95, GuiHelper.FRAME_LO);
-
-        // Player inventory label
-        ctx.drawText(textRenderer, Text.literal("INVENTORY"),
-                playerInventoryTitleX, playerInventoryTitleY, GuiHelper.CREAM_DIM, false);
     }
 }

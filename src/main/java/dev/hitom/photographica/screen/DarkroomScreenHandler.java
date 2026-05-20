@@ -63,12 +63,12 @@ public class DarkroomScreenHandler extends ScreenHandler {
         // Player inventory (3 rows × 9)
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 100 + row * 18));
+                addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 106 + row * 18));
             }
         }
         // Player hotbar
         for (int col = 0; col < 9; col++) {
-            addSlot(new Slot(playerInventory, col, 8 + col * 18, 158));
+            addSlot(new Slot(playerInventory, col, 8 + col * 18, 164));
         }
     }
 

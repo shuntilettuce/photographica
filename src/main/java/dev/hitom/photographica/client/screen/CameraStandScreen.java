@@ -14,7 +14,7 @@ public class CameraStandScreen extends HandledScreen<CameraStandScreenHandler> {
     public CameraStandScreen(CameraStandScreenHandler handler, PlayerInventory playerInventory, Text title) {
         super(handler, playerInventory, title);
         this.backgroundWidth  = 176;
-        this.backgroundHeight = 172;
+        this.backgroundHeight = 176;
     }
 
     @Override
@@ -84,8 +84,5 @@ public class CameraStandScreen extends HandledScreen<CameraStandScreenHandler> {
                 Text.literal("PHOTOGRAPHICA · TRIPOD HEAD"),
                 backgroundWidth / 2, 82, GuiHelper.FRAME_LO);
 
-        // Player inventory label
-        ctx.drawText(textRenderer, Text.literal("INVENTORY"),
-                playerInventoryTitleX, playerInventoryTitleY, GuiHelper.CREAM_DIM, false);
     }
 }
