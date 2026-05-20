@@ -69,7 +69,7 @@ public class CameraStandScreen extends HandledScreen<CameraStandScreenHandler> {
         // Draw slot labels above each slot
         context.drawText(this.textRenderer, Text.literal("カメラ"),  x + 26,  y + 24, 0x404040, false);
         context.drawText(this.textRenderer, Text.literal("レンズ"), x + 62,  y + 24, 0x404040, false);
-        context.drawText(this.textRenderer, Text.literal("フィルム"), x + 96, y + 24, 0x404040, false);
+        context.drawText(this.textRenderer, Text.literal("フィルム/SD"), x + 92, y + 24, 0x404040, false);
     }
 
     @Override

@@ -5,12 +5,14 @@ import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.component.ModDataComponents;
+import dev.hitom.photographica.component.SdCardData;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.ExposedFilmItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.FilmRollItem;
 import dev.hitom.photographica.item.LensItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
+import dev.hitom.photographica.item.SdCardItem;
 import dev.hitom.photographica.registry.ModItems;
 import dev.hitom.photographica.registry.ModScreenHandlers;
 import net.minecraft.entity.player.PlayerEntity;
@@ -55,11 +57,12 @@ public class CameraStandScreenHandler extends ScreenHandler {
             }
         });
 
-        // Slot 2: Film slot (x=107, y=35)
+        // Slot 2: Film/SD card slot (x=107, y=35)
         addSlot(new Slot(inventory, 2, 107, 35) {
             @Override
             public boolean canInsert(ItemStack stack) {
-                return stack.getItem() instanceof FilmRollItem;
+                return stack.getItem() instanceof FilmRollItem
+                        || stack.getItem() instanceof SdCardItem;
             }
         });
 
@@ -121,59 +124,70 @@ public class CameraStandScreenHandler extends ScreenHandler {
                 return true;
             }
             case 1 -> {
-                // フィルム装填: load film from slot 2 into FilmCameraItem in slot 0
+                // 装填: film camera → load film; digital camera → load SD card
                 ItemStack cameraStack = inventory.getStack(0);
-                ItemStack filmStack = inventory.getStack(2);
-                if (cameraStack.isEmpty() || filmStack.isEmpty()) return true;
-                if (!(cameraStack.getItem() instanceof FilmCameraItem)) return true;
-                if (FilmCameraItem.hasFilm(cameraStack)) return true;
-                if (!(filmStack.getItem() instanceof FilmRollItem fr)) return true;
+                ItemStack mediaStack = inventory.getStack(2);
+                if (cameraStack.isEmpty() || mediaStack.isEmpty()) return true;
 
-                FilmRollData fresh = filmStack.getOrDefault(ModDataComponents.FILM_ROLL,
-                        FilmRollData.freshRoll(fr.filmType()));
-                FilmCameraItem.setFilm(cameraStack, fresh.withWound(true));
-
-                CameraSettings cur = FilmCameraItem.getSettings(cameraStack);
-                FilmCameraItem.setSettings(cameraStack, new CameraSettings(
-                        cur.aperture(), cur.shutterSpeedIdx(), FilmKind.isoOf(fresh.filmType()),
-                        cur.focusDistance(), cur.focalLengthMm(), cur.lensType(),
-                        fresh.filmType(), fresh.totalExposures(),
-                        cur.exposureMode(), cur.focusMode()));
-
-                filmStack.decrement(1);
+                if (cameraStack.getItem() instanceof FilmCameraItem) {
+                    // Film camera: load FilmRoll
+                    if (FilmCameraItem.hasFilm(cameraStack)) return true;
+                    if (!(mediaStack.getItem() instanceof FilmRollItem fr)) return true;
+                    FilmRollData fresh = mediaStack.getOrDefault(ModDataComponents.FILM_ROLL,
+                            FilmRollData.freshRoll(fr.filmType()));
+                    FilmCameraItem.setFilm(cameraStack, fresh.withWound(true));
+                    CameraSettings cur = FilmCameraItem.getSettings(cameraStack);
+                    FilmCameraItem.setSettings(cameraStack, new CameraSettings(
+                            cur.aperture(), cur.shutterSpeedIdx(), FilmKind.isoOf(fresh.filmType()),
+                            cur.focusDistance(), cur.focalLengthMm(), cur.lensType(),
+                            fresh.filmType(), fresh.totalExposures(),
+                            cur.exposureMode(), cur.focusMode()));
+                    mediaStack.decrement(1);
+                } else if (cameraStack.getItem() instanceof CameraItem) {
+                    // Digital camera: load SD card
+                    if (cameraStack.contains(ModDataComponents.SD_CARD)) return true;
+                    if (!(mediaStack.getItem() instanceof SdCardItem)) return true;
+                    SdCardData sdData = mediaStack.getOrDefault(ModDataComponents.SD_CARD, SdCardData.EMPTY);
+                    cameraStack.set(ModDataComponents.SD_CARD, sdData);
+                    mediaStack.decrement(1);
+                }
                 inventory.markDirty();
                 return true;
             }
             case 2 -> {
-                // フィルム取り出し: unload film from FilmCameraItem in slot 0
+                // 取り出し: film camera → unload film; digital camera → unload SD card
                 ItemStack cameraStack = inventory.getStack(0);
                 if (cameraStack.isEmpty()) return true;
-                if (!(cameraStack.getItem() instanceof FilmCameraItem)) return true;
 
-                FilmRollData film = FilmCameraItem.getFilm(cameraStack);
-                if (film.totalExposures() == 0) return true;
-
-                // Check light level
-                int light = player.getWorld().getLightLevel(player.getBlockPos());
-                if (light > 0 && !film.isEmpty()) {
-                    film = film.withFoggedExposures();
-                }
-
-                ItemStack out;
-                if (film.isEmpty()) {
-                    // Unused film → return as FilmRoll
-                    out = filmRollForType(film.filmType());
-                } else {
-                    // Has exposures → ExposedFilm
-                    out = new ItemStack(ModItems.EXPOSED_FILM);
-                    out.set(ModDataComponents.FILM_ROLL, film);
-                }
-
-                FilmCameraItem.setFilm(cameraStack, FilmRollData.EMPTY.withWound(false));
-                inventory.markDirty();
-
-                if (!player.getInventory().insertStack(out)) {
-                    player.dropItem(out, false);
+                if (cameraStack.getItem() instanceof FilmCameraItem) {
+                    FilmRollData film = FilmCameraItem.getFilm(cameraStack);
+                    if (film.totalExposures() == 0) return true;
+                    int light = player.getWorld().getLightLevel(player.getBlockPos());
+                    if (light > 0 && !film.isEmpty()) {
+                        film = film.withFoggedExposures();
+                    }
+                    ItemStack out;
+                    if (film.isEmpty()) {
+                        out = filmRollForType(film.filmType());
+                    } else {
+                        out = new ItemStack(ModItems.EXPOSED_FILM);
+                        out.set(ModDataComponents.FILM_ROLL, film);
+                    }
+                    FilmCameraItem.setFilm(cameraStack, FilmRollData.EMPTY.withWound(false));
+                    inventory.markDirty();
+                    if (!player.getInventory().insertStack(out)) {
+                        player.dropItem(out, false);
+                    }
+                } else if (cameraStack.getItem() instanceof CameraItem) {
+                    if (!cameraStack.contains(ModDataComponents.SD_CARD)) return true;
+                    SdCardData sdData = cameraStack.get(ModDataComponents.SD_CARD);
+                    cameraStack.remove(ModDataComponents.SD_CARD);
+                    inventory.markDirty();
+                    ItemStack sdStack = new ItemStack(ModItems.SD_CARD);
+                    sdStack.set(ModDataComponents.SD_CARD, sdData != null ? sdData : SdCardData.EMPTY);
+                    if (!player.getInventory().insertStack(sdStack)) {
+                        player.dropItem(sdStack, false);
+                    }
                 }
                 return true;
             }
@@ -206,7 +220,8 @@ public class CameraStandScreenHandler extends ScreenHandler {
                     if (!insertItem(stack, 1, 2, false)) {
                         return ItemStack.EMPTY;
                     }
-                } else if (stack.getItem() instanceof FilmRollItem) {
+                } else if (stack.getItem() instanceof FilmRollItem
+                        || stack.getItem() instanceof SdCardItem) {
                     if (!insertItem(stack, 2, 3, false)) {
                         return ItemStack.EMPTY;
                     }
