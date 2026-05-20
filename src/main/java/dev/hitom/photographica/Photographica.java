@@ -82,7 +82,7 @@ public class Photographica implements ModInitializer {
 							incoming.aperture(), incoming.shutterSpeedIdx(), lockedIso,
 							incoming.focusDistance(), incoming.focalLengthMm(), incoming.lensType(),
 							incoming.filmType(), incoming.remainingShots(),
-							incoming.exposureMode(), incoming.focusMode());
+							incoming.exposureMode(), incoming.focusMode(), incoming.autoWind());
 					FilmCameraItem.setSettings(stack, safe);
 				}
 			});
@@ -133,7 +133,11 @@ public class Photographica implements ModInitializer {
 						world.getRegistryKey().getValue().toString(),
 						pos.getX(), pos.getY(), pos.getZ(),
 						payload.settings());
-				FilmCameraItem.setFilm(camera, film.withNewExposure(shot));
+				FilmRollData updated = film.withNewExposure(shot);
+				if (payload.settings().autoWind() && !updated.isExposed()) {
+					updated = updated.withWound(true);
+				}
+				FilmCameraItem.setFilm(camera, updated);
 			});
 		});
 
@@ -172,7 +176,7 @@ public class Photographica implements ModInitializer {
 								cur.aperture(), cur.shutterSpeedIdx(), FilmKind.isoOf(fresh.filmType()),
 								cur.focusDistance(), cur.focalLengthMm(), cur.lensType(),
 								fresh.filmType(), fresh.totalExposures(),
-								cur.exposureMode(), cur.focusMode()));
+								cur.exposureMode(), cur.focusMode(), cur.autoWind()));
 						s.decrement(1);
 						player.playSound(SoundEvents.BLOCK_DISPENSER_DISPENSE, 0.6f, 1.2f);
 						player.sendMessage(Text.literal("フィルムを装填しました"), true);

@@ -200,48 +200,48 @@ public class CameraScreen extends Screen {
 		return new CameraSettings(v, settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind());
 	}
 	private CameraSettings withShutter(int v) {
 		return new CameraSettings(settings.aperture(), v, settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind());
 	}
 	private CameraSettings withIso(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), v,
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind());
 	}
 	private CameraSettings withFocus(float v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				v, settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind());
 	}
 	private CameraSettings withFocalLength(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), v, settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind());
 	}
 	private CameraSettings withLensAndFocal(int lens, int focal) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), focal, lens,
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind());
 	}
 	private CameraSettings withExposureMode(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				v, settings.focusMode());
+				v, settings.focusMode(), settings.autoWind());
 	}
 	private CameraSettings withFocusMode(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), v);
+				settings.exposureMode(), v, settings.autoWind());
 	}
 }

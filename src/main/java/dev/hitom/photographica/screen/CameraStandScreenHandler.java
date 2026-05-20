@@ -110,7 +110,7 @@ public class CameraStandScreenHandler extends ScreenHandler {
                         current.aperture(), current.shutterSpeedIdx(), current.iso(),
                         current.focusDistance(), newFocal, newLensType,
                         current.filmType(), current.remainingShots(),
-                        current.exposureMode(), current.focusMode());
+                        current.exposureMode(), current.focusMode(), current.autoWind());
 
                 if (cameraStack.getItem() instanceof FilmCameraItem) {
                     FilmCameraItem.setSettings(cameraStack, updated);
@@ -141,7 +141,7 @@ public class CameraStandScreenHandler extends ScreenHandler {
                             cur.aperture(), cur.shutterSpeedIdx(), FilmKind.isoOf(fresh.filmType()),
                             cur.focusDistance(), cur.focalLengthMm(), cur.lensType(),
                             fresh.filmType(), fresh.totalExposures(),
-                            cur.exposureMode(), cur.focusMode()));
+                            cur.exposureMode(), cur.focusMode(), cur.autoWind()));
                     mediaStack.decrement(1);
                 } else if (cameraStack.getItem() instanceof CameraItem) {
                     // Digital camera: load SD card
