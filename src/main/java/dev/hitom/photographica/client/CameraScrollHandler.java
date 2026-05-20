@@ -18,11 +18,13 @@ import java.util.List;
 /**
  * Handles mouse-scroll camera adjustments while the viewfinder is active (player sneaking).
  *
- *   Scroll                → focal length  (zoom lenses only)
- *   Ctrl  + Scroll        → aperture
- *   Shift + Scroll        → shutter speed
- *   Alt   + Scroll        → ISO           (M mode only)
- *   Ctrl+Shift + Scroll   → focus distance (MF mode only)
+ * Shift is always held while the viewfinder is active (sneaking), so it is NOT
+ * used as a scroll modifier. Only Ctrl and Alt serve as modifiers:
+ *
+ *   Scroll           → focal length  (zoom lenses only)
+ *   Ctrl  + Scroll   → aperture
+ *   Alt   + Scroll   → shutter speed
+ *   Ctrl+Alt + Scroll → focus distance (MF mode only)
  */
 @Environment(EnvType.CLIENT)
 public final class CameraScrollHandler {
@@ -51,22 +53,19 @@ public final class CameraScrollHandler {
 		int dir = delta > 0 ? 1 : -1;
 
 		long win = mc.getWindow().getHandle();
-		boolean ctrl  = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_CONTROL)
+		boolean ctrl = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_CONTROL)
 				|| InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_CONTROL);
-		boolean shift = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_SHIFT)
-				|| InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_SHIFT);
-		boolean alt   = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_ALT)
+		boolean alt  = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_ALT)
 				|| InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_ALT);
+		// Shift is always held (viewfinder baseline = sneaking), so it is not a modifier.
 
 		CameraSettings updated;
-		if (ctrl && shift) {
+		if (ctrl && alt) {
 			updated = adjustFocusDistance(s, dir);
 		} else if (ctrl) {
 			updated = adjustAperture(s, dir);
-		} else if (shift) {
-			updated = adjustShutterSpeed(s, dir);
 		} else if (alt) {
-			updated = adjustISO(s, dir);
+			updated = adjustShutterSpeed(s, dir);
 		} else {
 			updated = adjustFocalLength(s, dir);
 		}

@@ -132,8 +132,8 @@ public final class ViewfinderHud {
 
 		// Scroll hint (bottom-right, inside frame) — two lines
 		boolean isZoom = dev.hitom.photographica.component.LensKind.isZoom(s.lensType());
-		String hint1 = isZoom ? "⟳ zoom  Ctrl⟳ F値  Shift⟳ SS" : "Ctrl⟳ F値  Shift⟳ SS";
-		String hint2 = "Alt⟳ ISO  Ctrl+Shift⟳ MF距離";
+		String hint1 = isZoom ? "⟳ zoom  Ctrl⟳ F値  Alt⟳ SS" : "Ctrl⟳ F値  Alt⟳ SS";
+		String hint2 = "Ctrl+Alt⟳ MF距離";
 		int hint1W = tr.getWidth(hint1);
 		int hint2W = tr.getWidth(hint2);
 		ctx.drawTextWithShadow(tr, Text.literal(hint1), fx2 - hint1W - 6, fy2 - tr.fontHeight * 2 - 16, 0x80FFFFFF);
