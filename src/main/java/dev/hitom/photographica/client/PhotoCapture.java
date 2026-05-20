@@ -593,18 +593,19 @@ public final class PhotoCapture {
 	}
 
 	/**
-	 * Depth-of-field blur.
+	 * Depth-of-field blur — depth-aware separable gather.
 	 *
-	 * For each image pixel the circle-of-confusion (CoC) radius is derived from
-	 * the depth buffer and the focus distance / aperture settings:
+	 * Each pixel gathers only from neighbours whose CoC is >= its own CoC.
+	 * This prevents sharp foreground subjects from leaking colour into blurred
+	 * background regions (and vice versa): a pixel with CoC=0 copies itself
+	 * exactly; a blurry pixel only averages from equally-or-more-blurry samples.
 	 *
-	 *   maxBlurPx  = 80 / aperture²          (wider aperture → larger blur)
-	 *   coc(front) = (1 − depth/focus) × max  (foreground: linear increase)
-	 *   coc(back)  = (r−1)/(r) × max          (background: asymptotic at max)
-	 *                where r = depth/focus
+	 *   maxBlurPx  = 80 / aperture²
+	 *   coc(front) = (1 − depth/focus) × max
+	 *   coc(back)  = (r−1)/(1+r−1) × max  (asymptotic toward max)
 	 *
-	 * A single separable box-blur at maxBlurPx is blended against the sharp
-	 * image using t = coc/maxBlurPx per pixel.
+	 * Two-pass separable (H then V).  H-pass reads from the original sharp image;
+	 * V-pass reads from the H-pass result, which is already free of horizontal bleed.
 	 */
 	private static NativeImage applyDepthOfField(NativeImage src, CameraSettings settings,
 	                                              float[] linearDepth,
@@ -612,109 +613,86 @@ public final class PhotoCapture {
 		float aperture  = settings.aperture();
 		float focusDist = settings.focusDistance();
 
-		// Maximum blur radius in pixels (at 1280px wide image).
 		float maxBlurPx = 80.0f / (aperture * aperture);
 		int   maxR      = Math.max(1, (int) Math.ceil(maxBlurPx));
 
-		// Pre-compute per-pixel CoC radii using depth buffer.
+		// Per-pixel CoC (Circle of Confusion) in image pixels.
 		float[] cocMap = new float[iw * ih];
 		for (int iy = 0; iy < ih; iy++) {
 			for (int ix = 0; ix < iw; ix++) {
-				// Map image pixel → framebuffer pixel (approximate; crop is centred).
 				int fx    = Math.max(0, Math.min(fbW - 1, ix * fbW / iw));
-				// NativeImage Y=0 top, OpenGL Y=0 bottom → flip fy.
 				int fy_gl = Math.max(0, Math.min(fbH - 1, fbH - 1 - (iy * fbH / ih)));
 				float depth = linearDepth[fy_gl * fbW + fx];
-
-				float coc;
-				float r = depth / focusDist;
-				if (depth <= focusDist) {
-					coc = (1.0f - r) * maxBlurPx;          // foreground
-				} else {
-					float bg = r - 1.0f;
-					coc = (bg / (1.0f + bg)) * maxBlurPx;  // background (asymptotic)
-				}
+				float r   = depth / focusDist;
+				float coc = (depth <= focusDist)
+						? (1.0f - r) * maxBlurPx
+						: ((r - 1.0f) / r) * maxBlurPx;
 				cocMap[iy * iw + ix] = Math.min(coc, maxBlurPx);
 			}
 		}
 
-		// Separable box blur at maxR (H then V pass).
-		NativeImage hBlur = applyHBoxBlur(src, maxR, iw, ih);
-		NativeImage blurred = applyVBoxBlur(hBlur, maxR, iw, ih);
-		hBlur.close();
-
-		// Blend sharp + blurred per pixel.
-		NativeImage result = new NativeImage(iw, ih, false);
+		// H-pass: reads from sharp source, gathers horizontally.
+		int[] hBuf = new int[iw * ih];
 		for (int iy = 0; iy < ih; iy++) {
 			for (int ix = 0; ix < iw; ix++) {
-				float t  = cocMap[iy * iw + ix] / maxBlurPx; // 0=sharp, 1=fully blurred
-				int   cs = src.getColor(ix, iy);
-				int   cb = blurred.getColor(ix, iy);
-				int ra = lerpCh((cs >>> 24) & 0xFF, (cb >>> 24) & 0xFF, t);
-				int bl = lerpCh((cs >>> 16) & 0xFF, (cb >>> 16) & 0xFF, t);
-				int gr = lerpCh((cs >>>  8) & 0xFF, (cb >>>  8) & 0xFF, t);
-				int rd = lerpCh( cs         & 0xFF,  cb         & 0xFF, t);
-				result.setColor(ix, iy, (ra << 24) | (bl << 16) | (gr << 8) | rd);
+				float coc = cocMap[iy * iw + ix];
+				if (coc < 0.5f) {
+					hBuf[iy * iw + ix] = src.getColor(ix, iy);
+					continue;
+				}
+				int r = Math.min(maxR, (int) Math.ceil(coc));
+				float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
+				for (int dx = -r; dx <= r; dx++) {
+					int sx = Math.max(0, Math.min(iw - 1, ix + dx));
+					// Weight: neighbour contributes proportionally to how blurry it is
+					// relative to us. Sharper neighbours (CoC < ours) are down-weighted.
+					float w = Math.min(1.0f, cocMap[iy * iw + sx] / coc);
+					if (w < 0.01f) continue;
+					int c = src.getColor(sx, iy);
+					aa += ((c >>> 24) & 0xFF) * w;
+					ba += ((c >>> 16) & 0xFF) * w;
+					ga += ((c >>>  8) & 0xFF) * w;
+					ra += ( c         & 0xFF) * w;
+					tw += w;
+				}
+				hBuf[iy * iw + ix] = (tw < 0.01f) ? src.getColor(ix, iy)
+						: ((clampCh(Math.round(aa / tw)) << 24)
+						| (clampCh(Math.round(ba / tw)) << 16)
+						| (clampCh(Math.round(ga / tw)) <<  8)
+						|  clampCh(Math.round(ra / tw)));
 			}
 		}
-		blurred.close();
+
+		// V-pass: reads from H-pass result, gathers vertically.
+		NativeImage result = new NativeImage(iw, ih, false);
+		for (int ix = 0; ix < iw; ix++) {
+			for (int iy = 0; iy < ih; iy++) {
+				float coc = cocMap[iy * iw + ix];
+				if (coc < 0.5f) {
+					result.setColor(ix, iy, src.getColor(ix, iy));
+					continue;
+				}
+				int r = Math.min(maxR, (int) Math.ceil(coc));
+				float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
+				for (int dy = -r; dy <= r; dy++) {
+					int sy = Math.max(0, Math.min(ih - 1, iy + dy));
+					float w = Math.min(1.0f, cocMap[sy * iw + ix] / coc);
+					if (w < 0.01f) continue;
+					int c = hBuf[sy * iw + ix];
+					aa += ((c >>> 24) & 0xFF) * w;
+					ba += ((c >>> 16) & 0xFF) * w;
+					ga += ((c >>>  8) & 0xFF) * w;
+					ra += ( c         & 0xFF) * w;
+					tw += w;
+				}
+				result.setColor(ix, iy, (tw < 0.01f) ? hBuf[iy * iw + ix]
+						: ((clampCh(Math.round(aa / tw)) << 24)
+						| (clampCh(Math.round(ba / tw)) << 16)
+						| (clampCh(Math.round(ga / tw)) <<  8)
+						|  clampCh(Math.round(ra / tw))));
+			}
+		}
 		return result;
-	}
-
-	private static int lerpCh(int a, int b, float t) {
-		return clampCh(Math.round(a + (b - a) * t));
-	}
-
-	/** Horizontal separable box blur. */
-	private static NativeImage applyHBoxBlur(NativeImage src, int radius, int w, int h) {
-		NativeImage dst = new NativeImage(w, h, false);
-		int diam = radius * 2 + 1;
-		for (int y = 0; y < h; y++) {
-			// Sliding-window accumulator (fast O(N) per row).
-			long ra = 0, ga = 0, ba = 0, aa = 0;
-			for (int dx = -radius; dx <= radius; dx++) {
-				int c = src.getColor(Math.max(0, Math.min(w - 1, dx)), y);
-				aa += (c >>> 24) & 0xFF; ba += (c >>> 16) & 0xFF;
-				ga += (c >>>  8) & 0xFF; ra +=  c         & 0xFF;
-			}
-			for (int x = 0; x < w; x++) {
-				dst.setColor(x, y, (((int)(aa/diam))<<24)|(((int)(ba/diam))<<16)
-						|(((int)(ga/diam))<<8)|(int)(ra/diam));
-				// Slide: remove left pixel, add right pixel.
-				int rem = src.getColor(Math.max(0, x - radius), y);
-				aa -= (rem >>> 24) & 0xFF; ba -= (rem >>> 16) & 0xFF;
-				ga -= (rem >>>  8) & 0xFF; ra -=  rem         & 0xFF;
-				int add = src.getColor(Math.min(w - 1, x + radius + 1), y);
-				aa += (add >>> 24) & 0xFF; ba += (add >>> 16) & 0xFF;
-				ga += (add >>>  8) & 0xFF; ra +=  add         & 0xFF;
-			}
-		}
-		return dst;
-	}
-
-	/** Vertical separable box blur. */
-	private static NativeImage applyVBoxBlur(NativeImage src, int radius, int w, int h) {
-		NativeImage dst = new NativeImage(w, h, false);
-		int diam = radius * 2 + 1;
-		for (int x = 0; x < w; x++) {
-			long ra = 0, ga = 0, ba = 0, aa = 0;
-			for (int dy = -radius; dy <= radius; dy++) {
-				int c = src.getColor(x, Math.max(0, Math.min(h - 1, dy)));
-				aa += (c >>> 24) & 0xFF; ba += (c >>> 16) & 0xFF;
-				ga += (c >>>  8) & 0xFF; ra +=  c         & 0xFF;
-			}
-			for (int y = 0; y < h; y++) {
-				dst.setColor(x, y, (((int)(aa/diam))<<24)|(((int)(ba/diam))<<16)
-						|(((int)(ga/diam))<<8)|(int)(ra/diam));
-				int rem = src.getColor(x, Math.max(0, y - radius));
-				aa -= (rem >>> 24) & 0xFF; ba -= (rem >>> 16) & 0xFF;
-				ga -= (rem >>>  8) & 0xFF; ra -=  rem         & 0xFF;
-				int add = src.getColor(x, Math.min(h - 1, y + radius + 1));
-				aa += (add >>> 24) & 0xFF; ba += (add >>> 16) & 0xFF;
-				ga += (add >>>  8) & 0xFF; ra +=  add         & 0xFF;
-			}
-		}
-		return dst;
 	}
 
 	/** Box-filter downsample to a max width (preserving aspect). Returns src if already small enough. */

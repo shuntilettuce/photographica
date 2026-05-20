@@ -6,7 +6,6 @@ import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.client.EvfPeakingEffect;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -78,11 +77,7 @@ public final class ViewfinderHud {
 		int fx2 = fx + frameW;
 		int fy2 = fy + frameH;
 
-		// Mirrorless EVF: apply focus peaking BEFORE drawing any overlay.
 		boolean isMirrorless = stack.getItem() instanceof MirrorlessCameraItem;
-		if (isMirrorless) {
-			EvfPeakingEffect.apply(mc, s.aperture(), tickCounter);
-		}
 
 		// Bezels (dim outside frame)
 		ctx.fill(0, 0, sw, fy, COLOR_BEZEL);
