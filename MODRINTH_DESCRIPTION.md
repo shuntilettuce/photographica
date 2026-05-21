@@ -55,6 +55,12 @@ Photos are stored as PNG files on the **client** machine. Deleting a photo in-ga
 
 ---
 
+## Development
+
+This mod was developed with the assistance of [Claude Code](https://claude.ai/code) (Anthropic's AI coding assistant). The game design, creative direction, and all final decisions were made by the author.
+
+---
+
 *日本語*
 
 フィルムカメラ・ミラーレスデジタルカメラを使って撮影できるModです。絞り・シャッタースピード・ISO・焦点距離・フォーカスモードなどリアルカメラの操作感を再現。フィルムカメラは現像・引き伸ばしワークフローに対応。デジタルはSDカード方式でブラウザから写真管理が可能です。シェーダー（Iris + Photon動作確認済み）にも対応しています。

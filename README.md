@@ -51,6 +51,10 @@ Both client and server must have the mod installed for multiplayer.
 
 The output JAR will be at `build/libs/photographica-<version>.jar`.
 
+## Development
+
+This mod was developed with the assistance of [Claude Code](https://claude.ai/code) (Anthropic's AI coding assistant). The game design, creative direction, and all final decisions were made by the author.
+
 ## License
 
 [MIT](LICENSE) — © 2024 hitom
