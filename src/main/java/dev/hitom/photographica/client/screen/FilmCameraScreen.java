@@ -131,6 +131,13 @@ public class FilmCameraScreen extends Screen {
 				step -> settings = withFocusMode(clampStep(settings.focusMode(), step, FOCUS_MODE_LABELS.length)),
 				true);
 
+		// Motion blur toggle (client-side, not synced to server)
+		addRow(cx, top + row++ * 22, "モーションブラー",
+				() -> dev.hitom.photographica.client.PhotoCapture.motionBlurEnabled ? "オン" : "オフ",
+				step -> dev.hitom.photographica.client.PhotoCapture.motionBlurEnabled =
+						!dev.hitom.photographica.client.PhotoCapture.motionBlurEnabled,
+				true);
+
 		// Load / Unload film buttons.
 		FilmRollData film = FilmCameraItem.getFilm(stack);
 		boolean loaded = film.totalExposures() > 0;

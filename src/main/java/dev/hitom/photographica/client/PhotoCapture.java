@@ -70,6 +70,9 @@ public final class PhotoCapture {
 	/** True if the next capture should be routed through the film-camera flow (TakeFilmPhotoPayload). */
 	private static volatile boolean pendingIsFilm = false;
 
+	/** Client-side toggle for motion blur on slow shutters. Off by default (no tripod). */
+	public static boolean motionBlurEnabled = false;
+
 	// Depth buffer pre-read during WorldRenderEvents.LAST (before Iris overwrites it).
 	private static volatile float[] pendingLinearDepth = null;
 	private static volatile int pendingDepthFbW = 0;
@@ -406,7 +409,7 @@ public final class PhotoCapture {
 
 		// Pass 3: Motion blur (slow shutters — simulates hand-camera shake)
 		NativeImage pass3;
-		if (t >= 1.0 / 30.0) {
+		if (motionBlurEnabled && t >= 1.0 / 30.0) {
 			pass3 = applyMotionBlur(pass2, t, w, h);
 			pass2.close();
 		} else {

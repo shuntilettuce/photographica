@@ -1,5 +1,6 @@
 package dev.hitom.photographica.client.screen;
 
+import dev.hitom.photographica.client.PhotoCapture;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.component.ModDataComponents;
@@ -125,6 +126,12 @@ public class CameraScreen extends Screen {
 		addRow(cx, top + row++ * 22, "フォーカスモード",
 				() -> FOCUS_MODE_LABELS[Math.max(0, Math.min(FOCUS_MODE_LABELS.length - 1, settings.focusMode()))],
 				step -> settings = withFocusMode(clampStep(settings.focusMode(), step, FOCUS_MODE_LABELS.length)),
+				true);
+
+		// Motion blur toggle (client-side, not synced to server)
+		addRow(cx, top + row++ * 22, "モーションブラー",
+				() -> PhotoCapture.motionBlurEnabled ? "オン" : "オフ",
+				step -> PhotoCapture.motionBlurEnabled = !PhotoCapture.motionBlurEnabled,
 				true);
 
 		int btnY = top + row * 22 + 14;
