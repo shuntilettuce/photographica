@@ -2,6 +2,8 @@
 
 A photography mod that brings realistic camera simulation to Minecraft. Take photos with film or digital cameras, develop your negatives in a darkroom, and print photographs to display in your world.
 
+> **Note:** This mod is currently available in Japanese only. The English version is coming soon.
+
 ---
 
 ## Features
