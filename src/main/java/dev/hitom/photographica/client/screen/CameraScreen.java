@@ -48,7 +48,7 @@ public class CameraScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = width / 2;
-		int top = height / 2 - 101;
+		int top = height / 2 - 112;
 		int row = 0;
 
 		// Aperture — disabled when auto controls it (Tv or P)
@@ -181,9 +181,9 @@ public class CameraScreen extends Screen {
 
 		// Draw dark panel background
 		int cx = width / 2;
-		int top = height / 2 - 101;
+		int top = height / 2 - 112;
 		int panelW = 320;
-		int panelH = 234;
+		int panelH = 256;
 		int px = cx - panelW / 2;
 		int py = top - 16;
 		GuiHelper.drawPanel(ctx, px, py, panelW, panelH);
