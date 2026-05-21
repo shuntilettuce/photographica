@@ -166,10 +166,15 @@ public final class PhotoCapture {
 	 * Only updates the centre-pixel depth for the viewfinder HUD — does NOT capture.
 	 * Actual capture happens in {@link #captureIfPending()}, invoked from GameRendererMixin
 	 * after renderWorld() returns so that Iris has composited its output first.
+	 *
+	 * Reads depth from whatever framebuffer is currently bound at LAST time — with Iris
+	 * this is Iris's own framebuffer (correct scene depth), with vanilla it is
+	 * mc.getFramebuffer().  We avoid calling fb.beginWrite() so we do not switch away
+	 * from whatever Iris has bound.
 	 */
 	public static void onWorldRenderEnd() {
 		MinecraftClient mc = MinecraftClient.getInstance();
-		updateCenterDepth(mc, mc.getFramebuffer());
+		updateCenterDepth(mc);
 	}
 
 	/** Called from GameRendererMixin after GameRenderer.renderWorld() returns. At this point
@@ -582,16 +587,25 @@ public final class PhotoCapture {
 	 * depth in {@link #lastSceneDepthBlocks} for the viewfinder HUD.
 	 * Only updates when the player is sneaking with a camera.
 	 */
-	private static void updateCenterDepth(MinecraftClient mc, Framebuffer fb) {
+	private static void updateCenterDepth(MinecraftClient mc) {
 		if (mc.player == null || !mc.player.isSneaking()) return;
 		ItemStack hand = mc.player.getMainHandStack();
 		if (!isAnyCamera(hand)) {
 			hand = mc.player.getOffHandStack();
 			if (!isAnyCamera(hand)) return;
 		}
-		fb.beginWrite(false);
-		int cx = fb.textureWidth  / 2;
-		int cy = fb.textureHeight / 2; // OpenGL Y=0 is bottom → centre is fine
+		// Read from the currently bound framebuffer without switching — with Iris active,
+		// WorldRenderEvents.LAST fires while Iris's own FBO is still bound, so we must
+		// not call fb.beginWrite() or we would switch to mc.getFramebuffer() whose depth
+		// buffer has been overwritten by Iris's compositing pass.
+		org.lwjgl.opengl.GL11.glGetError(); // clear any pending GL error
+		int[] viewport = new int[4];
+		org.lwjgl.opengl.GL11.glGetIntegerv(org.lwjgl.opengl.GL11.GL_VIEWPORT, viewport);
+		int vpW = viewport[2];
+		int vpH = viewport[3];
+		if (vpW <= 0 || vpH <= 0) return;
+		int cx = vpW / 2;
+		int cy = vpH / 2; // OpenGL Y=0 is bottom → centre is fine
 		FloatBuffer buf = BufferUtils.createFloatBuffer(1);
 		GL11.glReadPixels(cx, cy, 1, 1, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
 		float d   = buf.get(0);
