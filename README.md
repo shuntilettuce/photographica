@@ -2,7 +2,13 @@
 
 A photography mod that brings realistic camera simulation to Minecraft. Take photos with film or digital cameras, develop your negatives in a darkroom, and print photographs to display in your world.
 
----
+## Requirements
+
+- Minecraft **1.21.1**
+- Fabric Loader **≥ 0.16.0**
+- [Fabric API](https://modrinth.com/mod/fabric-api)
+
+Both client and server must have the mod installed for multiplayer.
 
 ## Features
 
@@ -17,44 +23,34 @@ A photography mod that brings realistic camera simulation to Minecraft. Take pho
 - **Focus modes** — Manual focus, Auto focus, Moving-object tracking (MOB)
 - **Viewfinder** — Sneak to look through the camera with correct field-of-view
 
-### Photographic Effects (applied at capture time)
+### Photographic Effects
 - Depth-of-field blur (depth-aware, no colour bleed at boundaries)
 - Motion blur on slow shutter speeds
 - ISO grain and chroma noise
 - Lens vignetting by aperture
 - Diffraction softening at f/16+
-- Film-stock tone curves (Colour ISO 400, Colour ISO 100, Colour ISO 1600, B&W ISO 400)
+- Film-stock tone curves per film type
 - Highlight rolloff and film reciprocity failure
 
 ### Film Workflow
 - Five film stocks: Colour ISO 400 (36 exp.), Colour ISO 100 (36 exp.), Colour ISO 1600 (36 exp.), B&W ISO 400 (36 exp.), Colour ISO 400 (24 exp.)
 - Develop exposed rolls in the Darkroom block
 - Print negatives in the Enlarger block to get displayable Photo items
-- Preview developed negatives as inverted thumbnails by right-clicking the film roll
+- Right-click a developed film roll to preview negatives as inverted thumbnails
 
 ### Digital Workflow
 - Photos saved as PNG files in `.minecraft/photographica/photos/`
 - SD card browser with thumbnail preview, metadata display, and per-photo deletion
 - Shader-compatible capture (tested with Iris + Photon)
 
----
+## Building
 
-## Requirements
+```bash
+./gradlew build
+```
 
-- Minecraft **1.21.1**
-- Fabric Loader **≥ 0.16.0**
-- Fabric API
+The output JAR will be at `build/libs/photographica-<version>.jar`.
 
-Both client and server must have the mod installed for multiplayer.
+## License
 
----
-
-## Notes
-
-Photos are stored as PNG files on the **client** machine. Deleting a photo in-game also removes the file from disk.
-
----
-
-*日本語*
-
-フィルムカメラ・ミラーレスデジタルカメラを使って撮影できるModです。絞り・シャッタースピード・ISO・焦点距離・フォーカスモードなどリアルカメラの操作感を再現。フィルムカメラは現像・引き伸ばしワークフローに対応。デジタルはSDカード方式でブラウザから写真管理が可能です。シェーダー（Iris + Photon動作確認済み）にも対応しています。
+[MIT](LICENSE) — © 2024 hitom
