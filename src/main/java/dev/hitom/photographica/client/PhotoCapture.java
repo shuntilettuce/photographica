@@ -70,6 +70,11 @@ public final class PhotoCapture {
 	/** True if the next capture should be routed through the film-camera flow (TakeFilmPhotoPayload). */
 	private static volatile boolean pendingIsFilm = false;
 
+	// Depth buffer pre-read during WorldRenderEvents.LAST (before Iris overwrites it).
+	private static volatile float[] pendingLinearDepth = null;
+	private static volatile int pendingDepthFbW = 0;
+	private static volatile int pendingDepthFbH = 0;
+
 	/** Returns true when a capture is queued for the current frame (used to suppress the block outline). */
 	public static boolean isCapturePending() { return pendingId != null; }
 
@@ -175,6 +180,31 @@ public final class PhotoCapture {
 	public static void onWorldRenderEnd() {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		updateCenterDepth(mc);
+
+		// If a capture is queued, pre-read the full depth buffer NOW — while the scene
+		// framebuffer is still bound and before Iris composites to mc.getFramebuffer()
+		// (Iris's composite pass overwrites the depth buffer, so reading it later in
+		// captureIfPending() would yield near-zero values for every pixel → max blur).
+		if (pendingId != null) {
+			int[] viewport = new int[4];
+			GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
+			int vpW = viewport[2];
+			int vpH = viewport[3];
+			if (vpW > 0 && vpH > 0) {
+				FloatBuffer buf = BufferUtils.createFloatBuffer(vpW * vpH);
+				GL11.glReadPixels(0, 0, vpW, vpH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
+				float[] depth = new float[vpW * vpH];
+				final float near = 0.05f, far = 512.0f;
+				for (int i = 0; i < depth.length; i++) {
+					float d = buf.get(i);
+					float ndc = 2.0f * d - 1.0f;
+					depth[i] = 2.0f * near * far / (far + near - ndc * (far - near));
+				}
+				pendingLinearDepth = depth;
+				pendingDepthFbW = vpW;
+				pendingDepthFbH = vpH;
+			}
+		}
 	}
 
 	/** Called from GameRendererMixin after GameRenderer.renderWorld() returns. At this point
@@ -191,14 +221,18 @@ public final class PhotoCapture {
 		pendingSettings = null;
 		pendingIsFilm = false;
 
-		// Read the full depth buffer when DoF will be applied.
+		// Use depth pre-read during WorldRenderEvents.LAST if available.
+		// Reading depth here from mc.getFramebuffer() would give wrong results with Iris
+		// because Iris's composite pass has already overwritten the depth buffer.
+		float[] preRead = pendingLinearDepth;
+		pendingLinearDepth = null;
 		float[] linearDepth = null;
-		int fbW = fb.textureWidth;
-		int fbH = fb.textureHeight;
+		int fbW = preRead != null ? pendingDepthFbW : fb.textureWidth;
+		int fbH = preRead != null ? pendingDepthFbH : fb.textureHeight;
 		if (LensKind.hasLens(settings.lensType())
 				&& settings.aperture() <= 5.6f
 				&& settings.focusDistance() < 999.0f) {
-			linearDepth = readLinearDepth(fb, fbW, fbH);
+			linearDepth = preRead != null ? preRead : readLinearDepth(fb, fbW, fbH);
 		}
 
 		NativeImage raw = ScreenshotRecorder.takeScreenshot(fb);
