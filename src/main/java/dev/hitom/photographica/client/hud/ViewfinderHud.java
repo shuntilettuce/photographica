@@ -1,5 +1,7 @@
 package dev.hitom.photographica.client.hud;
 
+import dev.hitom.photographica.client.PhotoCapture;
+import dev.hitom.photographica.client.render.EvfBlurRenderer;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.FilmRollData;
@@ -78,6 +80,20 @@ public final class ViewfinderHud {
 		int fy2 = fy + frameH;
 
 		boolean isMirrorless = stack.getItem() instanceof MirrorlessCameraItem;
+
+		// EVF real-time DoF blur (mirrorless only, before any overlays)
+		if (isMirrorless && LensKind.hasLens(s.lensType())
+				&& s.aperture() < 8.0f && s.focusDistance() < 999.0f) {
+			float sceneDepth = PhotoCapture.lastSceneDepthBlocks;
+			float focusDist  = s.focusDistance();
+			float maxBlurPx  = 15.0f / (s.aperture() * s.aperture());
+			float r          = sceneDepth / focusDist;
+			float coc        = (sceneDepth <= focusDist)
+					? (1.0f - r) * maxBlurPx
+					: ((r - 1.0f) / r) * maxBlurPx;
+			float blurRadius = Math.max(0f, Math.min(coc, maxBlurPx));
+			EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, blurRadius);
+		}
 
 		// Bezels (dim outside frame)
 		ctx.fill(0, 0, sw, fy, COLOR_BEZEL);
