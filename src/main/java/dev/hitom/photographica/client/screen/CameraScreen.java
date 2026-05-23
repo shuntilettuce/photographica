@@ -30,7 +30,10 @@ public class CameraScreen extends Screen {
 			"1/125", "1/250", "1/500", "1/1000", "1/2000", "1/4000"
 	};
 	private static final List<Integer> ISOS = List.of(100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600);
-	private static final List<Float> FOCUS_VALUES = List.of(0.3f, 0.5f, 1.0f, 2.0f, 3.0f, 5.0f, 10.0f, 20.0f, 50.0f, 999.0f);
+	private static final List<Float> FOCUS_VALUES = List.of(
+			0.3f, 0.5f, 0.7f, 1.0f, 1.2f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f,
+			5.0f, 6.0f, 7.0f, 8.0f, 10.0f, 12.0f, 15.0f, 20.0f, 25.0f, 30.0f,
+			40.0f, 50.0f, 70.0f, 100.0f, 999.0f);
 
 	private static final String[] EXP_MODE_LABELS  = {"M", "Av", "Tv", "P"};
 	private static final String[] FOCUS_MODE_LABELS = {"MF", "AF", "MOB"};
