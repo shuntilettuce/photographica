@@ -1,6 +1,8 @@
 package dev.hitom.photographica.client;
 
 import dev.hitom.photographica.client.hud.ViewfinderHud;
+import dev.hitom.photographica.client.render.PhotoFrameBlockEntityRenderer;
+import dev.hitom.photographica.client.render.PhotoTextureCache;
 import dev.hitom.photographica.client.screen.CameraScreen;
 import dev.hitom.photographica.client.screen.DarkroomScreen;
 import dev.hitom.photographica.client.screen.EnlargerScreen;
@@ -8,6 +10,7 @@ import dev.hitom.photographica.client.screen.FilmCameraScreen;
 import dev.hitom.photographica.client.screen.FilmStripScreen;
 import dev.hitom.photographica.client.screen.PhotoViewerScreen;
 import dev.hitom.photographica.client.screen.PrinterScreen;
+import dev.hitom.photographica.registry.ModBlockEntities;
 import dev.hitom.photographica.registry.ModScreenHandlers;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.DevelopedFilmItem;
@@ -18,7 +21,9 @@ import dev.hitom.photographica.network.LoadSdCardPayload;
 import dev.hitom.photographica.network.UnloadSdCardPayload;
 import dev.hitom.photographica.network.WindFilmPayload;
 import net.fabricmc.api.ClientModInitializer;
+import net.minecraft.client.render.block.entity.BlockEntityRendererFactories;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -144,6 +149,12 @@ public class PhotographicaClient implements ClientModInitializer {
 		});
 
 		WorldRenderEvents.LAST.register(ctx -> PhotoCapture.onWorldRenderEnd());
+
+		BlockEntityRendererFactories.register(ModBlockEntities.PHOTO_FRAME,
+				PhotoFrameBlockEntityRenderer::new);
+
+		// Discard cached photo textures when disconnecting so stale GPU resources are freed.
+		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> PhotoTextureCache.clear());
 	}
 
 	/** Opens the settings screen for whichever camera type is in the given stack. */

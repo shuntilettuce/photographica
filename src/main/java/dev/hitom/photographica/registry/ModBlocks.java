@@ -3,6 +3,7 @@ package dev.hitom.photographica.registry;
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.block.DarkroomBlock;
 import dev.hitom.photographica.block.EnlargerBlock;
+import dev.hitom.photographica.block.PhotoFrameBlock;
 import dev.hitom.photographica.block.PrinterBlock;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.block.AbstractBlock;
@@ -49,6 +50,16 @@ public final class ModBlocks {
                     .strength(2.5f))
     );
 
+    public static final Block PHOTO_FRAME = Registry.register(
+            Registries.BLOCK,
+            Identifier.of(Photographica.MOD_ID, "photo_frame"),
+            new PhotoFrameBlock(AbstractBlock.Settings.create()
+                    .mapColor(MapColor.OAK_TAN)
+                    .instrument(NoteBlockInstrument.BASS)
+                    .strength(0.5f)
+                    .nonOpaque())
+    );
+
     public static void register() {
         // Register BlockItems
         Registry.register(Registries.ITEM,
@@ -60,12 +71,16 @@ public final class ModBlocks {
         Registry.register(Registries.ITEM,
                 Identifier.of(Photographica.MOD_ID, "enlarger"),
                 new BlockItem(ENLARGER, new Item.Settings()));
+        Registry.register(Registries.ITEM,
+                Identifier.of(Photographica.MOD_ID, "photo_frame"),
+                new BlockItem(PHOTO_FRAME, new Item.Settings()));
 
         // Add to creative tab
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> {
             entries.add(DARKROOM.asItem());
             entries.add(PRINTER.asItem());
             entries.add(ENLARGER.asItem());
+            entries.add(PHOTO_FRAME.asItem());
         });
     }
 }
