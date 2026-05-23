@@ -4,6 +4,7 @@ import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.block.entity.DarkroomBlockEntity;
 import dev.hitom.photographica.block.entity.EnlargerBlockEntity;
 import dev.hitom.photographica.block.entity.PhotoFrameBlockEntity;
+import dev.hitom.photographica.block.entity.PhotoStandBlockEntity;
 import dev.hitom.photographica.block.entity.PrinterBlockEntity;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.registry.Registries;
@@ -39,6 +40,13 @@ public final class ModBlockEntities {
                     Registries.BLOCK_ENTITY_TYPE,
                     Identifier.of(Photographica.MOD_ID, "photo_frame"),
                     BlockEntityType.Builder.create(PhotoFrameBlockEntity::new, ModBlocks.PHOTO_FRAME).build(null)
+            );
+
+    public static final BlockEntityType<PhotoStandBlockEntity> PHOTO_STAND =
+            Registry.register(
+                    Registries.BLOCK_ENTITY_TYPE,
+                    Identifier.of(Photographica.MOD_ID, "photo_stand"),
+                    BlockEntityType.Builder.create(PhotoStandBlockEntity::new, ModBlocks.PHOTO_STAND).build(null)
             );
 
     public static void register() {

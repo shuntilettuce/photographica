@@ -2,6 +2,7 @@ package dev.hitom.photographica.client;
 
 import dev.hitom.photographica.client.hud.ViewfinderHud;
 import dev.hitom.photographica.client.render.PhotoFrameBlockEntityRenderer;
+import dev.hitom.photographica.client.render.PhotoStandBlockEntityRenderer;
 import dev.hitom.photographica.client.render.PhotoTextureCache;
 import dev.hitom.photographica.client.screen.CameraScreen;
 import dev.hitom.photographica.client.screen.DarkroomScreen;
@@ -152,6 +153,8 @@ public class PhotographicaClient implements ClientModInitializer {
 
 		BlockEntityRendererFactories.register(ModBlockEntities.PHOTO_FRAME,
 				PhotoFrameBlockEntityRenderer::new);
+		BlockEntityRendererFactories.register(ModBlockEntities.PHOTO_STAND,
+				PhotoStandBlockEntityRenderer::new);
 
 		// Discard cached photo textures when disconnecting so stale GPU resources are freed.
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> PhotoTextureCache.clear());
