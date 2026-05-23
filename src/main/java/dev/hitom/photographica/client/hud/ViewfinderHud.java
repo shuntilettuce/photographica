@@ -300,25 +300,47 @@ public final class ViewfinderHud {
 	/**
 	 * EVF live preview overlays for mirrorless cameras.
 	 *
-	 * Two layers rendered inside the frame:
-	 *   1. Exposure tint — black (underexposed) or white (overexposed) fill whose
-	 *      opacity scales with EV deviation from zero.  Dead-zone ±0.5 EV.
-	 *   2. Lens vignette — stepped dark gradient from all four edges; strength
-	 *      mirrors the same aperture → vignette mapping used in the capture pipeline.
+	 *   1. Exposure tint — quadratic alpha scale so ±4 EV ≈ completely
+	 *      white/black; accurately reflects ISO/SS/aperture combined EV.
+	 *   2. ISO grain — sparse noise dots whose density and opacity match
+	 *      the same noise table used in the actual photo capture pipeline.
+	 *   3. Lens vignette — stepped dark gradient from all four edges.
 	 */
 	private static void renderEvfPreview(DrawContext ctx, CameraSettings s,
 	                                     int fx, int fy, int fx2, int fy2) {
 		// --- Exposure tint ---
+		// Quadratic scale: saturates at ±4 EV (completely white/black).
+		// Dead-zone ±0.3 EV so minor rounding doesn't cause a visible tint.
 		double ev = s.evDeviation();
 		double absEv = Math.abs(ev);
-		if (absEv > 0.5) {
-			double excess = Math.min(absEv - 0.5, 6.5);
-			int alpha = (int) (excess * 22);
-			alpha = Math.min(180, alpha);
+		if (absEv > 0.3) {
+			double fraction = Math.min(1.0, absEv / 4.0);
+			int alpha = Math.min(230, (int)(fraction * fraction * 230));
 			int tintColor = ev > 0
 					? ((alpha << 24) | 0x00FFFFFF)  // white = overexposed
 					: (alpha << 24);                 // black = underexposed
 			ctx.fill(fx, fy, fx2, fy2, tintColor);
+		}
+
+		// --- ISO grain ---
+		float sigma = isoToNoiseSigma(s.iso());
+		if (sigma >= 1.5f) {
+			int fw = fx2 - fx;
+			int fh = fy2 - fy;
+			int numDots  = Math.min(1500, (int)(sigma * 20));
+			int dotAlpha = Math.min(160, (int)(sigma * 3.5f));
+			// LCG seeded per ~100 ms so grain animates at ~10 Hz
+			long rng = System.currentTimeMillis() / 100L * 2654435761L;
+			for (int i = 0; i < numDots; i++) {
+				rng = rng * 6364136223846793005L + 1442695040888963407L;
+				int gx   = fx + (int)((rng >>> 33) % fw);
+				rng = rng * 6364136223846793005L + 1442695040888963407L;
+				int gy   = fy + (int)((rng >>> 33) % fh);
+				rng = rng * 6364136223846793005L + 1442695040888963407L;
+				int gray = (int)((rng >>> 33) % 256);
+				ctx.fill(gx, gy, gx + 2, gy + 2,
+						(dotAlpha << 24) | (gray << 16) | (gray << 8) | gray);
+			}
 		}
 
 		// --- Vignette ---
@@ -326,22 +348,32 @@ public final class ViewfinderHud {
 		if (vigStr > 0.01f) {
 			int fw = fx2 - fx;
 			int fh = fy2 - fy;
-			// 8 bands from outermost (b=0) to innermost (b=7). Each band is a thin strip
-			// along every edge; opacity decreases toward center. Corners accumulate all
-			// overlapping bands and become the darkest area, matching real lens vignetting.
 			for (int b = 0; b < 8; b++) {
-				float t = (float) (8 - b) / 8.0f;        // 1.0 → 0.125
-				int alpha = (int) (vigStr * 110 * t * t);
+				float t = (float)(8 - b) / 8.0f;
+				int alpha = (int)(vigStr * 110 * t * t);
 				if (alpha < 1) continue;
 				int vc = (alpha << 24) & 0xFF000000;
 				int bw = (8 - b) * fw / 32;
 				int bh = (8 - b) * fh / 32;
-				ctx.fill(fx,        fy, fx + bw,  fy2, vc);  // left
-				ctx.fill(fx2 - bw, fy, fx2,       fy2, vc);  // right
-				ctx.fill(fx,        fy, fx2, fy + bh,  vc);  // top
-				ctx.fill(fx,  fy2 - bh, fx2, fy2,      vc);  // bottom
+				ctx.fill(fx,        fy, fx + bw,  fy2, vc);
+				ctx.fill(fx2 - bw, fy, fx2,       fy2, vc);
+				ctx.fill(fx,        fy, fx2, fy + bh,  vc);
+				ctx.fill(fx,  fy2 - bh, fx2, fy2,      vc);
 			}
 		}
+	}
+
+	/** ISO → luminance noise sigma (mirrors PhotoCapture.isoToNoiseSigma). */
+	private static float isoToNoiseSigma(int iso) {
+		if (iso <=   100) return  0.0f;
+		if (iso <=   200) return  1.5f;
+		if (iso <=   400) return  3.0f;
+		if (iso <=   800) return  6.0f;
+		if (iso <=  1600) return 11.0f;
+		if (iso <=  3200) return 18.0f;
+		if (iso <=  6400) return 28.0f;
+		if (iso <= 12800) return 42.0f;
+		return 60.0f;
 	}
 
 	/** Vignette strength for EVF live preview. */
