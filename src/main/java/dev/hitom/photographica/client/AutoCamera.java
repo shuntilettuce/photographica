@@ -148,10 +148,16 @@ public final class AutoCamera {
 	// -------------------------------------------------------------------------
 
 	private static float snapFocus(float depth) {
+		depth = Math.max(0.01f, depth);
+		// Use log-space distance: focus stops are log-distributed, and the gap
+		// between 100 and 999 (infinity) is huge in linear space but reasonable
+		// in log space. Without this, AF could never reach infinity inside
+		// Minecraft's render distance (≤ 512 blocks).
+		float logDepth = (float) Math.log(depth);
 		float best = FOCUS_STOPS.get(0);
 		float bestDiff = Float.MAX_VALUE;
 		for (float stop : FOCUS_STOPS) {
-			float d = Math.abs(depth - stop);
+			float d = Math.abs(logDepth - (float) Math.log(stop));
 			if (d < bestDiff) { bestDiff = d; best = stop; }
 		}
 		return best;

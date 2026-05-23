@@ -112,7 +112,8 @@ public final class EvfBlurRenderer {
     public static void renderBlur(int fx, int fy, int fx2, int fy2,
                                   float focusDist, float aperture) {
         if (depthTex == -1) return; // depth not captured yet
-        float maxBlurPx = Math.min(80.0f / (aperture * aperture), 32.0f);
+        float distScale = Math.min(1.0f, 3.0f / focusDist);
+        float maxBlurPx = Math.min(80.0f / (aperture * aperture) * distScale, 32.0f);
         if (maxBlurPx < 0.5f) return;
 
         MinecraftClient mc = MinecraftClient.getInstance();
