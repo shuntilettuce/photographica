@@ -41,8 +41,8 @@ public class PhotoFrameBlock extends BlockWithEntity {
     // Thin 2-pixel collision/outline shapes matching the model geometry, one per facing direction.
     private static final VoxelShape SHAPE_SOUTH = VoxelShapes.cuboid(0, 0, 0,      1, 1, 2.0/16);
     private static final VoxelShape SHAPE_NORTH = VoxelShapes.cuboid(0, 0, 14.0/16, 1, 1, 1);
-    private static final VoxelShape SHAPE_WEST  = VoxelShapes.cuboid(0, 0, 0,      2.0/16, 1, 1);
-    private static final VoxelShape SHAPE_EAST  = VoxelShapes.cuboid(14.0/16, 0, 0, 1, 1, 1);
+    private static final VoxelShape SHAPE_WEST  = VoxelShapes.cuboid(14.0/16, 0, 0, 1,      1, 1);
+    private static final VoxelShape SHAPE_EAST  = VoxelShapes.cuboid(0, 0, 0,      2.0/16, 1, 1);
 
     public PhotoFrameBlock(Settings settings) {
         super(settings);
