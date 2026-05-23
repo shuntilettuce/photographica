@@ -38,11 +38,11 @@ public class PhotoFrameBlock extends BlockWithEntity {
     public static final MapCodec<PhotoFrameBlock> CODEC = createCodec(PhotoFrameBlock::new);
     public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
 
-    // Thin 2-pixel collision/outline shapes matching the model geometry, one per facing direction.
-    private static final VoxelShape SHAPE_SOUTH = VoxelShapes.cuboid(0, 0, 0,      1, 1, 2.0/16);
-    private static final VoxelShape SHAPE_NORTH = VoxelShapes.cuboid(0, 0, 14.0/16, 1, 1, 1);
-    private static final VoxelShape SHAPE_WEST  = VoxelShapes.cuboid(14.0/16, 0, 0, 1,      1, 1);
-    private static final VoxelShape SHAPE_EAST  = VoxelShapes.cuboid(0, 0, 0,      2.0/16, 1, 1);
+    // 3:2 landscape shapes (12×8 face, 2px thick) matching the model geometry, one per facing direction.
+    private static final VoxelShape SHAPE_SOUTH = VoxelShapes.cuboid(2.0/16, 4.0/16, 0,       14.0/16, 12.0/16, 2.0/16);
+    private static final VoxelShape SHAPE_NORTH = VoxelShapes.cuboid(2.0/16, 4.0/16, 14.0/16, 14.0/16, 12.0/16, 1);
+    private static final VoxelShape SHAPE_WEST  = VoxelShapes.cuboid(14.0/16, 4.0/16, 2.0/16, 1,       12.0/16, 14.0/16);
+    private static final VoxelShape SHAPE_EAST  = VoxelShapes.cuboid(0,       4.0/16, 2.0/16, 2.0/16,  12.0/16, 14.0/16);
 
     public PhotoFrameBlock(Settings settings) {
         super(settings);
