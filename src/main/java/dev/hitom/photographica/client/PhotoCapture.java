@@ -78,8 +78,26 @@ public final class PhotoCapture {
 	private static volatile int pendingDepthFbW = 0;
 	private static volatile int pendingDepthFbH = 0;
 
-	/** Returns true when a capture is queued for the current frame (used to suppress the block outline). */
-	public static boolean isCapturePending() { return pendingId != null; }
+	// Long-exposure multi-frame accumulation state (null accumId = not accumulating).
+	private static volatile UUID accumId = null;
+	private static volatile CameraSettings accumSettings = null;
+	private static volatile boolean accumIsFilm = false;
+	private static volatile long accumEndMs = 0L;
+	private static volatile long accumNextSampleMs = 0L;
+	private static volatile long accumSampleIntervalMs = 50L;
+	private static volatile float[] accumR = null;
+	private static volatile float[] accumG = null;
+	private static volatile float[] accumB = null;
+	private static volatile int accumW = 0;
+	private static volatile int accumH = 0;
+	private static volatile int accumSamples = 0;
+	private static volatile float[] accumDepth = null;
+	private static volatile int accumDepthFbW = 0;
+	private static volatile int accumDepthFbH = 0;
+	private static final int ACCUM_MAX_SAMPLES = 20;
+
+	/** Returns true when a capture is queued or a long exposure is accumulating. */
+	public static boolean isCapturePending() { return pendingId != null || accumId != null; }
 
 	/** Called when the player presses the shutter (game thread). */
 	public static void take(ItemStack cameraStack) {
@@ -138,12 +156,28 @@ public final class PhotoCapture {
 
 		long now = System.currentTimeMillis();
 		if (now - lastCaptureMs < COOLDOWN_MS) return;
-		if (pendingId != null) return;
+		if (pendingId != null || accumId != null) return;
 		lastCaptureMs = now;
 
 		pendingSettings = settings;
 		pendingId = UUID.randomUUID();
 		pendingIsFilm = isFilm;
+
+		// For slow shutters with motion blur enabled, arm multi-frame accumulation so
+		// real camera movement during the exposure produces genuine motion blur trails.
+		double shutterSec = settings.shutterSeconds();
+		if (motionBlurEnabled && shutterSec >= 0.5) {
+			long durationMs = Math.max(500L, (long)(shutterSec * 1000));
+			accumId = pendingId;
+			accumSettings = settings;
+			accumIsFilm = isFilm;
+			accumEndMs = now + durationMs;
+			accumSampleIntervalMs = Math.max(50L, durationMs / ACCUM_MAX_SAMPLES);
+			accumNextSampleMs = now;
+			accumSamples = 0;
+			accumR = null; accumG = null; accumB = null;
+			accumDepth = null;
+		}
 
 		boolean isMirrorless = cameraStack.getItem() instanceof MirrorlessCameraItem;
 		if (isMirrorless) {
@@ -229,7 +263,13 @@ public final class PhotoCapture {
 	/** Called from GameRendererMixin after GameRenderer.renderWorld() returns. At this point
 	 *  Iris (if present) has already blitted its pipeline output to mc.getFramebuffer(). */
 	public static void captureIfPending() {
+		// Long-exposure accumulation takes priority.
+		if (accumId != null) {
+			tickAccumulation();
+			return;
+		}
 		if (pendingId == null) return;
+
 		MinecraftClient mc = MinecraftClient.getInstance();
 		Framebuffer fb = mc.getFramebuffer();
 
@@ -262,7 +302,7 @@ public final class PhotoCapture {
 		try {
 			cropped = cropTo3to2(raw);
 			downsampled = boxDownsample(cropped, 1280);
-			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH);
+			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH, true);
 			File dir = new File(mc.runDirectory, "photographica/photos");
 			if (!dir.exists() && !dir.mkdirs()) {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
@@ -294,6 +334,143 @@ public final class PhotoCapture {
 		}
 	}
 
+	/**
+	 * Per-frame accumulation tick for long-exposure shots.
+	 * Called every render frame while {@link #accumId} != null.
+	 * On the first call it steals the pre-read depth and immediately takes a color sample.
+	 * Subsequent calls take additional samples at {@link #accumSampleIntervalMs} intervals.
+	 * When the exposure duration elapses (or the sample cap is reached), delegates to
+	 * {@link #finalizeAccumulation}.
+	 */
+	private static void tickAccumulation() {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc == null) return;
+		Framebuffer fb = mc.getFramebuffer();
+		long now = System.currentTimeMillis();
+
+		// First tick: steal the depth pre-read and hand off pendingId.
+		if (accumSamples == 0 && pendingId != null) {
+			accumDepth = pendingLinearDepth;
+			accumDepthFbW = pendingDepthFbW;
+			accumDepthFbH = pendingDepthFbH;
+			pendingLinearDepth = null;
+			pendingId = null;
+		}
+
+		// Take a color sample if the interval has elapsed.
+		if (now >= accumNextSampleMs && accumSamples < ACCUM_MAX_SAMPLES) {
+			NativeImage frame = ScreenshotRecorder.takeScreenshot(fb);
+			NativeImage cropped = null;
+			NativeImage ds = null;
+			try {
+				cropped = cropTo3to2(frame);
+				ds = boxDownsample(cropped, 1280);
+				int w = ds.getWidth();
+				int h = ds.getHeight();
+				if (accumR == null) {
+					accumW = w; accumH = h;
+					accumR = new float[w * h];
+					accumG = new float[w * h];
+					accumB = new float[w * h];
+				}
+				if (w == accumW && h == accumH) {
+					for (int y = 0; y < h; y++) {
+						for (int x = 0; x < w; x++) {
+							int c = ds.getColor(x, y);
+							int idx = y * w + x;
+							accumR[idx] += c & 0xFF;
+							accumG[idx] += (c >> 8) & 0xFF;
+							accumB[idx] += (c >> 16) & 0xFF;
+						}
+					}
+					accumSamples++;
+				}
+			} finally {
+				if (ds != null && ds != cropped && ds != frame) ds.close();
+				if (cropped != null && cropped != frame) cropped.close();
+				frame.close();
+			}
+			accumNextSampleMs = now + accumSampleIntervalMs;
+		}
+
+		if (now >= accumEndMs || accumSamples >= ACCUM_MAX_SAMPLES) {
+			finalizeAccumulation(mc);
+		}
+	}
+
+	/** Averages all accumulated frames, applies photographic effects, and saves the photo. */
+	private static void finalizeAccumulation(MinecraftClient mc) {
+		UUID id = accumId;
+		CameraSettings settings = accumSettings;
+		boolean isFilm = accumIsFilm;
+		float[] depth = accumDepth;
+		int depthFbW = accumDepthFbW;
+		int depthFbH = accumDepthFbH;
+		int w = accumW;
+		int h = accumH;
+		int n = accumSamples;
+		float[] r = accumR, g = accumG, b = accumB;
+
+		resetAccumState();
+
+		if (n == 0 || r == null) {
+			Photographica.LOGGER.warn("Long exposure: no frames accumulated, discarding");
+			return;
+		}
+
+		// Average accumulated per-channel values into a NativeImage (already cropped+downsampled).
+		NativeImage averaged = new NativeImage(w, h, false);
+		for (int py = 0; py < h; py++) {
+			for (int px = 0; px < w; px++) {
+				int idx = py * w + px;
+				int rv = clampCh(Math.round(r[idx] / n));
+				int gv = clampCh(Math.round(g[idx] / n));
+				int bv = clampCh(Math.round(b[idx] / n));
+				averaged.setColor(px, py, (0xFF << 24) | (bv << 16) | (gv << 8) | rv);
+			}
+		}
+
+		NativeImage processed = null;
+		try {
+			// Skip synthetic motion blur — real blur is already baked into the accumulation.
+			processed = applyPhotographicEffects(averaged, settings, depth, depthFbW, depthFbH, false);
+			File dir = new File(mc.runDirectory, "photographica/photos");
+			if (!dir.exists() && !dir.mkdirs()) {
+				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
+				return;
+			}
+			File outFile = new File(dir, id + ".png");
+			processed.writeTo(outFile);
+			Photographica.LOGGER.info("Long-exposure photo saved: {} ({}x{}, {} frames accumulated)",
+					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight(), n);
+		} catch (IOException e) {
+			Photographica.LOGGER.error("Long-exposure photo capture failed", e);
+		} finally {
+			if (processed != null) processed.close();
+			averaged.close();
+		}
+
+		if (isFilm) {
+			ClientPlayNetworking.send(new TakeFilmPhotoPayload(id, settings));
+			if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), true);
+		} else {
+			ClientPlayNetworking.send(new CreatePhotoPayload(id, settings));
+			if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影"), true);
+		}
+	}
+
+	private static void resetAccumState() {
+		accumId = null;
+		accumSettings = null;
+		accumIsFilm = false;
+		accumEndMs = 0L;
+		accumSamples = 0;
+		accumR = null; accumG = null; accumB = null;
+		accumW = 0; accumH = 0;
+		accumDepth = null;
+		accumDepthFbW = 0; accumDepthFbH = 0;
+	}
+
 	/** Called by the HUD callback when the mirror-down click is due. */
 	public static void playMirrorDownClick() {
 		MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(
@@ -316,7 +493,8 @@ public final class PhotoCapture {
 	 * Returns a NEW NativeImage; src is NOT modified or closed.
 	 */
 	private static NativeImage applyPhotographicEffects(NativeImage src, CameraSettings settings,
-	                                                    float[] linearDepth, int fbW, int fbH) {
+	                                                    float[] linearDepth, int fbW, int fbH,
+	                                                    boolean doMotionBlur) {
 		double t    = settings.shutterSeconds();
 		double n    = settings.aperture();
 		double s    = settings.iso();
@@ -423,9 +601,10 @@ public final class PhotoCapture {
 			pass2 = pass1;
 		}
 
-		// Pass 3: Motion blur (slow shutters — simulates hand-camera shake)
+		// Pass 3: Motion blur (slow shutters — simulates hand-camera shake).
+		// Skipped for long-exposure accumulation captures: real blur is in the frame average.
 		NativeImage pass3;
-		if (motionBlurEnabled && t >= 1.0 / 30.0) {
+		if (doMotionBlur && motionBlurEnabled && t >= 1.0 / 30.0) {
 			pass3 = applyMotionBlur(pass2, t, w, h);
 			pass2.close();
 		} else {
