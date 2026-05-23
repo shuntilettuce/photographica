@@ -11,6 +11,7 @@ import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockRenderType;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockWithEntity;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityTicker;
 import net.minecraft.block.entity.BlockEntityType;
@@ -26,6 +27,9 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.util.shape.VoxelShapes;
+import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
@@ -33,6 +37,12 @@ public class PhotoFrameBlock extends BlockWithEntity {
 
     public static final MapCodec<PhotoFrameBlock> CODEC = createCodec(PhotoFrameBlock::new);
     public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
+
+    // Thin 2-pixel collision/outline shapes matching the model geometry, one per facing direction.
+    private static final VoxelShape SHAPE_SOUTH = VoxelShapes.cuboid(0, 0, 0,      1, 1, 2.0/16);
+    private static final VoxelShape SHAPE_NORTH = VoxelShapes.cuboid(0, 0, 14.0/16, 1, 1, 1);
+    private static final VoxelShape SHAPE_WEST  = VoxelShapes.cuboid(0, 0, 0,      2.0/16, 1, 1);
+    private static final VoxelShape SHAPE_EAST  = VoxelShapes.cuboid(14.0/16, 0, 0, 1, 1, 1);
 
     public PhotoFrameBlock(Settings settings) {
         super(settings);
@@ -52,6 +62,25 @@ public class PhotoFrameBlock extends BlockWithEntity {
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> builder) {
         builder.add(FACING);
+    }
+
+    private VoxelShape shapeFor(BlockState state) {
+        return switch (state.get(FACING)) {
+            case NORTH -> SHAPE_NORTH;
+            case WEST  -> SHAPE_WEST;
+            case EAST  -> SHAPE_EAST;
+            default    -> SHAPE_SOUTH;
+        };
+    }
+
+    @Override
+    protected VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext ctx) {
+        return shapeFor(state);
+    }
+
+    @Override
+    protected VoxelShape getCollisionShape(BlockState state, BlockView world, BlockPos pos, ShapeContext ctx) {
+        return shapeFor(state);
     }
 
     @Override
