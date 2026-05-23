@@ -30,11 +30,12 @@ import java.util.UUID;
 @Environment(EnvType.CLIENT)
 public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoStandBlockEntity> {
 
-    // Photo quad: 2px inset from the 12×9 panel face on all four edges.
-    private static final float X0 = 4f / 16f;
-    private static final float X1 = 12f / 16f;
-    private static final float Y0 = 3f / 16f;
-    private static final float Y1 = 8f / 16f;
+    // Inner black area of the 16×16 panel texture mapped onto the 12×8 face:
+    // X: 3.5/16..12.5/16 (9 px), Y: 2/16..8/16 (6 px)  →  3:2
+    private static final float X0 = 3.5f / 16f;
+    private static final float X1 = 12.5f / 16f;
+    private static final float Y0 = 2f   / 16f;
+    private static final float Y1 = 8f   / 16f;
 
     // Panel south face (z=14/16); photo rendered just in front of it.
     private static final float PANEL_Z = 14f / 16f + 0.001f;

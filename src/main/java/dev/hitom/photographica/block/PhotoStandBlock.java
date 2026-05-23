@@ -37,10 +37,10 @@ public class PhotoStandBlock extends BlockWithEntity {
     public static final MapCodec<PhotoStandBlock> CODEC = createCodec(PhotoStandBlock::new);
     public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
 
-    // Bounding box: base (full depth) + upright panel (y up to 10/16).
+    // Bounding box: base (full depth) + upright panel (y up to 9/16).
     // SOUTH/NORTH: stand extends along z. EAST/WEST: stand extends along x.
-    private static final VoxelShape SHAPE_NS = VoxelShapes.cuboid(1.0/16, 0, 2.0/16, 15.0/16, 10.0/16, 14.0/16);
-    private static final VoxelShape SHAPE_EW = VoxelShapes.cuboid(2.0/16, 0, 1.0/16, 14.0/16, 10.0/16, 15.0/16);
+    private static final VoxelShape SHAPE_NS = VoxelShapes.cuboid(1.0/16, 0, 2.0/16, 15.0/16, 9.0/16, 14.0/16);
+    private static final VoxelShape SHAPE_EW = VoxelShapes.cuboid(2.0/16, 0, 1.0/16, 14.0/16, 9.0/16, 15.0/16);
 
     public PhotoStandBlock(Settings settings) {
         super(settings);
