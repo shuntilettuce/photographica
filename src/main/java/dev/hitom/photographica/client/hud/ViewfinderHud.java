@@ -81,18 +81,11 @@ public final class ViewfinderHud {
 
 		boolean isMirrorless = stack.getItem() instanceof MirrorlessCameraItem;
 
-		// EVF real-time DoF blur (mirrorless only, before any overlays)
+		// EVF real-time DoF blur (mirrorless only, before any overlays).
+		// Per-pixel CoC is computed in the shader using the captured depth texture.
 		if (isMirrorless && LensKind.hasLens(s.lensType())
 				&& s.aperture() < 8.0f && s.focusDistance() < 999.0f) {
-			float sceneDepth = PhotoCapture.lastSceneDepthBlocks;
-			float focusDist  = s.focusDistance();
-			float maxBlurPx  = Math.min(80.0f / (s.aperture() * s.aperture()), 32.0f);
-			float r          = sceneDepth / focusDist;
-			float coc        = (sceneDepth <= focusDist)
-					? (1.0f - r) * maxBlurPx
-					: ((r - 1.0f) / r) * maxBlurPx;
-			float blurRadius = Math.max(0f, Math.min(coc, maxBlurPx));
-			EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, blurRadius);
+			EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture());
 		}
 
 		// Bezels (dim outside frame)

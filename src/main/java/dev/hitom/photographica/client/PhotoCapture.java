@@ -184,30 +184,46 @@ public final class PhotoCapture {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		updateCenterDepth(mc);
 
-		// If a capture is queued, pre-read the full depth buffer NOW — while the scene
-		// framebuffer is still bound and before Iris composites to mc.getFramebuffer()
-		// (Iris's composite pass overwrites the depth buffer, so reading it later in
-		// captureIfPending() would yield near-zero values for every pixel → max blur).
-		if (pendingId != null) {
+		// Determine what needs the depth buffer this frame.
+		// Both the EVF real-time blur and a pending photo capture need it
+		// captured NOW (before Iris composites overwrite the depth buffer).
+		boolean evfActive = isEvfActive(mc);
+
+		if (evfActive || pendingId != null) {
 			int[] viewport = new int[4];
 			GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
 			int vpW = viewport[2];
 			int vpH = viewport[3];
 			if (vpW > 0 && vpH > 0) {
-				FloatBuffer buf = BufferUtils.createFloatBuffer(vpW * vpH);
-				GL11.glReadPixels(0, 0, vpW, vpH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
-				float[] depth = new float[vpW * vpH];
-				final float near = 0.05f, far = 512.0f;
-				for (int i = 0; i < depth.length; i++) {
-					float d = buf.get(i);
-					float ndc = 2.0f * d - 1.0f;
-					depth[i] = 2.0f * near * far / (far + near - ndc * (far - near));
+				// EVF: GPU-side copy (no CPU readback — fast enough for every frame)
+				if (evfActive) {
+					dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(vpW, vpH);
 				}
-				pendingLinearDepth = depth;
-				pendingDepthFbW = vpW;
-				pendingDepthFbH = vpH;
+				// Photo capture: full CPU readback for per-pixel DoF processing
+				if (pendingId != null) {
+					FloatBuffer buf = BufferUtils.createFloatBuffer(vpW * vpH);
+					GL11.glReadPixels(0, 0, vpW, vpH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
+					float[] depth = new float[vpW * vpH];
+					final float near = 0.05f, far = 512.0f;
+					for (int i = 0; i < depth.length; i++) {
+						float d = buf.get(i);
+						float ndc = 2.0f * d - 1.0f;
+						depth[i] = 2.0f * near * far / (far + near - ndc * (far - near));
+					}
+					pendingLinearDepth = depth;
+					pendingDepthFbW = vpW;
+					pendingDepthFbH = vpH;
+				}
 			}
 		}
+	}
+
+	private static boolean isEvfActive(MinecraftClient mc) {
+		if (mc.player == null || !mc.player.isSneaking() || mc.currentScreen != null) return false;
+		ItemStack stack = mc.player.getMainHandStack();
+		if (stack.getItem() instanceof MirrorlessCameraItem) return true;
+		stack = mc.player.getOffHandStack();
+		return stack.getItem() instanceof MirrorlessCameraItem;
 	}
 
 	/** Called from GameRendererMixin after GameRenderer.renderWorld() returns. At this point
