@@ -19,15 +19,14 @@
       }
     },
     {
-      "comment": "Photo panel — 12×8 (3:2), -45° tilt around X at bottom-front edge",
-      "from": [2, 0, 12],
-      "to":   [14, 8, 14],
-      "rotation": { "origin": [8, 0, 12], "axis": "x", "angle": -45 },
+      "comment": "Photo panel — 12×9, 2px thick, nearly vertical (~80° from horizontal)",
+      "from": [2, 1, 12],
+      "to":   [14, 10, 14],
       "faces": {
-        "north": { "uv": [0, 0, 12, 8], "texture": "#wood" },
+        "north": { "uv": [0, 0, 12, 9], "texture": "#wood" },
         "south": { "uv": [0, 0, 16, 16], "texture": "#panel" },
-        "west":  { "uv": [0, 0,  2, 8], "texture": "#wood" },
-        "east":  { "uv": [0, 0,  2, 8], "texture": "#wood" },
+        "west":  { "uv": [0, 0,  2, 9], "texture": "#wood" },
+        "east":  { "uv": [0, 0,  2, 9], "texture": "#wood" },
         "up":    { "uv": [0, 0, 12, 2], "texture": "#wood" },
         "down":  { "uv": [0, 0, 12, 2], "texture": "#wood" }
       }
