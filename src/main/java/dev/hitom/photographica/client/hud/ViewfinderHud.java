@@ -20,7 +20,7 @@ import net.minecraft.text.Text;
 
 /**
  * Camera viewfinder HUD overlay. Rendered when the player holds a camera in
- * either hand. Draws a 3:2 photo frame with dimmed bezels, corner brackets,
+ * either hand. Draws a 3:4 photo frame with dimmed bezels, corner brackets,
  * center focus reticle, exposure readout, and a recording dot.
  */
 @Environment(EnvType.CLIENT)
@@ -66,8 +66,8 @@ public final class ViewfinderHud {
 		int sw = ctx.getScaledWindowWidth();
 		int sh = ctx.getScaledWindowHeight();
 
-		// Compute centered 3:2 frame
-		float aspect = 3f / 2f;
+		// Compute centered 3:4 frame
+		float aspect = 3f / 4f;
 		int frameH = (int) (sh * 0.86f);
 		int frameW = (int) (frameH * aspect);
 		if (frameW > sw * 0.94f) {
