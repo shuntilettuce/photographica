@@ -24,24 +24,24 @@ import java.util.UUID;
  *   - Panel element [2,1,12]→[14,10,14], south face at z=14 is the photo surface.
  *   - Base element [1,0,2]→[15,2,14] flat on the ground.
  *
- * Photo is drawn inset 1.5px from the panel edges (showing the panel texture as
- * a frame border) and tilted -10° around X (80° from horizontal = nearly vertical).
- * Inset area is 9×6 = 3:2.
+ * Photo is drawn with a 2px frame border, centred 3:2 in the 12×9 panel.
+ * BER tilt matches model JSON: -22.5° around X, pivot at origin [8,1,12].
  */
 @Environment(EnvType.CLIENT)
 public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoStandBlockEntity> {
 
-    // Photo quad: 9×6/16 = 3:2, inset 1.5px from the 12×9 panel (frame border visible).
-    private static final float X0 = 3.5f / 16f;
-    private static final float X1 = 12.5f / 16f;
-    private static final float Y0 = 2.5f / 16f;
-    private static final float Y1 = 8.5f / 16f;
+    // Photo quad: 2px inset from 12×9 panel, 3:2 centred vertically.
+    // X: 4/16..12/16 (2px left/right border). Y: 17/96..49/96 (≈1.83px top/bottom, exact 3:2).
+    private static final float X0 = 4f  / 16f;
+    private static final float X1 = 12f / 16f;
+    private static final float Y0 = 17f / 96f;
+    private static final float Y1 = 49f / 96f;
 
     // Panel south face (z=14/16); photo rendered just in front of it.
     private static final float PANEL_Z = 14f / 16f + 0.001f;
-    // Tilt pivot: bottom-centre of the panel south face.
-    private static final float PIVOT_Y = 1f / 16f;
-    private static final float PIVOT_Z = 14f / 16f;
+    // Tilt pivot: must match model JSON rotation origin exactly.
+    private static final float PIVOT_Y = 1f  / 16f;
+    private static final float PIVOT_Z = 12f / 16f;
 
     public PhotoStandBlockEntityRenderer(BlockEntityRendererFactory.Context ctx) {}
 
@@ -64,9 +64,9 @@ public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoS
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-facing.asRotation()));
         matrices.translate(-0.5, -0.5, -0.5);
 
-        // 2. Tilt panel -10° around X (80° from horizontal) at pivot = bottom of south face.
+        // 2. Tilt panel -22.5° around X matching model JSON rotation origin [8,1,12].
         matrices.translate(0.5f, PIVOT_Y, PIVOT_Z);
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-10f));
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-22.5f));
         matrices.translate(-0.5f, -PIVOT_Y, -PIVOT_Z);
 
         MatrixStack.Entry entry = matrices.peek();

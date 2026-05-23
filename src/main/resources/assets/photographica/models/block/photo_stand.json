@@ -19,9 +19,10 @@
       }
     },
     {
-      "comment": "Photo panel — 12×9, 2px thick, nearly vertical (~80° from horizontal)",
+      "comment": "Photo panel — 12×9, -22.5° tilt (~67.5° from horizontal)",
       "from": [2, 1, 12],
       "to":   [14, 10, 14],
+      "rotation": { "origin": [8, 1, 12], "axis": "x", "angle": -22.5 },
       "faces": {
         "north": { "uv": [0, 0, 12, 9], "texture": "#wood" },
         "south": { "uv": [0, 0, 16, 16], "texture": "#panel" },
