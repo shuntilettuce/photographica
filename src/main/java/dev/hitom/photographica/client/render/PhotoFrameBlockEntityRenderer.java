@@ -22,19 +22,19 @@ import java.util.UUID;
  *
  * Coordinate system (FACING=SOUTH, i.e. default model orientation):
  *   - Model occupies [0,0,0]→[16,16,2] in block units.
- *   - Photo quad drawn at z = 2/16 + ε, covering x ∈ [3.5,12.5], y ∈ [2,14]
- *     which preserves the 3:4 aspect ratio of captured photos (9 × 12 pixels).
+ *   - Photo quad drawn at z = 2/16 + ε, covering x ∈ [2,14], y ∈ [3.5,12.5]
+ *     which preserves the 4:3 aspect ratio (12 × 9 pixels in a 16×16 face).
  *   - Matrix is rotated to match the block's FACING before drawing.
  */
 @Environment(EnvType.CLIENT)
 public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoFrameBlockEntity> {
 
     // Photo area in block units (0–16) for FACING=SOUTH (default orientation).
-    // 3:4 portrait: width=9/16, height=12/16, centered in the 16×16 face.
-    private static final float X0 = 3.5f / 16f;
-    private static final float X1 = 12.5f / 16f;
-    private static final float Y0 = 2f / 16f;   // bottom of photo (3:4 centered in frame)
-    private static final float Y1 = 14f / 16f;  // top of photo
+    // 4:3 landscape: width=12/16, height=9/16, centered in the 16×16 face.
+    private static final float X0 = 2f / 16f;
+    private static final float X1 = 14f / 16f;
+    private static final float Y0 = 3.5f / 16f;  // bottom of photo (4:3 centered in frame)
+    private static final float Y1 = 12.5f / 16f; // top of photo
     private static final float Z  = 2f / 16f + 0.001f; // just in front of model south face
 
     public PhotoFrameBlockEntityRenderer(BlockEntityRendererFactory.Context ctx) {}

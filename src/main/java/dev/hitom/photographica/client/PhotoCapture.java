@@ -300,7 +300,7 @@ public final class PhotoCapture {
 		NativeImage downsampled = null;
 		NativeImage processed = null;
 		try {
-			cropped = cropTo3to4(raw);
+			cropped = cropTo3to2(raw);
 			downsampled = boxDownsample(cropped, 1280);
 			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH, true);
 			File dir = new File(mc.runDirectory, "photographica/photos");
@@ -363,7 +363,7 @@ public final class PhotoCapture {
 			NativeImage cropped = null;
 			NativeImage ds = null;
 			try {
-				cropped = cropTo3to4(frame);
+				cropped = cropTo3to2(frame);
 				ds = boxDownsample(cropped, 1280);
 				int w = ds.getWidth();
 				int h = ds.getHeight();
@@ -874,17 +874,17 @@ public final class PhotoCapture {
 		float maxBlurPx = 80.0f / (aperture * aperture) * distScale;
 		int   maxR      = Math.max(1, (int) Math.ceil(maxBlurPx));
 
-		// Reconstruct the crop window that cropTo3to4 used, so image pixels map to the
+		// Reconstruct the crop window that cropTo3to2 used, so image pixels map to the
 		// correct framebuffer pixels when sampling the depth buffer.
 		int croppedW, croppedH, cropOffX, cropOffY;
-		if ((float) fbW / fbH > 0.75f) {        // wider than 3:4 → sides cropped
+		if ((float) fbW / fbH > 1.5f) {        // wider than 3:2 → sides cropped
 			croppedH = fbH;
-			croppedW = Math.round(fbH * 0.75f);
+			croppedW = Math.round(fbH * 1.5f);
 			cropOffX = (fbW - croppedW) / 2;
 			cropOffY = 0;
-		} else {                                // taller than 3:4 → top/bottom cropped
+		} else {                                // taller than 3:2 → top/bottom cropped
 			croppedW = fbW;
-			croppedH = Math.round(fbW / 0.75f);
+			croppedH = Math.round(fbW / 1.5f);
 			cropOffX = 0;
 			cropOffY = (fbH - croppedH) / 2;
 		}
@@ -1008,11 +1008,11 @@ public final class PhotoCapture {
 		return dst;
 	}
 
-	/** Crops a NativeImage to 3:4 (centered). Returns a new image; caller must close both. */
-	private static NativeImage cropTo3to4(NativeImage src) {
+	/** Crops a NativeImage to 3:2 (centered). Returns a new image; caller must close both. */
+	private static NativeImage cropTo3to2(NativeImage src) {
 		int w = src.getWidth();
 		int h = src.getHeight();
-		float aspect = 3f / 4f;
+		float aspect = 3f / 2f;
 		int targetW, targetH;
 		if ((float) w / h > aspect) {
 			targetH = h;
