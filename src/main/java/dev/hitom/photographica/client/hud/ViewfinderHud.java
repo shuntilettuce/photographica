@@ -323,12 +323,15 @@ public final class ViewfinderHud {
 		}
 
 		// --- ISO grain ---
+		// Real cameras are clean at ISO ≤ 800; grain only becomes noticeable at
+		// ISO 1600+. We subtract a baseline of sigma=8 so low ISOs show nothing.
 		float sigma = isoToNoiseSigma(s.iso());
-		if (sigma >= 1.5f) {
+		float effectSigma = Math.max(0f, sigma - 8f); // ISO 1600: 3, 3200: 10, 6400: 20
+		if (effectSigma > 0f) {
 			int fw = fx2 - fx;
 			int fh = fy2 - fy;
-			int numDots  = Math.min(1500, (int)(sigma * 20));
-			int dotAlpha = Math.min(160, (int)(sigma * 3.5f));
+			int numDots  = Math.min(1200, (int)(effectSigma * 16));
+			int dotAlpha = Math.min(150, (int)(effectSigma * 4f));
 			// LCG seeded per ~100 ms so grain animates at ~10 Hz
 			long rng = System.currentTimeMillis() / 100L * 2654435761L;
 			for (int i = 0; i < numDots; i++) {
