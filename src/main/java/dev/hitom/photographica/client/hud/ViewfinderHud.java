@@ -87,11 +87,17 @@ public final class ViewfinderHud {
 			float sceneDepth = PhotoCapture.lastSceneDepthBlocks;
 			float focusDist  = s.focusDistance();
 			float maxBlurPx  = Math.min(80.0f / (s.aperture() * s.aperture()), 32.0f);
+			// Subject CoC
 			float r          = sceneDepth / focusDist;
 			float coc        = (sceneDepth <= focusDist)
 					? (1.0f - r) * maxBlurPx
 					: ((r - 1.0f) / r) * maxBlurPx;
-			float blurRadius = Math.max(0f, Math.min(coc, maxBlurPx));
+			// Background CoC: object 10 blocks behind focus plane.
+			// Ensures background bokeh persists even when subject is in focus.
+			// Naturally diminishes at long focus distances (physically correct).
+			float r_bg    = (focusDist + 10.0f) / focusDist;
+			float coc_bg  = ((r_bg - 1.0f) / r_bg) * maxBlurPx;
+			float blurRadius = Math.max(0f, Math.min(Math.max(coc, coc_bg), maxBlurPx));
 			EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, blurRadius);
 		}
 
