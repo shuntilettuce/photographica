@@ -28,11 +28,11 @@ import java.util.UUID;
 @Environment(EnvType.CLIENT)
 public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoFrameBlockEntity> {
 
-    // Photo area matches the 3:2 model face exactly.
-    private static final float X0 = 2f / 16f;
-    private static final float X1 = 14f / 16f;
-    private static final float Y0 = 4f / 16f;
-    private static final float Y1 = 12f / 16f;
+    // Photo area inset 2px from the 12×8 model face edges.
+    private static final float X0 = 4f / 16f;
+    private static final float X1 = 12f / 16f;
+    private static final float Y0 = 6f / 16f;
+    private static final float Y1 = 10f / 16f;
     private static final float Z  = 2f / 16f + 0.001f; // just in front of model south face
 
     public PhotoFrameBlockEntityRenderer(BlockEntityRendererFactory.Context ctx) {}
