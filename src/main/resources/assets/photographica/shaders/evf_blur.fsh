@@ -14,7 +14,7 @@ void main() {
         return;
     }
     int r = int(ceil(Radius));
-    r = min(r, 16); // cap to avoid very long loops
+    r = min(r, 32); // cap to avoid very long loops
     float sigma = max(Radius * 0.5, 1.0);
     vec4 col = vec4(0.0);
     float totalW = 0.0;

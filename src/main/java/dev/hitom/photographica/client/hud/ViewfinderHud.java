@@ -86,7 +86,7 @@ public final class ViewfinderHud {
 				&& s.aperture() < 8.0f && s.focusDistance() < 999.0f) {
 			float sceneDepth = PhotoCapture.lastSceneDepthBlocks;
 			float focusDist  = s.focusDistance();
-			float maxBlurPx  = 15.0f / (s.aperture() * s.aperture());
+			float maxBlurPx  = Math.min(80.0f / (s.aperture() * s.aperture()), 32.0f);
 			float r          = sceneDepth / focusDist;
 			float coc        = (sceneDepth <= focusDist)
 					? (1.0f - r) * maxBlurPx
