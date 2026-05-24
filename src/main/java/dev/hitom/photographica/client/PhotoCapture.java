@@ -871,10 +871,9 @@ public final class PhotoCapture {
 		float aperture  = settings.aperture();
 		float focusDist = settings.focusDistance();
 
-		// DoF widens with focus distance (CoC ∝ 1/F): behaviour is preserved at
-		// ≤ 3 m and progressively softens for distant subjects / landscapes.
-		float distScale = Math.min(1.0f, 3.0f / focusDist);
-		float maxBlurPx = 80.0f / (aperture * aperture) * distScale;
+		// maxBlurPx scales with aperture only — wider aperture = shallower DoF.
+		// At f/8+ this is already < 2px so everything appears sharp naturally.
+		float maxBlurPx = 80.0f / (aperture * aperture);
 		int   maxR      = Math.max(1, (int) Math.ceil(maxBlurPx));
 
 		// Reconstruct the crop window that cropTo3to2 used, so image pixels map to the
