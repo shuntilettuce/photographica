@@ -94,7 +94,7 @@ public final class PhotoCapture {
 	private static volatile float[] accumDepth = null;
 	private static volatile int accumDepthFbW = 0;
 	private static volatile int accumDepthFbH = 0;
-	private static final int ACCUM_MAX_SAMPLES = 60;
+	private static final int ACCUM_MAX_SAMPLES = 120;
 
 	/** Returns true when a capture is queued or a long exposure is accumulating. */
 	public static boolean isCapturePending() { return pendingId != null || accumId != null; }
