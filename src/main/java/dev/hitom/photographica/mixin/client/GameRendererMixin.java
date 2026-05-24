@@ -12,6 +12,7 @@ import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -32,6 +33,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
+
+	@Shadow private boolean renderHand;
+
 	@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D",
 			at = @At("RETURN"),
 			cancellable = true)
@@ -61,10 +65,33 @@ public class GameRendererMixin {
 	}
 
 	/**
+	 * Fired just before renderWorld() during long-exposure accumulation.
+	 *
+	 * With Iris shaders the hand is composited into mc.getFramebuffer() inside
+	 * renderWorld(), not in the vanilla renderHand() call that follows.  Setting
+	 * renderHand=false here prevents Iris from including the hand in its pipeline,
+	 * so the screenshot taken in photographica$captureAfterComposite is clean.
+	 * The flag is restored in that same inject, so vanilla's deferred renderHand()
+	 * call still runs normally for the on-screen view.
+	 */
+	@Inject(method = "render(Lnet/minecraft/client/render/RenderTickCounter;Z)V",
+			at = @At(value = "INVOKE",
+					target = "Lnet/minecraft/client/render/GameRenderer;renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
+					shift = At.Shift.BEFORE))
+	private void photographica$suppressHandBeforeAccumSample(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
+		if (PhotoCapture.isAccumulating()) {
+			this.renderHand = false;
+		}
+	}
+
+	/**
 	 * Fires after renderWorld() returns inside render(), at which point Iris (if present)
 	 * has already composited its pipeline output into mc.getFramebuffer(). This is the
 	 * correct time to take a screenshot that includes shader post-processing.
 	 * WorldRenderEvents.LAST fires *before* Iris composites, so it cannot be used for capture.
+	 *
+	 * Also restores renderHand after the accumulation-sample suppression above, so that
+	 * the vanilla renderHand() call that follows still draws the hand on-screen.
 	 */
 	@Inject(method = "render(Lnet/minecraft/client/render/RenderTickCounter;Z)V",
 			at = @At(value = "INVOKE",
@@ -72,6 +99,9 @@ public class GameRendererMixin {
 					shift = At.Shift.AFTER))
 	private void photographica$captureAfterComposite(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
 		PhotoCapture.captureIfPending();
+		if (PhotoCapture.isAccumulating()) {
+			this.renderHand = true;  // restore so vanilla renderHand() still runs for on-screen view
+		}
 	}
 
 	private static boolean isCamera(ItemStack stack) {

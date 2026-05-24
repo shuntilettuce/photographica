@@ -99,6 +99,9 @@ public final class PhotoCapture {
 	/** Returns true when a capture is queued or a long exposure is accumulating. */
 	public static boolean isCapturePending() { return pendingId != null || accumId != null; }
 
+	/** Returns true during multi-frame long-exposure accumulation (excludes single-frame captures). */
+	public static boolean isAccumulating() { return accumId != null; }
+
 	/** Called when the player presses the shutter (game thread). */
 	public static void take(ItemStack cameraStack) {
 		MinecraftClient mc = MinecraftClient.getInstance();
