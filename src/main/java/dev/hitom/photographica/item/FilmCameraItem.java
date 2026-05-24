@@ -43,7 +43,7 @@ public class FilmCameraItem extends Item {
 		return s != null ? s : new CameraSettings(
 				5.6f, 10, FilmKind.isoOf(FilmKind.COLOR_400),
 				5.0f, 50, LensKind.NONE, FilmKind.COLOR_400, 0,
-				CameraSettings.EXP_M, CameraSettings.FOCUS_MF, false);
+				CameraSettings.EXP_M, CameraSettings.FOCUS_MF, false, 0);
 	}
 
 	public static void setSettings(ItemStack stack, CameraSettings settings) {

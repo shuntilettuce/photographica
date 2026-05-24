@@ -14,6 +14,7 @@ import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.item.PhotoItem;
 import dev.hitom.photographica.item.PhotoPaperItem;
 import dev.hitom.photographica.item.SdCardItem;
+import dev.hitom.photographica.item.TripodItem;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroups;
@@ -47,6 +48,7 @@ public final class ModItems {
 	public static final Item DEVELOPED_FILM     = reg("developed_film",      new DevelopedFilmItem(new Item.Settings().maxCount(1)));
 	public static final Item SD_CARD            = reg("sd_card",             new SdCardItem(new Item.Settings().maxCount(1)));
 	public static final Item PHOTO_PAPER        = reg("photo_paper",         new PhotoPaperItem(new Item.Settings()));
+	public static final Item TRIPOD             = reg("tripod",              new TripodItem(new Item.Settings().maxCount(1)));
 
 	private static Item reg(String name, Item item) {
 		return Registry.register(Registries.ITEM, Identifier.of(Photographica.MOD_ID, name), item);
@@ -74,6 +76,7 @@ public final class ModItems {
 			entries.add(DEVELOPED_FILM);
 			entries.add(SD_CARD);
 			entries.add(PHOTO_PAPER);
+			entries.add(TRIPOD);
 			entries.add(PHOTO);
 		});
 	}

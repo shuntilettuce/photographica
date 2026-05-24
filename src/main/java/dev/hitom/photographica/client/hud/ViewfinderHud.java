@@ -218,6 +218,21 @@ public final class ViewfinderHud {
 			ctx.drawTextWithShadow(tr, Text.literal(lensHint),
 					(fx + fx2 - hw) / 2, fy + frameH / 2 + 4, COLOR_TEXT_DIM);
 		}
+
+		// Self-timer countdown
+		if (PhotoCapture.isTimerActive()) {
+			long remMs = PhotoCapture.timerRemainingMs();
+			int remSec = (int) Math.ceil(remMs / 1000.0);
+			String countStr = remSec > 0 ? String.valueOf(remSec) : "●";
+			int countColor = remSec <= 1 ? 0xFFFF4444 : 0xFFFFFFFF;
+			ctx.getMatrices().push();
+			ctx.getMatrices().scale(3.0f, 3.0f, 1.0f);
+			ctx.drawTextWithShadow(tr, Text.literal(countStr),
+					(sw / 2 - tr.getWidth(countStr) * 3 / 2) / 3,
+					(sh / 2 - tr.fontHeight * 3 / 2) / 3 - 20,
+					countColor);
+			ctx.getMatrices().pop();
+		}
 	}
 
 	/**

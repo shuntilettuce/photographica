@@ -70,8 +70,19 @@ public final class PhotoCapture {
 	/** True if the next capture should be routed through the film-camera flow (TakeFilmPhotoPayload). */
 	private static volatile boolean pendingIsFilm = false;
 
-	/** Client-side toggle for motion blur on slow shutters. Off by default (no tripod). */
-	public static boolean motionBlurEnabled = false;
+	/** True when a tripod is in the player's off-hand. Evaluated each time take() is called. */
+	public static boolean motionBlurEnabled = false; // kept for CameraScreen read-only display
+
+	/** Returns true if the player currently has a tripod in their off-hand. */
+	public static boolean hasTripod() {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player == null) return false;
+		return mc.player.getOffHandStack().getItem() instanceof dev.hitom.photographica.item.TripodItem;
+	}
+
+	// Self-timer state
+	public static volatile long timerFireMs = 0L;       // epoch ms when the photo should fire; 0 = no timer active
+	private static volatile ItemStack timerStack = null; // camera stack snapshot
 
 	// Depth buffer pre-read during WorldRenderEvents.LAST (before Iris overwrites it).
 	private static volatile float[] pendingLinearDepth = null;
@@ -106,6 +117,9 @@ public final class PhotoCapture {
 	public static void take(ItemStack cameraStack) {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.world == null || mc.player == null) return;
+
+		// Update motionBlurEnabled based on tripod presence (for display and effect).
+		motionBlurEnabled = hasTripod();
 
 		boolean isFilm = cameraStack.getItem() instanceof FilmCameraItem;
 		CameraSettings settings = isFilm
@@ -160,16 +174,29 @@ public final class PhotoCapture {
 		long now = System.currentTimeMillis();
 		if (now - lastCaptureMs < COOLDOWN_MS) return;
 		if (pendingId != null || accumId != null) return;
+
+		// Self-timer: arm a delayed capture instead of capturing immediately.
+		int timerSec = settings.timerSeconds();
+		if (timerSec > 0) {
+			if (timerFireMs > 0) return; // already counting down
+			timerFireMs = now + timerSec * 1000L;
+			timerStack = cameraStack.copy();
+			// Play initial click sound to confirm timer started
+			mc.getSoundManager().play(PositionedSoundInstance.master(
+					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 1.0f, 1.2f));
+			return;
+		}
+
 		lastCaptureMs = now;
 
 		pendingSettings = settings;
 		pendingId = UUID.randomUUID();
 		pendingIsFilm = isFilm;
 
-		// For slow shutters with motion blur enabled, arm multi-frame accumulation so
-		// real camera movement during the exposure produces genuine motion blur trails.
+		// For slow shutters with motion blur enabled (tripod in off-hand), arm multi-frame
+		// accumulation so real camera movement during the exposure produces genuine motion blur trails.
 		double shutterSec = settings.shutterSeconds();
-		if (motionBlurEnabled && shutterSec >= 1.0 / 30.0) {
+		if (hasTripod() && shutterSec >= 1.0 / 30.0) {
 			long durationMs = Math.max((long)(shutterSec * 1000), 1L);
 			accumId = pendingId;
 			accumSettings = settings;
@@ -266,6 +293,7 @@ public final class PhotoCapture {
 	/** Called from GameRendererMixin after GameRenderer.renderWorld() returns. At this point
 	 *  Iris (if present) has already blitted its pipeline output to mc.getFramebuffer(). */
 	public static void captureIfPending() {
+		tickTimer();
 		// Long-exposure accumulation takes priority.
 		if (accumId != null) {
 			tickAccumulation();
@@ -478,6 +506,36 @@ public final class PhotoCapture {
 		MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(
 				SoundEvents.BLOCK_TRIPWIRE_CLICK_OFF, 1.3f, 1.0f));
 	}
+
+	/** Ticks the self-timer each frame. Fires the actual capture when the countdown reaches zero. */
+	public static void tickTimer() {
+		if (timerFireMs == 0L || timerStack == null) return;
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc == null || mc.player == null) { timerFireMs = 0; timerStack = null; return; }
+		long now = System.currentTimeMillis();
+		long remaining = timerFireMs - now;
+
+		// Tick sound at each whole-second boundary while counting down (but not at fire time)
+		if (remaining > 200) {
+			long secRemaining = (remaining + 999) / 1000; // ceiling
+			long prevSecRemaining = (remaining + 999 + 16) / 1000; // approx last frame
+			if (secRemaining != prevSecRemaining && secRemaining > 0) {
+				mc.getSoundManager().play(PositionedSoundInstance.master(
+						SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 1.0f,
+						secRemaining == 1 ? 2.0f : 1.5f));
+			}
+		}
+
+		if (now >= timerFireMs) {
+			timerFireMs = 0;
+			ItemStack stack = timerStack;
+			timerStack = null;
+			take(stack); // fire the actual capture
+		}
+	}
+
+	public static boolean isTimerActive() { return timerFireMs > 0; }
+	public static long timerRemainingMs() { return Math.max(0, timerFireMs - System.currentTimeMillis()); }
 
 	// -------------------------------------------------------------------------
 	// Photographic image effects
