@@ -98,8 +98,11 @@ public class GameRendererMixin {
 					target = "Lnet/minecraft/client/render/GameRenderer;renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
 					shift = At.Shift.AFTER))
 	private void photographica$captureAfterComposite(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
+		// Snapshot accumulating state BEFORE captureIfPending() — finalizeAccumulation()
+		// resets accumId to null inside that call, so checking after would miss the restore.
+		boolean wasAccumulating = PhotoCapture.isAccumulating();
 		PhotoCapture.captureIfPending();
-		if (PhotoCapture.isAccumulating()) {
+		if (wasAccumulating) {
 			this.renderHand = true;  // restore so vanilla renderHand() still runs for on-screen view
 		}
 	}
