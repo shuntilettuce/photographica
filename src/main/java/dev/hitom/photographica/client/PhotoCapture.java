@@ -169,8 +169,8 @@ public final class PhotoCapture {
 		// For slow shutters with motion blur enabled, arm multi-frame accumulation so
 		// real camera movement during the exposure produces genuine motion blur trails.
 		double shutterSec = settings.shutterSeconds();
-		if (motionBlurEnabled && shutterSec >= 0.5) {
-			long durationMs = Math.max(500L, (long)(shutterSec * 1000));
+		if (motionBlurEnabled && shutterSec >= 1.0 / 30.0) {
+			long durationMs = Math.max((long)(shutterSec * 1000), 1L);
 			accumId = pendingId;
 			accumSettings = settings;
 			accumIsFilm = isFilm;
