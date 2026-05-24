@@ -175,7 +175,7 @@ public final class PhotoCapture {
 			accumSettings = settings;
 			accumIsFilm = isFilm;
 			accumEndMs = now + durationMs;
-			accumSampleIntervalMs = Math.max(16L, durationMs / ACCUM_MAX_SAMPLES);
+			accumSampleIntervalMs = Math.max(8L, durationMs / ACCUM_MAX_SAMPLES);
 			accumNextSampleMs = now;
 			accumSamples = 0;
 			accumR = null; accumG = null; accumB = null;
