@@ -292,8 +292,7 @@ public final class PhotoCapture {
 		int fbW = preRead != null ? pendingDepthFbW : fb.textureWidth;
 		int fbH = preRead != null ? pendingDepthFbH : fb.textureHeight;
 		if (LensKind.hasLens(settings.lensType())
-				&& settings.aperture() <= 5.6f
-				&& settings.focusDistance() < 999.0f) {
+				&& settings.aperture() <= 5.6f) {
 			linearDepth = preRead != null ? preRead : readLinearDepth(fb, fbW, fbH);
 		}
 
@@ -597,7 +596,7 @@ public final class PhotoCapture {
 
 		// Pass 2: Depth-of-field blur
 		NativeImage pass2;
-		if (linearDepth != null && n <= 5.6 && settings.focusDistance() < 999.0f) {
+		if (linearDepth != null && n <= 5.6) {
 			pass2 = applyDepthOfField(pass1, settings, linearDepth, w, h, fbW, fbH);
 			pass1.close();
 		} else {
@@ -892,16 +891,27 @@ public final class PhotoCapture {
 		}
 
 		// Per-pixel CoC (Circle of Confusion) in image pixels.
+		// Infinity focus (focusDist >= 999): coc = maxBlurPx * nearLimit / depth
+		//   where nearLimit = 10/aperture (f/2→5 m, f/4→2.5 m).
+		//   Objects closer than nearLimit are fully blurred; farther objects clear up as 1/depth.
+		// Finite focus: standard near/far CoC formula.
+		boolean infinityFocus = (focusDist >= 999.0f);
+		float nearLimit = infinityFocus ? (10.0f / aperture) : 0.0f;
 		float[] cocMap = new float[iw * ih];
 		for (int iy = 0; iy < ih; iy++) {
 			for (int ix = 0; ix < iw; ix++) {
 				int fx    = Math.max(0, Math.min(fbW - 1, cropOffX + ix * croppedW / iw));
 				int fy_gl = Math.max(0, Math.min(fbH - 1, fbH - 1 - (cropOffY + iy * croppedH / ih)));
 				float depth = linearDepth[fy_gl * fbW + fx];
-				float r   = depth / focusDist;
-				float coc = (depth <= focusDist)
-						? (1.0f - r) * maxBlurPx
-						: ((r - 1.0f) / r) * maxBlurPx;
+				float coc;
+				if (infinityFocus) {
+					coc = Math.min(maxBlurPx, maxBlurPx * nearLimit / Math.max(depth, 0.05f));
+				} else {
+					float r = depth / focusDist;
+					coc = (depth <= focusDist)
+							? (1.0f - r) * maxBlurPx
+							: ((r - 1.0f) / r) * maxBlurPx;
+				}
 				cocMap[iy * iw + ix] = Math.min(coc, maxBlurPx);
 			}
 		}
