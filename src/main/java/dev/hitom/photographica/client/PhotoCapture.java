@@ -94,7 +94,7 @@ public final class PhotoCapture {
 	private static volatile float[] accumDepth = null;
 	private static volatile int accumDepthFbW = 0;
 	private static volatile int accumDepthFbH = 0;
-	private static final int ACCUM_MAX_SAMPLES = 20;
+	private static final int ACCUM_MAX_SAMPLES = 60;
 
 	/** Returns true when a capture is queued or a long exposure is accumulating. */
 	public static boolean isCapturePending() { return pendingId != null || accumId != null; }
@@ -172,7 +172,7 @@ public final class PhotoCapture {
 			accumSettings = settings;
 			accumIsFilm = isFilm;
 			accumEndMs = now + durationMs;
-			accumSampleIntervalMs = Math.max(50L, durationMs / ACCUM_MAX_SAMPLES);
+			accumSampleIntervalMs = Math.max(16L, durationMs / ACCUM_MAX_SAMPLES);
 			accumNextSampleMs = now;
 			accumSamples = 0;
 			accumR = null; accumG = null; accumB = null;
