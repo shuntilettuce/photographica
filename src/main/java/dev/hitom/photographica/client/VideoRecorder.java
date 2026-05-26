@@ -129,6 +129,15 @@ public final class VideoRecorder {
     private static int[] dofTempR, dofTempG, dofTempB, dofTempA;
     private static int   dofTempCap = 0;
 
+    /**
+     * Smoothed ISO AUTO exposure multiplier shared across post-processing frames.
+     * Updated frame-by-frame with an asymmetric EMA:
+     *   darkening  (mult rising)  → slow rate  (~3 s to fully adjust)
+     *   brightening(mult falling) → fast rate  (~0.5 s)
+     * This prevents a single dark frame from spiking the exposure.
+     */
+    private static float smoothedExpMult = 1.0f;
+
     private static final ExecutorService ioExecutor =
             Executors.newSingleThreadExecutor(r -> {
                 Thread t = new Thread(r, "photographica-video-io");
@@ -199,7 +208,8 @@ public final class VideoRecorder {
             sessionId = ts + "_" + (System.currentTimeMillis() % 1000);
         }
 
-        currentFps    = VideoCameraItem.getSettings(stack).fps();
+        currentFps      = VideoCameraItem.getSettings(stack).fps();
+        smoothedExpMult = 1.0f;   // reset ISO AUTO smoothing for new session
         frameCount    = 0;
         recordStartMs = System.currentTimeMillis();
         nextFrameMs   = recordStartMs;
@@ -464,7 +474,13 @@ public final class VideoRecorder {
         float[] grid = meta.depthGrid();
 
         // ── Pass 1: auto-exposure + vignette ─────────────────────────────────
-        float expMult = computeAutoExposure(src);
+        float rawExpMult = computeAutoExposure(src);
+        // Asymmetric EMA — slow to boost ISO (darken scene), fast to cut it.
+        // Rising mult = getting brighter (scene went dark) → slow: ~3 s / 72 frames at 24fps
+        // Falling mult = getting dimmer  (scene lit up)   → fast: ~0.5 s / 12 frames
+        float alpha = rawExpMult > smoothedExpMult ? 0.04f : 0.15f;
+        smoothedExpMult = smoothedExpMult * (1f - alpha) + rawExpMult * alpha;
+        float expMult = smoothedExpMult;
         float vig     = apertureToVignette(ap);
 
         NativeImage pass1 = new NativeImage(w, h, false);
