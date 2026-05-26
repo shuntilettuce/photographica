@@ -1,4 +1,6 @@
 {
+	"item.photographica.video_camera": "Camcorder",
+	"screen.photographica.video_camera": "Camcorder Settings",
 	"item.photographica.camera": "DSLR Camera",
 	"item.photographica.mirrorless_camera": "Mirrorless Camera",
 	"item.photographica.film_camera": "Film SLR Camera",

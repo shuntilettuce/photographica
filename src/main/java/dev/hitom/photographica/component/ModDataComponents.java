@@ -45,6 +45,15 @@ public final class ModDataComponents {
 					.build()
 	);
 
+	public static final ComponentType<VideoSettings> VIDEO_SETTINGS = Registry.register(
+			Registries.DATA_COMPONENT_TYPE,
+			Identifier.of(Photographica.MOD_ID, "video_settings"),
+			ComponentType.<VideoSettings>builder()
+					.codec(VideoSettings.CODEC)
+					.packetCodec(VideoSettings.PACKET_CODEC)
+					.build()
+	);
+
 	public static void register() {
 		// Class init is enough; this method just forces it.
 	}

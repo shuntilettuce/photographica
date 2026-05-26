@@ -5,6 +5,8 @@ import dev.hitom.photographica.client.screen.FilmCameraScreen;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
+import dev.hitom.photographica.item.VideoCameraItem;
+import dev.hitom.photographica.client.screen.VideoCameraScreen;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.entity.Entity;
@@ -52,9 +54,13 @@ public class ClientPlayerInteractionManagerMixin {
 
         final ItemStack cameraStack = camera;
         MinecraftClient mc = MinecraftClient.getInstance();
-        mc.setScreen(cameraStack.getItem() instanceof FilmCameraItem
-                ? new FilmCameraScreen(cameraStack, stand.getId())
-                : new CameraScreen(cameraStack, stand.getId()));
+        if (cameraStack.getItem() instanceof VideoCameraItem) {
+            mc.setScreen(new VideoCameraScreen(cameraStack));
+        } else if (cameraStack.getItem() instanceof FilmCameraItem) {
+            mc.setScreen(new FilmCameraScreen(cameraStack, stand.getId()));
+        } else {
+            mc.setScreen(new CameraScreen(cameraStack, stand.getId()));
+        }
         cir.setReturnValue(ActionResult.SUCCESS);
     }
 
@@ -62,7 +68,8 @@ public class ClientPlayerInteractionManagerMixin {
         return !stack.isEmpty() && (
                 stack.getItem() instanceof CameraItem ||
                 stack.getItem() instanceof FilmCameraItem ||
-                stack.getItem() instanceof MirrorlessCameraItem
+                stack.getItem() instanceof MirrorlessCameraItem ||
+                stack.getItem() instanceof VideoCameraItem
         );
     }
 }

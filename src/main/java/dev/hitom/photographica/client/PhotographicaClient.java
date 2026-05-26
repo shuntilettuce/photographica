@@ -1,5 +1,6 @@
 package dev.hitom.photographica.client;
 
+import dev.hitom.photographica.client.hud.VideoRecorderHud;
 import dev.hitom.photographica.client.hud.ViewfinderHud;
 import dev.hitom.photographica.client.render.PhotoFrameBlockEntityRenderer;
 import dev.hitom.photographica.client.render.PhotoStandBlockEntityRenderer;
@@ -11,6 +12,7 @@ import dev.hitom.photographica.client.screen.FilmCameraScreen;
 import dev.hitom.photographica.client.screen.FilmStripScreen;
 import dev.hitom.photographica.client.screen.PhotoViewerScreen;
 import dev.hitom.photographica.client.screen.PrinterScreen;
+import dev.hitom.photographica.client.screen.VideoCameraScreen;
 import dev.hitom.photographica.registry.ModBlockEntities;
 import dev.hitom.photographica.registry.ModScreenHandlers;
 import dev.hitom.photographica.item.CameraItem;
@@ -18,6 +20,7 @@ import dev.hitom.photographica.item.DevelopedFilmItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.item.PhotoItem;
+import dev.hitom.photographica.item.VideoCameraItem;
 import dev.hitom.photographica.network.LoadSdCardPayload;
 import dev.hitom.photographica.network.UnloadSdCardPayload;
 import dev.hitom.photographica.network.WindFilmPayload;
@@ -41,6 +44,10 @@ import org.lwjgl.glfw.GLFW;
 public class PhotographicaClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
+		VideoCameraItem.clientToggleRecord = VideoRecorder::toggle;
+		VideoCameraItem.clientOpenScreen = stack ->
+				MinecraftClient.getInstance().setScreen(new VideoCameraScreen(stack));
+
 		CameraItem.clientOpenScreen = stack ->
 				MinecraftClient.getInstance().setScreen(new CameraScreen(stack));
 		CameraItem.clientTakePhoto = PhotoCapture::take;
@@ -121,6 +128,7 @@ public class PhotographicaClient implements ClientModInitializer {
 		});
 
 		HudRenderCallback.EVENT.register(ViewfinderHud::render);
+		HudRenderCallback.EVENT.register(VideoRecorderHud::render);
 		HudRenderCallback.EVENT.register((ctx, tick) -> {
 			long now = System.currentTimeMillis();
 
@@ -149,7 +157,10 @@ public class PhotographicaClient implements ClientModInitializer {
 			}
 		});
 
-		WorldRenderEvents.LAST.register(ctx -> PhotoCapture.onWorldRenderEnd());
+		WorldRenderEvents.LAST.register(ctx -> {
+			PhotoCapture.onWorldRenderEnd();
+			VideoRecorder.onWorldRenderEnd();
+		});
 
 		BlockEntityRendererFactories.register(ModBlockEntities.PHOTO_FRAME,
 				PhotoFrameBlockEntityRenderer::new);

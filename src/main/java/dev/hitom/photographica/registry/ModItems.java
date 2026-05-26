@@ -14,6 +14,7 @@ import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.item.PhotoItem;
 import dev.hitom.photographica.item.PhotoPaperItem;
 import dev.hitom.photographica.item.SdCardItem;
+import dev.hitom.photographica.item.VideoCameraItem;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroups;
@@ -24,6 +25,7 @@ import net.minecraft.util.Identifier;
 public final class ModItems {
 	private ModItems() {}
 
+	public static final Item VIDEO_CAMERA       = reg("video_camera",        new VideoCameraItem(new Item.Settings()));
 	public static final Item CAMERA             = reg("camera",              new CameraItem(new Item.Settings()));
 	public static final Item FILM_CAMERA        = reg("film_camera",         new FilmCameraItem(new Item.Settings()));
 	public static final Item MIRRORLESS_CAMERA  = reg("mirrorless_camera",   new MirrorlessCameraItem(new Item.Settings()));
@@ -53,6 +55,7 @@ public final class ModItems {
 
 	public static void register() {
 		ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> {
+			entries.add(VIDEO_CAMERA);
 			entries.add(CAMERA);
 			entries.add(MIRRORLESS_CAMERA);
 			entries.add(FILM_CAMERA);

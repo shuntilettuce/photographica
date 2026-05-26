@@ -1,6 +1,7 @@
 package dev.hitom.photographica.mixin.client;
 
 import dev.hitom.photographica.client.PhotoCapture;
+import dev.hitom.photographica.client.VideoRecorder;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
@@ -111,6 +112,7 @@ public class GameRendererMixin {
 		boolean wasAccumulating = PhotoCapture.isAccumulating();
 		boolean wasArmorStand = PhotoCapture.armorStandCapturePending;
 		PhotoCapture.captureIfPending();
+		VideoRecorder.captureFrameIfRecording();
 		if (wasAccumulating || wasArmorStand) {
 			this.renderHand = true;  // restore so vanilla renderHand() still runs for on-screen view
 		}
