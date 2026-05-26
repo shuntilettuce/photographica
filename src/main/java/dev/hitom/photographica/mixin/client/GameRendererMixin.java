@@ -61,10 +61,11 @@ public class GameRendererMixin {
 		PlayerEntity player = MinecraftClient.getInstance().player;
 		if (player == null) return;
 
-		// Video camera zoom — applies whenever the video camera is held (no sneaking required)
+		// Video camera zoom — always applies while holding a video camera so that
+		// the vanilla FOV setting never bleeds through at the max-zoom-out position.
 		ItemStack vs = player.getMainHandStack();
 		if (!(vs.getItem() instanceof VideoCameraItem)) vs = player.getOffHandStack();
-		if (vs.getItem() instanceof VideoCameraItem && VideoRecorder.videoFov < 69.5f) {
+		if (vs.getItem() instanceof VideoCameraItem) {
 			cir.setReturnValue((double) VideoRecorder.videoFov);
 			return;
 		}
