@@ -13,6 +13,7 @@ import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.item.SdCardItem;
 import dev.hitom.photographica.network.CreatePhotoFromArmorStandPayload;
 import dev.hitom.photographica.network.CreatePhotoPayload;
+import dev.hitom.photographica.network.EquipCameraToArmorStandPayload;
 import dev.hitom.photographica.network.DeleteSdPhotoPayload;
 import dev.hitom.photographica.network.DevelopFilmPayload;
 import dev.hitom.photographica.network.LoadFilmPayload;
@@ -73,9 +74,10 @@ public class Photographica implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(LoadSdCardPayload.ID,          LoadSdCardPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(UnloadSdCardPayload.ID,        UnloadSdCardPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(DeleteSdPhotoPayload.ID,       DeleteSdPhotoPayload.CODEC);
-		PayloadTypeRegistry.playC2S().register(UpdateArmorStandCameraPayload.ID,      UpdateArmorStandCameraPayload.CODEC);
-		PayloadTypeRegistry.playC2S().register(CreatePhotoFromArmorStandPayload.ID,   CreatePhotoFromArmorStandPayload.CODEC);
-		PayloadTypeRegistry.playC2S().register(TakeFilmPhotoFromArmorStandPayload.ID, TakeFilmPhotoFromArmorStandPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(UpdateArmorStandCameraPayload.ID,        UpdateArmorStandCameraPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(CreatePhotoFromArmorStandPayload.ID,    CreatePhotoFromArmorStandPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(TakeFilmPhotoFromArmorStandPayload.ID,  TakeFilmPhotoFromArmorStandPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(EquipCameraToArmorStandPayload.ID,      EquipCameraToArmorStandPayload.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(UpdateCameraSettingsPayload.ID, (payload, context) -> {
 			context.server().execute(() -> {
@@ -434,6 +436,39 @@ public class Photographica implements ModInitializer {
 				}
 				FilmCameraItem.setFilm(camera, updated);
 				stand.equipStack(cameraSlot, camera);
+			});
+		});
+
+		// EquipCameraToArmorStandPayload: move camera from player's main hand to armor stand's main hand
+		ServerPlayNetworking.registerGlobalReceiver(EquipCameraToArmorStandPayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> {
+				net.minecraft.entity.Entity entity = player.getServerWorld().getEntityById(payload.entityId());
+				if (!(entity instanceof ArmorStandEntity stand)) return;
+
+				// Safety: reject if stand already has a camera
+				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND}) {
+					ItemStack s = stand.getEquippedStack(slot);
+					if (!s.isEmpty() && (s.getItem() instanceof CameraItem
+							|| s.getItem() instanceof FilmCameraItem
+							|| s.getItem() instanceof MirrorlessCameraItem)) return;
+				}
+
+				ItemStack held = player.getStackInHand(Hand.MAIN_HAND);
+				if (held.isEmpty()) return;
+				if (!(held.getItem() instanceof CameraItem)
+						&& !(held.getItem() instanceof FilmCameraItem)
+						&& !(held.getItem() instanceof MirrorlessCameraItem)) return;
+
+				// Equip camera to stand's main hand; return what was there to player
+				ItemStack existing = stand.getEquippedStack(EquipmentSlot.MAINHAND).copy();
+				stand.equipStack(EquipmentSlot.MAINHAND, held.copy());
+				player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+
+				if (!existing.isEmpty() && !player.getInventory().insertStack(existing)) {
+					player.dropItem(existing, false);
+				}
+				player.playSound(SoundEvents.ITEM_BUNDLE_INSERT, 0.8f, 1.1f);
 			});
 		});
 

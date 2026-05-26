@@ -138,17 +138,6 @@ public class CameraScreen extends Screen {
 				step -> settings = withFocusMode(clampStep(settings.focusMode(), step, FOCUS_MODE_LABELS.length)),
 				true);
 
-		// Tripod / armor stand status (read-only display)
-		if (armorStandEntityId >= 0) {
-			addRow(cx, top + row++ * 22, "撮影位置",
-					() -> "§a防具立て§r",
-					step -> {}, false);
-		} else {
-			addRow(cx, top + row++ * 22, "三脚",
-					() -> PhotoCapture.hasTripod() ? "§aあり§r" : "§cなし§r",
-					step -> {}, false);
-		}
-
 		// Self-timer
 		addRow(cx, top + row++ * 22, "タイマー",
 				() -> {

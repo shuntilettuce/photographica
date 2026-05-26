@@ -1,11 +1,12 @@
 package dev.hitom.photographica.mixin.client;
 
-import dev.hitom.photographica.client.PhotoCapture;
 import dev.hitom.photographica.client.screen.CameraScreen;
 import dev.hitom.photographica.client.screen.FilmCameraScreen;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
+import dev.hitom.photographica.network.EquipCameraToArmorStandPayload;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.entity.Entity;
@@ -21,47 +22,62 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Intercepts right-click on an armor stand that has a camera equipped.
- * Instead of the vanilla armor stand interaction (equip/take), opens the
- * camera settings screen with an "armor stand mode" flag.
+ * Intercepts right-click on an armor stand:
  *
- * Only fires when the player has an empty main hand and is NOT sneaking
- * (sneaking keeps vanilla slot-cycle behavior).
+ * 1. Player holding a camera + stand has no camera → equip the camera to the stand.
+ * 2. Player with empty hand + stand has a camera → open camera settings screen.
+ *
+ * Sneaking always falls through to vanilla behavior (item pickup / slot cycling).
  */
 @Mixin(ClientPlayerInteractionManager.class)
 public class ClientPlayerInteractionManagerMixin {
 
-	@Inject(method = "interactEntity",
-			at = @At("HEAD"),
-			cancellable = true)
-	private void photographica$openArmorStandCameraScreen(
-			PlayerEntity player, Entity entity, Hand hand,
-			CallbackInfoReturnable<ActionResult> cir) {
-		if (hand != Hand.MAIN_HAND) return;
-		if (!(entity instanceof ArmorStandEntity stand)) return;
-		if (player.isSneaking()) return;
-		if (!player.getMainHandStack().isEmpty()) return;
+    @Inject(method = "interactEntity",
+            at = @At("HEAD"),
+            cancellable = true)
+    private void photographica$armorStandCameraInteract(
+            PlayerEntity player, Entity entity, Hand hand,
+            CallbackInfoReturnable<ActionResult> cir) {
+        if (hand != Hand.MAIN_HAND) return;
+        if (!(entity instanceof ArmorStandEntity stand)) return;
+        if (player.isSneaking()) return;
 
-		// Check main hand first, then off hand
-		ItemStack camera = stand.getEquippedStack(EquipmentSlot.MAINHAND);
-		if (!isCameraItem(camera)) {
-			camera = stand.getEquippedStack(EquipmentSlot.OFFHAND);
-			if (!isCameraItem(camera)) return;
-		}
+        ItemStack held = player.getMainHandStack();
 
-		final ItemStack cameraStack = camera;
-		MinecraftClient mc = MinecraftClient.getInstance();
-		mc.setScreen(cameraStack.getItem() instanceof FilmCameraItem
-				? new FilmCameraScreen(cameraStack, stand.getId())
-				: new CameraScreen(cameraStack, stand.getId()));
-		cir.setReturnValue(ActionResult.SUCCESS);
-	}
+        // ── Case 1: Player is holding a camera → try to equip it to the stand ──
+        if (isCameraItem(held)) {
+            // Only equip if the stand has no camera in either hand already.
+            boolean standHasCamera = isCameraItem(stand.getEquippedStack(EquipmentSlot.MAINHAND))
+                    || isCameraItem(stand.getEquippedStack(EquipmentSlot.OFFHAND));
+            if (!standHasCamera) {
+                ClientPlayNetworking.send(new EquipCameraToArmorStandPayload(stand.getId()));
+                cir.setReturnValue(ActionResult.SUCCESS);
+            }
+            return;
+        }
 
-	private static boolean isCameraItem(ItemStack stack) {
-		return !stack.isEmpty() && (
-				stack.getItem() instanceof CameraItem ||
-				stack.getItem() instanceof FilmCameraItem ||
-				stack.getItem() instanceof MirrorlessCameraItem
-		);
-	}
+        // ── Case 2: Player has empty hand → open settings if stand has a camera ──
+        if (!held.isEmpty()) return;
+
+        ItemStack camera = stand.getEquippedStack(EquipmentSlot.MAINHAND);
+        if (!isCameraItem(camera)) {
+            camera = stand.getEquippedStack(EquipmentSlot.OFFHAND);
+            if (!isCameraItem(camera)) return;
+        }
+
+        final ItemStack cameraStack = camera;
+        MinecraftClient mc = MinecraftClient.getInstance();
+        mc.setScreen(cameraStack.getItem() instanceof FilmCameraItem
+                ? new FilmCameraScreen(cameraStack, stand.getId())
+                : new CameraScreen(cameraStack, stand.getId()));
+        cir.setReturnValue(ActionResult.SUCCESS);
+    }
+
+    private static boolean isCameraItem(ItemStack stack) {
+        return !stack.isEmpty() && (
+                stack.getItem() instanceof CameraItem ||
+                stack.getItem() instanceof FilmCameraItem ||
+                stack.getItem() instanceof MirrorlessCameraItem
+        );
+    }
 }

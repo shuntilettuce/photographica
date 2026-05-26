@@ -98,6 +98,8 @@ public final class PhotoCapture {
 	private static volatile ItemStack timerStack = null; // camera stack snapshot
 	private static volatile int timerArmorStandEntityId = -1; // entity ID if timer armed for armor stand (-1 = player shot)
 	private static long timerLastTickMs = 0L; // last mechanical tick timestamp (film camera timer)
+	/** Prevents take() from re-arming the timer when it is fired from tickTimer(). */
+	private static volatile boolean timerIsFiring = false;
 
 	// Armor stand capture state
 	public static volatile int armorStandFocalLength = 0;       // focal length during armor stand capture (0 = not active)
@@ -197,8 +199,9 @@ public final class PhotoCapture {
 		if (pendingId != null || accumId != null) return;
 
 		// Self-timer: arm a delayed capture instead of capturing immediately.
+		// timerIsFiring is true when called from tickTimer() — bypass re-arm to avoid infinite loop.
 		int timerSec = settings.timerSeconds();
-		if (timerSec > 0) {
+		if (!timerIsFiring && timerSec > 0) {
 			if (timerFireMs > 0) return; // already counting down
 			timerFireMs = now + timerSec * 1000L;
 			timerStack = cameraStack.copy();
@@ -632,7 +635,9 @@ public final class PhotoCapture {
 						: CameraItem.getSettings(stack);
 				armArmorStandCapture(standId, stack, settings, isFilm, now);
 			} else {
-				take(stack); // regular player capture
+				// Call take() directly, but flag it so take() skips re-arming the timer.
+				timerIsFiring = true;
+				try { take(stack); } finally { timerIsFiring = false; }
 			}
 		}
 	}
