@@ -110,8 +110,9 @@ public class GameRendererMixin {
 		if (PhotoCapture.isAccumulating() || PhotoCapture.armorStandCapturePending) {
 			this.renderHand = false;
 		}
-		// Suppress hand for video frames that will be captured this render cycle
-		if (VideoRecorder.willCaptureThisFrame()) {
+		// Suppress hand for the entire duration of recording so it never
+		// appears in any captured frame (user confirmed complete hide is fine).
+		if (VideoRecorder.isRecording()) {
 			this.renderHand = false;
 			photographica$videoHandSuppressed = true;
 		} else {

@@ -116,6 +116,9 @@ public final class VideoRecorder {
     /** Reusable GL buffer (grows, never shrinks within a recording session). */
     private static FloatBuffer depthReadBuf      = null;
     private static int         depthReadBufCap   = 0;
+    /** Viewport and crop dimensions stored by onWorldRenderEnd() for the next frame. */
+    private static int pendingVpW = 0, pendingVpH = 0;
+    private static int pendingCropOffX = 0, pendingCropOffY = 0;
 
     // ── DoF temp arrays (reused across frames in the background thread) ────────
     private static int[] dofTempR, dofTempG, dofTempB, dofTempA;
@@ -159,15 +162,20 @@ public final class VideoRecorder {
     /**
      * All per-frame data captured on the render thread.
      *
-     * @param depthGrid   32×18 linear-depth map (metres). Row 0 = bottom (GL convention).
-     * @param focusDepth  Locked AF distance at capture time (metres).
+     * @param depthGrid  32×18 linear-depth map (metres). Row 0 = bottom (GL convention).
+     * @param focusDepth Locked AF distance at capture time (metres).
+     * @param vpW/vpH    Full viewport size at capture time (GL pixels).
+     * @param cropOffX/Y Pixel offset of the 16:9 crop within the full viewport (GL pixels).
+     *                   Used in post-processing to map output image pixels to the depth grid.
      */
     record FrameMeta(int   idx,
                      float velX,   float velY,  float velZ,
                      float yaw,    float pitch,
                      float aperture,
                      float focusDepth,
-                     float[] depthGrid) {}
+                     float[] depthGrid,
+                     int vpW, int vpH,
+                     int cropOffX, int cropOffY) {}
 
     // ── Start / Stop ───────────────────────────────────────────────────────────
     public static void toggle(ItemStack stack) {
@@ -258,6 +266,17 @@ public final class VideoRecorder {
 
         pendingDepthGrid  = downsampleDepth(depthReadBuf, vpW, vpH, DEP_W, DEP_H);
         pendingDepthReady = true;
+
+        // Compute the 16:9 crop that cropTo16x9() will apply to the screenshot,
+        // so post-processing can correctly map image pixels → depth grid.
+        float aspect = 16f / 9f;
+        int cropW, cropH;
+        if ((float) vpW / vpH > aspect) { cropH = vpH; cropW = Math.round(vpH * aspect); }
+        else                             { cropW = vpW; cropH = Math.round(vpW / aspect); }
+        pendingVpW     = vpW;
+        pendingVpH     = vpH;
+        pendingCropOffX = (vpW - cropW) / 2;
+        pendingCropOffY = (vpH - cropH) / 2;
     }
 
     /**
@@ -314,7 +333,9 @@ public final class VideoRecorder {
                 (float) vel.x, (float) vel.y, (float) vel.z,
                 yaw, pitch, ap,
                 currentFocusDepth,
-                depthGrid);
+                depthGrid,
+                pendingVpW, pendingVpH,
+                pendingCropOffX, pendingCropOffY);
 
         NativeImage raw;
         try {
@@ -463,19 +484,45 @@ public final class VideoRecorder {
         }
 
         // ── Pass 2: depth-of-field bokeh ─────────────────────────────────────
+        // Viewport / crop info needed to map image pixels → depth grid precisely.
+        // cropTo16x9 removes (cropOffX, cropOffY) pixels from the GL-space edges;
+        // the remaining cropW×cropH region is then downsampled to w×h.
+        int vw = meta.vpW(), vh = meta.vpH();
+        int cOffX = meta.cropOffX(), cOffY = meta.cropOffY();
+        // Recompute cropW/cropH from VP and offsets (stored implicitly)
+        float aspect16_9 = 16f / 9f;
+        int cropW, cropH;
+        if (vw > 0 && vh > 0) {
+            if ((float) vw / vh > aspect16_9) { cropH = vh; cropW = Math.round(vh * aspect16_9); }
+            else                               { cropW = vw; cropH = Math.round(vw / aspect16_9); }
+        } else {
+            cropW = w; cropH = h; // fallback: treat as identity
+        }
+
         // Build per-pixel CoC radius map
         float maxCoC = 40.0f;      // hard cap: 40 px radius (80 px diameter)
         float[] cocMap = new float[w * h];
         for (int py = 0; py < h; py++) {
-            // Flip Y: image row 0 = top, GL depth grid row 0 = bottom
-            float fy = 1.0f - (py + 0.5f) / h;
             for (int px = 0; px < w; px++) {
-                float fx = (px + 0.5f) / w;
-                float d = (grid != null)
-                        ? bilinearDepth(grid, DEP_W, DEP_H, fx, fy) : focus;
+                float d;
+                if (grid != null && vw > 0) {
+                    // Map output-image pixel (px,py) → GL framebuffer coordinates
+                    // Then normalize to [0,1] for the depth grid
+                    float glX = px * (float) cropW / w + cOffX;
+                    // Image row 0 = top; GL row 0 = bottom → flip
+                    float glY = (vh - 1) - (py * (float) cropH / h + cOffY);
+                    float fx  = (glX + 0.5f) / vw;
+                    float fy  = (glY + 0.5f) / vh;
+                    d = bilinearDepth(grid, DEP_W, DEP_H,
+                            Math.max(0f, Math.min(1f, fx)),
+                            Math.max(0f, Math.min(1f, fy)));
+                } else {
+                    d = focus;
+                }
                 d = Math.max(d, 0.2f);
-                // CoC diameter, then halve to get radius for the blur kernel
-                float coc = Math.abs(d - focus) * ap * CoC_K / (d * focus);
+                // CORRECT formula: CoC ∝ 1/aperture (larger f-number = smaller CoC = sharper)
+                // CoC_diameter = |d - D| × CoC_K / (ap × d × D)
+                float coc = Math.abs(d - focus) * CoC_K / (ap * d * focus);
                 cocMap[py * w + px] = Math.min(coc * 0.5f, maxCoC * 0.5f);
             }
         }
@@ -511,11 +558,17 @@ public final class VideoRecorder {
 
         NativeImage pass3 = new NativeImage(w, h, false);
         for (int py = 0; py < h; py++) {
-            float fy = 1.0f - (py + 0.5f) / h;
             for (int px = 0; px < w; px++) {
-                float fx = (px + 0.5f) / w;
-                float d  = (grid != null)
-                        ? bilinearDepth(grid, DEP_W, DEP_H, fx, fy) : focus;
+                float d;
+                if (grid != null && vw > 0) {
+                    float glX = px * (float) cropW / w + cOffX;
+                    float glY = (vh - 1) - (py * (float) cropH / h + cOffY);
+                    float fx  = Math.max(0f, Math.min(1f, (glX + 0.5f) / vw));
+                    float fy  = Math.max(0f, Math.min(1f, (glY + 0.5f) / vh));
+                    d = bilinearDepth(grid, DEP_W, DEP_H, fx, fy);
+                } else {
+                    d = focus;
+                }
                 d = Math.max(d, 0.2f);
 
                 // Physically correct: far objects have negligible trail
