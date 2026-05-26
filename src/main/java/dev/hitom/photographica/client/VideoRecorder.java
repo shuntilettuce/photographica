@@ -60,18 +60,18 @@ public final class VideoRecorder {
      * K constant for CoC formula.
      * CoC_px = |depth - focus| × aperture × CoC_K / (depth × focus)
      *
-     * Derivation (thin-lens, 28 mm focal length on 36 mm sensor, 1280 px wide):
-     *   f = 0.028 m,  sensor_w = 0.036 m,  img_w = 1280 px
-     *   K = f² / sensor_w × img_w = 0.000784 / 0.036 × 1280 ≈ 27.8
-     *
-     * 28 mm is typical for a consumer camcorder wide end — shallower DoF
-     * than a 50 mm portrait lens, but still gives noticeable bokeh up close.
-     * Results (aperture 2.8, focus 10 m):
-     *   d=20 m  → CoC ≈ 3.9 px  (subtly soft)
-     *   d=3 m, focus=5 m → CoC ≈ 10.5 px  (foreground blur)
-     *   d=200 m, focus=300 m → CoC ≈ 0.13 px (essentially sharp) ✓
+     * Tuned for visible bokeh at Minecraft gaming distances (1–20 m).
+     * Physical derivation gives ~28 for a 28 mm camcorder lens, but that
+     * produces CoC < 3 px at typical distances — invisible after blur scaling.
+     * K=100 gives:
+     *   f/2.8, focus=5 m, d=1 m  → CoC radius ≈ 14 px  (strong foreground blur)
+     *   f/2.8, focus=5 m, d=2 m  → CoC radius ≈ 11 px  (moderate)
+     *   f/2.8, focus=5 m, d=10 m → CoC radius ≈  3.6 px (subtle background)
+     *   f/8,   focus=5 m, d=1 m  → CoC radius ≈  5 px  (stopped-down, less blur)
+     *   f/22,  focus=5 m, d=1 m  → CoC radius ≈  1.8 px (essentially sharp) ✓
+     *   d=200 m, focus=300 m     → CoC radius ≈  0.5 px (essentially sharp) ✓
      */
-    private static final float CoC_K    = 28.0f;
+    private static final float CoC_K    = 100.0f;
     /**
      * Focal pixels for motion blur.
      * pixel_displacement = velocity_blocks_per_frame × FOCAL_PX / depth_blocks
@@ -540,14 +540,18 @@ public final class VideoRecorder {
 
         // ── Pass 3: directional motion blur ──────────────────────────────────
         float yawRad   = (float) Math.toRadians(meta.yaw());
+        float pitchRad = (float) Math.toRadians(meta.pitch());
         float screenVX = (float)(Math.cos(yawRad) * meta.velX()
                                + Math.sin(yawRad) * meta.velZ());
-        float screenVY = meta.velY();
+        // Y velocity only affects the screen image when the camera is tilted.
+        // When looking horizontally (pitch≈0) gravity (-0.08 b/tick) must NOT
+        // produce blur — the player isn't visually moving.
+        float screenVY = meta.velY() * (float) Math.abs(Math.sin(pitchRad));
         // Convert blocks/tick → blocks/frame  (Minecraft runs at 20 TPS)
         float velPerFrame = (float) Math.sqrt(screenVX * screenVX + screenVY * screenVY)
                           * (20.0f / FPS);
 
-        if (velPerFrame < 0.002f) return pass2;  // negligible motion
+        if (velPerFrame < 0.01f) return pass2;  // negligible motion (raised threshold)
 
         float invMag = 1.0f / (float) Math.sqrt(
                 screenVX * screenVX + screenVY * screenVY + 1e-12f);
