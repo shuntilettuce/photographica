@@ -37,11 +37,7 @@ public class VideoCameraItem extends Item implements Equipment {
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
         if (world.isClient) {
-            if (user.isSneaking()) {
-                clientOpenScreen.accept(stack);
-            } else {
-                clientToggleRecord.accept(stack);
-            }
+            clientToggleRecord.accept(stack);
         }
         return TypedActionResult.success(stack, world.isClient);
     }

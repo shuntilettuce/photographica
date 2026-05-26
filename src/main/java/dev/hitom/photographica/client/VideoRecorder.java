@@ -501,7 +501,7 @@ public final class VideoRecorder {
         }
 
         // Build per-pixel CoC radius map
-        float maxCoC = 12.0f;      // hard cap: 12 px radius (24 px diameter) — subtle bokeh
+        float maxCoC = 40.0f;      // hard cap: 40 px radius (80 px diameter)
         float[] cocMap = new float[w * h];
         for (int py = 0; py < h; py++) {
             for (int px = 0; px < w; px++) {
