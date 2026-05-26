@@ -114,6 +114,11 @@ public final class VideoRecorder {
     /** The actual locked / servo-tracking focus distance written into FrameMeta. */
     private static float currentFocusDepth    = 5.0f;
 
+    // ── Angular velocity tracking (for motion blur) ────────────────────────────
+    /** Yaw and pitch at the previous captured frame (degrees). */
+    private static float prevFrameYaw   = 0f;
+    private static float prevFramePitch = 0f;
+
     // ── Depth-buffer read ──────────────────────────────────────────────────────
     /** Pending depth grid from onWorldRenderEnd(), consumed by captureFrameIfRecording(). */
     private static float[]     pendingDepthGrid  = null;
@@ -184,8 +189,10 @@ public final class VideoRecorder {
      *                   Used in post-processing to map output image pixels to the depth grid.
      */
     record FrameMeta(int   idx,
-                     float velX,   float velY,  float velZ,
-                     float yaw,    float pitch,
+                     float velX,      float velY,       float velZ,
+                     float yaw,       float pitch,
+                     float deltaYaw,  float deltaPitch,  // camera angular velocity (degrees/frame)
+                     float fovDeg,                       // horizontal video FOV at capture time
                      float aperture,
                      float focusDepth,
                      float[] depthGrid,
@@ -210,6 +217,8 @@ public final class VideoRecorder {
 
         currentFps      = VideoCameraItem.getSettings(stack).fps();
         smoothedExpMult = 1.0f;   // reset ISO AUTO smoothing for new session
+        prevFrameYaw    = mc.player != null ? mc.player.getYaw()   : 0f;
+        prevFramePitch  = mc.player != null ? mc.player.getPitch() : 0f;
         frameCount    = 0;
         recordStartMs = System.currentTimeMillis();
         nextFrameMs   = recordStartMs;
@@ -345,10 +354,22 @@ public final class VideoRecorder {
         float pitch = mc.player.getPitch();
         float ap    = VideoCameraItem.getSettings(recordingStack).aperture();
 
+        // Angular velocity: yaw/pitch change since the last captured frame.
+        float rawDeltaYaw = yaw - prevFrameYaw;
+        // Wrap to [-180, +180] to handle 0°/360° crossing.
+        if (rawDeltaYaw >  180f) rawDeltaYaw -= 360f;
+        if (rawDeltaYaw < -180f) rawDeltaYaw += 360f;
+        float deltaYaw   = rawDeltaYaw;
+        float deltaPitch = pitch - prevFramePitch;
+        prevFrameYaw   = yaw;
+        prevFramePitch = pitch;
+
         FrameMeta meta = new FrameMeta(
                 frameCount,
                 (float) vel.x, (float) vel.y, (float) vel.z,
-                yaw, pitch, ap,
+                yaw, pitch,
+                deltaYaw, deltaPitch, videoFov,
+                ap,
                 currentFocusDepth,
                 depthGrid,
                 pendingVpW, pendingVpH,
@@ -562,32 +583,50 @@ public final class VideoRecorder {
         NativeImage pass2 = separableVariableBlur(dof2,  scaledCoc, w, h);  dof2.close();
         pass1.close();
 
-        // ── Pass 3: directional motion blur ──────────────────────────────────
-        float yawRad   = (float) Math.toRadians(meta.yaw());
-        float pitchRad = (float) Math.toRadians(meta.pitch());
-        float screenVX = (float)(Math.cos(yawRad) * meta.velX()
-                               + Math.sin(yawRad) * meta.velZ());
-        // Y velocity only affects the screen image when the camera is tilted.
-        // When looking horizontally (pitch≈0) gravity (-0.08 b/tick) must NOT
-        // produce blur — the player isn't visually moving.
-        float screenVY = meta.velY() * (float) Math.abs(Math.sin(pitchRad));
-        // Convert blocks/tick → blocks/frame  (Minecraft runs at 20 TPS)
-        float velPerFrame = (float) Math.sqrt(screenVX * screenVX + screenVY * screenVY)
-                          * (20.0f / currentFps);
+        // ── Pass 3: motion blur (angular + translational) ────────────────────
+        //
+        // Angular velocity (camera rotation) is the dominant blur source during
+        // gameplay.  A forward-walking player has zero LATERAL screen velocity
+        // from translation alone, but any pan/tilt is fully captured here.
+        //
+        // Physics:
+        //   When the camera rotates +deltaYaw°, every on-screen object appears
+        //   to have moved -deltaYaw * w/fovH pixels (leftward) during the frame.
+        //   At the END of the frame the object is at (px, py).
+        //   At the START of the frame it was at (px + rotSampleX, py + rotSampleY).
+        //   → We sample from (px) toward (px + rotSampleX), i.e. ndx = +rotSampleX.
+        //
+        //   For translational strafing (camera-right velocity):
+        //   Strafe right → scene moves left → object was to the RIGHT at frame start.
+        //   → transX is POSITIVE when strafing right (sample rightward).
+        //
+        float fovH     = meta.fovDeg();
+        float fovV     = fovH * 9f / 16f;   // 16:9 output aspect
 
-        if (velPerFrame < 0.01f) return pass2;  // negligible motion (raised threshold)
+        // Rotational component (pixels, uniform across all depths)
+        // Minecraft pitch: +90 = looking straight down (objects move UP = negative py)
+        float rotSampleX =  meta.deltaYaw()   * w / fovH;
+        float rotSampleY = -meta.deltaPitch() * h / fovV;  // sign: look down → objects up
 
-        float invMag = 1.0f / (float) Math.sqrt(
-                screenVX * screenVX + screenVY * screenVY + 1e-12f);
-        // Trail direction: opposite to movement direction
-        float ndx = -screenVX * invMag;
-        float ndy = -screenVY * invMag;
-        float velScale  = velPerFrame * FOCAL_PX;   // px at 1-metre depth
-        float maxBlurPx = w / 15.0f;               // hard cap ~85 px at 1280 px wide
+        // Translational strafing (depth-dependent; pre-compute scale at 1 m)
+        float yawRad    = (float) Math.toRadians(meta.yaw());
+        float strafeVel = ((float)(Math.cos(yawRad) * meta.velX()
+                                 + Math.sin(yawRad) * meta.velZ()))
+                        * (20.0f / currentFps);           // blocks per frame
+        float transScale = strafeVel * FOCAL_PX;          // pixels at 1 m depth
+
+        // Early-exit: check total blur at focus distance
+        float totalAtFocus = (float) Math.sqrt(
+                (rotSampleX + transScale / focus) * (rotSampleX + transScale / focus)
+              + rotSampleY * rotSampleY);
+        if (totalAtFocus < 0.5f) return pass2;
+
+        float maxBlurPx = w / 10.0f;   // hard cap ~128 px at 1280 wide
 
         NativeImage pass3 = new NativeImage(w, h, false);
         for (int py = 0; py < h; py++) {
             for (int px = 0; px < w; px++) {
+                // Per-pixel depth for translational component
                 float d;
                 if (grid != null && vw > 0) {
                     float glX = px * (float) cropW / w + cOffX;
@@ -600,16 +639,21 @@ public final class VideoRecorder {
                 }
                 d = Math.max(d, 0.2f);
 
-                // Physically correct: far objects have negligible trail
-                int blurLen = (int) Math.min(velScale / d, maxBlurPx);
+                // Total pixel displacement to sample along
+                float sampleX = rotSampleX + transScale / d;
+                float sampleY = rotSampleY;
+                float blurMag = (float) Math.sqrt(sampleX * sampleX + sampleY * sampleY);
+                int blurLen = (int) Math.min(blurMag, maxBlurPx);
 
                 if (blurLen < 1) {
                     pass3.setColor(px, py, pass2.getColor(px, py));
                     continue;
                 }
 
-                // Linear-falloff weighting: s=0 (current) has full weight,
-                // s=blurLen has weight 1 — sharp leading edge, soft trail.
+                float ndx = sampleX / blurMag;
+                float ndy = sampleY / blurMag;
+
+                // Linear-falloff: s=0 = sharp leading edge, s=blurLen = faint ghost
                 float ra = 0, ga = 0, ba = 0, aa = 0, sumW = 0;
                 for (int s = 0; s <= blurLen; s++) {
                     float wt = (blurLen - s + 1);
