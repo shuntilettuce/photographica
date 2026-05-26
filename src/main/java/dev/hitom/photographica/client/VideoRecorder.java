@@ -137,6 +137,24 @@ public final class VideoRecorder {
     public static int     getFrameCount()    { return frameCount; }
     public static long    getRecordStartMs() { return recordStartMs; }
 
+    /**
+     * Zoom FOV in degrees for the video camera viewfinder.
+     * 70 = native (no zoom).  Reduced by Alt+scroll in CameraScrollHandler.
+     * Applied in GameRendererMixin.photographica$applyFocalLength.
+     */
+    public static float videoFov = 70.0f;
+
+    /**
+     * Returns true if the current render frame will be captured as a video frame.
+     * Called from GameRendererMixin BEFORE renderWorld() to decide whether to
+     * suppress the player's hand model.
+     */
+    public static boolean willCaptureThisFrame() {
+        return recording
+                && System.currentTimeMillis() >= nextFrameMs
+                && frameCount < MAX_FRAMES;
+    }
+
     // ── FrameMeta ──────────────────────────────────────────────────────────────
     /**
      * All per-frame data captured on the render thread.
@@ -461,7 +479,15 @@ public final class VideoRecorder {
                 cocMap[py * w + px] = Math.min(coc * 0.5f, maxCoC * 0.5f);
             }
         }
-        NativeImage pass2 = separableVariableBlur(pass1, cocMap, w, h);
+        // 3-pass separable box blur approximates a Gaussian bokeh profile.
+        // Each pass uses radius scaled by 1/√3 ≈ 0.58 so that three passes
+        // together give the same total spread as one pass at the full radius.
+        float[] scaledCoc = new float[w * h];
+        for (int i = 0; i < cocMap.length; i++) scaledCoc[i] = cocMap[i] * 0.58f;
+
+        NativeImage dof1 = separableVariableBlur(pass1,  scaledCoc, w, h);
+        NativeImage dof2 = separableVariableBlur(dof1,   scaledCoc, w, h);  dof1.close();
+        NativeImage pass2 = separableVariableBlur(dof2,  scaledCoc, w, h);  dof2.close();
         pass1.close();
 
         // ── Pass 3: directional motion blur ──────────────────────────────────
@@ -500,20 +526,23 @@ public final class VideoRecorder {
                     continue;
                 }
 
-                long ra = 0, ga = 0, ba = 0, aa = 0;
-                int  samples = blurLen + 1;
+                // Linear-falloff weighting: s=0 (current) has full weight,
+                // s=blurLen has weight 1 — sharp leading edge, soft trail.
+                float ra = 0, ga = 0, ba = 0, aa = 0, sumW = 0;
                 for (int s = 0; s <= blurLen; s++) {
+                    float wt = (blurLen - s + 1);
                     int sx = Math.max(0, Math.min(w - 1, px + (int)(s * ndx)));
                     int sy = Math.max(0, Math.min(h - 1, py + (int)(s * ndy)));
                     int c  = pass2.getColor(sx, sy);
-                    aa += (c >>> 24) & 0xFF;
-                    ba += (c >>> 16) & 0xFF;
-                    ga += (c >>>  8) & 0xFF;
-                    ra +=  c         & 0xFF;
+                    aa += ((c >>> 24) & 0xFF) * wt;
+                    ba += ((c >>> 16) & 0xFF) * wt;
+                    ga += ((c >>>  8) & 0xFF) * wt;
+                    ra += ( c         & 0xFF) * wt;
+                    sumW += wt;
                 }
                 pass3.setColor(px, py,
-                        ((int)(aa / samples) << 24) | ((int)(ba / samples) << 16)
-                      | ((int)(ga / samples) <<  8) |  (int)(ra / samples));
+                        (clamp((int)(aa / sumW)) << 24) | (clamp((int)(ba / sumW)) << 16)
+                      | (clamp((int)(ga / sumW)) <<  8) |  clamp((int)(ra / sumW)));
             }
         }
         pass2.close();
@@ -549,19 +578,18 @@ public final class VideoRecorder {
         }
         if (count == 0) return 1.0f;
 
-        // 60th-percentile luminance — less aggressive than the previous 70th,
-        // avoids over-darkening scenes that are normally bright.
-        int threshold = (int)(count * 0.60), cumulative = 0, p60 = 128;
+        // 50th-percentile (median) luminance.
+        int threshold = (int)(count * 0.50), cumulative = 0, p50 = 128;
         for (int i = 0; i < 256; i++) {
             cumulative += hist[i];
-            if (cumulative >= threshold) { p60 = i; break; }
+            if (cumulative >= threshold) { p50 = i; break; }
         }
-        if (p60 < 6) return 1.0f;  // extremely dark scene — don't over-boost
+        if (p50 < 6) return 1.0f;  // extremely dark scene — don't over-boost
 
-        // Target 128 (true mid-grey) — keeps typical Minecraft scenes neutral.
-        float mult = 128.0f / p60;
-        // Allow up to +1.5 stop brightening (3.0×) and −0.75 stop darkening (0.6×).
-        return Math.max(0.6f, Math.min(3.0f, mult));
+        // Target 140 (≈55% brightness) — bright and natural, not bleached.
+        float mult = 140.0f / p50;
+        // Allow up to +2 stop brightening (4.0×) and −0.5 stop darkening (0.7×).
+        return Math.max(0.7f, Math.min(4.0f, mult));
     }
 
     // ── Separable variable-radius box blur (O(W×H) via prefix sums) ───────────

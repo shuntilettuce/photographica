@@ -185,6 +185,10 @@ public class PhotographicaClient implements ClientModInitializer {
 			FilmCameraItem.clientOpenScreen.accept(stack);
 			return true;
 		}
+		if (stack.getItem() instanceof VideoCameraItem) {
+			VideoCameraItem.clientOpenScreen.accept(stack);
+			return true;
+		}
 		return false;
 	}
 }

@@ -1,9 +1,11 @@
 package dev.hitom.photographica.client;
 
+import dev.hitom.photographica.client.VideoRecorder;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
+import dev.hitom.photographica.item.VideoCameraItem;
 import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -38,10 +40,36 @@ public final class CameraScrollHandler {
 			40.0f, 50.0f, 70.0f, 100.0f, 999.0f);
 	private static final int           SHUTTER_COUNT = 18;
 
+	/** FOV step in degrees per scroll tick for the video camera zoom. */
+	private static final float VIDEO_ZOOM_STEP = 5.0f;
+	/** Minimum FOV (maximum zoom) for the video camera. */
+	private static final float VIDEO_FOV_MIN   = 10.0f;
+	/** Default (unzoomed) FOV for the video camera. */
+	private static final float VIDEO_FOV_MAX   = 70.0f;
+
 	/** Positive delta = scroll up. Returns true if consumed. */
 	public static boolean onScroll(double delta) {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.player == null || mc.currentScreen != null) return false;
+
+		long win = mc.getWindow().getHandle();
+		boolean alt = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_ALT)
+				|| InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_ALT);
+
+		// Alt + scroll = video camera zoom (works regardless of sneaking)
+		if (alt) {
+			ItemStack vstack = mc.player.getMainHandStack();
+			if (!(vstack.getItem() instanceof VideoCameraItem))
+				vstack = mc.player.getOffHandStack();
+			if (vstack.getItem() instanceof VideoCameraItem) {
+				// Scroll up = zoom in = smaller FOV
+				VideoRecorder.videoFov = Math.max(VIDEO_FOV_MIN,
+						Math.min(VIDEO_FOV_MAX,
+								VideoRecorder.videoFov - (float) Math.signum(delta) * VIDEO_ZOOM_STEP));
+				return true;
+			}
+		}
+
 		if (!mc.player.isSneaking()) return false;
 
 		ItemStack stack = mc.player.getMainHandStack();
@@ -55,11 +83,9 @@ public final class CameraScrollHandler {
 				: CameraItem.getSettings(stack);
 		int dir = delta > 0 ? 1 : -1;
 
-		long win = mc.getWindow().getHandle();
 		boolean ctrl = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_CONTROL)
 				|| InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_CONTROL);
-		boolean alt  = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_ALT)
-				|| InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_ALT);
+		// alt already declared above
 		// Shift is always held (viewfinder baseline = sneaking), so it is not a modifier.
 
 		CameraSettings updated;

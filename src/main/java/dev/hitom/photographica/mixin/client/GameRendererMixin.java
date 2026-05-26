@@ -6,6 +6,7 @@ import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
+import dev.hitom.photographica.item.VideoCameraItem;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
@@ -14,6 +15,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -31,11 +33,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *
  * If no lens is attached (or the held item isn't a camera) the vanilla return
  * value is left untouched.
+ *
+ * Also suppresses the player's hand model during video frames that will be
+ * captured, so the hand does not appear in recorded footage.
  */
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
 
 	@Shadow private boolean renderHand;
+
+	/** True when the hand was hidden for an in-progress video frame capture. */
+	@Unique private boolean photographica$videoHandSuppressed = false;
 
 	@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D",
 			at = @At("RETURN"),
@@ -52,6 +60,15 @@ public class GameRendererMixin {
 
 		PlayerEntity player = MinecraftClient.getInstance().player;
 		if (player == null) return;
+
+		// Video camera zoom — applies whenever the video camera is held (no sneaking required)
+		ItemStack vs = player.getMainHandStack();
+		if (!(vs.getItem() instanceof VideoCameraItem)) vs = player.getOffHandStack();
+		if (vs.getItem() instanceof VideoCameraItem && VideoRecorder.videoFov < 69.5f) {
+			cir.setReturnValue((double) VideoRecorder.videoFov);
+			return;
+		}
+
 		// FOV change (focal length) only applies while the viewfinder is active
 		if (!player.isSneaking()) return;
 
@@ -74,7 +91,8 @@ public class GameRendererMixin {
 	}
 
 	/**
-	 * Fired just before renderWorld() during long-exposure accumulation.
+	 * Fired just before renderWorld() during long-exposure accumulation OR
+	 * when a video frame is about to be captured.
 	 *
 	 * With Iris shaders the hand is composited into mc.getFramebuffer() inside
 	 * renderWorld(), not in the vanilla renderHand() call that follows.  Setting
@@ -91,6 +109,13 @@ public class GameRendererMixin {
 		// Suppress hand during long-exposure accumulation AND armor stand capture
 		if (PhotoCapture.isAccumulating() || PhotoCapture.armorStandCapturePending) {
 			this.renderHand = false;
+		}
+		// Suppress hand for video frames that will be captured this render cycle
+		if (VideoRecorder.willCaptureThisFrame()) {
+			this.renderHand = false;
+			photographica$videoHandSuppressed = true;
+		} else {
+			photographica$videoHandSuppressed = false;
 		}
 	}
 
@@ -113,9 +138,11 @@ public class GameRendererMixin {
 		boolean wasArmorStand = PhotoCapture.armorStandCapturePending;
 		PhotoCapture.captureIfPending();
 		VideoRecorder.captureFrameIfRecording();
-		if (wasAccumulating || wasArmorStand) {
-			this.renderHand = true;  // restore so vanilla renderHand() still runs for on-screen view
+		// Restore renderHand for the vanilla renderHand() call that follows
+		if (wasAccumulating || wasArmorStand || photographica$videoHandSuppressed) {
+			this.renderHand = true;
 		}
+		photographica$videoHandSuppressed = false;
 	}
 
 	private static boolean isCamera(ItemStack stack) {
