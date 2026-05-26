@@ -97,6 +97,7 @@ public final class PhotoCapture {
 	public static volatile long timerFireMs = 0L;       // epoch ms when the photo should fire; 0 = no timer active
 	private static volatile ItemStack timerStack = null; // camera stack snapshot
 	private static volatile int timerArmorStandEntityId = -1; // entity ID if timer armed for armor stand (-1 = player shot)
+	private static long timerLastTickMs = 0L; // last mechanical tick timestamp (film camera timer)
 
 	// Armor stand capture state
 	public static volatile int armorStandFocalLength = 0;       // focal length during armor stand capture (0 = not active)
@@ -201,9 +202,13 @@ public final class PhotoCapture {
 			if (timerFireMs > 0) return; // already counting down
 			timerFireMs = now + timerSec * 1000L;
 			timerStack = cameraStack.copy();
-			// Play initial click sound to confirm timer started
+			timerLastTickMs = now; // start ticking immediately
+			// Film: soft initial wind-up click; Digital: confirmation beep
+			boolean timerIsFilm = cameraStack.getItem() instanceof FilmCameraItem;
 			mc.getSoundManager().play(PositionedSoundInstance.master(
-					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 1.0f, 1.2f));
+					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(),
+					timerIsFilm ? 0.5f : 1.0f,
+					timerIsFilm ? 0.85f : 1.2f));
 			return;
 		}
 
@@ -555,31 +560,69 @@ public final class PhotoCapture {
 				SoundEvents.BLOCK_TRIPWIRE_CLICK_OFF, 1.3f, 1.0f));
 	}
 
-	/** Ticks the self-timer each frame. Fires the actual capture when the countdown reaches zero. */
+	/**
+	 * Ticks the self-timer each frame. Fires the actual capture when the countdown reaches zero.
+	 *
+	 * Film cameras: continuous rapid mechanical ticking ("ジジジジジジ") — every 150 ms normally,
+	 *   accelerating to 80 ms in the final 3 seconds, like a real film-camera self-timer escapement.
+	 * Digital cameras: one electronic beep per second with rising pitch as the deadline approaches.
+	 */
 	public static void tickTimer() {
 		if (timerFireMs == 0L || timerStack == null) return;
 		MinecraftClient mc = MinecraftClient.getInstance();
-		if (mc == null || mc.player == null) { timerFireMs = 0; timerStack = null; return; }
+		if (mc == null || mc.player == null) {
+			timerFireMs = 0; timerStack = null; timerLastTickMs = 0; return;
+		}
 		long now = System.currentTimeMillis();
 		long remaining = timerFireMs - now;
+		boolean isFilmTimer = timerStack.getItem() instanceof FilmCameraItem;
 
-		// Tick sound at each whole-second boundary while counting down (but not at fire time)
-		if (remaining > 200) {
-			long secRemaining = (remaining + 999) / 1000; // ceiling
-			long prevSecRemaining = (remaining + 999 + 16) / 1000; // approx last frame
-			if (secRemaining != prevSecRemaining && secRemaining > 0) {
-				mc.getSoundManager().play(PositionedSoundInstance.master(
-						SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 1.0f,
-						secRemaining == 1 ? 2.0f : 1.5f));
+		if (remaining > 150) {
+			if (isFilmTimer) {
+				// --- Film camera: rapid mechanical escapement ticks ---
+				// Interval narrows from 150 ms → 80 ms in the last 3 seconds,
+				// mimicking the escapement speeding up just before firing.
+				long tickInterval = remaining > 3000L ? 150L : 80L;
+				if (now - timerLastTickMs >= tickInterval) {
+					timerLastTickMs = now;
+					// Alternating slight pitch variation gives a more mechanical feel
+					float pitch = (timerLastTickMs / tickInterval % 2 == 0) ? 0.85f : 0.90f;
+					mc.getSoundManager().play(PositionedSoundInstance.master(
+							SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.45f, pitch));
+				}
+			} else {
+				// --- Digital camera: one beep per second, ascending pitch ---
+				// secRemaining counts down: at 5 s → pitch 1.2, 4 s → 1.3, … 1 s → 1.8
+				long secRemaining     = (remaining + 999) / 1000;
+				long prevSecRemaining = (remaining + 999 + 16) / 1000;
+				if (secRemaining != prevSecRemaining && secRemaining > 0) {
+					// Pitch table: 5→1.1, 4→1.2, 3→1.3, 2→1.5, 1→1.8
+					float pitch = switch ((int) Math.min(secRemaining, 5)) {
+						case 1  -> 1.8f;
+						case 2  -> 1.5f;
+						case 3  -> 1.3f;
+						case 4  -> 1.2f;
+						default -> 1.1f;
+					};
+					mc.getSoundManager().play(PositionedSoundInstance.master(
+							SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.8f, pitch));
+				}
 			}
 		}
 
 		if (now >= timerFireMs) {
 			timerFireMs = 0;
+			timerLastTickMs = 0;
 			ItemStack stack = timerStack;
 			timerStack = null;
 			int standId = timerArmorStandEntityId;
 			timerArmorStandEntityId = -1;
+
+			// Final click — slightly louder/higher than the ticks
+			mc.getSoundManager().play(PositionedSoundInstance.master(
+					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(),
+					isFilmTimer ? 0.7f : 1.0f,
+					isFilmTimer ? 1.1f : 2.0f));
 
 			if (standId >= 0) {
 				// Armor stand timer: arm capture from armor stand perspective
@@ -661,8 +704,12 @@ public final class PhotoCapture {
 			timerFireMs = now + timerSec * 1000L;
 			timerStack = cameraStack.copy();
 			timerArmorStandEntityId = entityId;
+			timerLastTickMs = now; // start ticking immediately
+			boolean timerIsFilmStand = cameraStack.getItem() instanceof FilmCameraItem;
 			mc.getSoundManager().play(PositionedSoundInstance.master(
-					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 1.0f, 1.2f));
+					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(),
+					timerIsFilmStand ? 0.5f : 1.0f,
+					timerIsFilmStand ? 0.85f : 1.2f));
 			return;
 		}
 
