@@ -5,20 +5,30 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 
-public record VideoSettings(float aperture) {
+public record VideoSettings(float aperture, int fps) {
 
-    public static final VideoSettings DEFAULT = new VideoSettings(2.8f);
+    public static final VideoSettings DEFAULT = new VideoSettings(2.8f, 24);
 
     public static final Codec<VideoSettings> CODEC = RecordCodecBuilder.create(instance ->
             instance.group(
                     Codec.FLOAT.optionalFieldOf("aperture", 2.8f)
-                               .forGetter(VideoSettings::aperture)
+                               .forGetter(VideoSettings::aperture),
+                    Codec.INT.optionalFieldOf("fps", 24)
+                             .forGetter(VideoSettings::fps)
             ).apply(instance, VideoSettings::new));
 
     public static final PacketCodec<ByteBuf, VideoSettings> PACKET_CODEC = new PacketCodec<>() {
-        @Override public VideoSettings decode(ByteBuf buf) { return new VideoSettings(buf.readFloat()); }
-        @Override public void encode(ByteBuf buf, VideoSettings v) { buf.writeFloat(v.aperture()); }
+        @Override
+        public VideoSettings decode(ByteBuf buf) {
+            return new VideoSettings(buf.readFloat(), buf.readInt());
+        }
+        @Override
+        public void encode(ByteBuf buf, VideoSettings v) {
+            buf.writeFloat(v.aperture());
+            buf.writeInt(v.fps());
+        }
     };
 
-    public VideoSettings withAperture(float v) { return new VideoSettings(v); }
+    public VideoSettings withAperture(float v) { return new VideoSettings(v, fps); }
+    public VideoSettings withFps(int v)        { return new VideoSettings(aperture, v); }
 }

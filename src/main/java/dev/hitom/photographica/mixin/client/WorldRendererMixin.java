@@ -1,6 +1,7 @@
 package dev.hitom.photographica.mixin.client;
 
 import dev.hitom.photographica.client.PhotoCapture;
+import dev.hitom.photographica.client.VideoRecorder;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.WorldRenderer;
@@ -22,7 +23,7 @@ public class WorldRendererMixin {
 	private void photographica$hideOutlineDuringCapture(MatrixStack matrices, VertexConsumer vertexConsumer,
 	                                                    Entity entity, double cameraX, double cameraY, double cameraZ,
 	                                                    BlockPos pos, BlockState state, CallbackInfo ci) {
-		if (PhotoCapture.isCapturePending()) {
+		if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) {
 			ci.cancel();
 		}
 	}

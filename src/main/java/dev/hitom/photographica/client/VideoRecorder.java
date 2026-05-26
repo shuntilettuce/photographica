@@ -46,9 +46,13 @@ public final class VideoRecorder {
     private VideoRecorder() {}
 
     // ── Constants ─────────────────────────────────────────────────────────────
+    /** Default FPS; actual recording FPS is read from VideoSettings at start time. */
     public static final int  FPS        = 24;
-    public static final int  MAX_FRAMES = FPS * 120;        // 2 minutes
-    private static final long FRAME_MS  = 1000L / FPS;
+    /** Maximum frames at the highest supported FPS (30) for 2 minutes. */
+    public static final int  MAX_FRAMES = 30 * 120;        // 2 minutes @ 30 fps
+
+    // Runtime FPS (set when recording starts from VideoSettings).
+    private static int currentFps = FPS;
 
     /** Depth-grid dimensions (32×18 — same 16:9 ratio as output, 1/40 scale). */
     private static final int   DEP_W = 32;
@@ -76,11 +80,11 @@ public final class VideoRecorder {
      * Focal pixels for motion blur.
      * pixel_displacement = velocity_blocks_per_frame × FOCAL_PX / depth_blocks
      *
-     * Tuned down from the physical value (1778 px) to give subtle, realistic blur
-     * rather than smearing everything.  At walking speed (~0.17 blocks/frame) and
-     * 5 m depth: blurLen = 0.17 × 350 / 5 ≈ 12 px — visible but not exaggerated.
+     * At walking speed (~0.17 b/frame) and 3 m depth:
+     *   blurLen = 0.17 × 600 / 3 ≈ 34 px — clearly visible.
+     * Sprinting (~0.28 b/frame) at 3 m → ~56 px (capped by maxBlurPx).
      */
-    private static final float FOCAL_PX = 350f;
+    private static final float FOCAL_PX = 600f;
 
     /** Dwell time (frames) before AF servo starts tracking a new depth. */
     private static final int   FOCUS_DWELL_FRAMES = 20;    // ~0.83 s
@@ -140,6 +144,7 @@ public final class VideoRecorder {
     public static long    getDoneAtMs()      { return doneAtMs; }
     public static int     getFrameCount()    { return frameCount; }
     public static long    getRecordStartMs() { return recordStartMs; }
+    public static int     getCurrentFps()    { return currentFps; }
 
     /**
      * Zoom FOV in degrees for the video camera viewfinder.
@@ -194,6 +199,7 @@ public final class VideoRecorder {
             sessionId = ts + "_" + (System.currentTimeMillis() % 1000);
         }
 
+        currentFps    = VideoCameraItem.getSettings(stack).fps();
         frameCount    = 0;
         recordStartMs = System.currentTimeMillis();
         nextFrameMs   = recordStartMs;
@@ -343,7 +349,7 @@ public final class VideoRecorder {
             raw = ScreenshotRecorder.takeScreenshot(mc.getFramebuffer());
         } catch (Exception e) {
             Photographica.LOGGER.warn("[VideoRecorder] Screenshot failed frame {}", frameCount, e);
-            nextFrameMs += FRAME_MS;
+            nextFrameMs = recordStartMs + (long)((frameCount + 1) * 1000.0 / currentFps);
             return;
         }
 
@@ -357,9 +363,11 @@ public final class VideoRecorder {
 
         frameMetas.add(meta);
         frameCount++;
-        nextFrameMs += FRAME_MS;
+        // Precise timing: avoids the 1.6% drift from integer 1000/fps.
+        // Frame n should start at recordStartMs + n * 1000.0 / fps.
+        nextFrameMs = recordStartMs + (long)(frameCount * 1000.0 / currentFps);
 
-        if (frameCount == FPS * 60 && mc.player != null)
+        if (frameCount == currentFps * 60 && mc.player != null)
             mc.player.sendMessage(Text.literal("⚠ 残り 1:00"), true);
 
         ioExecutor.submit(() -> {
@@ -549,7 +557,7 @@ public final class VideoRecorder {
         float screenVY = meta.velY() * (float) Math.abs(Math.sin(pitchRad));
         // Convert blocks/tick → blocks/frame  (Minecraft runs at 20 TPS)
         float velPerFrame = (float) Math.sqrt(screenVX * screenVX + screenVY * screenVY)
-                          * (20.0f / FPS);
+                          * (20.0f / currentFps);
 
         if (velPerFrame < 0.01f) return pass2;  // negligible motion (raised threshold)
 
@@ -559,7 +567,7 @@ public final class VideoRecorder {
         float ndx = -screenVX * invMag;
         float ndy = -screenVY * invMag;
         float velScale  = velPerFrame * FOCAL_PX;   // px at 1-metre depth
-        float maxBlurPx = w / 30.0f;               // hard cap ~43 px at 1280 px wide
+        float maxBlurPx = w / 15.0f;               // hard cap ~85 px at 1280 px wide
 
         NativeImage pass3 = new NativeImage(w, h, false);
         for (int py = 0; py < h; py++) {
@@ -746,7 +754,7 @@ public final class VideoRecorder {
             try {
                 ProcessBuilder pb = new ProcessBuilder(
                         ff, "-y",
-                        "-framerate", String.valueOf(FPS),
+                        "-framerate", String.valueOf(currentFps),
                         "-i", new File(processedDir, "frame_%04d.png").getAbsolutePath(),
                         "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
                         outPath);

@@ -15,10 +15,10 @@ import java.util.List;
 @Environment(EnvType.CLIENT)
 public class VideoCameraScreen extends Screen {
 
-    private static final List<Float> APERTURES =
-            List.of(1.4f, 2.0f, 2.8f, 4.0f, 5.6f, 8.0f, 11.0f, 16.0f, 22.0f);
+    private static final List<Float>   APERTURES = List.of(1.4f, 2.0f, 2.8f, 4.0f, 5.6f, 8.0f, 11.0f, 16.0f, 22.0f);
+    private static final List<Integer> FPS_LIST  = List.of(24, 30);
 
-    private final ItemStack  stack;
+    private final ItemStack stack;
     private VideoSettings settings;
     private boolean dirty = false;
 
@@ -38,15 +38,19 @@ public class VideoCameraScreen extends Screen {
         addRow(cx, top + row++ * 22, "絞り",
                 () -> "F" + formatFloat(settings.aperture()),
                 step -> {
-                    int idx = clampStep(APERTURES.indexOf(settings.aperture()), step, APERTURES.size());
+                    int idx = clampIdx(nearestIdx(APERTURES, settings.aperture()) + step, APERTURES.size());
                     settings = settings.withAperture(APERTURES.get(idx));
                     dirty = true;
                 }, true);
 
-        // Read-only info row
-        addRow(cx, top + row++ * 22, "モード",
-                () -> "ISO AUTO  ·  AF  ·  24fps",
-                step -> {}, false);
+        // FPS row
+        addRow(cx, top + row++ * 22, "fps",
+                () -> settings.fps() + " fps",
+                step -> {
+                    int idx = clampIdx(FPS_LIST.indexOf(settings.fps()) + step, FPS_LIST.size());
+                    settings = settings.withFps(FPS_LIST.get(Math.max(0, idx)));
+                    dirty = true;
+                }, !VideoRecorder.isRecording());   // lock fps while recording
 
         int btnY = top + row * 22 + 12;
 
@@ -83,7 +87,7 @@ public class VideoCameraScreen extends Screen {
         int cx     = width / 2;
         int top    = height / 2 - 60;
         int panelW = 320;
-        int panelH = 120;
+        int panelH = 130;
         int px     = cx - panelW / 2;
         int py     = top - 16;
 
@@ -134,7 +138,17 @@ public class VideoCameraScreen extends Screen {
         return String.valueOf(v);
     }
 
-    private static int clampStep(int idx, int step, int size) {
-        return Math.floorMod(idx + step, size);
+    private static int clampIdx(int idx, int size) {
+        return Math.max(0, Math.min(size - 1, idx));
+    }
+
+    /** Find nearest index in the list to the given value. */
+    private static int nearestIdx(List<Float> list, float v) {
+        int best = 0; float bestDiff = Float.MAX_VALUE;
+        for (int i = 0; i < list.size(); i++) {
+            float d = Math.abs(list.get(i) - v);
+            if (d < bestDiff) { bestDiff = d; best = i; }
+        }
+        return best;
     }
 }
