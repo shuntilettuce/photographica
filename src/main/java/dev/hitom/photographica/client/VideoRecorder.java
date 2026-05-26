@@ -430,8 +430,23 @@ public final class VideoRecorder {
                         "-crf",  "18",
                         "-pix_fmt", "yuv420p",
                         outPath);
-                pb.redirectErrorStream(true);
+                // Discard stdout/stderr so the OS pipe buffer never fills up
+                // and proc.waitFor() can't deadlock.
+                pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+                pb.redirectError(ProcessBuilder.Redirect.DISCARD);
                 Process proc = pb.start();
+
+                // Drain loop: update progress gauge while waiting
+                long startMs = System.currentTimeMillis();
+                while (proc.isAlive()) {
+                    try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+                    // Animate progress from 80 → 98 while ffmpeg runs (we don't get exact
+                    // frame counts without parsing stderr, so just time-based estimation).
+                    long elapsed = System.currentTimeMillis() - startMs;
+                    int animated = 80 + (int) Math.min(18, elapsed / 1000);  // +1% per second, cap at 98%
+                    ppProgress = animated;
+                }
+
                 int exit = proc.waitFor();
                 if (exit == 0) return true;
                 Photographica.LOGGER.warn("[VideoRecorder] ffmpeg exited {}", exit);
