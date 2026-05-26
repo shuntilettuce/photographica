@@ -93,7 +93,8 @@ public class Photographica implements ModInitializer {
 							incoming.aperture(), incoming.shutterSpeedIdx(), lockedIso,
 							incoming.focusDistance(), incoming.focalLengthMm(), incoming.lensType(),
 							incoming.filmType(), incoming.remainingShots(),
-							incoming.exposureMode(), incoming.focusMode(), incoming.autoWind(), incoming.timerSeconds());
+							incoming.exposureMode(), incoming.focusMode(), incoming.autoWind(), incoming.timerSeconds(),
+							incoming.motionBlur());
 					FilmCameraItem.setSettings(stack, safe);
 				}
 			});
@@ -187,7 +188,8 @@ public class Photographica implements ModInitializer {
 								cur.aperture(), cur.shutterSpeedIdx(), FilmKind.isoOf(fresh.filmType()),
 								cur.focusDistance(), cur.focalLengthMm(), cur.lensType(),
 								fresh.filmType(), fresh.totalExposures(),
-								cur.exposureMode(), cur.focusMode(), cur.autoWind(), cur.timerSeconds()));
+								cur.exposureMode(), cur.focusMode(), cur.autoWind(), cur.timerSeconds(),
+								cur.motionBlur()));
 						s.decrement(1);
 						player.playSound(SoundEvents.BLOCK_DISPENSER_DISPENSE, 0.6f, 1.2f);
 						player.sendMessage(Text.literal("フィルムを装填しました"), true);
@@ -341,7 +343,7 @@ public class Photographica implements ModInitializer {
 				net.minecraft.entity.Entity entity = context.player().getServerWorld().getEntityById(payload.entityId());
 				if (!(entity instanceof ArmorStandEntity stand)) return;
 				// Try MAINHAND first, then OFFHAND
-				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND}) {
+				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND, EquipmentSlot.CHEST}) {
 					ItemStack camera = stand.getEquippedStack(slot);
 					if (camera.isEmpty()) continue;
 					if (camera.getItem() instanceof CameraItem) {
@@ -357,7 +359,8 @@ public class Photographica implements ModInitializer {
 								incoming.aperture(), incoming.shutterSpeedIdx(), lockedIso,
 								incoming.focusDistance(), incoming.focalLengthMm(), incoming.lensType(),
 								incoming.filmType(), incoming.remainingShots(),
-								incoming.exposureMode(), incoming.focusMode(), incoming.autoWind(), incoming.timerSeconds());
+								incoming.exposureMode(), incoming.focusMode(), incoming.autoWind(), incoming.timerSeconds(),
+								incoming.motionBlur());
 						FilmCameraItem.setSettings(camera, safe);
 						stand.equipStack(slot, camera);
 						return;
@@ -374,7 +377,7 @@ public class Photographica implements ModInitializer {
 				if (!(entity instanceof ArmorStandEntity stand)) return;
 				ItemStack camera = null;
 				EquipmentSlot cameraSlot = null;
-				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND}) {
+				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND, EquipmentSlot.CHEST}) {
 					ItemStack s = stand.getEquippedStack(slot);
 					if (!s.isEmpty() && (s.getItem() instanceof CameraItem || s.getItem() instanceof MirrorlessCameraItem)) {
 						camera = s; cameraSlot = slot; break;
@@ -412,7 +415,7 @@ public class Photographica implements ModInitializer {
 				if (!(entity instanceof ArmorStandEntity stand)) return;
 				ItemStack camera = null;
 				EquipmentSlot cameraSlot = null;
-				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND}) {
+				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND, EquipmentSlot.CHEST}) {
 					ItemStack s = stand.getEquippedStack(slot);
 					if (!s.isEmpty() && s.getItem() instanceof FilmCameraItem) {
 						camera = s; cameraSlot = slot; break;
@@ -447,7 +450,7 @@ public class Photographica implements ModInitializer {
 				if (!(entity instanceof ArmorStandEntity stand)) return;
 
 				// Safety: reject if stand already has a camera
-				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND}) {
+				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND, EquipmentSlot.CHEST}) {
 					ItemStack s = stand.getEquippedStack(slot);
 					if (!s.isEmpty() && (s.getItem() instanceof CameraItem
 							|| s.getItem() instanceof FilmCameraItem

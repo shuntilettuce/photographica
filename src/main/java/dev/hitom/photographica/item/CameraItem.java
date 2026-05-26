@@ -17,7 +17,7 @@ import net.minecraft.world.World;
 import java.util.List;
 import java.util.function.Consumer;
 
-public class CameraItem extends Item {
+public class CameraItem extends Item implements net.minecraft.item.Equipment {
 	/** Wired by client init. Opens the dial GUI on shift+right-click. */
 	public static Consumer<ItemStack> clientOpenScreen = stack -> {};
 	/** Wired by client init. Captures screenshot to disk and notifies server on right-click. */
@@ -25,6 +25,11 @@ public class CameraItem extends Item {
 
 	public CameraItem(Settings settings) {
 		super(settings.maxCount(1));
+	}
+
+	@Override
+	public net.minecraft.entity.EquipmentSlot getSlotType() {
+		return net.minecraft.entity.EquipmentSlot.CHEST;
 	}
 
 	public static CameraSettings getSettings(ItemStack stack) {

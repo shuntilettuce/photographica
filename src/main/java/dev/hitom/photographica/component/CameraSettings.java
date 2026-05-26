@@ -31,7 +31,8 @@ public record CameraSettings(
 		int exposureMode,
 		int focusMode,
 		boolean autoWind,
-		int timerSeconds
+		int timerSeconds,
+		boolean motionBlur
 ) {
 	// Exposure mode constants
 	public static final int EXP_M  = 0;
@@ -45,7 +46,7 @@ public record CameraSettings(
 	public static final int FOCUS_MOB = 2;
 
 	public static final CameraSettings DEFAULT = new CameraSettings(
-			5.6f, 10, 400, 5.0f, 50, LensKind.NONE, 0, 0, EXP_M, FOCUS_MF, false, 0
+			5.6f, 10, 400, 5.0f, 50, LensKind.NONE, 0, 0, EXP_M, FOCUS_MF, false, 0, false
 	);
 
 	public static final Codec<CameraSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -60,7 +61,8 @@ public record CameraSettings(
 			Codec.INT.optionalFieldOf("exposure_mode", EXP_M).forGetter(CameraSettings::exposureMode),
 			Codec.INT.optionalFieldOf("focus_mode", FOCUS_MF).forGetter(CameraSettings::focusMode),
 			Codec.BOOL.optionalFieldOf("auto_wind", false).forGetter(CameraSettings::autoWind),
-			Codec.INT.optionalFieldOf("timer_seconds", 0).forGetter(CameraSettings::timerSeconds)
+			Codec.INT.optionalFieldOf("timer_seconds", 0).forGetter(CameraSettings::timerSeconds),
+			Codec.BOOL.optionalFieldOf("motion_blur", false).forGetter(CameraSettings::motionBlur)
 	).apply(instance, CameraSettings::new));
 
 	public static final PacketCodec<ByteBuf, CameraSettings> PACKET_CODEC = new PacketCodec<>() {
@@ -78,7 +80,8 @@ public record CameraSettings(
 					buf.readInt(),
 					buf.readInt(),
 					buf.readBoolean(),
-					buf.readInt()
+					buf.readInt(),
+					buf.readBoolean()
 			);
 		}
 
@@ -96,6 +99,7 @@ public record CameraSettings(
 			buf.writeInt(v.focusMode());
 			buf.writeBoolean(v.autoWind());
 			buf.writeInt(v.timerSeconds());
+			buf.writeBoolean(v.motionBlur());
 		}
 	};
 
@@ -129,41 +133,46 @@ public record CameraSettings(
 
 	public CameraSettings withExposureMode(int mode) {
 		return new CameraSettings(aperture, shutterSpeedIdx, iso, focusDistance,
-				focalLengthMm, lensType, filmType, remainingShots, mode, focusMode, autoWind, timerSeconds);
+				focalLengthMm, lensType, filmType, remainingShots, mode, focusMode, autoWind, timerSeconds, motionBlur);
 	}
 
 	public CameraSettings withFocusMode(int mode) {
 		return new CameraSettings(aperture, shutterSpeedIdx, iso, focusDistance,
-				focalLengthMm, lensType, filmType, remainingShots, exposureMode, mode, autoWind, timerSeconds);
+				focalLengthMm, lensType, filmType, remainingShots, exposureMode, mode, autoWind, timerSeconds, motionBlur);
 	}
 
 	public CameraSettings withApertureAndShutter(float ap, int ss) {
 		return new CameraSettings(ap, ss, iso, focusDistance,
-				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, autoWind, timerSeconds);
+				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, autoWind, timerSeconds, motionBlur);
 	}
 
 	public CameraSettings withShutterIdx(int ss) {
 		return new CameraSettings(aperture, ss, iso, focusDistance,
-				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, autoWind, timerSeconds);
+				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, autoWind, timerSeconds, motionBlur);
 	}
 
 	public CameraSettings withApertureVal(float ap) {
 		return new CameraSettings(ap, shutterSpeedIdx, iso, focusDistance,
-				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, autoWind, timerSeconds);
+				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, autoWind, timerSeconds, motionBlur);
 	}
 
 	public CameraSettings withFocusDistance(float fd) {
 		return new CameraSettings(aperture, shutterSpeedIdx, iso, fd,
-				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, autoWind, timerSeconds);
+				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, autoWind, timerSeconds, motionBlur);
 	}
 
 	public CameraSettings withAutoWind(boolean v) {
 		return new CameraSettings(aperture, shutterSpeedIdx, iso, focusDistance,
-				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, v, timerSeconds);
+				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, v, timerSeconds, motionBlur);
 	}
 
 	public CameraSettings withTimerSeconds(int t) {
 		return new CameraSettings(aperture, shutterSpeedIdx, iso, focusDistance,
-				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, autoWind, t);
+				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, autoWind, t, motionBlur);
+	}
+
+	public CameraSettings withMotionBlur(boolean v) {
+		return new CameraSettings(aperture, shutterSpeedIdx, iso, focusDistance,
+				focalLengthMm, lensType, filmType, remainingShots, exposureMode, focusMode, autoWind, timerSeconds, v);
 	}
 }

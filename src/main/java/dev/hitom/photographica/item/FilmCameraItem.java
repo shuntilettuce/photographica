@@ -28,12 +28,17 @@ import java.util.function.Consumer;
  *   - When the roll is full or manually rewound, the film state is moved
  *     onto a dedicated ExposedFilm item to be developed elsewhere.
  */
-public class FilmCameraItem extends Item {
+public class FilmCameraItem extends Item implements net.minecraft.item.Equipment {
 	public static Consumer<ItemStack> clientOpenScreen   = stack -> {};
 	public static Consumer<ItemStack> clientTakePhoto    = stack -> {};
 
 	public FilmCameraItem(Settings settings) {
 		super(settings.maxCount(1));
+	}
+
+	@Override
+	public net.minecraft.entity.EquipmentSlot getSlotType() {
+		return net.minecraft.entity.EquipmentSlot.CHEST;
 	}
 
 	public static CameraSettings getSettings(ItemStack stack) {
@@ -43,7 +48,7 @@ public class FilmCameraItem extends Item {
 		return s != null ? s : new CameraSettings(
 				5.6f, 10, FilmKind.isoOf(FilmKind.COLOR_400),
 				5.0f, 50, LensKind.NONE, FilmKind.COLOR_400, 0,
-				CameraSettings.EXP_M, CameraSettings.FOCUS_MF, false, 0);
+				CameraSettings.EXP_M, CameraSettings.FOCUS_MF, false, 0, false);
 	}
 
 	public static void setSettings(ItemStack stack, CameraSettings settings) {

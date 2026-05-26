@@ -85,10 +85,14 @@ public final class PhotoCapture {
 				mc.world.getEntitiesByClass(
 						net.minecraft.entity.decoration.ArmorStandEntity.class, box,
 						stand -> {
-							net.minecraft.item.ItemStack mh = stand.getEquippedStack(net.minecraft.entity.EquipmentSlot.MAINHAND);
-							if (!mh.isEmpty() && isAnyCamera(mh)) return true;
-							net.minecraft.item.ItemStack oh = stand.getEquippedStack(net.minecraft.entity.EquipmentSlot.OFFHAND);
-							return !oh.isEmpty() && isAnyCamera(oh);
+							for (net.minecraft.entity.EquipmentSlot slot : new net.minecraft.entity.EquipmentSlot[]{
+									net.minecraft.entity.EquipmentSlot.MAINHAND,
+									net.minecraft.entity.EquipmentSlot.OFFHAND,
+									net.minecraft.entity.EquipmentSlot.CHEST}) {
+								net.minecraft.item.ItemStack s = stand.getEquippedStack(slot);
+								if (!s.isEmpty() && isAnyCamera(s)) return true;
+							}
+							return false;
 						});
 		return !stands.isEmpty();
 	}
@@ -221,10 +225,10 @@ public final class PhotoCapture {
 		pendingId = UUID.randomUUID();
 		pendingIsFilm = isFilm;
 
-		// For slow shutters with motion blur enabled (tripod in off-hand), arm multi-frame
+		// For slow shutters with motion blur enabled, arm multi-frame
 		// accumulation so real camera movement during the exposure produces genuine motion blur trails.
 		double shutterSec = settings.shutterSeconds();
-		if (hasTripod() && shutterSec >= 1.0 / 30.0) {
+		if (settings.motionBlur() && shutterSec >= 1.0 / 30.0) {
 			long durationMs = Math.max((long)(shutterSec * 1000), 1L);
 			accumId = pendingId;
 			accumSettings = settings;

@@ -5,8 +5,6 @@ import dev.hitom.photographica.client.screen.FilmCameraScreen;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
-import dev.hitom.photographica.network.EquipCameraToArmorStandPayload;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.entity.Entity;
@@ -22,12 +20,12 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Intercepts right-click on an armor stand:
+ * Opens the camera settings screen when the player right-clicks (empty main hand)
+ * an armor stand that has a camera equipped in any slot (MAINHAND, OFFHAND, or CHEST).
  *
- * 1. Player holding a camera + stand has no camera → equip the camera to the stand.
- * 2. Player with empty hand + stand has a camera → open camera settings screen.
- *
- * Sneaking always falls through to vanilla behavior (item pickup / slot cycling).
+ * Sneaking falls through to vanilla behavior.
+ * When the player holds a camera and clicks the stand, vanilla Equipment equipping
+ * handles it automatically (cameras implement Equipment → CHEST slot).
  */
 @Mixin(ClientPlayerInteractionManager.class)
 public class ClientPlayerInteractionManagerMixin {
@@ -35,35 +33,22 @@ public class ClientPlayerInteractionManagerMixin {
     @Inject(method = "interactEntity",
             at = @At("HEAD"),
             cancellable = true)
-    private void photographica$armorStandCameraInteract(
+    private void photographica$openArmorStandCameraScreen(
             PlayerEntity player, Entity entity, Hand hand,
             CallbackInfoReturnable<ActionResult> cir) {
         if (hand != Hand.MAIN_HAND) return;
         if (!(entity instanceof ArmorStandEntity stand)) return;
         if (player.isSneaking()) return;
+        if (!player.getMainHandStack().isEmpty()) return;
 
-        ItemStack held = player.getMainHandStack();
-
-        // ── Case 1: Player is holding a camera → try to equip it to the stand ──
-        if (isCameraItem(held)) {
-            // Only equip if the stand has no camera in either hand already.
-            boolean standHasCamera = isCameraItem(stand.getEquippedStack(EquipmentSlot.MAINHAND))
-                    || isCameraItem(stand.getEquippedStack(EquipmentSlot.OFFHAND));
-            if (!standHasCamera) {
-                ClientPlayNetworking.send(new EquipCameraToArmorStandPayload(stand.getId()));
-                cir.setReturnValue(ActionResult.SUCCESS);
-            }
-            return;
+        // Find camera on the stand (check all equip slots)
+        ItemStack camera = null;
+        for (EquipmentSlot slot : new EquipmentSlot[]{
+                EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND, EquipmentSlot.CHEST}) {
+            ItemStack s = stand.getEquippedStack(slot);
+            if (isCameraItem(s)) { camera = s; break; }
         }
-
-        // ── Case 2: Player has empty hand → open settings if stand has a camera ──
-        if (!held.isEmpty()) return;
-
-        ItemStack camera = stand.getEquippedStack(EquipmentSlot.MAINHAND);
-        if (!isCameraItem(camera)) {
-            camera = stand.getEquippedStack(EquipmentSlot.OFFHAND);
-            if (!isCameraItem(camera)) return;
-        }
+        if (camera == null) return;
 
         final ItemStack cameraStack = camera;
         MinecraftClient mc = MinecraftClient.getInstance();

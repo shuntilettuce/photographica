@@ -101,7 +101,7 @@ public final class CameraScrollHandler {
 		if (newIdx == idx) return s;
 		return new CameraSettings(s.aperture(), s.shutterSpeedIdx(), s.iso(),
 				s.focusDistance(), stops.get(newIdx), s.lensType(),
-				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds());
+				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds(), s.motionBlur());
 	}
 
 	private static CameraSettings adjustAperture(CameraSettings s, int dir) {
@@ -111,7 +111,7 @@ public final class CameraScrollHandler {
 		if (newIdx == idx) return s;
 		return new CameraSettings(APERTURES.get(newIdx), s.shutterSpeedIdx(), s.iso(),
 				s.focusDistance(), s.focalLengthMm(), s.lensType(),
-				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds());
+				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds(), s.motionBlur());
 	}
 
 	private static CameraSettings adjustShutterSpeed(CameraSettings s, int dir) {
@@ -130,7 +130,7 @@ public final class CameraScrollHandler {
 		if (ISOS.get(newIdx) == s.iso()) return s;
 		return new CameraSettings(s.aperture(), s.shutterSpeedIdx(), ISOS.get(newIdx),
 				s.focusDistance(), s.focalLengthMm(), s.lensType(),
-				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds());
+				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds(), s.motionBlur());
 	}
 
 	private static CameraSettings adjustFocusDistance(CameraSettings s, int dir) {
