@@ -267,13 +267,21 @@ public final class VideoRecorder {
     // ── Render-thread hooks ────────────────────────────────────────────────────
 
     /**
-     * Called from WorldRenderEvents.LAST.
+     * Called from WorldRenderEvents.LAST (fires inside renderWorld()).
      * Reads the entire viewport depth buffer in one glReadPixels call, then
      * downsamples on CPU to a 32×18 linear-depth grid.
+     *
+     * Timing strategy: read depth eagerly — as soon as the previous depth was
+     * consumed — rather than checking nextFrameMs.  Avoids a race condition
+     * where a slow render tick causes onWorldRenderEnd to fire just before
+     * nextFrameMs while captureFrameIfRecording fires just after it, leaving
+     * the capture with a flat depth grid and zero CoC (no bokeh).
      */
     public static void onWorldRenderEnd() {
         if (!recording) return;
-        if (System.currentTimeMillis() < nextFrameMs) return;
+        // If depth is already pending (not yet consumed by captureFrameIfRecording),
+        // there is nothing to do — don't overwrite the pending grid.
+        if (pendingDepthReady) return;
 
         GL11.glGetError();
         int[] vp = new int[4];
