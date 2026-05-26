@@ -7,6 +7,7 @@ import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.component.SdCardData;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.LensItem;
+import dev.hitom.photographica.network.UpdateArmorStandCameraPayload;
 import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -39,12 +40,18 @@ public class CameraScreen extends Screen {
 	private static final String[] FOCUS_MODE_LABELS = {"MF", "AF", "MOB"};
 
 	private final ItemStack stack;
+	private final int armorStandEntityId; // -1 = player's hand camera
 	private CameraSettings settings;
 	private boolean dirty = false;
 
 	public CameraScreen(ItemStack stack) {
+		this(stack, -1);
+	}
+
+	public CameraScreen(ItemStack stack, int armorStandEntityId) {
 		super(Text.translatable("screen.photographica.camera"));
 		this.stack = stack;
+		this.armorStandEntityId = armorStandEntityId;
 		this.settings = CameraItem.getSettings(stack);
 	}
 
@@ -131,10 +138,16 @@ public class CameraScreen extends Screen {
 				step -> settings = withFocusMode(clampStep(settings.focusMode(), step, FOCUS_MODE_LABELS.length)),
 				true);
 
-		// Tripod status (read-only display)
-		addRow(cx, top + row++ * 22, "三脚",
-				() -> PhotoCapture.hasTripod() ? "§aあり§r" : "§cなし§r",
-				step -> {}, false);
+		// Tripod / armor stand status (read-only display)
+		if (armorStandEntityId >= 0) {
+			addRow(cx, top + row++ * 22, "撮影位置",
+					() -> "§a防具立て§r",
+					step -> {}, false);
+		} else {
+			addRow(cx, top + row++ * 22, "三脚",
+					() -> PhotoCapture.hasTripod() ? "§aあり§r" : "§cなし§r",
+					step -> {}, false);
+		}
 
 		// Self-timer
 		addRow(cx, top + row++ * 22, "タイマー",
@@ -153,23 +166,36 @@ public class CameraScreen extends Screen {
 				}, true);
 
 		int btnY = top + row * 22 + 14;
-		SdCardData sdData = stack.getOrDefault(ModDataComponents.SD_CARD, SdCardData.EMPTY);
-		if (!sdData.isEmpty()) {
+		if (armorStandEntityId >= 0) {
+			// Armor stand mode: show "Shoot" + "Close"
 			addDrawableChild(SafelightButton.primary(cx - 105, btnY, 100,
-					Text.literal("SDカード (" + sdData.photos().size() + ")"),
+					Text.literal("撮影"),
 					b -> {
-						if (dirty) {
-							CameraItem.setSettings(stack, settings);
-							ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
-							dirty = false;
-						}
-						client.setScreen(new SdCardBrowserScreen(stack, sdData, this));
+						flushSettings();
+						PhotoCapture.triggerArmorStandCapture(armorStandEntityId, stack);
+						close();
 					}));
 			addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
 					Text.literal("閉じる"), b -> close()));
 		} else {
-			addDrawableChild(SafelightButton.ghost(cx - 50, btnY, 100,
-					Text.literal("閉じる"), b -> close()));
+			SdCardData sdData = stack.getOrDefault(ModDataComponents.SD_CARD, SdCardData.EMPTY);
+			if (!sdData.isEmpty()) {
+				addDrawableChild(SafelightButton.primary(cx - 105, btnY, 100,
+						Text.literal("SDカード (" + sdData.photos().size() + ")"),
+						b -> {
+							if (dirty) {
+								CameraItem.setSettings(stack, settings);
+								ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
+								dirty = false;
+							}
+							client.setScreen(new SdCardBrowserScreen(stack, sdData, this));
+						}));
+				addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
+						Text.literal("閉じる"), b -> close()));
+			} else {
+				addDrawableChild(SafelightButton.ghost(cx - 50, btnY, 100,
+						Text.literal("閉じる"), b -> close()));
+			}
 		}
 	}
 
@@ -218,12 +244,21 @@ public class CameraScreen extends Screen {
 		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("CAMERA SETTINGS"), cx, py + 6, GuiHelper.CREAM);
 	}
 
-	@Override
-	public void close() {
+	private void flushSettings() {
 		if (dirty) {
 			CameraItem.setSettings(stack, settings);
-			ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
+			if (armorStandEntityId >= 0) {
+				ClientPlayNetworking.send(new UpdateArmorStandCameraPayload(armorStandEntityId, settings));
+			} else {
+				ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
+			}
+			dirty = false;
 		}
+	}
+
+	@Override
+	public void close() {
+		flushSettings();
 		super.close();
 	}
 

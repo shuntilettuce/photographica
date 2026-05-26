@@ -10,7 +10,9 @@ import dev.hitom.photographica.component.SdCardData;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
+import dev.hitom.photographica.network.CreatePhotoFromArmorStandPayload;
 import dev.hitom.photographica.network.CreatePhotoPayload;
+import dev.hitom.photographica.network.TakeFilmPhotoFromArmorStandPayload;
 import dev.hitom.photographica.network.TakeFilmPhotoPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -27,6 +29,7 @@ import net.minecraft.text.Text;
 import java.io.File;
 import java.io.IOException;
 import java.nio.FloatBuffer;
+import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 import org.lwjgl.BufferUtils;
@@ -73,16 +76,33 @@ public final class PhotoCapture {
 	/** True when a tripod is in the player's off-hand. Evaluated each time take() is called. */
 	public static boolean motionBlurEnabled = false; // kept for CameraScreen read-only display
 
-	/** Returns true if the player currently has a tripod in their off-hand. */
+	/** Returns true if an armor stand with a camera is within 6 blocks of the player. */
 	public static boolean hasTripod() {
 		MinecraftClient mc = MinecraftClient.getInstance();
-		if (mc.player == null) return false;
-		return mc.player.getOffHandStack().getItem() instanceof dev.hitom.photographica.item.TripodItem;
+		if (mc.player == null || mc.world == null) return false;
+		net.minecraft.util.math.Box box = mc.player.getBoundingBox().expand(6.0);
+		List<net.minecraft.entity.decoration.ArmorStandEntity> stands =
+				mc.world.getEntitiesByClass(
+						net.minecraft.entity.decoration.ArmorStandEntity.class, box,
+						stand -> {
+							net.minecraft.item.ItemStack mh = stand.getEquippedStack(net.minecraft.entity.EquipmentSlot.MAINHAND);
+							if (!mh.isEmpty() && isAnyCamera(mh)) return true;
+							net.minecraft.item.ItemStack oh = stand.getEquippedStack(net.minecraft.entity.EquipmentSlot.OFFHAND);
+							return !oh.isEmpty() && isAnyCamera(oh);
+						});
+		return !stands.isEmpty();
 	}
 
 	// Self-timer state
 	public static volatile long timerFireMs = 0L;       // epoch ms when the photo should fire; 0 = no timer active
 	private static volatile ItemStack timerStack = null; // camera stack snapshot
+	private static volatile int timerArmorStandEntityId = -1; // entity ID if timer armed for armor stand (-1 = player shot)
+
+	// Armor stand capture state
+	public static volatile int armorStandFocalLength = 0;       // focal length during armor stand capture (0 = not active)
+	public static volatile boolean armorStandCapturePending = false;
+	private static volatile int pendingArmorStandEntityId = -1;
+	private static volatile int accumArmorStandEntityId = -1;
 
 	// Depth buffer pre-read during WorldRenderEvents.LAST (before Iris overwrites it).
 	private static volatile float[] pendingLinearDepth = null;
@@ -307,9 +327,11 @@ public final class PhotoCapture {
 		UUID id = pendingId;
 		CameraSettings settings = pendingSettings;
 		boolean isFilm = pendingIsFilm;
+		int captureStandId = pendingArmorStandEntityId; // capture before reset
 		pendingId = null;
 		pendingSettings = null;
 		pendingIsFilm = false;
+		pendingArmorStandEntityId = -1;
 
 		// Use depth pre-read during WorldRenderEvents.LAST if available.
 		// Reading depth here from mc.getFramebuffer() would give wrong results with Iris
@@ -351,7 +373,19 @@ public final class PhotoCapture {
 			raw.close();
 		}
 
-		if (isFilm) {
+		if (captureStandId >= 0) {
+			if (isFilm) {
+				ClientPlayNetworking.send(new TakeFilmPhotoFromArmorStandPayload(id, settings, captureStandId));
+				if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て・フィルム)"), true);
+			} else {
+				ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(id, settings, captureStandId));
+				if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て)"), true);
+			}
+			// Restore player camera
+			if (mc.player != null) mc.setCameraEntity(mc.player);
+			armorStandCapturePending = false;
+			armorStandFocalLength = 0;
+		} else if (isFilm) {
 			ClientPlayNetworking.send(new TakeFilmPhotoPayload(id, settings));
 			if (mc.player != null) {
 				mc.player.sendMessage(Text.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), true);
@@ -433,6 +467,7 @@ public final class PhotoCapture {
 		UUID id = accumId;
 		CameraSettings settings = accumSettings;
 		boolean isFilm = accumIsFilm;
+		int finalStandId = accumArmorStandEntityId; // capture before reset
 		float[] depth = accumDepth;
 		int depthFbW = accumDepthFbW;
 		int depthFbH = accumDepthFbH;
@@ -480,7 +515,19 @@ public final class PhotoCapture {
 			averaged.close();
 		}
 
-		if (isFilm) {
+		if (finalStandId >= 0) {
+			if (isFilm) {
+				ClientPlayNetworking.send(new TakeFilmPhotoFromArmorStandPayload(id, settings, finalStandId));
+				if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て・フィルム)"), true);
+			} else {
+				ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(id, settings, finalStandId));
+				if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て)"), true);
+			}
+			// Restore player camera after armor stand long exposure
+			if (mc.player != null) mc.setCameraEntity(mc.player);
+			armorStandCapturePending = false;
+			armorStandFocalLength = 0;
+		} else if (isFilm) {
 			ClientPlayNetworking.send(new TakeFilmPhotoPayload(id, settings));
 			if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), true);
 		} else {
@@ -493,6 +540,7 @@ public final class PhotoCapture {
 		accumId = null;
 		accumSettings = null;
 		accumIsFilm = false;
+		accumArmorStandEntityId = -1;
 		accumEndMs = 0L;
 		accumSamples = 0;
 		accumR = null; accumG = null; accumB = null;
@@ -530,7 +578,159 @@ public final class PhotoCapture {
 			timerFireMs = 0;
 			ItemStack stack = timerStack;
 			timerStack = null;
-			take(stack); // fire the actual capture
+			int standId = timerArmorStandEntityId;
+			timerArmorStandEntityId = -1;
+
+			if (standId >= 0) {
+				// Armor stand timer: arm capture from armor stand perspective
+				boolean isFilm = stack.getItem() instanceof FilmCameraItem;
+				CameraSettings settings = isFilm
+						? FilmCameraItem.getSettings(stack)
+						: CameraItem.getSettings(stack);
+				armArmorStandCapture(standId, stack, settings, isFilm, now);
+			} else {
+				take(stack); // regular player capture
+			}
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Armor stand capture
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Called when the player clicks "撮影" in the armor stand camera settings screen.
+	 * Validates the camera state, handles self-timer, and arms the capture.
+	 */
+	public static void triggerArmorStandCapture(int entityId, ItemStack cameraStack) {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player == null || mc.world == null) return;
+
+		boolean isFilm = cameraStack.getItem() instanceof FilmCameraItem;
+		CameraSettings settings = isFilm
+				? FilmCameraItem.getSettings(cameraStack)
+				: CameraItem.getSettings(cameraStack);
+
+		if (!LensKind.hasLens(settings.lensType())) {
+			mc.player.sendMessage(Text.literal("⚠ レンズが取り付けられていません"), true);
+			mc.getSoundManager().play(PositionedSoundInstance.master(
+					SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
+			return;
+		}
+
+		// Digital: check SD card
+		if (!isFilm) {
+			if (!cameraStack.contains(ModDataComponents.SD_CARD)) {
+				mc.player.sendMessage(Text.literal("⚠ SDカードが装填されていません"), true);
+				mc.getSoundManager().play(PositionedSoundInstance.master(
+						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
+				return;
+			}
+			SdCardData sd = cameraStack.get(ModDataComponents.SD_CARD);
+			if (sd != null && sd.isFull()) {
+				mc.player.sendMessage(Text.literal("⚠ SDカードがいっぱいです"), true);
+				return;
+			}
+		}
+
+		// Film: check loaded, wound, frames remaining
+		if (isFilm) {
+			FilmRollData film = FilmCameraItem.getFilm(cameraStack);
+			if (film.totalExposures() == 0) {
+				mc.player.sendMessage(Text.literal("⚠ フィルムが装填されていません"), true);
+				return;
+			}
+			if (film.isExposed()) {
+				mc.player.sendMessage(Text.literal("⚠ フィルム使用済み — 現像してください"), true);
+				return;
+			}
+			if (!film.wound()) {
+				mc.player.sendMessage(Text.literal("⚠ フィルムを巻き上げてください"), true);
+				return;
+			}
+		}
+
+		long now = System.currentTimeMillis();
+		if (now - lastCaptureMs < COOLDOWN_MS) return;
+		if (pendingId != null || accumId != null) return;
+
+		// Self-timer
+		int timerSec = settings.timerSeconds();
+		if (timerSec > 0) {
+			if (timerFireMs > 0) return; // already counting down
+			timerFireMs = now + timerSec * 1000L;
+			timerStack = cameraStack.copy();
+			timerArmorStandEntityId = entityId;
+			mc.getSoundManager().play(PositionedSoundInstance.master(
+					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 1.0f, 1.2f));
+			return;
+		}
+
+		armArmorStandCapture(entityId, cameraStack, settings, isFilm, now);
+	}
+
+	/**
+	 * Arms a capture from the armor stand's perspective.
+	 * Switches {@code mc.cameraEntity} to the armor stand so the next render
+	 * frame is drawn from its position/direction, then queues the screenshot.
+	 */
+	private static void armArmorStandCapture(int entityId, ItemStack cameraStack,
+	                                          CameraSettings settings, boolean isFilm, long now) {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.world == null) return;
+
+		net.minecraft.entity.Entity entity = mc.world.getEntityById(entityId);
+		if (!(entity instanceof net.minecraft.entity.decoration.ArmorStandEntity stand)) return;
+
+		lastCaptureMs = now;
+		motionBlurEnabled = true; // armor stand = always stable
+
+		pendingSettings = settings;
+		pendingId = UUID.randomUUID();
+		pendingIsFilm = isFilm;
+		pendingArmorStandEntityId = entityId;
+		armorStandCapturePending = true;
+		armorStandFocalLength = LensKind.hasLens(settings.lensType()) ? settings.focalLengthMm() : 0;
+
+		// Switch render camera to armor stand perspective for the capture frame
+		mc.setCameraEntity(stand);
+
+		// Long exposure: multi-frame accumulation from armor stand perspective
+		double shutterSec = settings.shutterSeconds();
+		if (shutterSec >= 1.0 / 30.0) {
+			long durationMs = Math.max((long)(shutterSec * 1000), 1L);
+			accumId = pendingId;
+			accumSettings = settings;
+			accumIsFilm = isFilm;
+			accumArmorStandEntityId = entityId;
+			accumEndMs = now + durationMs;
+			accumSampleIntervalMs = Math.max(8L, durationMs / ACCUM_MAX_SAMPLES);
+			accumNextSampleMs = now;
+			accumSamples = 0;
+			accumR = null; accumG = null; accumB = null;
+			accumDepth = null;
+		}
+
+		boolean isMirrorless = cameraStack.getItem() instanceof MirrorlessCameraItem;
+		if (isMirrorless) {
+			mirrorEndMs = now;
+			secondClickAtMs = 0;
+		} else {
+			mirrorEndMs = now + MIRROR_DURATION_MS;
+			secondClickAtMs = now + MIRROR_DOWN_DELAY_MS;
+		}
+		flashEndMs = now + FLASH_TOTAL_MS;
+
+		// Shutter sound
+		if (isFilm) {
+			mc.getSoundManager().play(PositionedSoundInstance.master(
+					SoundEvents.BLOCK_PISTON_CONTRACT, 1.2f, 1.4f));
+		} else if (isMirrorless) {
+			mc.getSoundManager().play(PositionedSoundInstance.master(
+					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 0.6f, 1.8f));
+		} else {
+			mc.getSoundManager().play(PositionedSoundInstance.master(
+					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 1.5f, 0.9f));
 		}
 	}
 

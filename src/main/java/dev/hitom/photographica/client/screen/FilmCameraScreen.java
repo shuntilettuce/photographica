@@ -1,5 +1,6 @@
 package dev.hitom.photographica.client.screen;
 
+import dev.hitom.photographica.client.PhotoCapture;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.FilmRollData;
@@ -9,6 +10,7 @@ import dev.hitom.photographica.item.FilmRollItem;
 import dev.hitom.photographica.item.LensItem;
 import dev.hitom.photographica.network.LoadFilmPayload;
 import dev.hitom.photographica.network.UnloadFilmPayload;
+import dev.hitom.photographica.network.UpdateArmorStandCameraPayload;
 import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -48,12 +50,18 @@ public class FilmCameraScreen extends Screen {
 	private static final String[] FOCUS_MODE_LABELS = {"MF", "AF", "MOB"};
 
 	private final ItemStack stack;
+	private final int armorStandEntityId; // -1 = player's hand camera
 	private CameraSettings settings;
 	private boolean dirty = false;
 
 	public FilmCameraScreen(ItemStack stack) {
+		this(stack, -1);
+	}
+
+	public FilmCameraScreen(ItemStack stack, int armorStandEntityId) {
 		super(Text.literal("フィルムカメラ"));
 		this.stack = stack;
+		this.armorStandEntityId = armorStandEntityId;
 		this.settings = FilmCameraItem.getSettings(stack);
 	}
 
@@ -134,10 +142,16 @@ public class FilmCameraScreen extends Screen {
 				step -> settings = withFocusMode(clampStep(settings.focusMode(), step, FOCUS_MODE_LABELS.length)),
 				true);
 
-		// Tripod status (read-only display)
-		addRow(cx, top + row++ * 22, "三脚",
-				() -> dev.hitom.photographica.client.PhotoCapture.hasTripod() ? "§aあり§r" : "§cなし§r",
-				step -> {}, false);
+		// Tripod / armor stand status (read-only display)
+		if (armorStandEntityId >= 0) {
+			addRow(cx, top + row++ * 22, "撮影位置",
+					() -> "§a防具立て§r",
+					step -> {}, false);
+		} else {
+			addRow(cx, top + row++ * 22, "三脚",
+					() -> PhotoCapture.hasTripod() ? "§aあり§r" : "§cなし§r",
+					step -> {}, false);
+		}
 
 		// Self-timer
 		addRow(cx, top + row++ * 22, "タイマー",
@@ -155,45 +169,59 @@ public class FilmCameraScreen extends Screen {
 					dirty = true;
 				}, true);
 
-		// Load / Unload film buttons.
 		FilmRollData film = FilmCameraItem.getFilm(stack);
 		boolean loaded = film.totalExposures() > 0;
 		int btnY = top + row * 22 + 14;
 
-		addDrawableChild(SafelightButton.of(cx - 105, btnY, 100,
-				Text.literal(loaded ? "フィルム取り出し" : "フィルム装填"),
-				b -> {
-					if (loaded) {
-						ClientPlayNetworking.send(new UnloadFilmPayload());
+		if (armorStandEntityId >= 0) {
+			// Armor stand mode: show "Shoot" + "Close"
+			addDrawableChild(SafelightButton.primary(cx - 105, btnY, 100,
+					Text.literal("撮影"),
+					b -> {
+						flushDirty();
+						PhotoCapture.triggerArmorStandCapture(armorStandEntityId, stack);
 						close();
-					} else {
-						Map<Integer, Integer> available = availableFilmTypes();
-						if (available.size() == 1) {
-							int ft = available.keySet().iterator().next();
-							ClientPlayNetworking.send(new LoadFilmPayload(ft));
+					}));
+			addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
+					Text.literal("閉じる"),
+					b -> close()));
+		} else {
+			// Normal (player hand) mode: film load/unload buttons
+			addDrawableChild(SafelightButton.of(cx - 105, btnY, 100,
+					Text.literal(loaded ? "フィルム取り出し" : "フィルム装填"),
+					b -> {
+						if (loaded) {
+							ClientPlayNetworking.send(new UnloadFilmPayload());
 							close();
-						} else if (available.size() > 1) {
-							flushDirty();
-							client.setScreen(new FilmPickerScreen(this, available));
 						} else {
-							ClientPlayNetworking.send(new LoadFilmPayload(0));
-							close();
+							Map<Integer, Integer> available = availableFilmTypes();
+							if (available.size() == 1) {
+								int ft = available.keySet().iterator().next();
+								ClientPlayNetworking.send(new LoadFilmPayload(ft));
+								close();
+							} else if (available.size() > 1) {
+								flushDirty();
+								client.setScreen(new FilmPickerScreen(this, available));
+							} else {
+								ClientPlayNetworking.send(new LoadFilmPayload(0));
+								close();
+							}
 						}
-					}
-				}));
+					}));
 
-		String autoWindLabel = settings.autoWind() ? "自動巻上げ: §aON" : "自動巻上げ: §cOFF";
-		addDrawableChild(SafelightButton.ghost(cx - 105, btnY + 24, 210,
-				Text.literal(autoWindLabel),
-				b -> {
-					settings = settings.withAutoWind(!settings.autoWind());
-					dirty = true;
-					clearAndInit();
-				}));
+			String autoWindLabel = settings.autoWind() ? "自動巻上げ: §aON" : "自動巻上げ: §cOFF";
+			addDrawableChild(SafelightButton.ghost(cx - 105, btnY + 24, 210,
+					Text.literal(autoWindLabel),
+					b -> {
+						settings = settings.withAutoWind(!settings.autoWind());
+						dirty = true;
+						clearAndInit();
+					}));
 
-		addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
-				Text.literal("閉じる"),
-				b -> close()));
+			addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
+					Text.literal("閉じる"),
+					b -> close()));
+		}
 	}
 
 	private void addRow(int cx, int y, String label, java.util.function.Supplier<String> value,
@@ -265,7 +293,11 @@ public class FilmCameraScreen extends Screen {
 	private void flushDirty() {
 		if (dirty) {
 			FilmCameraItem.setSettings(stack, settings);
-			ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
+			if (armorStandEntityId >= 0) {
+				ClientPlayNetworking.send(new UpdateArmorStandCameraPayload(armorStandEntityId, settings));
+			} else {
+				ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
+			}
 			dirty = false;
 		}
 	}

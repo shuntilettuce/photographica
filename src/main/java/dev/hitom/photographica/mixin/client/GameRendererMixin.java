@@ -41,6 +41,14 @@ public class GameRendererMixin {
 			cancellable = true)
 	private void photographica$applyFocalLength(Camera camera, float tickDelta, boolean changingFov,
 	                                            CallbackInfoReturnable<Double> cir) {
+		// Armor stand capture mode: use the armor stand camera's focal length
+		if (PhotoCapture.armorStandCapturePending && PhotoCapture.armorStandFocalLength > 0) {
+			int f = PhotoCapture.armorStandFocalLength;
+			double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
+			cir.setReturnValue(vFovDegrees);
+			return;
+		}
+
 		PlayerEntity player = MinecraftClient.getInstance().player;
 		if (player == null) return;
 		// FOV change (focal length) only applies while the viewfinder is active
@@ -79,7 +87,8 @@ public class GameRendererMixin {
 					target = "Lnet/minecraft/client/render/GameRenderer;renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
 					shift = At.Shift.BEFORE))
 	private void photographica$suppressHandBeforeAccumSample(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
-		if (PhotoCapture.isAccumulating()) {
+		// Suppress hand during long-exposure accumulation AND armor stand capture
+		if (PhotoCapture.isAccumulating() || PhotoCapture.armorStandCapturePending) {
 			this.renderHand = false;
 		}
 	}
@@ -98,11 +107,11 @@ public class GameRendererMixin {
 					target = "Lnet/minecraft/client/render/GameRenderer;renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
 					shift = At.Shift.AFTER))
 	private void photographica$captureAfterComposite(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
-		// Snapshot accumulating state BEFORE captureIfPending() — finalizeAccumulation()
-		// resets accumId to null inside that call, so checking after would miss the restore.
+		// Snapshot state BEFORE captureIfPending() — both flags reset inside that call.
 		boolean wasAccumulating = PhotoCapture.isAccumulating();
+		boolean wasArmorStand = PhotoCapture.armorStandCapturePending;
 		PhotoCapture.captureIfPending();
-		if (wasAccumulating) {
+		if (wasAccumulating || wasArmorStand) {
 			this.renderHand = true;  // restore so vanilla renderHand() still runs for on-screen view
 		}
 	}

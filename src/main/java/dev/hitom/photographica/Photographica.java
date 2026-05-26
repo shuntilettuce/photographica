@@ -11,14 +11,17 @@ import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.FilmRollItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.item.SdCardItem;
+import dev.hitom.photographica.network.CreatePhotoFromArmorStandPayload;
 import dev.hitom.photographica.network.CreatePhotoPayload;
 import dev.hitom.photographica.network.DeleteSdPhotoPayload;
 import dev.hitom.photographica.network.DevelopFilmPayload;
 import dev.hitom.photographica.network.LoadFilmPayload;
 import dev.hitom.photographica.network.LoadSdCardPayload;
+import dev.hitom.photographica.network.TakeFilmPhotoFromArmorStandPayload;
 import dev.hitom.photographica.network.TakeFilmPhotoPayload;
 import dev.hitom.photographica.network.UnloadFilmPayload;
 import dev.hitom.photographica.network.UnloadSdCardPayload;
+import dev.hitom.photographica.network.UpdateArmorStandCameraPayload;
 import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
 import dev.hitom.photographica.network.WindFilmPayload;
 import dev.hitom.photographica.registry.ModBlockEntities;
@@ -30,6 +33,7 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
@@ -69,6 +73,9 @@ public class Photographica implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(LoadSdCardPayload.ID,          LoadSdCardPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(UnloadSdCardPayload.ID,        UnloadSdCardPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(DeleteSdPhotoPayload.ID,       DeleteSdPhotoPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(UpdateArmorStandCameraPayload.ID,      UpdateArmorStandCameraPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(CreatePhotoFromArmorStandPayload.ID,   CreatePhotoFromArmorStandPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(TakeFilmPhotoFromArmorStandPayload.ID, TakeFilmPhotoFromArmorStandPayload.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(UpdateCameraSettingsPayload.ID, (payload, context) -> {
 			context.server().execute(() -> {
@@ -323,6 +330,110 @@ public class Photographica implements ModInitializer {
 					s.set(ModDataComponents.SD_CARD, sd.withoutPhoto(payload.photoId()));
 					return;
 				}
+			});
+		});
+
+		// UpdateArmorStandCameraPayload: update camera settings on an armor stand
+		ServerPlayNetworking.registerGlobalReceiver(UpdateArmorStandCameraPayload.ID, (payload, context) -> {
+			context.server().execute(() -> {
+				net.minecraft.entity.Entity entity = context.player().getServerWorld().getEntityById(payload.entityId());
+				if (!(entity instanceof ArmorStandEntity stand)) return;
+				// Try MAINHAND first, then OFFHAND
+				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND}) {
+					ItemStack camera = stand.getEquippedStack(slot);
+					if (camera.isEmpty()) continue;
+					if (camera.getItem() instanceof CameraItem) {
+						CameraItem.setSettings(camera, payload.settings());
+						stand.equipStack(slot, camera);
+						return;
+					}
+					if (camera.getItem() instanceof FilmCameraItem) {
+						CameraSettings incoming = payload.settings();
+						FilmRollData f = FilmCameraItem.getFilm(camera);
+						int lockedIso = f.totalExposures() > 0 ? FilmKind.isoOf(f.filmType()) : incoming.iso();
+						CameraSettings safe = new CameraSettings(
+								incoming.aperture(), incoming.shutterSpeedIdx(), lockedIso,
+								incoming.focusDistance(), incoming.focalLengthMm(), incoming.lensType(),
+								incoming.filmType(), incoming.remainingShots(),
+								incoming.exposureMode(), incoming.focusMode(), incoming.autoWind(), incoming.timerSeconds());
+						FilmCameraItem.setSettings(camera, safe);
+						stand.equipStack(slot, camera);
+						return;
+					}
+				}
+			});
+		});
+
+		// CreatePhotoFromArmorStandPayload: create photo from armor stand's camera
+		ServerPlayNetworking.registerGlobalReceiver(CreatePhotoFromArmorStandPayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> {
+				net.minecraft.entity.Entity entity = player.getServerWorld().getEntityById(payload.entityId());
+				if (!(entity instanceof ArmorStandEntity stand)) return;
+				ItemStack camera = null;
+				EquipmentSlot cameraSlot = null;
+				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND}) {
+					ItemStack s = stand.getEquippedStack(slot);
+					if (!s.isEmpty() && (s.getItem() instanceof CameraItem || s.getItem() instanceof MirrorlessCameraItem)) {
+						camera = s; cameraSlot = slot; break;
+					}
+				}
+				if (camera == null) return;
+
+				ServerWorld world = player.getServerWorld();
+				BlockPos pos = stand.getBlockPos();
+				PhotoData photoData = new PhotoData(
+						payload.id(), player.getName().getString(), world.getTime(),
+						world.getRegistryKey().getValue().toString(),
+						pos.getX(), pos.getY(), pos.getZ(),
+						payload.settings());
+
+				if (camera.contains(ModDataComponents.SD_CARD)) {
+					SdCardData sd = camera.get(ModDataComponents.SD_CARD);
+					if (sd != null && !sd.isFull()) {
+						camera.set(ModDataComponents.SD_CARD, sd.withPhoto(photoData));
+						stand.equipStack(cameraSlot, camera);
+						return;
+					}
+				}
+				ItemStack photo = new ItemStack(ModItems.PHOTO);
+				photo.set(ModDataComponents.PHOTO_DATA, photoData);
+				if (!player.getInventory().insertStack(photo)) player.dropItem(photo, false);
+			});
+		});
+
+		// TakeFilmPhotoFromArmorStandPayload: expose frame on film camera on armor stand
+		ServerPlayNetworking.registerGlobalReceiver(TakeFilmPhotoFromArmorStandPayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> {
+				net.minecraft.entity.Entity entity = player.getServerWorld().getEntityById(payload.entityId());
+				if (!(entity instanceof ArmorStandEntity stand)) return;
+				ItemStack camera = null;
+				EquipmentSlot cameraSlot = null;
+				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND}) {
+					ItemStack s = stand.getEquippedStack(slot);
+					if (!s.isEmpty() && s.getItem() instanceof FilmCameraItem) {
+						camera = s; cameraSlot = slot; break;
+					}
+				}
+				if (camera == null) return;
+
+				FilmRollData film = FilmCameraItem.getFilm(camera);
+				if (film.totalExposures() == 0 || film.isExposed() || !film.wound()) return;
+
+				ServerWorld world = player.getServerWorld();
+				BlockPos pos = stand.getBlockPos();
+				PhotoData shot = new PhotoData(
+						payload.id(), player.getName().getString(), world.getTime(),
+						world.getRegistryKey().getValue().toString(),
+						pos.getX(), pos.getY(), pos.getZ(),
+						payload.settings());
+				FilmRollData updated = film.withNewExposure(shot);
+				if (payload.settings().autoWind() && !updated.isExposed()) {
+					updated = updated.withWound(true);
+				}
+				FilmCameraItem.setFilm(camera, updated);
+				stand.equipStack(cameraSlot, camera);
 			});
 		});
 
