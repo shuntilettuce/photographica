@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.nio.FloatBuffer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -25,41 +26,69 @@ import java.util.concurrent.Executors;
 /**
  * Client-side video recording engine for the Camcorder item.
  *
- * Flow:
- *   1. startRecording()           – called from VideoCameraItem right-click
- *   2. onWorldRenderEnd()         – WorldRenderEvents.LAST; reads full viewport depth
- *                                   and downsamples to DEP_W×DEP_H grid
- *   3. captureFrameIfRecording()  – after GameRenderer.renderWorld(); takes screenshot
- *   4. stopRecording()            – stops capture, starts background post-process thread
- *   5. doPostProcess()            – background: applies effects, encodes with ffmpeg
+ * Pipeline per rendered frame (render thread):
+ *   onWorldRenderEnd()          – WorldRenderEvents.LAST: one glReadPixels for the full
+ *                                 viewport depth buffer, downsampled to 32×18 grid.
+ *   captureFrameIfRecording()   – after GameRenderer.renderWorld(): screenshot + dwell-AF.
  *
- * Depth-based motion blur:
- *   The full viewport depth buffer is read once per frame (one glReadPixels call),
- *   downsampled to a 32×18 float grid stored in FrameMeta. During post-processing,
- *   each output pixel samples its depth via bilinear interpolation and scales its
- *   blur radius by (refDepth / pixDepth) — near objects blur more, far ones less.
+ * Post-processing (background thread, per raw frame):
+ *   Pass 1  – histogram auto-exposure (ISO AUTO simulation) + vignette
+ *   Pass 2  – DoF bokeh blur: separable variable-radius box blur driven by per-pixel CoC
+ *             (circle of confusion) computed from 50mm/f-number optics model
+ *   Pass 3  – directional motion blur: physically-correct blur length = velocity/depth × focal_px
+ *
+ * Autofocus model:
+ *   The camera accumulates how many consecutive frames the centre-pixel depth has been
+ *   stable (within 25%).  After 24 frames (1 second), focus begins servo-tracking toward
+ *   that depth.  Panning to a new subject resets the dwell counter.
  */
 public final class VideoRecorder {
     private VideoRecorder() {}
 
-    // ── Constants ──────────────────────────────────────────────────────────────
+    // ── Constants ─────────────────────────────────────────────────────────────
     public static final int  FPS        = 24;
-    public static final int  MAX_FRAMES = FPS * 120; // 2 minutes
+    public static final int  MAX_FRAMES = FPS * 120;        // 2 minutes
     private static final long FRAME_MS  = 1000L / FPS;
 
-    /** Depth grid dimensions (32×18 = same 16:9 ratio as 1280×720, at 1/40 scale). */
-    private static final int DEP_W = 32;
-    private static final int DEP_H = 18;
+    /** Depth-grid dimensions (32×18 — same 16:9 ratio as output, 1/40 scale). */
+    private static final int   DEP_W = 32;
+    private static final int   DEP_H = 18;
+    private static final float NEAR  = 0.05f;
+    private static final float FAR   = 512.0f;
 
-    private static final float NEAR = 0.05f;
-    private static final float FAR  = 512.0f;
+    /**
+     * K constant for CoC formula.
+     * CoC_px = |depth - focus| × aperture × CoC_K / (depth × focus)
+     *
+     * Derivation (thin-lens, 50 mm focal length on 36 mm sensor, 1280 px wide):
+     *   f = 0.050 m,  sensor_w = 0.036 m,  img_w = 1280 px
+     *   K = f² / sensor_w × img_w = 0.0025 / 0.036 × 1280 ≈ 88.9
+     *
+     * Results (aperture 2.8, focus 10 m):
+     *   d=20 m  → CoC ≈ 12.5 px  (noticeably soft)
+     *   d=200 m, focus=300 m → CoC ≈ 0.4 px  (essentially sharp) ✓
+     */
+    private static final float CoC_K    = 88.9f;
+    /**
+     * Focal pixels for motion blur.
+     * pixel_displacement = velocity_blocks_per_frame × FOCAL_PX / depth_blocks
+     *
+     * FOCAL_PX = focal_length / sensor_width × image_width
+     *          = 0.050 / 0.036 × 1280 ≈ 1778 px
+     */
+    private static final float FOCAL_PX = 1778f;
+
+    /** Dwell time (frames) before AF servo starts tracking a new depth. */
+    private static final int   FOCUS_DWELL_FRAMES = FPS;   // 1 second
+    /** Fractional depth change that counts as "same object." */
+    private static final float FOCUS_TOL          = 0.25f;
 
     // ── Recording state ────────────────────────────────────────────────────────
-    private static volatile boolean recording       = false;
-    private static volatile boolean postProcessing  = false;
-    private static volatile int     ppProgress      = 0;          // 0-100
-    private static volatile String  ppMessage       = "";
-    public  static volatile long    doneAtMs        = 0L;         // 0 = no "done" banner
+    private static volatile boolean recording      = false;
+    private static volatile boolean postProcessing = false;
+    private static volatile int     ppProgress     = 0;
+    private static volatile String  ppMessage      = "";
+    public  static volatile long    doneAtMs       = 0L;
 
     private static String          sessionId;
     private static int             frameCount;
@@ -69,12 +98,25 @@ public final class VideoRecorder {
     private static List<FrameMeta> frameMetas;
     private static ItemStack       recordingStack;
 
-    // Depth grid sampled by onWorldRenderEnd(), consumed by captureFrameIfRecording()
-    // Allocated lazily and reused across frames to avoid GC pressure.
-    private static float[]      pendingDepthGrid  = null;
-    private static boolean      pendingDepthReady = false;
-    private static FloatBuffer  depthReadBuf      = null; // reusable GL buffer
-    private static int          depthReadBufCap   = 0;
+    // ── Autofocus state ────────────────────────────────────────────────────────
+    /** Depth the centre pixel has been showing for focusCandidateFrames frames. */
+    private static float focusCandidateDepth  = 5.0f;
+    /** How many consecutive frames the candidate depth has been stable. */
+    private static int   focusCandidateFrames = 0;
+    /** The actual locked / servo-tracking focus distance written into FrameMeta. */
+    private static float currentFocusDepth    = 5.0f;
+
+    // ── Depth-buffer read ──────────────────────────────────────────────────────
+    /** Pending depth grid from onWorldRenderEnd(), consumed by captureFrameIfRecording(). */
+    private static float[]     pendingDepthGrid  = null;
+    private static boolean     pendingDepthReady = false;
+    /** Reusable GL buffer (grows, never shrinks within a recording session). */
+    private static FloatBuffer depthReadBuf      = null;
+    private static int         depthReadBufCap   = 0;
+
+    // ── DoF temp arrays (reused across frames in the background thread) ────────
+    private static int[] dofTempR, dofTempG, dofTempB, dofTempA;
+    private static int   dofTempCap = 0;
 
     private static final ExecutorService ioExecutor =
             Executors.newSingleThreadExecutor(r -> {
@@ -94,36 +136,31 @@ public final class VideoRecorder {
 
     // ── FrameMeta ──────────────────────────────────────────────────────────────
     /**
-     * Per-frame metadata captured on the render thread.
-     * depthGrid is a DEP_W×DEP_H array of linear-depth values (metres from camera).
-     * Row 0 = bottom of viewport (OpenGL convention); row (DEP_H-1) = top.
+     * All per-frame data captured on the render thread.
+     *
+     * @param depthGrid   32×18 linear-depth map (metres). Row 0 = bottom (GL convention).
+     * @param focusDepth  Locked AF distance at capture time (metres).
      */
-    record FrameMeta(int idx,
-                     float velX, float velY, float velZ,
-                     float yaw,  float pitch,
+    record FrameMeta(int   idx,
+                     float velX,   float velY,  float velZ,
+                     float yaw,    float pitch,
                      float aperture,
+                     float focusDepth,
                      float[] depthGrid) {}
 
     // ── Start / Stop ───────────────────────────────────────────────────────────
     public static void toggle(ItemStack stack) {
-        if (recording) {
-            stopRecording();
-        } else if (!postProcessing) {
-            startRecording(stack);
-        }
+        if (recording) stopRecording();
+        else if (!postProcessing) startRecording(stack);
     }
 
     public static void startRecording(ItemStack stack) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
 
-        // Use datetime as session ID so files sort naturally
         String ts = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
-        // Guard against two recordings starting in the same second
         sessionId = ts;
-        File candidateDir = new File(mc.runDirectory,
-                "photographica/video_temp/" + sessionId);
-        if (candidateDir.exists()) {
+        if (new File(mc.runDirectory, "photographica/video_temp/" + sessionId).exists()) {
             sessionId = ts + "_" + (System.currentTimeMillis() % 1000);
         }
 
@@ -133,6 +170,11 @@ public final class VideoRecorder {
         frameMetas    = new ArrayList<>(MAX_FRAMES);
         recordingStack = stack;
 
+        // Reset AF
+        currentFocusDepth    = 5.0f;
+        focusCandidateDepth  = 5.0f;
+        focusCandidateFrames = 0;
+
         rawDir = new File(mc.runDirectory,
                 "photographica/video_temp/" + sessionId + "/raw");
         if (!rawDir.mkdirs()) {
@@ -141,27 +183,27 @@ public final class VideoRecorder {
         }
 
         recording = true;
-        if (mc.player != null) mc.player.sendMessage(
-                Text.literal("● REC 開始"), true);
+        if (mc.player != null)
+            mc.player.sendMessage(Text.literal("● REC 開始"), true);
     }
 
     public static void stopRecording() {
         if (!recording) return;
         recording = false;
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player != null) mc.player.sendMessage(
-                Text.literal("■ 録画停止 — 後処理中..."), true);
+        if (mc.player != null)
+            mc.player.sendMessage(Text.literal("■ 録画停止 — 後処理中..."), true);
 
-        final List<FrameMeta> metas     = new ArrayList<>(frameMetas);
-        final File            rawDirSnap = rawDir;
-        final VideoSettings   vs        = VideoCameraItem.getSettings(recordingStack);
-        final File            vidDir    = new File(mc.runDirectory, "photographica/videos");
+        final List<FrameMeta> metas    = new ArrayList<>(frameMetas);
+        final File            rawSnap  = rawDir;
+        final VideoSettings   vs       = VideoCameraItem.getSettings(recordingStack);
+        final File            vidDir   = new File(mc.runDirectory, "photographica/videos");
 
         postProcessing = true;
         ppProgress     = 0;
         ppMessage      = "後処理中...";
 
-        Thread t = new Thread(() -> doPostProcess(metas, rawDirSnap, vs, vidDir),
+        Thread t = new Thread(() -> doPostProcess(metas, rawSnap, vs, vidDir),
                 "photographica-video-pp");
         t.setDaemon(true);
         t.start();
@@ -170,65 +212,75 @@ public final class VideoRecorder {
     // ── Render-thread hooks ────────────────────────────────────────────────────
 
     /**
-     * Called from WorldRenderEvents.LAST (render thread).
-     * Reads the full viewport depth buffer with one glReadPixels call,
-     * then downsamples it to a DEP_W×DEP_H float grid.
-     * Must be called BEFORE captureFrameIfRecording().
+     * Called from WorldRenderEvents.LAST.
+     * Reads the entire viewport depth buffer in one glReadPixels call, then
+     * downsamples on CPU to a 32×18 linear-depth grid.
      */
     public static void onWorldRenderEnd() {
         if (!recording) return;
-        long now = System.currentTimeMillis();
-        if (now < nextFrameMs) return;
+        if (System.currentTimeMillis() < nextFrameMs) return;
 
-        GL11.glGetError(); // clear pending errors
-        int[] viewport = new int[4];
-        GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
-        int vpW = viewport[2];
-        int vpH = viewport[3];
+        GL11.glGetError();
+        int[] vp = new int[4];
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, vp);
+        int vpW = vp[2], vpH = vp[3];
         if (vpW <= 0 || vpH <= 0) { pendingDepthReady = false; return; }
 
-        // Ensure read buffer is large enough; reallocate only when viewport grows.
         int needed = vpW * vpH;
         if (depthReadBuf == null || depthReadBufCap < needed) {
             depthReadBuf    = BufferUtils.createFloatBuffer(needed);
             depthReadBufCap = needed;
         }
         depthReadBuf.clear();
+        GL11.glReadPixels(0, 0, vpW, vpH,
+                GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, depthReadBuf);
 
-        // One glReadPixels for the entire viewport depth — single GPU-CPU sync point.
-        GL11.glReadPixels(0, 0, vpW, vpH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, depthReadBuf);
-
-        // Downsample to DEP_W×DEP_H grid on CPU.
         pendingDepthGrid  = downsampleDepth(depthReadBuf, vpW, vpH, DEP_W, DEP_H);
         pendingDepthReady = true;
     }
 
     /**
-     * Called from GameRendererMixin after renderWorld() (render thread).
-     * Takes a screenshot and queues it for async disk write.
+     * Called from GameRendererMixin after renderWorld().
+     * Takes a screenshot, advances the dwell-time autofocus, and queues the frame for I/O.
      */
     public static void captureFrameIfRecording() {
         if (!recording) return;
         long now = System.currentTimeMillis();
         if (now < nextFrameMs) return;
-
-        if (frameCount >= MAX_FRAMES) {
-            stopRecording();
-            return;
-        }
+        if (frameCount >= MAX_FRAMES) { stopRecording(); return; }
 
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
 
-        // Consume pending depth grid (or use a flat fallback if not ready)
+        // Consume depth grid
         float[] depthGrid;
         if (pendingDepthReady && pendingDepthGrid != null) {
             depthGrid = pendingDepthGrid;
             pendingDepthGrid  = null;
             pendingDepthReady = false;
         } else {
-            depthGrid = flatDepthGrid(5.0f);
+            depthGrid = flatDepthGrid(currentFocusDepth);
         }
+
+        // ── Dwell-time autofocus ──────────────────────────────────────────────
+        // Centre cell of the depth grid = what the camera is looking at
+        float centreDepth = Math.max(
+                depthGrid[(DEP_H / 2) * DEP_W + DEP_W / 2], 0.3f);
+
+        if (Math.abs(centreDepth - focusCandidateDepth)
+                / Math.max(focusCandidateDepth, 0.1f) <= FOCUS_TOL) {
+            focusCandidateFrames++;
+            if (focusCandidateFrames >= FOCUS_DWELL_FRAMES) {
+                // Servo toward the stable target (smooth, not instant)
+                currentFocusDepth =
+                        currentFocusDepth * 0.88f + focusCandidateDepth * 0.12f;
+            }
+        } else {
+            // Subject changed — reset dwell
+            focusCandidateDepth  = centreDepth;
+            focusCandidateFrames = 0;
+        }
+        // ─────────────────────────────────────────────────────────────────────
 
         Vec3d vel   = mc.player.getVelocity();
         float yaw   = mc.player.getYaw();
@@ -238,7 +290,9 @@ public final class VideoRecorder {
         FrameMeta meta = new FrameMeta(
                 frameCount,
                 (float) vel.x, (float) vel.y, (float) vel.z,
-                yaw, pitch, ap, depthGrid);
+                yaw, pitch, ap,
+                currentFocusDepth,
+                depthGrid);
 
         NativeImage raw;
         try {
@@ -251,7 +305,7 @@ public final class VideoRecorder {
 
         NativeImage cropped = cropTo16x9(raw);
         NativeImage frame   = boxDownsample(cropped, 1280);
-        if (cropped != raw)  cropped.close();
+        if (cropped != raw) cropped.close();
         raw.close();
 
         int  idx     = frameCount;
@@ -261,18 +315,14 @@ public final class VideoRecorder {
         frameCount++;
         nextFrameMs += FRAME_MS;
 
-        if (frameCount == FPS * 60 && mc.player != null) {
+        if (frameCount == FPS * 60 && mc.player != null)
             mc.player.sendMessage(Text.literal("⚠ 残り 1:00"), true);
-        }
 
         ioExecutor.submit(() -> {
-            try {
-                frame.writeTo(outFile);
-            } catch (IOException e) {
+            try { frame.writeTo(outFile); }
+            catch (IOException e) {
                 Photographica.LOGGER.warn("[VideoRecorder] Frame write failed: {}", outFile, e);
-            } finally {
-                frame.close();
-            }
+            } finally { frame.close(); }
         });
     }
 
@@ -299,20 +349,19 @@ public final class VideoRecorder {
 
         for (int i = 0; i < total; i++) {
             FrameMeta meta   = metas.get(i);
-            File inFile  = new File(rawDirIn,    String.format("frame_%04d.png", meta.idx()));
+            File inFile  = new File(rawDirIn,     String.format("frame_%04d.png", meta.idx()));
             File outFile = new File(processedDir, String.format("frame_%04d.png", meta.idx()));
 
-            if (!inFile.exists()) {
-                ppProgress = (i + 1) * 80 / total;
-                continue;
-            }
+            if (!inFile.exists()) { ppProgress = (i + 1) * 80 / total; continue; }
 
-            try (NativeImage img = NativeImage.read(inFile.toPath().toUri().toURL().openStream())) {
+            try (NativeImage img =
+                         NativeImage.read(inFile.toPath().toUri().toURL().openStream())) {
                 NativeImage processed = applyVideoEffects(img, meta);
                 processed.writeTo(outFile);
                 processed.close();
             } catch (IOException e) {
-                Photographica.LOGGER.warn("[VideoRecorder] Post-process failed frame {}", meta.idx(), e);
+                Photographica.LOGGER.warn("[VideoRecorder] Post-process failed frame {}",
+                        meta.idx(), e);
             }
 
             ppProgress = (i + 1) * 80 / total;
@@ -324,7 +373,6 @@ public final class VideoRecorder {
 
         if (!vidDir.exists()) vidDir.mkdirs();
         String outMp4 = new File(vidDir, sessionId + ".mp4").getAbsolutePath();
-
         boolean ffmpegOk = runFfmpeg(processedDir, outMp4);
 
         ppProgress = 100;
@@ -348,82 +396,42 @@ public final class VideoRecorder {
     // ── Video effects ──────────────────────────────────────────────────────────
 
     /**
-     * Applies exposure, vignette, and depth-scaled directional motion blur.
+     * Three-pass effect pipeline applied to each raw frame.
      *
-     * Blur model:
-     *   baseBlurLen  = |screenSpaceVelocity| × SCALE  (pixels)
-     *   pixBlurLen   = baseBlurLen × clamp(refDepth / pixDepth, 0, 4)
-     *   → near pixels (small depth) get multiplied blur
-     *   → far  pixels (large depth) get divided   blur → near zero
-     *
-     * Depth is looked up from FrameMeta.depthGrid (32×18) via bilinear interpolation.
-     * refDepth = centre depth pixel (the "focus" reference).
+     * Pass 1 – Auto-exposure (histogram, ISO AUTO simulation) + vignette
+     * Pass 2 – DoF bokeh: per-pixel CoC from 50 mm optics model, separable blur
+     * Pass 3 – Directional motion blur: blur_px = velocity × FOCAL_PX / depth
      */
     private static NativeImage applyVideoEffects(NativeImage src, FrameMeta meta) {
-        int w  = src.getWidth();
-        int h  = src.getHeight();
-        float halfW = w * 0.5f;
-        float halfH = h * 0.5f;
+        int   w      = src.getWidth();
+        int   h      = src.getHeight();
+        float halfW  = w * 0.5f;
+        float halfH  = h * 0.5f;
+        float ap     = meta.aperture();
+        float focus  = Math.max(meta.focusDepth(), 0.5f);
+        float[] grid = meta.depthGrid();
 
-        // ── Exposure ──
-        float n   = meta.aperture();
-        double evCam = Math.log(n * n * 48.0) / Math.log(2.0) - 2.0;
-        double evRef = Math.log(5.6 * 5.6 * 48.0) / Math.log(2.0) - 2.0;
-        float  expMult = Math.max(0.1f, Math.min(8.0f, (float) Math.pow(2.0, evRef - evCam)));
+        // ── Pass 1: auto-exposure + vignette ─────────────────────────────────
+        float expMult = computeAutoExposure(src);
+        float vig     = apertureToVignette(ap);
 
-        // ── Vignette ──
-        float vig = apertureToVignette(n);
-
-        // ── Screen-space velocity → blur direction & base length ──
-        float yawRad  = (float) Math.toRadians(meta.yaw());
-        // Project world-space horizontal velocity onto screen-right axis
-        float screenVX = (float)( Math.cos(yawRad) * meta.velX()
-                                + Math.sin(yawRad) * meta.velZ());
-        // Pitch only affects vertical to second order; use raw Y as screen-up
-        float screenVY = meta.velY();
-
-        // 1 block/tick × 20 ticks/s ÷ 24 fps × ~32 px/block at default FOV
-        final float SCALE = (20.0f / FPS) * 32.0f;
-        float bDX = -screenVX * SCALE;  // negative: moving right → trail to left
-        float bDY = -screenVY * SCALE;
-
-        float baseBlur = (float) Math.sqrt(bDX * bDX + bDY * bDY);
-        // Hard cap: never blur more than 1/8 of frame width
-        float maxBlur = w / 8.0f;
-        baseBlur = Math.min(baseBlur, maxBlur);
-
-        // Normalised blur direction
-        float ndx = 0f, ndy = 0f;
-        if (baseBlur >= 0.5f) {
-            float inv = 1.0f / baseBlur;
-            ndx = bDX * inv;
-            ndy = bDY * inv;
-        }
-
-        // ── Reference depth = centre of depth grid ──
-        float[] depthGrid = meta.depthGrid();
-        float refDepth = (depthGrid != null)
-                ? depthGrid[(DEP_H / 2) * DEP_W + DEP_W / 2]
-                : 5.0f;
-        refDepth = Math.max(refDepth, 0.5f);
-
-        // ── Pass 1: exposure + vignette ──
         NativeImage pass1 = new NativeImage(w, h, false);
         for (int py = 0; py < h; py++) {
             float dy = (py - halfH) / halfH;
+            float dy2 = dy * dy;
             for (int px = 0; px < w; px++) {
-                int c  = src.getColor(px, py);
-                int a  = (c >>> 24) & 0xFF;
-                int b  = (c >>> 16) & 0xFF;
-                int g  = (c >>>  8) & 0xFF;
-                int r  =  c         & 0xFF;
+                int c = src.getColor(px, py);
+                int a = (c >>> 24) & 0xFF;
+                int b = (c >>> 16) & 0xFF;
+                int g = (c >>>  8) & 0xFF;
+                int r =  c         & 0xFF;
 
                 r = applyExposure(r, expMult);
                 g = applyExposure(g, expMult);
                 b = applyExposure(b, expMult);
 
                 float dx = (px - halfW) / halfW;
-                float vf = Math.max(0f, 1f - vig * (dx * dx + dy * dy) * 0.5f);
+                float vf = Math.max(0f, 1f - vig * (dx * dx + dy2) * 0.5f);
                 r = clamp((int)(r * vf));
                 g = clamp((int)(g * vf));
                 b = clamp((int)(b * vf));
@@ -432,57 +440,209 @@ public final class VideoRecorder {
             }
         }
 
-        if (baseBlur < 0.5f) return pass1;  // no movement — skip blur pass
-
-        // ── Pass 2: depth-scaled directional motion blur ──
-        NativeImage pass2 = new NativeImage(w, h, false);
-
+        // ── Pass 2: depth-of-field bokeh ─────────────────────────────────────
+        // Build per-pixel CoC radius map
+        float maxCoC = w / 5.0f;   // hard cap: 20% of frame width
+        float[] cocMap = new float[w * h];
         for (int py = 0; py < h; py++) {
-            // Normalised texture coordinate (0 = top in image space, but depth grid
-            // rows go bottom-up in GL convention — flip fy for the grid lookup)
-            float fy = 1.0f - (py + 0.5f) / h;   // flip Y: image top → depth grid bottom
-            float fx = 0f;
-
+            // Flip Y: image row 0 = top, GL depth grid row 0 = bottom
+            float fy = 1.0f - (py + 0.5f) / h;
             for (int px = 0; px < w; px++) {
-                fx = (px + 0.5f) / w;
+                float fx = (px + 0.5f) / w;
+                float d = (grid != null)
+                        ? bilinearDepth(grid, DEP_W, DEP_H, fx, fy) : focus;
+                d = Math.max(d, 0.2f);
+                // CoC diameter, then halve to get radius for the blur kernel
+                float coc = Math.abs(d - focus) * ap * CoC_K / (d * focus);
+                cocMap[py * w + px] = Math.min(coc * 0.5f, maxCoC * 0.5f);
+            }
+        }
+        NativeImage pass2 = separableVariableBlur(pass1, cocMap, w, h);
+        pass1.close();
 
-                // Look up linear depth at this pixel via bilinear interpolation
-                float pixDepth = (depthGrid != null)
-                        ? bilinearDepth(depthGrid, DEP_W, DEP_H, fx, fy)
-                        : refDepth;
-                pixDepth = Math.max(pixDepth, 0.2f);
+        // ── Pass 3: directional motion blur ──────────────────────────────────
+        float yawRad   = (float) Math.toRadians(meta.yaw());
+        float screenVX = (float)(Math.cos(yawRad) * meta.velX()
+                               + Math.sin(yawRad) * meta.velZ());
+        float screenVY = meta.velY();
+        // Convert blocks/tick → blocks/frame  (Minecraft runs at 20 TPS)
+        float velPerFrame = (float) Math.sqrt(screenVX * screenVX + screenVY * screenVY)
+                          * (20.0f / FPS);
 
-                // Depth scale: near → large blur, far → small blur
-                // depthScale > 1 for near objects, < 1 for far objects
-                float depthScale = Math.min(refDepth / pixDepth, 4.0f);
-                int blurLen = (int)(baseBlur * depthScale);
-                blurLen = Math.min(blurLen, (int) maxBlur);
+        if (velPerFrame < 0.002f) return pass2;  // negligible motion
+
+        float invMag = 1.0f / (float) Math.sqrt(
+                screenVX * screenVX + screenVY * screenVY + 1e-12f);
+        // Trail direction: opposite to movement direction
+        float ndx = -screenVX * invMag;
+        float ndy = -screenVY * invMag;
+        float velScale  = velPerFrame * FOCAL_PX;   // px at 1-metre depth
+        float maxBlurPx = w / 6.0f;
+
+        NativeImage pass3 = new NativeImage(w, h, false);
+        for (int py = 0; py < h; py++) {
+            float fy = 1.0f - (py + 0.5f) / h;
+            for (int px = 0; px < w; px++) {
+                float fx = (px + 0.5f) / w;
+                float d  = (grid != null)
+                        ? bilinearDepth(grid, DEP_W, DEP_H, fx, fy) : focus;
+                d = Math.max(d, 0.2f);
+
+                // Physically correct: far objects have negligible trail
+                int blurLen = (int) Math.min(velScale / d, maxBlurPx);
 
                 if (blurLen < 1) {
-                    pass2.setColor(px, py, pass1.getColor(px, py));
+                    pass3.setColor(px, py, pass2.getColor(px, py));
                     continue;
                 }
 
-                // 1-D box blur along (ndx, ndy) direction, length blurLen
                 long ra = 0, ga = 0, ba = 0, aa = 0;
                 int  samples = blurLen + 1;
                 for (int s = 0; s <= blurLen; s++) {
                     int sx = Math.max(0, Math.min(w - 1, px + (int)(s * ndx)));
                     int sy = Math.max(0, Math.min(h - 1, py + (int)(s * ndy)));
-                    int c  = pass1.getColor(sx, sy);
+                    int c  = pass2.getColor(sx, sy);
                     aa += (c >>> 24) & 0xFF;
                     ba += (c >>> 16) & 0xFF;
                     ga += (c >>>  8) & 0xFF;
                     ra +=  c         & 0xFF;
                 }
-                pass2.setColor(px, py,
+                pass3.setColor(px, py,
                         ((int)(aa / samples) << 24) | ((int)(ba / samples) << 16)
                       | ((int)(ga / samples) <<  8) |  (int)(ra / samples));
             }
         }
+        pass2.close();
+        return pass3;
+    }
 
-        pass1.close();
-        return pass2;
+    // ── Auto-exposure ──────────────────────────────────────────────────────────
+
+    /**
+     * Histogram-based auto-exposure that simulates ISO AUTO metering.
+     *
+     * Finds the 70th-percentile luminance and scales the image so that
+     * value maps to 110 (≈ 43% brightness).  This is equivalent to spot-metering
+     * at 70% of sorted-pixels brightness — prevents highlight clipping while
+     * keeping shadows visible.  Clamped to ±1 stop (0.5 – 2.0×).
+     */
+    private static float computeAutoExposure(NativeImage src) {
+        int w = src.getWidth(), h = src.getHeight();
+        int[] hist  = new int[256];
+        int   count = 0;
+        // Sample every 8th pixel — sufficient for a histogram
+        for (int py = 0; py < h; py += 8) {
+            for (int px = 0; px < w; px += 8) {
+                int c = src.getColor(px, py);
+                // NativeImage is ABGR; extract r, g, b correctly
+                int r =  c         & 0xFF;
+                int g = (c >>>  8) & 0xFF;
+                int b = (c >>> 16) & 0xFF;
+                int luma = (r * 299 + g * 587 + b * 114) / 1000;  // BT.601
+                hist[Math.min(luma, 255)]++;
+                count++;
+            }
+        }
+        if (count == 0) return 1.0f;
+
+        // 70th-percentile luminance
+        int threshold = (int)(count * 0.70), cumulative = 0, p70 = 128;
+        for (int i = 0; i < 256; i++) {
+            cumulative += hist[i];
+            if (cumulative >= threshold) { p70 = i; break; }
+        }
+        if (p70 < 6) return 1.0f;  // extremely dark scene — don't over-boost
+
+        float mult = 110.0f / p70;
+        return Math.max(0.5f, Math.min(2.0f, mult));  // ±1 stop
+    }
+
+    // ── Separable variable-radius box blur (O(W×H) via prefix sums) ───────────
+
+    /**
+     * Applies a 2-pass (horizontal then vertical) separable box blur where each
+     * pixel has its own blur radius from {@code radiusMap}.
+     *
+     * Uses prefix-sum tables per row / column so the per-pixel cost is O(1)
+     * regardless of radius — total complexity is O(W×H).
+     * Temp arrays are allocated once and reused across frames.
+     */
+    private static NativeImage separableVariableBlur(NativeImage src,
+                                                     float[] radiusMap,
+                                                     int w, int h) {
+        int size = w * h;
+        if (dofTempCap < size) {
+            dofTempR = new int[size]; dofTempG = new int[size];
+            dofTempB = new int[size]; dofTempA = new int[size];
+            dofTempCap = size;
+        }
+
+        long[] prefR = new long[w + 1], prefG = new long[w + 1],
+               prefB = new long[w + 1], prefA = new long[w + 1];
+
+        // ── Horizontal pass ───────────────────────────────────────────────────
+        for (int py = 0; py < h; py++) {
+            prefR[0] = prefG[0] = prefB[0] = prefA[0] = 0;
+            for (int px = 0; px < w; px++) {
+                int c = src.getColor(px, py);
+                prefA[px + 1] = prefA[px] + ((c >>> 24) & 0xFF);
+                prefB[px + 1] = prefB[px] + ((c >>> 16) & 0xFF);
+                prefG[px + 1] = prefG[px] + ((c >>>  8) & 0xFF);
+                prefR[px + 1] = prefR[px] + ( c         & 0xFF);
+            }
+            for (int px = 0; px < w; px++) {
+                int r = (int) radiusMap[py * w + px];
+                int base = py * w + px;
+                if (r < 1) {
+                    int c = src.getColor(px, py);
+                    dofTempA[base] = (c >>> 24) & 0xFF;
+                    dofTempB[base] = (c >>> 16) & 0xFF;
+                    dofTempG[base] = (c >>>  8) & 0xFF;
+                    dofTempR[base] =  c         & 0xFF;
+                } else {
+                    int x0 = Math.max(0, px - r), x1 = Math.min(w - 1, px + r);
+                    int cnt = x1 - x0 + 1;
+                    dofTempA[base] = (int)((prefA[x1 + 1] - prefA[x0]) / cnt);
+                    dofTempB[base] = (int)((prefB[x1 + 1] - prefB[x0]) / cnt);
+                    dofTempG[base] = (int)((prefG[x1 + 1] - prefG[x0]) / cnt);
+                    dofTempR[base] = (int)((prefR[x1 + 1] - prefR[x0]) / cnt);
+                }
+            }
+        }
+
+        long[] vprefR = new long[h + 1], vprefG = new long[h + 1],
+               vprefB = new long[h + 1], vprefA = new long[h + 1];
+
+        // ── Vertical pass ─────────────────────────────────────────────────────
+        NativeImage dst = new NativeImage(w, h, false);
+        for (int px = 0; px < w; px++) {
+            vprefR[0] = vprefG[0] = vprefB[0] = vprefA[0] = 0;
+            for (int py = 0; py < h; py++) {
+                int base = py * w + px;
+                vprefA[py + 1] = vprefA[py] + dofTempA[base];
+                vprefB[py + 1] = vprefB[py] + dofTempB[base];
+                vprefG[py + 1] = vprefG[py] + dofTempG[base];
+                vprefR[py + 1] = vprefR[py] + dofTempR[base];
+            }
+            for (int py = 0; py < h; py++) {
+                int r    = (int) radiusMap[py * w + px];
+                int base = py * w + px;
+                if (r < 1) {
+                    dst.setColor(px, py,
+                            (dofTempA[base] << 24) | (dofTempB[base] << 16)
+                          | (dofTempG[base] <<  8) |  dofTempR[base]);
+                } else {
+                    int y0  = Math.max(0, py - r), y1 = Math.min(h - 1, py + r);
+                    int cnt = y1 - y0 + 1;
+                    int a   = (int)((vprefA[y1 + 1] - vprefA[y0]) / cnt);
+                    int b   = (int)((vprefB[y1 + 1] - vprefB[y0]) / cnt);
+                    int g   = (int)((vprefG[y1 + 1] - vprefG[y0]) / cnt);
+                    int rv  = (int)((vprefR[y1 + 1] - vprefR[y0]) / cnt);
+                    dst.setColor(px, py, (a << 24) | (b << 16) | (g << 8) | rv);
+                }
+            }
+        }
+        return dst;
     }
 
     // ── ffmpeg ─────────────────────────────────────────────────────────────────
@@ -495,25 +655,18 @@ public final class VideoRecorder {
                         ff, "-y",
                         "-framerate", String.valueOf(FPS),
                         "-i", new File(processedDir, "frame_%04d.png").getAbsolutePath(),
-                        "-c:v", "libx264",
-                        "-crf",  "18",
-                        "-pix_fmt", "yuv420p",
+                        "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
                         outPath);
-                // Discard stdout/stderr so the OS pipe buffer never fills up.
-                // Without this, proc.waitFor() deadlocks once the 64KB pipe buffer
-                // fills with ffmpeg's progress output.
                 pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
                 pb.redirectError(ProcessBuilder.Redirect.DISCARD);
                 Process proc = pb.start();
 
-                // Poll isAlive() so we can animate ppProgress 80→98 while ffmpeg runs.
                 long startMs = System.currentTimeMillis();
                 while (proc.isAlive()) {
-                    try { Thread.sleep(200); } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt(); break;
-                    }
-                    long elapsed = System.currentTimeMillis() - startMs;
-                    ppProgress = 80 + (int) Math.min(18, elapsed / 1000); // +1%/s, cap 98
+                    try { Thread.sleep(200); }
+                    catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                    ppProgress = 80 + (int) Math.min(18,
+                            (System.currentTimeMillis() - startMs) / 1000);
                 }
 
                 int exit = proc.waitFor();
@@ -530,9 +683,9 @@ public final class VideoRecorder {
     // ── Depth utilities ────────────────────────────────────────────────────────
 
     /**
-     * Downsamples a raw GL depth buffer (non-linear, [0,1]) to a dW×dH grid
-     * of linear depths in metres. Averages raw depth values within each cell
-     * before linearising (more accurate than linearising then averaging).
+     * Downsamples the raw GL depth buffer (non-linear NDC [0,1]) to a dW×dH grid
+     * of linear depths in metres.  Averages raw depth values within each cell before
+     * linearising (more accurate than linearising then averaging).
      */
     private static float[] downsampleDepth(FloatBuffer raw, int vpW, int vpH,
                                            int dW, int dH) {
@@ -545,7 +698,6 @@ public final class VideoRecorder {
                 int sx0 = dx * vpW / dW;
                 int sx1 = Math.min((dx + 1) * vpW / dW, vpW);
                 if (sx1 <= sx0) sx1 = sx0 + 1;
-
                 double sum = 0;
                 int    cnt = 0;
                 for (int sy = sy0; sy < sy1; sy++) {
@@ -555,80 +707,59 @@ public final class VideoRecorder {
                         cnt++;
                     }
                 }
-
-                float rawD  = (float)(sum / cnt);
-                float ndc   = 2.0f * rawD - 1.0f;
-                // Linearise: depth in metres from camera
-                float linD  = 2.0f * NEAR * FAR / (FAR + NEAR - ndc * (FAR - NEAR));
-                grid[dy * dW + dx] = linD;
+                float rawD = (float)(sum / cnt);
+                float ndc  = 2.0f * rawD - 1.0f;
+                grid[dy * dW + dx] = 2.0f * NEAR * FAR / (FAR + NEAR - ndc * (FAR - NEAR));
             }
         }
         return grid;
     }
 
     /**
-     * Bilinear interpolation over a dW×dH depth grid at normalised coordinates
-     * (fx, fy) ∈ [0, 1]. Row 0 = bottom (GL convention).
+     * Bilinear interpolation over a dW×dH depth grid at normalised (fx, fy) ∈ [0,1].
+     * Row 0 = bottom (OpenGL convention).
      */
     private static float bilinearDepth(float[] grid, int dW, int dH,
                                        float fx, float fy) {
-        float gx = fx * (dW - 1);
-        float gy = fy * (dH - 1);
-        int   x0 = (int) gx,  y0 = (int) gy;
-        int   x1 = Math.min(x0 + 1, dW - 1);
-        int   y1 = Math.min(y0 + 1, dH - 1);
-        float tx = gx - x0,   ty = gy - y0;
-
+        float gx = fx * (dW - 1), gy = fy * (dH - 1);
+        int   x0 = (int) gx, y0 = (int) gy;
+        int   x1 = Math.min(x0 + 1, dW - 1), y1 = Math.min(y0 + 1, dH - 1);
+        float tx = gx - x0, ty = gy - y0;
         float d00 = grid[y0 * dW + x0], d10 = grid[y0 * dW + x1];
         float d01 = grid[y1 * dW + x0], d11 = grid[y1 * dW + x1];
         return (d00 * (1 - tx) + d10 * tx) * (1 - ty)
              + (d01 * (1 - tx) + d11 * tx) *      ty;
     }
 
-    /** Returns a flat DEP_W×DEP_H depth grid filled with a single value. */
     private static float[] flatDepthGrid(float depth) {
         float[] g = new float[DEP_W * DEP_H];
-        java.util.Arrays.fill(g, depth);
+        Arrays.fill(g, depth);
         return g;
     }
 
     // ── Image utilities ────────────────────────────────────────────────────────
 
-    /** Crops a NativeImage to 16:9 aspect ratio (centred). */
     private static NativeImage cropTo16x9(NativeImage src) {
-        int w = src.getWidth();
-        int h = src.getHeight();
+        int w = src.getWidth(), h = src.getHeight();
         float aspect = 16f / 9f;
-        int targetW, targetH;
-        if ((float) w / h > aspect) {
-            targetH = h;
-            targetW = Math.round(h * aspect);
-        } else {
-            targetW = w;
-            targetH = Math.round(w / aspect);
-        }
-        if (targetW == w && targetH == h) return src;
-        int offX = (w - targetW) / 2;
-        int offY = (h - targetH) / 2;
-        NativeImage dst = new NativeImage(targetW, targetH, false);
-        for (int y = 0; y < targetH; y++) {
-            for (int x = 0; x < targetW; x++) {
+        int tW, tH;
+        if ((float) w / h > aspect) { tH = h; tW = Math.round(h * aspect); }
+        else                         { tW = w; tH = Math.round(w / aspect); }
+        if (tW == w && tH == h) return src;
+        int offX = (w - tW) / 2, offY = (h - tH) / 2;
+        NativeImage dst = new NativeImage(tW, tH, false);
+        for (int y = 0; y < tH; y++)
+            for (int x = 0; x < tW; x++)
                 dst.setColor(x, y, src.getColor(x + offX, y + offY));
-            }
-        }
         return dst;
     }
 
-    /** Box downsample to maxWidth, preserving aspect ratio. */
     private static NativeImage boxDownsample(NativeImage src, int maxWidth) {
-        int sw = src.getWidth();
-        int sh = src.getHeight();
+        int sw = src.getWidth(), sh = src.getHeight();
         if (sw <= maxWidth) return src;
-        int dw = maxWidth;
-        int dh = Math.max(1, Math.round((float) sh * dw / sw));
+        int dw = maxWidth, dh = Math.max(1, Math.round((float) sh * dw / sw));
         NativeImage dst = new NativeImage(dw, dh, false);
-        float xS = (float) sw / dw;
-        float yS = (float) sh / dh;
+        float xS = (float) sw / dw, yS = (float) sh / dh;
         for (int y = 0; y < dh; y++) {
             int sy0 = (int) Math.floor(y * yS);
             int sy1 = Math.min(sh, (int) Math.ceil((y + 1) * yS));
@@ -639,16 +770,13 @@ public final class VideoRecorder {
                 if (sx1 <= sx0) sx1 = sx0 + 1;
                 long ra = 0, ga = 0, ba = 0, aa = 0;
                 int  n  = 0;
-                for (int sy = sy0; sy < sy1; sy++) {
+                for (int sy = sy0; sy < sy1; sy++)
                     for (int sx = sx0; sx < sx1; sx++) {
                         int c = src.getColor(sx, sy);
-                        aa += (c >>> 24) & 0xFF;
-                        ba += (c >>> 16) & 0xFF;
-                        ga += (c >>>  8) & 0xFF;
-                        ra +=  c         & 0xFF;
+                        aa += (c >>> 24) & 0xFF; ba += (c >>> 16) & 0xFF;
+                        ga += (c >>>  8) & 0xFF; ra +=  c         & 0xFF;
                         n++;
                     }
-                }
                 dst.setColor(x, y,
                         ((int)(aa / n) << 24) | ((int)(ba / n) << 16)
                       | ((int)(ga / n) <<  8) |  (int)(ra / n));
@@ -659,6 +787,7 @@ public final class VideoRecorder {
 
     private static int applyExposure(int v, float mult) {
         float f = v * mult;
+        // Shoulder curve for highlights: soft knee above 200
         if (f > 200f) {
             float excess = f - 200f;
             f = 200f + 55f * (1f - (float) Math.exp(-excess / 55f));
