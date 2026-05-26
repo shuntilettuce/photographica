@@ -60,15 +60,18 @@ public final class VideoRecorder {
      * K constant for CoC formula.
      * CoC_px = |depth - focus| × aperture × CoC_K / (depth × focus)
      *
-     * Derivation (thin-lens, 50 mm focal length on 36 mm sensor, 1280 px wide):
-     *   f = 0.050 m,  sensor_w = 0.036 m,  img_w = 1280 px
-     *   K = f² / sensor_w × img_w = 0.0025 / 0.036 × 1280 ≈ 88.9
+     * Derivation (thin-lens, 28 mm focal length on 36 mm sensor, 1280 px wide):
+     *   f = 0.028 m,  sensor_w = 0.036 m,  img_w = 1280 px
+     *   K = f² / sensor_w × img_w = 0.000784 / 0.036 × 1280 ≈ 27.8
      *
+     * 28 mm is typical for a consumer camcorder wide end — shallower DoF
+     * than a 50 mm portrait lens, but still gives noticeable bokeh up close.
      * Results (aperture 2.8, focus 10 m):
-     *   d=20 m  → CoC ≈ 12.5 px  (noticeably soft)
-     *   d=200 m, focus=300 m → CoC ≈ 0.4 px  (essentially sharp) ✓
+     *   d=20 m  → CoC ≈ 3.9 px  (subtly soft)
+     *   d=3 m, focus=5 m → CoC ≈ 10.5 px  (foreground blur)
+     *   d=200 m, focus=300 m → CoC ≈ 0.13 px (essentially sharp) ✓
      */
-    private static final float CoC_K    = 88.9f;
+    private static final float CoC_K    = 28.0f;
     /**
      * Focal pixels for motion blur.
      * pixel_displacement = velocity_blocks_per_frame × FOCAL_PX / depth_blocks
@@ -79,7 +82,7 @@ public final class VideoRecorder {
     private static final float FOCAL_PX = 1778f;
 
     /** Dwell time (frames) before AF servo starts tracking a new depth. */
-    private static final int   FOCUS_DWELL_FRAMES = FPS;   // 1 second
+    private static final int   FOCUS_DWELL_FRAMES = 20;    // ~0.83 s
     /** Fractional depth change that counts as "same object." */
     private static final float FOCUS_TOL          = 0.25f;
 
@@ -271,9 +274,10 @@ public final class VideoRecorder {
                 / Math.max(focusCandidateDepth, 0.1f) <= FOCUS_TOL) {
             focusCandidateFrames++;
             if (focusCandidateFrames >= FOCUS_DWELL_FRAMES) {
-                // Servo toward the stable target (smooth, not instant)
+                // Servo toward the stable target — faster rate so it reaches
+                // the new focus within ~0.3 s after the dwell period ends.
                 currentFocusDepth =
-                        currentFocusDepth * 0.88f + focusCandidateDepth * 0.12f;
+                        currentFocusDepth * 0.65f + focusCandidateDepth * 0.35f;
             }
         } else {
             // Subject changed — reset dwell
@@ -442,7 +446,7 @@ public final class VideoRecorder {
 
         // ── Pass 2: depth-of-field bokeh ─────────────────────────────────────
         // Build per-pixel CoC radius map
-        float maxCoC = w / 5.0f;   // hard cap: 20% of frame width
+        float maxCoC = 40.0f;      // hard cap: 40 px radius (80 px diameter)
         float[] cocMap = new float[w * h];
         for (int py = 0; py < h; py++) {
             // Flip Y: image row 0 = top, GL depth grid row 0 = bottom
@@ -545,16 +549,19 @@ public final class VideoRecorder {
         }
         if (count == 0) return 1.0f;
 
-        // 70th-percentile luminance
-        int threshold = (int)(count * 0.70), cumulative = 0, p70 = 128;
+        // 60th-percentile luminance — less aggressive than the previous 70th,
+        // avoids over-darkening scenes that are normally bright.
+        int threshold = (int)(count * 0.60), cumulative = 0, p60 = 128;
         for (int i = 0; i < 256; i++) {
             cumulative += hist[i];
-            if (cumulative >= threshold) { p70 = i; break; }
+            if (cumulative >= threshold) { p60 = i; break; }
         }
-        if (p70 < 6) return 1.0f;  // extremely dark scene — don't over-boost
+        if (p60 < 6) return 1.0f;  // extremely dark scene — don't over-boost
 
-        float mult = 110.0f / p70;
-        return Math.max(0.5f, Math.min(2.0f, mult));  // ±1 stop
+        // Target 128 (true mid-grey) — keeps typical Minecraft scenes neutral.
+        float mult = 128.0f / p60;
+        // Allow up to +1.5 stop brightening (3.0×) and −0.75 stop darkening (0.6×).
+        return Math.max(0.6f, Math.min(3.0f, mult));
     }
 
     // ── Separable variable-radius box blur (O(W×H) via prefix sums) ───────────
