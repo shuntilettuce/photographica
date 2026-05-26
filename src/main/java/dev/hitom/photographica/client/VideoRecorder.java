@@ -76,10 +76,11 @@ public final class VideoRecorder {
      * Focal pixels for motion blur.
      * pixel_displacement = velocity_blocks_per_frame × FOCAL_PX / depth_blocks
      *
-     * FOCAL_PX = focal_length / sensor_width × image_width
-     *          = 0.050 / 0.036 × 1280 ≈ 1778 px
+     * Tuned down from the physical value (1778 px) to give subtle, realistic blur
+     * rather than smearing everything.  At walking speed (~0.17 blocks/frame) and
+     * 5 m depth: blurLen = 0.17 × 350 / 5 ≈ 12 px — visible but not exaggerated.
      */
-    private static final float FOCAL_PX = 1778f;
+    private static final float FOCAL_PX = 350f;
 
     /** Dwell time (frames) before AF servo starts tracking a new depth. */
     private static final int   FOCUS_DWELL_FRAMES = 20;    // ~0.83 s
@@ -500,7 +501,7 @@ public final class VideoRecorder {
         }
 
         // Build per-pixel CoC radius map
-        float maxCoC = 40.0f;      // hard cap: 40 px radius (80 px diameter)
+        float maxCoC = 12.0f;      // hard cap: 12 px radius (24 px diameter) — subtle bokeh
         float[] cocMap = new float[w * h];
         for (int py = 0; py < h; py++) {
             for (int px = 0; px < w; px++) {
@@ -554,7 +555,7 @@ public final class VideoRecorder {
         float ndx = -screenVX * invMag;
         float ndy = -screenVY * invMag;
         float velScale  = velPerFrame * FOCAL_PX;   // px at 1-metre depth
-        float maxBlurPx = w / 6.0f;
+        float maxBlurPx = w / 30.0f;               // hard cap ~43 px at 1280 px wide
 
         NativeImage pass3 = new NativeImage(w, h, false);
         for (int py = 0; py < h; py++) {
