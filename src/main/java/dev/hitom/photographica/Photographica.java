@@ -11,6 +11,7 @@ import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.FilmRollItem;
 import dev.hitom.photographica.item.MirrorlessCameraItem;
 import dev.hitom.photographica.item.SdCardItem;
+import dev.hitom.photographica.item.VideoCameraItem;
 import dev.hitom.photographica.network.CreatePhotoFromArmorStandPayload;
 import dev.hitom.photographica.network.CreatePhotoPayload;
 import dev.hitom.photographica.network.EquipCameraToArmorStandPayload;
@@ -20,6 +21,7 @@ import dev.hitom.photographica.network.LoadFilmPayload;
 import dev.hitom.photographica.network.LoadSdCardPayload;
 import dev.hitom.photographica.network.TakeFilmPhotoFromArmorStandPayload;
 import dev.hitom.photographica.network.TakeFilmPhotoPayload;
+import dev.hitom.photographica.network.UnequipCameraFromArmorStandPayload;
 import dev.hitom.photographica.network.UnloadFilmPayload;
 import dev.hitom.photographica.network.UnloadSdCardPayload;
 import dev.hitom.photographica.network.UpdateArmorStandCameraPayload;
@@ -78,6 +80,7 @@ public class Photographica implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(CreatePhotoFromArmorStandPayload.ID,    CreatePhotoFromArmorStandPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(TakeFilmPhotoFromArmorStandPayload.ID,  TakeFilmPhotoFromArmorStandPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(EquipCameraToArmorStandPayload.ID,      EquipCameraToArmorStandPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(UnequipCameraFromArmorStandPayload.ID, UnequipCameraFromArmorStandPayload.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(UpdateCameraSettingsPayload.ID, (payload, context) -> {
 			context.server().execute(() -> {
@@ -472,6 +475,34 @@ public class Photographica implements ModInitializer {
 					player.dropItem(existing, false);
 				}
 				player.playSound(SoundEvents.ITEM_BUNDLE_INSERT, 0.8f, 1.1f);
+			});
+		});
+
+		// UnequipCameraFromArmorStandPayload: remove camera from armor stand → player inventory
+		ServerPlayNetworking.registerGlobalReceiver(UnequipCameraFromArmorStandPayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> {
+				net.minecraft.entity.Entity entity = player.getServerWorld().getEntityById(payload.entityId());
+				if (!(entity instanceof ArmorStandEntity stand)) return;
+
+				// Find the camera slot
+				for (EquipmentSlot slot : new EquipmentSlot[]{
+						EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND, EquipmentSlot.CHEST}) {
+					ItemStack s = stand.getEquippedStack(slot);
+					if (s.isEmpty()) continue;
+					if (!(s.getItem() instanceof CameraItem)
+							&& !(s.getItem() instanceof FilmCameraItem)
+							&& !(s.getItem() instanceof MirrorlessCameraItem)
+							&& !(s.getItem() instanceof VideoCameraItem)) continue;
+
+					// Remove from stand and give to player
+					stand.equipStack(slot, ItemStack.EMPTY);
+					if (!player.getInventory().insertStack(s.copy())) {
+						player.dropItem(s, false);
+					}
+					player.playSound(SoundEvents.ITEM_BUNDLE_REMOVE_ONE, 0.8f, 1.1f);
+					return;
+				}
 			});
 		});
 

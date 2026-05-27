@@ -3,8 +3,10 @@ package dev.hitom.photographica.client.screen;
 import dev.hitom.photographica.client.VideoRecorder;
 import dev.hitom.photographica.component.VideoSettings;
 import dev.hitom.photographica.item.VideoCameraItem;
+import dev.hitom.photographica.network.UnequipCameraFromArmorStandPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.item.ItemStack;
@@ -79,8 +81,20 @@ public class VideoCameraScreen extends Screen {
                     }));
         }
 
-        addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
-                Text.literal("閉じる"), b -> close()));
+        if (armorStandEntityId >= 0 && !VideoRecorder.isRecording()) {
+            // Armor stand mode: show "Remove camera" button below close
+            addDrawableChild(SafelightButton.of(cx + 5, btnY, 100,
+                    Text.literal("取り出す"),
+                    b -> {
+                        ClientPlayNetworking.send(new UnequipCameraFromArmorStandPayload(armorStandEntityId));
+                        close();
+                    }));
+            addDrawableChild(SafelightButton.ghost(cx + 5, btnY + 24, 100,
+                    Text.literal("閉じる"), b -> close()));
+        } else {
+            addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
+                    Text.literal("閉じる"), b -> close()));
+        }
     }
 
     @Override

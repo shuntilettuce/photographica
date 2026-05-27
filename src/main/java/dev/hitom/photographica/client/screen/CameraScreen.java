@@ -7,6 +7,7 @@ import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.component.SdCardData;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.LensItem;
+import dev.hitom.photographica.network.UnequipCameraFromArmorStandPayload;
 import dev.hitom.photographica.network.UpdateArmorStandCameraPayload;
 import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
 import net.fabricmc.api.EnvType;
@@ -164,7 +165,7 @@ public class CameraScreen extends Screen {
 
 		int btnY = top + row * 22 + 14;
 		if (armorStandEntityId >= 0) {
-			// Armor stand mode: show "Shoot" + "Close"
+			// Armor stand mode: "Shoot" | "Remove camera" | "Close"
 			addDrawableChild(SafelightButton.primary(cx - 105, btnY, 100,
 					Text.literal("撮影"),
 					b -> {
@@ -172,7 +173,13 @@ public class CameraScreen extends Screen {
 						PhotoCapture.triggerArmorStandCapture(armorStandEntityId, stack);
 						close();
 					}));
-			addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
+			addDrawableChild(SafelightButton.of(cx + 5, btnY, 100,
+					Text.literal("取り出す"),
+					b -> {
+						ClientPlayNetworking.send(new UnequipCameraFromArmorStandPayload(armorStandEntityId));
+						close();
+					}));
+			addDrawableChild(SafelightButton.ghost(cx + 5, btnY + 24, 100,
 					Text.literal("閉じる"), b -> close()));
 		} else {
 			SdCardData sdData = stack.getOrDefault(ModDataComponents.SD_CARD, SdCardData.EMPTY);
