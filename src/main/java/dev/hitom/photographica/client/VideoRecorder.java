@@ -4,6 +4,7 @@ import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.component.VideoSettings;
 import dev.hitom.photographica.item.VideoCameraItem;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.Camera;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.item.ItemStack;
@@ -116,8 +117,13 @@ public final class VideoRecorder {
 
     // ── Angular velocity tracking (for motion blur) ────────────────────────────
     /** Yaw and pitch at the previous captured frame (degrees). */
-    private static float prevFrameYaw   = 0f;
-    private static float prevFramePitch = 0f;
+    private static float   prevFrameYaw      = 0f;
+    private static float   prevFramePitch    = 0f;
+    /** False on the very first captured frame — prevents a start-up spike. */
+    private static boolean prevFrameValid    = false;
+    /** EMA-smoothed angular deltas — damp single-frame mouse spikes. */
+    private static float   smoothedDeltaYaw  = 0f;
+    private static float   smoothedDeltaPitch = 0f;
 
     // ── Depth-buffer read ──────────────────────────────────────────────────────
     /** Pending depth grid from onWorldRenderEnd(), consumed by captureFrameIfRecording(). */
@@ -217,8 +223,11 @@ public final class VideoRecorder {
 
         currentFps      = VideoCameraItem.getSettings(stack).fps();
         smoothedExpMult = 1.0f;   // reset ISO AUTO smoothing for new session
-        prevFrameYaw    = mc.player != null ? mc.player.getYaw()   : 0f;
-        prevFramePitch  = mc.player != null ? mc.player.getPitch() : 0f;
+        prevFrameValid    = false;
+        prevFrameYaw      = 0f;
+        prevFramePitch    = 0f;
+        smoothedDeltaYaw  = 0f;
+        smoothedDeltaPitch = 0f;
         frameCount    = 0;
         recordStartMs = System.currentTimeMillis();
         nextFrameMs   = recordStartMs;
@@ -357,18 +366,35 @@ public final class VideoRecorder {
         }
         // ─────────────────────────────────────────────────────────────────────
 
-        Vec3d vel   = mc.player.getVelocity();
-        float yaw   = mc.player.getYaw();
-        float pitch = mc.player.getPitch();
-        float ap    = VideoCameraItem.getSettings(recordingStack).aperture();
+        Vec3d vel = mc.player.getVelocity();
+        float ap  = VideoCameraItem.getSettings(recordingStack).aperture();
+
+        // Use the rendering Camera for yaw/pitch: it incorporates tickDelta interpolation
+        // and benefits from smooth-camera mode, avoiding per-tick quantisation spikes.
+        Camera camera = mc.gameRenderer != null ? mc.gameRenderer.getCamera() : null;
+        float yaw   = (camera != null && camera.isReady()) ? camera.getYaw()   : mc.player.getYaw();
+        float pitch = (camera != null && camera.isReady()) ? camera.getPitch() : mc.player.getPitch();
 
         // Angular velocity: yaw/pitch change since the last captured frame.
-        float rawDeltaYaw = yaw - prevFrameYaw;
-        // Wrap to [-180, +180] to handle 0°/360° crossing.
-        if (rawDeltaYaw >  180f) rawDeltaYaw -= 360f;
-        if (rawDeltaYaw < -180f) rawDeltaYaw += 360f;
-        float deltaYaw   = rawDeltaYaw;
-        float deltaPitch = pitch - prevFramePitch;
+        // On the very first frame set delta=0 to avoid a large startup spike.
+        float deltaYaw, deltaPitch;
+        if (prevFrameValid) {
+            float rawDeltaYaw = yaw - prevFrameYaw;
+            // Wrap to [-180, +180] to handle 0°/360° crossing.
+            if (rawDeltaYaw >  180f) rawDeltaYaw -= 360f;
+            if (rawDeltaYaw < -180f) rawDeltaYaw += 360f;
+            float rawDeltaPitch = pitch - prevFramePitch;
+            // EMA smoothing (α=0.4): damps single-frame mouse spikes while still
+            // tracking sustained pans.  A 60° spike decays to ~24% within 2 frames.
+            final float A = 0.4f;
+            smoothedDeltaYaw   = smoothedDeltaYaw   * (1 - A) + rawDeltaYaw   * A;
+            smoothedDeltaPitch = smoothedDeltaPitch * (1 - A) + rawDeltaPitch * A;
+            deltaYaw   = smoothedDeltaYaw;
+            deltaPitch = smoothedDeltaPitch;
+        } else {
+            deltaYaw = deltaPitch = 0f;
+            prevFrameValid = true;
+        }
         prevFrameYaw   = yaw;
         prevFramePitch = pitch;
 
@@ -623,11 +649,21 @@ public final class VideoRecorder {
                         * (20.0f / currentFps);           // blocks per frame
         float transScale = strafeVel * FOCAL_PX;          // pixels at 1 m depth
 
-        // Early-exit: check total blur at focus distance
+        // Forward/backward velocity component (camera-forward direction).
+        // Produces radial (zoom-like) blur: objects near the edges of the screen
+        // blur outward while near objects blur more than distant ones.
+        float fwdVel = ((float)(-Math.sin(yawRad) * meta.velX()
+                               + Math.cos(yawRad) * meta.velZ()))
+                     * (20.0f / currentFps);              // blocks per frame
+        float cx = w * 0.5f, cy = h * 0.5f;
+
+        // Early-exit: check total blur at focus distance (centre pixel + corner fwd)
         float totalAtFocus = (float) Math.sqrt(
                 (rotSampleX + transScale / focus) * (rotSampleX + transScale / focus)
               + rotSampleY * rotSampleY);
-        if (totalAtFocus < 0.5f) return pass2;
+        float cornerFwdBlur = (float) Math.sqrt(cx * cx + cy * cy)
+                            * Math.abs(fwdVel) / focus;
+        if (totalAtFocus < 0.5f && cornerFwdBlur < 0.5f) return pass2;
 
         float maxBlurPx = w / 10.0f;   // hard cap ~128 px at 1280 wide
 
@@ -647,9 +683,11 @@ public final class VideoRecorder {
                 }
                 d = Math.max(d, 0.2f);
 
-                // Total pixel displacement to sample along
-                float sampleX = rotSampleX + transScale / d;
-                float sampleY = rotSampleY;
+                // Total pixel displacement to sample along.
+                // Radial forward component: moving forward → objects expand outward
+                // from screen centre; near objects shift more than distant ones.
+                float sampleX = rotSampleX + transScale / d + (px - cx) * fwdVel / d;
+                float sampleY = rotSampleY                  + (py - cy) * fwdVel / d;
                 float blurMag = (float) Math.sqrt(sampleX * sampleX + sampleY * sampleY);
                 int blurLen = (int) Math.min(blurMag, maxBlurPx);
 
