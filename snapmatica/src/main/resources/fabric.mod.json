@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "snapmatica",
+  "version": "${version}",
+  "name": "Snapmatica",
+  "description": "A client-only photography mod. Press a key to take screenshots with realistic camera effects (DoF, grain, vignette, tone curves).",
+  "authors": ["shunti"],
+  "contact": {},
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.shunti.snapmatica.client.SnapmaticaClient"
+    ]
+  },
+  "mixins": [
+    "snapmatica.client.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=21"
+  }
+}
