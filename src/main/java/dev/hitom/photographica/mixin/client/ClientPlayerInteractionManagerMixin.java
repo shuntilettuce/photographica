@@ -16,6 +16,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
+import net.minecraft.util.hit.EntityHitResult;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -23,34 +24,63 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Opens the camera settings screen when the player right-clicks (empty main hand)
- * an armor stand that has a camera equipped in any slot (MAINHAND, OFFHAND, or CHEST).
+ * an armor stand that has a camera equipped in any slot.
  *
- * Sneaking falls through to vanilla behavior.
- * When the player holds a camera and clicks the stand, vanilla Equipment equipping
- * handles it automatically (cameras implement Equipment → CHEST slot).
+ * We hook interactEntityAtLocation rather than interactEntity because the vanilla
+ * ArmorStand.interactAt() fires inside interactEntityAtLocation and returns CONSUME
+ * (removing the camera from the stand) before interactEntity is ever reached.
+ * Intercepting at the earlier hook lets us cancel the take-out action and open
+ * the settings screen instead.
+ *
+ * Sneaking falls through to vanilla so the player can still use normal armor-stand
+ * interactions while crouching.
  */
 @Mixin(ClientPlayerInteractionManager.class)
 public class ClientPlayerInteractionManagerMixin {
 
+    /**
+     * Primary hook: fires for position-sensitive entity interaction (the path armor
+     * stands actually use — returns CONSUME when removing an item from a slot).
+     */
+    @Inject(method = "interactEntityAtLocation",
+            at = @At("HEAD"),
+            cancellable = true)
+    private void photographica$openArmorStandCameraScreenAt(
+            PlayerEntity player, Entity entity, EntityHitResult hitResult, Hand hand,
+            CallbackInfoReturnable<ActionResult> cir) {
+        if (tryOpenCameraScreen(player, entity, hand, cir)) return;
+    }
+
+    /**
+     * Fallback hook: fires when interactAt returns PASS (no position-sensitive action).
+     * Kept in case some code path reaches here instead of interactEntityAtLocation.
+     */
     @Inject(method = "interactEntity",
             at = @At("HEAD"),
             cancellable = true)
     private void photographica$openArmorStandCameraScreen(
             PlayerEntity player, Entity entity, Hand hand,
             CallbackInfoReturnable<ActionResult> cir) {
-        if (hand != Hand.MAIN_HAND) return;
-        if (!(entity instanceof ArmorStandEntity stand)) return;
-        if (player.isSneaking()) return;
-        if (!player.getMainHandStack().isEmpty()) return;
+        tryOpenCameraScreen(player, entity, hand, cir);
+    }
 
-        // Find camera on the stand (check all equip slots)
+    // ── Shared logic ──────────────────────────────────────────────────────────
+
+    private static boolean tryOpenCameraScreen(PlayerEntity player, Entity entity, Hand hand,
+                                               CallbackInfoReturnable<ActionResult> cir) {
+        if (hand != Hand.MAIN_HAND) return false;
+        if (!(entity instanceof ArmorStandEntity stand)) return false;
+        if (player.isSneaking()) return false;
+        if (!player.getMainHandStack().isEmpty()) return false;
+
+        // Find a camera on the stand (main hand, off hand, or chest slot)
         ItemStack camera = null;
         for (EquipmentSlot slot : new EquipmentSlot[]{
                 EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND, EquipmentSlot.CHEST}) {
             ItemStack s = stand.getEquippedStack(slot);
             if (isCameraItem(s)) { camera = s; break; }
         }
-        if (camera == null) return;
+        if (camera == null) return false;
 
         final ItemStack cameraStack = camera;
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -62,6 +92,7 @@ public class ClientPlayerInteractionManagerMixin {
             mc.setScreen(new CameraScreen(cameraStack, stand.getId()));
         }
         cir.setReturnValue(ActionResult.SUCCESS);
+        return true;
     }
 
     private static boolean isCameraItem(ItemStack stack) {

@@ -14,6 +14,7 @@ import dev.hitom.photographica.client.screen.PhotoViewerScreen;
 import dev.hitom.photographica.client.screen.PrinterScreen;
 import dev.hitom.photographica.client.screen.VideoCameraScreen;
 import dev.hitom.photographica.registry.ModBlockEntities;
+import dev.hitom.photographica.registry.ModItems;
 import dev.hitom.photographica.registry.ModScreenHandlers;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.DevelopedFilmItem;
@@ -25,6 +26,7 @@ import dev.hitom.photographica.network.LoadSdCardPayload;
 import dev.hitom.photographica.network.UnloadSdCardPayload;
 import dev.hitom.photographica.network.WindFilmPayload;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.rendering.v1.ArmorRenderer;
 import net.minecraft.client.render.block.entity.BlockEntityRendererFactories;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -35,10 +37,14 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.render.OverlayTexture;
+import net.minecraft.client.render.model.json.ModelTransformationMode;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.util.math.RotationAxis;
 import org.lwjgl.glfw.GLFW;
 
 public class PhotographicaClient implements ClientModInitializer {
@@ -166,6 +172,29 @@ public class PhotographicaClient implements ClientModInitializer {
 				PhotoFrameBlockEntityRenderer::new);
 		BlockEntityRendererFactories.register(ModBlockEntities.PHOTO_STAND,
 				PhotoStandBlockEntityRenderer::new);
+
+		// Render the video-camera item model on the player's chest when worn.
+		// Uses the humanoid body bone for correct rotation with body/head animations.
+		ArmorRenderer.register((matrices, vertexConsumers, stack, entity, slot, light, contextModel) -> {
+			if (slot != EquipmentSlot.CHEST) return;
+			matrices.push();
+			// Align with the body's current rotation (handles swimming, crawling, etc.)
+			contextModel.body.rotate(matrices);
+			// Position: center of chest front face, slightly raised
+			matrices.translate(0.0, 0.12, -0.175);
+			// Item models render "upside-down" in FIXED mode; flip to correct orientation
+			matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(180f));
+			// Scale down to about 35% of a full block so it looks worn, not oversized
+			matrices.scale(0.35f, 0.35f, 0.35f);
+			MinecraftClient mc = MinecraftClient.getInstance();
+			mc.getItemRenderer().renderItem(
+					stack,
+					ModelTransformationMode.FIXED,
+					light, OverlayTexture.DEFAULT_UV,
+					matrices, vertexConsumers,
+					entity.getWorld(), entity.getId());
+			matrices.pop();
+		}, ModItems.VIDEO_CAMERA);
 
 		// Discard cached photo textures when disconnecting so stale GPU resources are freed.
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> PhotoTextureCache.clear());
