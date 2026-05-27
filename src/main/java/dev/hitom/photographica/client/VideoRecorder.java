@@ -115,6 +115,12 @@ public final class VideoRecorder {
      */
     private static int recordingArmorStandEntityId = -1;
 
+    /**
+     * Whether smooth/cinematic camera was enabled before recording started.
+     * Restored when recording stops so the user's preference is not permanently changed.
+     */
+    private static boolean prevSmoothCamera = false;
+
     // ── Autofocus state ────────────────────────────────────────────────────────
     /** Depth the centre pixel has been showing for focusCandidateFrames frames. */
     private static float focusCandidateDepth  = 5.0f;
@@ -276,6 +282,12 @@ public final class VideoRecorder {
             if (stand != null) mc.cameraEntity = stand;
         }
 
+        // Enable cinematic (smooth) camera for the duration of the recording so
+        // all captured frames benefit from Minecraft's built-in mouse smoothing.
+        // The previous setting is saved and restored when recording stops.
+        prevSmoothCamera = mc.options.smoothCameraEnabled;
+        mc.options.smoothCameraEnabled = true;
+
         recording = true;
         if (mc.player != null)
             mc.player.sendMessage(Text.literal("● REC 開始"), true);
@@ -284,13 +296,14 @@ public final class VideoRecorder {
     public static void stopRecording() {
         if (!recording) return;
         recording = false;
+        MinecraftClient mc = MinecraftClient.getInstance();
         // Restore player perspective if we were recording from an armor stand.
         if (recordingArmorStandEntityId >= 0) {
-            MinecraftClient mc = MinecraftClient.getInstance();
             if (mc.player != null) mc.cameraEntity = mc.player;
             recordingArmorStandEntityId = -1;
         }
-        MinecraftClient mc = MinecraftClient.getInstance();
+        // Restore the smooth-camera setting the player had before recording.
+        mc.options.smoothCameraEnabled = prevSmoothCamera;
         if (mc.player != null)
             mc.player.sendMessage(Text.literal("■ 録画停止 — 後処理中..."), true);
 
