@@ -8,9 +8,13 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 
 import java.util.List;
 
@@ -198,6 +202,52 @@ public final class AutoCamera {
 			if (toEnt.normalize().dotProduct(look) >= MOB_CONE_COS && dist < best) best = dist;
 		}
 		return best < Double.MAX_VALUE ? (float) best : null;
+	}
+
+	// -------------------------------------------------------------------------
+	// Armor stand AF
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Computes and returns a focus-stop-snapped distance for the given armor stand.
+	 * Fires a block raycast from the stand's eye position along its facing direction
+	 * (max 64 blocks), then checks for any living entities within a 5° forward cone.
+	 * The closer of the two results is snapped to the nearest FOCUS_STOPS entry.
+	 *
+	 * <p>Called by {@link PhotoCapture} immediately before arming a capture so that
+	 * the photo always uses freshly computed focus regardless of where the player
+	 * was standing when they last manually adjusted the camera.</p>
+	 *
+	 * @param stand the armor stand whose perspective the camera is shooting from
+	 * @param world the current client world
+	 * @return snapped focus distance in meters (blocks)
+	 */
+	public static float snapFocusFromArmorStand(ArmorStandEntity stand, ClientWorld world) {
+		Vec3d eye  = stand.getEyePos();
+		Vec3d look = stand.getRotationVec(1.0f);
+
+		// Block raycast (64-block max)
+		HitResult hit = world.raycast(new RaycastContext(
+				eye, eye.add(look.multiply(64.0)),
+				RaycastContext.ShapeType.OUTLINE,
+				RaycastContext.FluidHandling.NONE,
+				stand));
+		float depth = (float) hit.getPos().distanceTo(eye);
+
+		// Entity scan: find nearest living entity within the 5° forward cone
+		for (LivingEntity e : world.getEntitiesByClass(
+				LivingEntity.class,
+				stand.getBoundingBox().expand(50.0),
+				ent -> ent.isAlive())) {
+			Vec3d toEnt = e.getPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);
+			double dist = toEnt.length();
+			if (dist < 0.1) continue;
+			if (toEnt.normalize().dotProduct(look) >= MOB_CONE_COS) {
+				depth = Math.min(depth, (float) dist);
+			}
+		}
+
+		return snapFocus(depth);
 	}
 
 	private static double sq(double x) { return x * x; }
