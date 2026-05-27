@@ -29,8 +29,6 @@ public final class PhotoCapture {
     public static long mirrorEndMs = 0L;
     public static long flashEndMs  = 0L;
     public static long secondClickAtMs = 0L;
-    public static long timerStartMs = 0L;
-    public static int  timerDurationSec = 0;
 
     /** Depth at the centre of the screen (blocks), updated each frame. */
     public static float lastSceneDepthBlocks = 5.0f;
@@ -50,18 +48,6 @@ public final class PhotoCapture {
         return System.currentTimeMillis() < mirrorEndMs;
     }
 
-    public static boolean isTimerActive() {
-        return timerDurationSec > 0
-                && timerStartMs > 0
-                && System.currentTimeMillis() < timerStartMs + timerDurationSec * 1000L;
-    }
-
-    public static long timerRemainingMs() {
-        if (timerDurationSec <= 0 || timerStartMs <= 0) return 0;
-        long end = timerStartMs + timerDurationSec * 1000L;
-        return Math.max(0, end - System.currentTimeMillis());
-    }
-
     public static void take() {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
@@ -74,46 +60,12 @@ public final class PhotoCapture {
                 Math.max(0, Math.min(SnapmaticaClient.SHUTTER_SECONDS.length - 1, shutterIdx))];
         long shutterMs = Math.min(1500, (long)(shutterSec * 1000));
 
-        // DSLR-style blackout
         mirrorEndMs = now + 100 + shutterMs + 100;
         flashEndMs = mirrorEndMs + Math.min(200, 20 + shutterMs / 2);
         secondClickAtMs = now + 100 + shutterMs;
 
-        // Self-timer: arm countdown, don't capture yet.
-        if (SnapmaticaClient.timerSeconds > 0 && timerStartMs == 0) {
-            timerStartMs = now;
-            timerDurationSec = SnapmaticaClient.timerSeconds;
-            lastShotMs = now;
-            // Reset the shutter-effect timestamps — they'll be re-set when the
-            // timer fires and actually triggers the capture.
-            mirrorEndMs = 0;
-            flashEndMs  = 0;
-            secondClickAtMs = 0;
-            return;
-        }
-
         capturePending = true;
         lastShotMs = now;
-    }
-
-    /**
-     * Called every client tick.
-     * Fires the actual capture when the self-timer countdown reaches zero.
-     */
-    public static void tick() {
-        if (timerStartMs == 0 || timerDurationSec <= 0) return;
-        long now = System.currentTimeMillis();
-        if (now < timerStartMs + timerDurationSec * 1000L) return;
-
-        // Timer expired — fire the capture.
-        timerStartMs = 0;
-        timerDurationSec = 0;
-        // Re-arm: call take() with timerSeconds zeroed out temporarily so it
-        // goes straight to capture.
-        int savedTimer = SnapmaticaClient.timerSeconds;
-        SnapmaticaClient.timerSeconds = 0;
-        take();
-        SnapmaticaClient.timerSeconds = savedTimer;
     }
 
     public static void captureIfPending() {
@@ -192,6 +144,9 @@ public final class PhotoCapture {
         int vpW = viewport[2];
         int vpH = viewport[3];
         if (vpW <= 0 || vpH <= 0) return;
+
+        // GPU-side depth copy for EVF DoF blur (no CPU readback).
+        EvfBlurRenderer.captureDepth(vpW, vpH);
 
         int cx = vpW / 2;
         int cy = vpH / 2;

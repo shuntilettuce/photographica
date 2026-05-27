@@ -43,6 +43,15 @@ public final class ViewfinderOverlay {
         if (fw > sw*0.94f) { fw = (int)(sw*0.94f); fh = (int)(fw/aspect); }
         int fx = (sw-fw)/2, fy = (sh-fh)/2, fx2 = fx+fw, fy2 = fy+fh;
 
+        // EVF real-time DoF blur (GPU shader, depth-aware) — rendered before bezels
+        // so it only affects the scene inside the viewfinder frame.
+        boolean hasLensForBlur = SnapmaticaClient.lensType != 0;
+        if (hasLensForBlur && SnapmaticaClient.aperture < 8.0f
+                && SnapmaticaClient.focusDistance < 999.0f) {
+            EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2,
+                    SnapmaticaClient.focusDistance, SnapmaticaClient.aperture);
+        }
+
         // Bezels
         ctx.fill(0,0,sw,fy,0xB8000000); ctx.fill(0,fy2,sw,sh,0xB8000000);
         ctx.fill(0,fy,fx,fy2,0xB8000000); ctx.fill(fx2,fy,sw,fy2,0xB8000000);
@@ -103,18 +112,6 @@ public final class ViewfinderOverlay {
                 +" | "+fl2[clampIdx(SnapmaticaClient.focusMode,3)]),
                 fx+6,fy+4+tr.fontHeight*2+4,0xFFCCCCFF);
 
-        // Self-timer countdown
-        if (PhotoCapture.isTimerActive()) {
-            int rs=(int)Math.ceil(PhotoCapture.timerRemainingMs()/1000.0);
-            String cs=rs>0?String.valueOf(rs):"●";
-            ctx.getMatrices().push();
-            ctx.getMatrices().scale(3f,3f,1f);
-            ctx.drawTextWithShadow(tr,Text.literal(cs),
-                    (sw/2-tr.getWidth(cs)*3/2)/3,
-                    (sh/2-tr.fontHeight*3/2)/3-20,
-                    rs<=1?0xFFFF4444:0xFFFFFFFF);
-            ctx.getMatrices().pop();
-        }
     }
 
     // ── EVF live preview ────────────────────────────────────────────────────────

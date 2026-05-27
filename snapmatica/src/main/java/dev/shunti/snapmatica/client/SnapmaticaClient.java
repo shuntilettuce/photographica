@@ -29,7 +29,6 @@ public class SnapmaticaClient implements ClientModInitializer {
     public static int exposureMode = 0;           // M (manual)
     public static int focusMode = 0;              // MF (manual focus)
     public static boolean motionBlur = false;
-    public static int timerSeconds = 0;
 
     /** When true, sneaking shows the viewfinder overlay (default: enabled). */
     public static boolean viewfinderSneakEnabled = true;
@@ -69,20 +68,17 @@ public class SnapmaticaClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
 
-            // Self-timer countdown — fires capture when the countdown reaches zero.
-            PhotoCapture.tick();
-
             // Toggle the sneak-to-viewfinder mode
             while (viewfinderSneakKey.wasPressed()) {
                 viewfinderSneakEnabled = !viewfinderSneakEnabled;
             }
 
-            // Shoot key pressed (ignore while timer is already counting down)
-            if (shootKey.wasPressed() && !PhotoCapture.isTimerActive()) {
+            // Shoot key
+            if (shootKey.wasPressed()) {
                 PhotoCapture.take();
             }
 
-            // Settings key pressed
+            // Settings key
             if (settingsKey.wasPressed()) {
                 client.setScreen(new CameraScreen());
             }

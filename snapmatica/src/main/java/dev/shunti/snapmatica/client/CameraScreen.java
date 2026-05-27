@@ -98,14 +98,6 @@ public class CameraScreen extends Screen {
                 step -> { SnapmaticaClient.focusMode = clampStep(SnapmaticaClient.focusMode, step, FOCUS_MODE_LABELS.length); },
                 true);
 
-        // Timer
-        addRow2(cx, top + row++ * rowHeight, "Timer",
-                () -> { int t = SnapmaticaClient.timerSeconds; return t == 0 ? "OFF" : t + "s"; },
-                btnWidth,
-                step -> { int[] tv = {0, 2, 5, 10}; int cur = SnapmaticaClient.timerSeconds; int idx = 0;
-                    for (int i = 0; i < tv.length; i++) if (tv[i] == cur) { idx = i; break; }
-                    idx = Math.floorMod(idx + step, tv.length); SnapmaticaClient.timerSeconds = tv[idx]; },
-                true);
 
         // Close button
         addDrawableChild(ButtonWidget.builder(Text.literal("Close"), b -> close())
