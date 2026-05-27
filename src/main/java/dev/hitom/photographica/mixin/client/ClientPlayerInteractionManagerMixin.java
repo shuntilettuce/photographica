@@ -85,7 +85,7 @@ public class ClientPlayerInteractionManagerMixin {
         final ItemStack cameraStack = camera;
         MinecraftClient mc = MinecraftClient.getInstance();
         if (cameraStack.getItem() instanceof VideoCameraItem) {
-            mc.setScreen(new VideoCameraScreen(cameraStack));
+            mc.setScreen(new VideoCameraScreen(cameraStack, stand.getId()));
         } else if (cameraStack.getItem() instanceof FilmCameraItem) {
             mc.setScreen(new FilmCameraScreen(cameraStack, stand.getId()));
         } else {

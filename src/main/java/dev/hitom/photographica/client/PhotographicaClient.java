@@ -107,6 +107,17 @@ public class PhotographicaClient implements ClientModInitializer {
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			AutoCamera.tick(client);
+			// While recording from an armor stand, keep the camera entity pointing at
+			// the stand. If the stand has been destroyed, stop recording gracefully.
+			int standId = VideoRecorder.getRecordingArmorStandEntityId();
+			if (standId >= 0 && client.world != null) {
+				net.minecraft.entity.Entity stand = client.world.getEntityById(standId);
+				if (stand != null) {
+					client.cameraEntity = stand;
+				} else {
+					VideoRecorder.stopRecording();
+				}
+			}
 			if (client.player == null) return;
 			if (settingsKey.wasPressed()) {
 				ItemStack stack = client.player.getMainHandStack();
@@ -173,7 +184,7 @@ public class PhotographicaClient implements ClientModInitializer {
 		BlockEntityRendererFactories.register(ModBlockEntities.PHOTO_STAND,
 				PhotoStandBlockEntityRenderer::new);
 
-		// Render the video-camera item model on the player's chest when worn.
+		// Render all four camera item models on the player's chest when worn.
 		// Uses the humanoid body bone for correct rotation with body/head animations.
 		ArmorRenderer.register((matrices, vertexConsumers, stack, entity, slot, light, contextModel) -> {
 			if (slot != EquipmentSlot.CHEST) return;
@@ -194,7 +205,7 @@ public class PhotographicaClient implements ClientModInitializer {
 					matrices, vertexConsumers,
 					entity.getWorld(), entity.getId());
 			matrices.pop();
-		}, ModItems.VIDEO_CAMERA);
+		}, ModItems.VIDEO_CAMERA, ModItems.CAMERA, ModItems.MIRRORLESS_CAMERA, ModItems.FILM_CAMERA);
 
 		// Discard cached photo textures when disconnecting so stale GPU resources are freed.
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> PhotoTextureCache.clear());

@@ -107,6 +107,14 @@ public final class VideoRecorder {
     private static List<FrameMeta> frameMetas;
     private static ItemStack       recordingStack;
 
+    /**
+     * Entity ID of the armor stand whose camera is being recorded from, or -1
+     * when recording from the player's own camera.  When set, the client camera
+     * entity is switched to the armor stand so the video is rendered from its
+     * perspective.  Restored to the player when recording stops.
+     */
+    private static int recordingArmorStandEntityId = -1;
+
     // ── Autofocus state ────────────────────────────────────────────────────────
     /** Depth the centre pixel has been showing for focusCandidateFrames frames. */
     private static float focusCandidateDepth  = 5.0f;
@@ -157,10 +165,11 @@ public final class VideoRecorder {
             });
 
     // ── Public accessors ───────────────────────────────────────────────────────
-    public static boolean isRecording()      { return recording; }
-    public static boolean isPostProcessing() { return postProcessing; }
-    public static int     getPpProgress()    { return ppProgress; }
-    public static String  getPpMessage()     { return ppMessage; }
+    public static boolean isRecording()                  { return recording; }
+    public static boolean isPostProcessing()             { return postProcessing; }
+    public static int     getPpProgress()                { return ppProgress; }
+    public static String  getPpMessage()                 { return ppMessage; }
+    public static int     getRecordingArmorStandEntityId() { return recordingArmorStandEntityId; }
     public static long    getDoneAtMs()      { return doneAtMs; }
     public static int     getFrameCount()    { return frameCount; }
     public static long    getRecordStartMs() { return recordStartMs; }
@@ -208,10 +217,24 @@ public final class VideoRecorder {
     // ── Start / Stop ───────────────────────────────────────────────────────────
     public static void toggle(ItemStack stack) {
         if (recording) stopRecording();
-        else if (!postProcessing) startRecording(stack);
+        else if (!postProcessing) startRecording(stack, -1);
     }
 
+    /** Convenience overload for player-held camera (no armor stand). */
     public static void startRecording(ItemStack stack) {
+        startRecording(stack, -1);
+    }
+
+    /**
+     * Start recording.
+     *
+     * @param armorStandEntityId  Entity ID of the armor stand whose camera is
+     *                            being recorded, or -1 for the player's own camera.
+     *                            When ≥ 0 the client camera entity is switched to
+     *                            the armor stand so the video is filmed from its
+     *                            perspective.
+     */
+    public static void startRecording(ItemStack stack, int armorStandEntityId) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
 
@@ -246,6 +269,13 @@ public final class VideoRecorder {
             return;
         }
 
+        // Switch to armor-stand perspective if recording from a tripod.
+        recordingArmorStandEntityId = armorStandEntityId;
+        if (armorStandEntityId >= 0 && mc.world != null) {
+            net.minecraft.entity.Entity stand = mc.world.getEntityById(armorStandEntityId);
+            if (stand != null) mc.cameraEntity = stand;
+        }
+
         recording = true;
         if (mc.player != null)
             mc.player.sendMessage(Text.literal("● REC 開始"), true);
@@ -254,6 +284,12 @@ public final class VideoRecorder {
     public static void stopRecording() {
         if (!recording) return;
         recording = false;
+        // Restore player perspective if we were recording from an armor stand.
+        if (recordingArmorStandEntityId >= 0) {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc.player != null) mc.cameraEntity = mc.player;
+            recordingArmorStandEntityId = -1;
+        }
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null)
             mc.player.sendMessage(Text.literal("■ 録画停止 — 後処理中..."), true);

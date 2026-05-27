@@ -21,11 +21,17 @@ public class VideoCameraScreen extends Screen {
     private final ItemStack stack;
     private VideoSettings settings;
     private boolean dirty = false;
+    private final int armorStandEntityId; // -1 = player's hand camera
 
     public VideoCameraScreen(ItemStack stack) {
+        this(stack, -1);
+    }
+
+    public VideoCameraScreen(ItemStack stack, int armorStandEntityId) {
         super(Text.translatable("screen.photographica.video_camera"));
-        this.stack    = stack;
-        this.settings = VideoCameraItem.getSettings(stack);
+        this.stack              = stack;
+        this.settings           = VideoCameraItem.getSettings(stack);
+        this.armorStandEntityId = armorStandEntityId;
     }
 
     @Override
@@ -68,7 +74,7 @@ public class VideoCameraScreen extends Screen {
                     Text.literal("● REC"),
                     b -> {
                         flushSettings();
-                        VideoRecorder.startRecording(stack);
+                        VideoRecorder.startRecording(stack, armorStandEntityId);
                         close();
                     }));
         }
