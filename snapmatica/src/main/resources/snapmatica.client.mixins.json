@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "package": "dev.shunti.snapmatica.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "GameRendererMixin",
+    "MouseMixin",
+    "WorldRendererMixin",
+    "EntityRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
