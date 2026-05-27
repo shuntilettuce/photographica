@@ -1,0 +1,426 @@
+package dev.hitom.photographica.client.screen;
+
+import dev.hitom.photographica.client.PhotoCapture;
+import dev.hitom.photographica.component.CameraSettings;
+import dev.hitom.photographica.component.FilmKind;
+import dev.hitom.photographica.component.FilmRollData;
+import dev.hitom.photographica.component.LensKind;
+import dev.hitom.photographica.item.FilmCameraItem;
+import dev.hitom.photographica.item.FilmRollItem;
+import dev.hitom.photographica.item.LensItem;
+import dev.hitom.photographica.network.LoadFilmPayload;
+import dev.hitom.photographica.network.UnloadFilmPayload;
+import dev.hitom.photographica.network.UnequipCameraFromArmorStandPayload;
+import dev.hitom.photographica.network.UpdateArmorStandCameraPayload;
+import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.item.ItemStack;
+import net.minecraft.text.Text;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
+
+/**
+ * Settings screen for the film camera. Same row layout as the DSLR screen but
+ *   - ISO row is read-only (locked to the loaded film's sensitivity)
+ *   - Two extra buttons at the bottom for loading / unloading film
+ *   - Headline strip at the top showing film status and exposure count
+ */
+@Environment(EnvType.CLIENT)
+public class FilmCameraScreen extends Screen {
+	private static final List<Float> APERTURES = List.of(1.4f, 2.0f, 2.8f, 4.0f, 5.6f, 8.0f, 11.0f, 16.0f, 22.0f);
+	private static final String[] SHUTTERS = {
+			"30s", "15s", "8s", "4s", "2s", "1s",
+			"1/2", "1/4", "1/8", "1/15", "1/30", "1/60",
+			"1/125", "1/250", "1/500", "1/1000", "1/2000", "1/4000"
+	};
+	private static final List<Float> FOCUS_VALUES = List.of(
+			0.3f, 0.5f, 0.7f, 1.0f, 1.2f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f,
+			5.0f, 6.0f, 7.0f, 8.0f, 10.0f, 12.0f, 15.0f, 20.0f, 25.0f, 30.0f,
+			40.0f, 50.0f, 70.0f, 100.0f, 999.0f);
+
+	private static final String[] EXP_MODE_LABELS  = {"M", "Av", "Tv", "P"};
+	private static final String[] FOCUS_MODE_LABELS = {"MF", "AF", "MOB"};
+
+	private final ItemStack stack;
+	private final int armorStandEntityId; // -1 = player's hand camera
+	private CameraSettings settings;
+	private boolean dirty = false;
+
+	public FilmCameraScreen(ItemStack stack) {
+		this(stack, -1);
+	}
+
+	public FilmCameraScreen(ItemStack stack, int armorStandEntityId) {
+		super(Text.literal("フィルムカメラ"));
+		this.stack = stack;
+		this.armorStandEntityId = armorStandEntityId;
+		this.settings = FilmCameraItem.getSettings(stack);
+	}
+
+	@Override
+	protected void init() {
+		int cx = width / 2;
+		int top = height / 2 - 110;
+		int row = 0;
+
+		// Aperture — disabled when auto controls it (Tv or P)
+		boolean apAuto = settings.exposureMode() == CameraSettings.EXP_TV
+				|| settings.exposureMode() == CameraSettings.EXP_P;
+		addRow(cx, top + row++ * 22, "絞り",
+				() -> apAuto ? "AUTO" : "F" + formatFloat(settings.aperture()),
+				step -> {
+					int idx = clampStep(APERTURES.indexOf(settings.aperture()), step, APERTURES.size());
+					settings = withAperture(APERTURES.get(idx));
+				}, !apAuto);
+
+		// Shutter — disabled when auto controls it (Av or P)
+		boolean ssAuto = settings.exposureMode() == CameraSettings.EXP_AV
+				|| settings.exposureMode() == CameraSettings.EXP_P;
+		addRow(cx, top + row++ * 22, "シャッター",
+				() -> ssAuto ? "AUTO" : SHUTTERS[clampIdx(settings.shutterSpeedIdx(), SHUTTERS.length)],
+				step -> settings = withShutter(clampStep(settings.shutterSpeedIdx(), step, SHUTTERS.length)),
+				!ssAuto);
+
+		// ISO is film-locked → display only.
+		addRow(cx, top + row++ * 22, "ISO (フィルム)",
+				() -> "ISO " + settings.iso() + " §8(固定)",
+				step -> {}, false);
+
+		// Focus distance — disabled when AF or MOB
+		boolean focusAuto = settings.focusMode() != CameraSettings.FOCUS_MF;
+		String focusAutoLabel = settings.focusMode() == CameraSettings.FOCUS_MOB ? "MOB" : "AF";
+		addRow(cx, top + row++ * 22, "フォーカス",
+				() -> focusAuto ? focusAutoLabel : formatFocus(settings.focusDistance()),
+				step -> {
+					int curIdx = nearestIdxFloat(FOCUS_VALUES, settings.focusDistance());
+					int idx = clampStep(curIdx, step, FOCUS_VALUES.size());
+					settings = withFocus(FOCUS_VALUES.get(idx));
+				}, !focusAuto);
+
+		boolean focalEditable = LensKind.isZoom(settings.lensType());
+		addRow(cx, top + row++ * 22, "焦点距離",
+				() -> LensKind.hasLens(settings.lensType()) ? settings.focalLengthMm() + "mm" : "—",
+				step -> {
+					if (!LensKind.isZoom(settings.lensType())) return;
+					List<Integer> stops = LensKind.focalLengthStops(settings.lensType());
+					int curIdx = stops.indexOf(settings.focalLengthMm());
+					if (curIdx < 0) curIdx = 0;
+					int newIdx = clampStep(curIdx, step, stops.size());
+					settings = withFocalLength(stops.get(newIdx));
+				}, focalEditable);
+
+		addRow(cx, top + row++ * 22, "レンズ",
+				() -> LensKind.displayName(settings.lensType()),
+				step -> {
+					List<Integer> available = availableLensKinds();
+					int curIdx = available.indexOf(settings.lensType());
+					if (curIdx < 0) curIdx = 0;
+					int newLens = available.get(clampStep(curIdx, step, available.size()));
+					int newFocal = LensKind.hasLens(newLens)
+							? LensKind.clampFocalLength(newLens, settings.focalLengthMm())
+							: LensKind.defaultFocalLength(newLens);
+					settings = withLensAndFocal(newLens, newFocal);
+				}, true);
+
+		// Exposure mode row (M / Av / Tv / P)
+		addRow(cx, top + row++ * 22, "露出モード",
+				() -> EXP_MODE_LABELS[Math.max(0, Math.min(EXP_MODE_LABELS.length - 1, settings.exposureMode()))],
+				step -> settings = withExposureMode(clampStep(settings.exposureMode(), step, EXP_MODE_LABELS.length)),
+				true);
+
+		// Focus mode row (MF / AF / MOB)
+		addRow(cx, top + row++ * 22, "フォーカスモード",
+				() -> FOCUS_MODE_LABELS[Math.max(0, Math.min(FOCUS_MODE_LABELS.length - 1, settings.focusMode()))],
+				step -> settings = withFocusMode(clampStep(settings.focusMode(), step, FOCUS_MODE_LABELS.length)),
+				true);
+
+		// Self-timer
+		addRow(cx, top + row++ * 22, "タイマー",
+				() -> {
+					int t = settings.timerSeconds();
+					return t == 0 ? "なし" : t + "秒";
+				},
+				step -> {
+					int[] tv = {0, 2, 5, 10};
+					int cur = settings.timerSeconds();
+					int idx = 0;
+					for (int i = 0; i < tv.length; i++) if (tv[i] == cur) { idx = i; break; }
+					idx = Math.floorMod(idx + step, tv.length);
+					settings = settings.withTimerSeconds(tv[idx]);
+					dirty = true;
+				}, true);
+
+		// Motion blur — enables long-exposure frame accumulation for tripod / slow shutter shots
+		addRow(cx, top + row++ * 22, "モーションブラー",
+				() -> settings.motionBlur() ? "§aON" : "§cOFF",
+				step -> {
+					settings = settings.withMotionBlur(!settings.motionBlur());
+					dirty = true;
+				}, true);
+
+		FilmRollData film = FilmCameraItem.getFilm(stack);
+		boolean loaded = film.totalExposures() > 0;
+		int btnY = top + row * 22 + 14;
+
+		if (armorStandEntityId >= 0) {
+			// Armor stand mode: "Shoot" | "Remove camera" | "Close"
+			addDrawableChild(SafelightButton.primary(cx - 105, btnY, 100,
+					Text.literal("撮影"),
+					b -> {
+						flushDirty();
+						PhotoCapture.triggerArmorStandCapture(armorStandEntityId, stack);
+						close();
+					}));
+			addDrawableChild(SafelightButton.of(cx + 5, btnY, 100,
+					Text.literal("取り出す"),
+					b -> {
+						ClientPlayNetworking.send(new UnequipCameraFromArmorStandPayload(armorStandEntityId));
+						close();
+					}));
+			addDrawableChild(SafelightButton.ghost(cx + 5, btnY + 24, 100,
+					Text.literal("閉じる"),
+					b -> close()));
+		} else {
+			// Normal (player hand) mode: film load/unload buttons
+			addDrawableChild(SafelightButton.of(cx - 105, btnY, 100,
+					Text.literal(loaded ? "フィルム取り出し" : "フィルム装填"),
+					b -> {
+						if (loaded) {
+							ClientPlayNetworking.send(new UnloadFilmPayload());
+							close();
+						} else {
+							Map<Integer, Integer> available = availableFilmTypes();
+							if (available.size() == 1) {
+								int ft = available.keySet().iterator().next();
+								ClientPlayNetworking.send(new LoadFilmPayload(ft));
+								close();
+							} else if (available.size() > 1) {
+								flushDirty();
+								client.setScreen(new FilmPickerScreen(this, available));
+							} else {
+								ClientPlayNetworking.send(new LoadFilmPayload(0));
+								close();
+							}
+						}
+					}));
+
+			String autoWindLabel = settings.autoWind() ? "自動巻上げ: §aON" : "自動巻上げ: §cOFF";
+			addDrawableChild(SafelightButton.ghost(cx - 105, btnY + 24, 210,
+					Text.literal(autoWindLabel),
+					b -> {
+						settings = settings.withAutoWind(!settings.autoWind());
+						dirty = true;
+						clearAndInit();
+					}));
+
+			addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
+					Text.literal("閉じる"),
+					b -> close()));
+		}
+	}
+
+	private void addRow(int cx, int y, String label, java.util.function.Supplier<String> value,
+	                    java.util.function.IntConsumer step, boolean editable) {
+		SafelightButton left = SafelightButton.of(cx - 30, y, 20, Text.literal("◀"),
+				b -> { step.accept(-1); dirty = true; clearAndInit(); });
+		left.active = editable;
+		addDrawableChild(left);
+
+		SafelightButton center = SafelightButton.ghost(cx - 8, y, 140,
+				Text.literal(label + ": " + value.get()), b -> {});
+		center.active = false;
+		addDrawableChild(center);
+
+		SafelightButton right = SafelightButton.of(cx + 134, y, 20, Text.literal("▶"),
+				b -> { step.accept(1); dirty = true; clearAndInit(); });
+		right.active = editable;
+		addDrawableChild(right);
+	}
+
+	@Override
+	public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {}
+
+	@Override
+	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+		ctx.fill(0, 0, this.width, this.height, 0xFF101010);
+
+		// Draw dark panel background
+		int cx = width / 2;
+		int top = height / 2 - 110;
+		int panelW = 320;
+		int panelH = 302;
+		int px = cx - panelW / 2;
+		int py = top - 16;
+		GuiHelper.drawPanel(ctx, px, py, panelW, panelH);
+
+		// Nameplate at top of panel
+		GuiHelper.drawNameplate(ctx, px + 6, py + 5, panelW - 12);
+
+		// Rule below nameplate
+		GuiHelper.drawRule(ctx, px + 6, py + 17, panelW - 12);
+
+		// Film status — drawn ABOVE the buttons
+		FilmRollData film = FilmCameraItem.getFilm(stack);
+		String status;
+		int statusColor;
+		if (film.totalExposures() == 0) {
+			status = "NO FILM LOADED";
+			statusColor = GuiHelper.CREAM_FAINT;
+		} else if (film.isExposed()) {
+			status = "EXPOSED  " + film.usedExposures() + "/" + film.totalExposures() + "  —  DEVELOP";
+			statusColor = GuiHelper.EMBER;
+		} else {
+			String wound = film.wound() ? "WOUND" : "WIND ON";
+			status = FilmKind.displayName(film.filmType())
+					+ "  ·  " + film.usedExposures() + "/" + film.totalExposures()
+					+ "  ·  " + wound;
+			statusColor = GuiHelper.CREAM;
+		}
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, py + 216, statusColor);
+
+		super.render(ctx, mouseX, mouseY, delta);
+
+		// Title text on nameplate
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("FILM CAMERA"), cx, py + 6, GuiHelper.CREAM);
+	}
+
+	/** Sends pending settings to the server without closing the screen. */
+	private void flushDirty() {
+		if (dirty) {
+			FilmCameraItem.setSettings(stack, settings);
+			if (armorStandEntityId >= 0) {
+				ClientPlayNetworking.send(new UpdateArmorStandCameraPayload(armorStandEntityId, settings));
+			} else {
+				ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
+			}
+			dirty = false;
+		}
+	}
+
+	@Override
+	public void close() {
+		flushDirty();
+		super.close();
+	}
+
+	/** Returns filmType → count for each film roll type found in the player's inventory. */
+	private Map<Integer, Integer> availableFilmTypes() {
+		Map<Integer, Integer> result = new LinkedHashMap<>();
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player == null) return result;
+		for (ItemStack s : mc.player.getInventory().main) {
+			if (s.getItem() instanceof FilmRollItem fr)
+				result.merge(fr.filmType(), s.getCount(), Integer::sum);
+		}
+		for (ItemStack s : mc.player.getInventory().offHand) {
+			if (s.getItem() instanceof FilmRollItem fr)
+				result.merge(fr.filmType(), s.getCount(), Integer::sum);
+		}
+		return result;
+	}
+
+	/** Returns lens kind IDs available to the player: always NONE + current + any LensItem in inventory. */
+	private List<Integer> availableLensKinds() {
+		TreeSet<Integer> kinds = new TreeSet<>();
+		kinds.add(LensKind.NONE);
+		kinds.add(settings.lensType());
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player != null) {
+			for (ItemStack s : mc.player.getInventory().main) {
+				if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
+			}
+			for (ItemStack s : mc.player.getInventory().offHand) {
+				if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
+			}
+		}
+		return new ArrayList<>(kinds);
+	}
+
+	// ---------- helpers ----------
+
+	private static int clampIdx(int idx, int len) {
+		if (idx < 0) return 0;
+		if (idx >= len) return len - 1;
+		return idx;
+	}
+
+	private static int clampStep(int idx, int step, int len) {
+		int next = idx + step;
+		if (next < 0) return 0;
+		if (next >= len) return len - 1;
+		return next;
+	}
+
+	private static int nearestIdxFloat(List<Float> values, float target) {
+		int best = 0;
+		float bestDiff = Float.MAX_VALUE;
+		for (int i = 0; i < values.size(); i++) {
+			float d = Math.abs(values.get(i) - target);
+			if (d < bestDiff) { bestDiff = d; best = i; }
+		}
+		return best;
+	}
+
+	private static String formatFloat(float v) {
+		if (v == (int) v) return String.valueOf((int) v);
+		return String.format("%.1f", v);
+	}
+
+	private static String formatFocus(float v) {
+		if (v >= 999.0f) return "∞";
+		if (v < 1.0f) return String.format("%.1fm", v);
+		return formatFloat(v) + "m";
+	}
+
+	private CameraSettings withAperture(float v) {
+		return new CameraSettings(v, settings.shutterSpeedIdx(), settings.iso(),
+				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
+				settings.filmType(), settings.remainingShots(),
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+	}
+	private CameraSettings withShutter(int v) {
+		return new CameraSettings(settings.aperture(), v, settings.iso(),
+				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
+				settings.filmType(), settings.remainingShots(),
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+	}
+	private CameraSettings withFocus(float v) {
+		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
+				v, settings.focalLengthMm(), settings.lensType(),
+				settings.filmType(), settings.remainingShots(),
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+	}
+	private CameraSettings withFocalLength(int v) {
+		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
+				settings.focusDistance(), v, settings.lensType(),
+				settings.filmType(), settings.remainingShots(),
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+	}
+	private CameraSettings withLensAndFocal(int lens, int focal) {
+		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
+				settings.focusDistance(), focal, lens,
+				settings.filmType(), settings.remainingShots(),
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+	}
+	private CameraSettings withExposureMode(int v) {
+		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
+				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
+				settings.filmType(), settings.remainingShots(),
+				v, settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+	}
+	private CameraSettings withFocusMode(int v) {
+		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
+				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
+				settings.filmType(), settings.remainingShots(),
+				settings.exposureMode(), v, settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+	}
+}

@@ -27,6 +27,33 @@ public final class ModDataComponents {
 					.build()
 	);
 
+	public static final ComponentType<FilmRollData> FILM_ROLL = Registry.register(
+			Registries.DATA_COMPONENT_TYPE,
+			Identifier.of(Photographica.MOD_ID, "film_roll"),
+			ComponentType.<FilmRollData>builder()
+					.codec(FilmRollData.CODEC)
+					.packetCodec(FilmRollData.PACKET_CODEC)
+					.build()
+	);
+
+	public static final ComponentType<SdCardData> SD_CARD = Registry.register(
+			Registries.DATA_COMPONENT_TYPE,
+			Identifier.of(Photographica.MOD_ID, "sd_card"),
+			ComponentType.<SdCardData>builder()
+					.codec(SdCardData.CODEC)
+					.packetCodec(SdCardData.PACKET_CODEC)
+					.build()
+	);
+
+	public static final ComponentType<VideoSettings> VIDEO_SETTINGS = Registry.register(
+			Registries.DATA_COMPONENT_TYPE,
+			Identifier.of(Photographica.MOD_ID, "video_settings"),
+			ComponentType.<VideoSettings>builder()
+					.codec(VideoSettings.CODEC)
+					.packetCodec(VideoSettings.PACKET_CODEC)
+					.build()
+	);
+
 	public static void register() {
 		// Class init is enough; this method just forces it.
 	}

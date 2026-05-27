@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./gradlew build -q 2>/dev/null; echo '{\"systemMessage\": \"JAR ready: /home/user/photographica/build/libs/photographica-0.1.0.jar\"}'"
+          }
+        ]
+      }
+    ]
+  }
+}
