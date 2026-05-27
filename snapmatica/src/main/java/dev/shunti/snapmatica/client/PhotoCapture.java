@@ -75,6 +75,9 @@ public final class PhotoCapture {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
 
+        //? if >=1.21.11 {
+        /*ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), raw -> processScreenshot(mc, raw));*/
+        //?} else {
         NativeImage raw;
         try {
             raw = ScreenshotRecorder.takeScreenshot(mc.getFramebuffer());
@@ -82,7 +85,11 @@ public final class PhotoCapture {
             System.err.println("[Snapmatica] Screenshot failed: " + e.getMessage());
             return;
         }
+        processScreenshot(mc, raw);
+        //?}
+    }
 
+    private static void processScreenshot(MinecraftClient mc, NativeImage raw) {
         // ── Crop to 3:2 aspect ratio ────────────────────────────────────────────
         int w = raw.getWidth();
         int h = raw.getHeight();
@@ -100,7 +107,7 @@ public final class PhotoCapture {
         NativeImage cropped = new NativeImage(cropW, cropH, false);
         for (int y = 0; y < cropH; y++) {
             for (int x = 0; x < cropW; x++) {
-                cropped.setColor(x, y, raw.getColor(x + offX, y + offY));
+                setPixelAbgr(cropped, x, y, getPixelAbgr(raw, x + offX, y + offY));
             }
         }
         raw.close();
@@ -188,7 +195,7 @@ public final class PhotoCapture {
 
         for (int py = 0; py < h; py++) {
             for (int px = 0; px < w; px++) {
-                int c = src.getColor(px, py);
+                int c = getPixelAbgr(src, px, py);
                 int a = (c >>> 24) & 0xFF;
                 int b = (c >>> 16) & 0xFF;
                 int g = (c >>>  8) & 0xFF;
@@ -227,7 +234,7 @@ public final class PhotoCapture {
                 g = softClip(g);
                 b = softClip(b);
 
-                dst.setColor(px, py, (a << 24) | (b << 16) | (g << 8) | r);
+                setPixelAbgr(dst, px, py, (a << 24) | (b << 16) | (g << 8) | r);
             }
         }
 
@@ -261,7 +268,7 @@ public final class PhotoCapture {
             for (int x = 0; x < w; x++) {
                 float weight = depthWeight(y, h, radius, focusDist, depthCenter);
                 if (weight <= 0f) {
-                    tmp.setColor(x, y, src.getColor(x, y));
+                    setPixelAbgr(tmp, x, y, getPixelAbgr(src, x, y));
                     continue;
                 }
                 int ar = 0, ag = 0, ab = 0, aa = 0;
@@ -269,16 +276,16 @@ public final class PhotoCapture {
                 for (int k = -radius; k <= radius; k++) {
                     int sx = x + k;
                     if (sx < 0 || sx >= w) continue;
-                    int c = src.getColor(sx, y);
+                    int c = getPixelAbgr(src, sx, y);
                     ar += (c >>> 24) & 0xFF;
                     ag += (c >>> 16) & 0xFF;
                     ab += (c >>>  8) & 0xFF;
                     aa += c & 0xFF;
                     count++;
                 }
-                if (count == 0) { tmp.setColor(x, y, src.getColor(x, y)); continue; }
+                if (count == 0) { setPixelAbgr(tmp, x, y, getPixelAbgr(src, x, y)); continue; }
                 int nc = ( (ar / count) << 24 ) | ( (ag / count) << 16 ) | ( (ab / count) << 8 ) | ( aa / count );
-                tmp.setColor(x, y, blendWithOriginal(src.getColor(x, y), nc, weight));
+                setPixelAbgr(tmp, x, y, blendWithOriginal(getPixelAbgr(src, x, y), nc, weight));
             }
         }
 
@@ -288,7 +295,7 @@ public final class PhotoCapture {
             for (int y = 0; y < h; y++) {
                 float weight = depthWeight(y, h, radius, focusDist, depthCenter);
                 if (weight <= 0f) {
-                    dst.setColor(x, y, tmp.getColor(x, y));
+                    setPixelAbgr(dst, x, y, getPixelAbgr(tmp, x, y));
                     continue;
                 }
                 int ar = 0, ag = 0, ab = 0, aa = 0;
@@ -296,16 +303,16 @@ public final class PhotoCapture {
                 for (int k = -radius; k <= radius; k++) {
                     int sy = y + k;
                     if (sy < 0 || sy >= h) continue;
-                    int c = tmp.getColor(x, sy);
+                    int c = getPixelAbgr(tmp, x, sy);
                     ar += (c >>> 24) & 0xFF;
                     ag += (c >>> 16) & 0xFF;
                     ab += (c >>>  8) & 0xFF;
                     aa += c & 0xFF;
                     count++;
                 }
-                if (count == 0) { dst.setColor(x, y, tmp.getColor(x, y)); continue; }
+                if (count == 0) { setPixelAbgr(dst, x, y, getPixelAbgr(tmp, x, y)); continue; }
                 int nc = ( (ar / count) << 24 ) | ( (ag / count) << 16 ) | ( (ab / count) << 8 ) | ( aa / count );
-                dst.setColor(x, y, blendWithOriginal(tmp.getColor(x, y), nc, weight));
+                setPixelAbgr(dst, x, y, blendWithOriginal(getPixelAbgr(tmp, x, y), nc, weight));
             }
         }
         tmp.close();
@@ -349,6 +356,25 @@ public final class PhotoCapture {
 
         return (r << 24) | (g << 16) | (b << 8) | a;
     }
+
+    // ── Pixel access (NativeImage format changed in 1.21.4) ─────────────────────
+
+    //? if >=1.21.4 {
+    /*private static int getPixelAbgr(NativeImage img, int x, int y) {
+        int argb = img.getColorArgb(x, y);
+        int a = (argb >>> 24) & 0xFF; int r = (argb >>> 16) & 0xFF;
+        int g = (argb >>>  8) & 0xFF; int b =  argb         & 0xFF;
+        return (a << 24) | (b << 16) | (g << 8) | r;
+    }
+    private static void setPixelAbgr(NativeImage img, int x, int y, int abgr) {
+        int a = (abgr >>> 24) & 0xFF; int b = (abgr >>> 16) & 0xFF;
+        int g = (abgr >>>  8) & 0xFF; int r =  abgr         & 0xFF;
+        img.setColorArgb(x, y, (a << 24) | (r << 16) | (g << 8) | b);
+    }*/
+    //?} else {
+    private static int getPixelAbgr(NativeImage img, int x, int y) { return img.getColor(x, y); }
+    private static void setPixelAbgr(NativeImage img, int x, int y, int abgr) { img.setColor(x, y, abgr); }
+    //?}
 
     // ── Effect helpers ──────────────────────────────────────────────────────────
 
