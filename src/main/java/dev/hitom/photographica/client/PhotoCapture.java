@@ -19,6 +19,7 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
+import net.minecraft.client.option.Perspective;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.util.ScreenshotRecorder;
@@ -110,6 +111,8 @@ public final class PhotoCapture {
 	public static volatile boolean armorStandCapturePending = false;
 	private static volatile int pendingArmorStandEntityId = -1;
 	private static volatile int accumArmorStandEntityId = -1;
+	/** Perspective saved before armor stand capture; restored afterwards to avoid forcing first-person permanently. */
+	private static volatile Perspective savedArmorStandPerspective = null;
 
 	// Depth buffer pre-read during WorldRenderEvents.LAST (before Iris overwrites it).
 	private static volatile float[] pendingLinearDepth = null;
@@ -393,8 +396,12 @@ public final class PhotoCapture {
 				ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(id, settings, captureStandId));
 				if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て)"), true);
 			}
-			// Restore player camera
+			// Restore player camera and perspective
 			if (mc.player != null) mc.setCameraEntity(mc.player);
+			if (savedArmorStandPerspective != null) {
+				mc.options.setPerspective(savedArmorStandPerspective);
+				savedArmorStandPerspective = null;
+			}
 			armorStandCapturePending = false;
 			armorStandFocalLength = 0;
 		} else if (isFilm) {
@@ -535,8 +542,12 @@ public final class PhotoCapture {
 				ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(id, settings, finalStandId));
 				if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て)"), true);
 			}
-			// Restore player camera after armor stand long exposure
+			// Restore player camera and perspective after armor stand long exposure
 			if (mc.player != null) mc.setCameraEntity(mc.player);
+			if (savedArmorStandPerspective != null) {
+				mc.options.setPerspective(savedArmorStandPerspective);
+				savedArmorStandPerspective = null;
+			}
 			armorStandCapturePending = false;
 			armorStandFocalLength = 0;
 		} else if (isFilm) {
@@ -748,7 +759,12 @@ public final class PhotoCapture {
 		armorStandCapturePending = true;
 		armorStandFocalLength = LensKind.hasLens(settings.lensType()) ? settings.focalLengthMm() : 0;
 
-		// Switch render camera to armor stand perspective for the capture frame
+		// Switch render camera to armor stand perspective for the capture frame.
+		// Force first-person so we don't get the "back of the armor stand" third-person shot.
+		savedArmorStandPerspective = mc.options.getPerspective();
+		if (savedArmorStandPerspective != Perspective.FIRST_PERSON) {
+			mc.options.setPerspective(Perspective.FIRST_PERSON);
+		}
 		mc.setCameraEntity(stand);
 
 		// Long exposure: multi-frame accumulation from armor stand perspective
