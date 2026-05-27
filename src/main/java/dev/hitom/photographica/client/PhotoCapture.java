@@ -113,6 +113,19 @@ public final class PhotoCapture {
 	private static volatile int accumArmorStandEntityId = -1;
 	/** Perspective saved before armor stand capture; restored afterwards to avoid forcing first-person permanently. */
 	private static volatile Perspective savedArmorStandPerspective = null;
+	/**
+	 * Set to true in {@link #armArmorStandCapture} so that the very next
+	 * {@link #captureIfPending()} call is skipped.
+	 *
+	 * When the capture is armed mid-frame (e.g. from a timer tick or the camera screen
+	 * "撮影" button), {@code renderWorld()} has already completed for that frame using
+	 * the player's camera.  If we captured the framebuffer immediately it would contain
+	 * the player's view, not the armor stand's — producing a composited/wrong image.
+	 *
+	 * By returning early once, we let the engine run a full render cycle from the stand's
+	 * perspective before we grab the screenshot.
+	 */
+	private static volatile boolean armorStandSkipOnce = false;
 
 	// Depth buffer pre-read during WorldRenderEvents.LAST (before Iris overwrites it).
 	private static volatile float[] pendingLinearDepth = null;
@@ -329,6 +342,17 @@ public final class PhotoCapture {
 	 *  Iris (if present) has already blitted its pipeline output to mc.getFramebuffer(). */
 	public static void captureIfPending() {
 		tickTimer();
+
+		// Skip one frame when the armor stand capture was just armed this same frame.
+		// armArmorStandCapture() may fire mid-frame (timer, button click) AFTER renderWorld()
+		// has already rendered the player's view.  Capturing here would grab the wrong
+		// framebuffer.  We return early so the engine completes a full render cycle from
+		// the stand's camera before we take the screenshot.
+		if (armorStandSkipOnce) {
+			armorStandSkipOnce = false;
+			return;
+		}
+
 		// Long-exposure accumulation takes priority.
 		if (accumId != null) {
 			tickAccumulation();
@@ -767,6 +791,13 @@ public final class PhotoCapture {
 		pendingArmorStandEntityId = entityId;
 		armorStandCapturePending = true;
 		armorStandFocalLength = LensKind.hasLens(settings.lensType()) ? settings.focalLengthMm() : 0;
+
+		// Discard any depth pre-read from the current frame — it was captured from
+		// the player's perspective, not the armor stand's.  A fresh depth read will
+		// happen during WorldRenderEvents.LAST on the next (stand-camera) frame.
+		pendingLinearDepth = null;
+		// Signal captureIfPending() to skip the current frame (player-view framebuffer).
+		armorStandSkipOnce = true;
 
 		// Switch render camera to armor stand perspective for the capture frame.
 		// Force first-person so we don't get the "back of the armor stand" third-person shot.
