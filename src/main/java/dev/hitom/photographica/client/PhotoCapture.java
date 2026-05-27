@@ -109,6 +109,15 @@ public final class PhotoCapture {
 	// Armor stand capture state
 	public static volatile int armorStandFocalLength = 0;       // focal length during armor stand capture (0 = not active)
 	public static volatile boolean armorStandCapturePending = false;
+	/**
+	 * Entity ID of the armor stand currently being captured.
+	 * Set alongside {@link #armorStandCapturePending}; cleared when it returns to false.
+	 * Exposed so {@code GameRendererMixin} can re-assert {@code mc.setCameraEntity(stand)}
+	 * every frame immediately before {@code renderWorld()}, preventing any vanilla / mod
+	 * code that runs between frames from silently resetting the camera entity to the player
+	 * (which would cause the photo to show the player's perspective instead of the stand's).
+	 */
+	public static volatile int armorStandCaptureEntityId = -1;
 	private static volatile int pendingArmorStandEntityId = -1;
 	private static volatile int accumArmorStandEntityId = -1;
 	/** Perspective saved before armor stand capture; restored afterwards to avoid forcing first-person permanently. */
@@ -428,6 +437,7 @@ public final class PhotoCapture {
 			}
 			armorStandCapturePending = false;
 			armorStandFocalLength = 0;
+			armorStandCaptureEntityId = -1;
 		} else if (isFilm) {
 			ClientPlayNetworking.send(new TakeFilmPhotoPayload(id, settings));
 			if (mc.player != null) {
@@ -574,6 +584,7 @@ public final class PhotoCapture {
 			}
 			armorStandCapturePending = false;
 			armorStandFocalLength = 0;
+			armorStandCaptureEntityId = -1;
 		} else if (isFilm) {
 			ClientPlayNetworking.send(new TakeFilmPhotoPayload(id, settings));
 			if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), true);
@@ -781,6 +792,7 @@ public final class PhotoCapture {
 		pendingIsFilm = isFilm;
 		pendingArmorStandEntityId = entityId;
 		armorStandCapturePending = true;
+		armorStandCaptureEntityId = entityId;
 		armorStandFocalLength = LensKind.hasLens(settings.lensType()) ? settings.focalLengthMm() : 0;
 
 		// Discard any depth pre-read from the current frame — it was captured from
@@ -839,6 +851,25 @@ public final class PhotoCapture {
 
 	public static boolean isTimerActive() { return timerFireMs > 0; }
 	public static long timerRemainingMs() { return Math.max(0, timerFireMs - System.currentTimeMillis()); }
+
+	/**
+	 * Returns the focal length (mm) for a pending hand-held (non-armor-stand) capture,
+	 * or 0 if no such capture is pending.
+	 *
+	 * Used by {@code GameRendererMixin} to apply the correct FOV even when the player
+	 * is not sneaking through the viewfinder at the moment a self-timer fires.
+	 * Without this, the timer capture frame would inherit the vanilla/player FOV setting
+	 * instead of the lens focal length, making the photo look wider or narrower than intended.
+	 */
+	public static int pendingHandheldFocalLength() {
+		if (armorStandCapturePending) return 0;  // armor stand FOV handled by armorStandFocalLength
+		CameraSettings s = pendingSettings;
+		if (s == null) s = accumSettings;         // during long-exposure accumulation
+		if (s == null) return 0;
+		if (!LensKind.hasLens(s.lensType())) return 0;
+		int f = s.focalLengthMm();
+		return f > 0 ? f : 0;
+	}
 
 	// -------------------------------------------------------------------------
 	// Photographic image effects

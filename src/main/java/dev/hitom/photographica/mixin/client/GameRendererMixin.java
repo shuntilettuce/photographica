@@ -58,6 +58,17 @@ public class GameRendererMixin {
 			return;
 		}
 
+		// Self-timer capture for hand-held camera: apply the lens FOV for the capture frame
+		// even when the player is NOT sneaking through the viewfinder.
+		// Without this, a timer that fires while the player looks away would render the capture
+		// frame with the vanilla/player FOV instead of the lens focal length.
+		int pendingFocal = PhotoCapture.pendingHandheldFocalLength();
+		if (pendingFocal > 0) {
+			double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / pendingFocal));
+			cir.setReturnValue(vFovDegrees);
+			return;
+		}
+
 		PlayerEntity player = MinecraftClient.getInstance().player;
 		if (player == null) return;
 
@@ -101,6 +112,11 @@ public class GameRendererMixin {
 	 * so the screenshot taken in photographica$captureAfterComposite is clean.
 	 * The flag is restored in that same inject, so vanilla's deferred renderHand()
 	 * call still runs normally for the on-screen view.
+	 *
+	 * Also re-asserts the armor stand as camera entity every frame while
+	 * armorStandCapturePending is true, preventing any vanilla or mod code that
+	 * runs between frames from silently resetting mc.cameraEntity back to the player
+	 * (which would cause the photo to show the player's view instead of the stand's).
 	 */
 	@Inject(method = "render(Lnet/minecraft/client/render/RenderTickCounter;Z)V",
 			at = @At(value = "INVOKE",
@@ -110,6 +126,23 @@ public class GameRendererMixin {
 		// Suppress hand during long-exposure accumulation AND armor stand capture
 		if (PhotoCapture.isAccumulating() || PhotoCapture.armorStandCapturePending) {
 			this.renderHand = false;
+		}
+		// Re-assert the armor stand as camera entity every frame to ensure renderWorld()
+		// always renders from the stand's perspective.  Without this, code that runs
+		// between render frames (game ticks, network handlers, etc.) could reset
+		// mc.cameraEntity to mc.player, causing the captured photo to show the player's
+		// view composited over/instead of the armor stand's intended framing.
+		if (PhotoCapture.armorStandCapturePending) {
+			int standId = PhotoCapture.armorStandCaptureEntityId;
+			if (standId >= 0) {
+				MinecraftClient mc = MinecraftClient.getInstance();
+				if (mc.world != null) {
+					net.minecraft.entity.Entity stand = mc.world.getEntityById(standId);
+					if (stand != null && mc.cameraEntity != stand) {
+						mc.setCameraEntity(stand);
+					}
+				}
+			}
 		}
 		// Suppress hand for the entire duration of recording so it never
 		// appears in any captured frame (user confirmed complete hide is fine).
