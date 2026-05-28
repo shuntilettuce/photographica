@@ -54,6 +54,28 @@ public final class EvfBlurRenderer {
 
     /** GPU-side depth buffer copy. Call during WorldRenderEvents.LAST. */
     public static void captureDepth(int fbW, int fbH) {
+        //? if >=1.21.11 {
+        /*// In 1.21.11 glCopyTexImage2D can't read scene depth because it lives in a
+        // GpuTexture, not the legacy FBO depth attachment.  Borrow the GL ID directly.
+        net.minecraft.client.gl.Framebuffer mainFb =
+                net.minecraft.client.MinecraftClient.getInstance().getFramebuffer();
+        if (mainFb == null) return;
+        com.mojang.blaze3d.textures.GpuTexture depthGpu = mainFb.getDepthAttachment();
+        if (!(depthGpu instanceof net.minecraft.client.texture.GlTexture glDepth)) return;
+        int glId = glDepth.getGlId();
+        if (glId <= 0) return;
+        // Disable depth-compare mode so the shader can sample raw float values.
+        int prevActiveTU_ = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        int prevTex2D_    = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, glId);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, 0);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex2D_);
+        GL13.glActiveTexture(prevActiveTU_);
+        depthTex  = glId;
+        depthTexW = mainFb.textureWidth;
+        depthTexH = mainFb.textureHeight;*/
+        //?} else {
         if (fbW <= 0 || fbH <= 0) return;
 
         int prevActiveTU = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
@@ -84,6 +106,7 @@ public final class EvfBlurRenderer {
 
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex2D);
         GL13.glActiveTexture(prevActiveTU);
+        //?}
     }
 
     /**

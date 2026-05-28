@@ -467,13 +467,29 @@ public final class VideoRecorder {
                 pendingCropOffX, pendingCropOffY);
 
         //? if >=1.21.11 {
-        /*NativeImage[] rawRef = {null};
-        ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), img -> rawRef[0] = img);
-        NativeImage raw = rawRef[0];
-        if (raw == null) {
-            nextFrameMs = recordStartMs + (long)((frameCount + 1) * 1000.0 / currentFps);
-            return;
-        }*/
+        /*// takeScreenshot is GPU-async in 1.21.11: claim the frame slot synchronously so
+        // timing and meta ordering stay correct, then process pixels inside the callback.
+        int idx     = frameCount;
+        File outFile = new File(rawDir, String.format("frame_%04d.png", idx));
+        frameMetas.add(meta);
+        frameCount++;
+        nextFrameMs = recordStartMs + (long)(frameCount * 1000.0 / currentFps);
+        if (frameCount == currentFps * 60 && mc.player != null)
+            mc.player.sendMessage(Text.literal("⚠ 残り 1:00"), true);
+        ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), raw -> {
+            if (raw == null) return;
+            NativeImage cropped_ = cropTo16x9(raw);
+            NativeImage frame_   = boxDownsample(cropped_, 1280);
+            if (cropped_ != raw) cropped_.close();
+            raw.close();
+            ioExecutor.submit(() -> {
+                try { frame_.writeTo(outFile); }
+                catch (IOException e) {
+                    Photographica.LOGGER.warn("[VideoRecorder] Frame write failed: {}", outFile, e);
+                } finally { frame_.close(); }
+            });
+        });
+        return;*/
         //?} else {
         NativeImage raw;
         try {
@@ -485,6 +501,7 @@ public final class VideoRecorder {
         }
         //?}
 
+        //? if <1.21.11 {
         NativeImage cropped = cropTo16x9(raw);
         NativeImage frame   = boxDownsample(cropped, 1280);
         if (cropped != raw) cropped.close();
@@ -508,6 +525,7 @@ public final class VideoRecorder {
                 Photographica.LOGGER.warn("[VideoRecorder] Frame write failed: {}", outFile, e);
             } finally { frame.close(); }
         });
+        //?}
     }
 
     // ── Post-processing ────────────────────────────────────────────────────────
