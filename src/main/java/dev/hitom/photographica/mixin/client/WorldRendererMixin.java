@@ -27,6 +27,18 @@ public class WorldRendererMixin {
 	 * Suppresses the block-selection outline during any capture or recording,
 	 * so it never bleeds into photos or video frames.
 	 */
+	//? if >=1.21.11 {
+	/*@Inject(
+			method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;DDDLnet/minecraft/client/render/state/OutlineRenderState;IF)V",
+			at = @At("HEAD"),
+			cancellable = true
+	)
+	private void photographica$hideOutlineDuringCapture(CallbackInfo ci) {
+		if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) {
+			ci.cancel();
+		}
+	}*/
+	//?} else {
 	@Inject(
 			method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;Lnet/minecraft/entity/Entity;DDDLnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)V",
 			at = @At("HEAD"),
@@ -39,6 +51,7 @@ public class WorldRendererMixin {
 			ci.cancel();
 		}
 	}
+	//?}
 
 	/**
 	 * Vanilla WorldRenderer.render() skips drawing a {@code ClientPlayerEntity} when
@@ -58,6 +71,21 @@ public class WorldRendererMixin {
 	 * {@code mc.player != mc.player} evaluates to {@code false} and the player
 	 * entity is rendered normally.
 	 */
+	//? if >=1.21.11 {
+	/*@Redirect(
+			method = "render(Lnet/minecraft/client/util/memory/ObjectAllocator;Lnet/minecraft/client/render/RenderTickCounter;ZLnet/minecraft/client/render/Camera;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;Lorg/joml/Vector4f;Z)V",
+			at = @At(value = "INVOKE", ordinal = 3,
+					target = "Lnet/minecraft/client/render/Camera;getFocusedEntity()Lnet/minecraft/entity/Entity;"),
+			require = 0
+	)
+	private Entity photographica$allowPlayerRenderDuringArmorStandCapture(Camera camera) {
+		if (PhotoCapture.armorStandCapturePending) {
+			MinecraftClient mc = MinecraftClient.getInstance();
+			if (mc.player != null) return mc.player;
+		}
+		return camera.getFocusedEntity();
+	}*/
+	//?} else {
 	@Redirect(
 			method = "render(Lnet/minecraft/client/render/RenderTickCounter;ZLnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/GameRenderer;Lnet/minecraft/client/render/LightmapTextureManager;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
 			at = @At(value = "INVOKE", ordinal = 3,
@@ -70,4 +98,5 @@ public class WorldRendererMixin {
 		}
 		return camera.getFocusedEntity();
 	}
+	//?}
 }

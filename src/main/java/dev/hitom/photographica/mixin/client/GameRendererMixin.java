@@ -47,6 +47,40 @@ public class GameRendererMixin {
 	/** True when the hand was hidden for an in-progress video frame capture. */
 	@Unique private boolean photographica$videoHandSuppressed = false;
 
+	//? if >=1.21.11 {
+	/*@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)F",
+			at = @At("RETURN"),
+			cancellable = true)
+	private void photographica$applyFocalLength(Camera camera, float tickDelta, boolean changingFov,
+	                                            CallbackInfoReturnable<Float> cir) {
+		if (PhotoCapture.armorStandCapturePending && PhotoCapture.armorStandFocalLength > 0) {
+			int f = PhotoCapture.armorStandFocalLength;
+			cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(12.0 / f)));
+			return;
+		}
+		PlayerEntity player = MinecraftClient.getInstance().player;
+		if (player == null) return;
+		ItemStack vs = player.getMainHandStack();
+		if (!(vs.getItem() instanceof VideoCameraItem)) vs = player.getOffHandStack();
+		if (vs.getItem() instanceof VideoCameraItem) {
+			cir.setReturnValue(VideoRecorder.videoFov);
+			return;
+		}
+		if (!player.isSneaking()) return;
+		ItemStack stack = player.getMainHandStack();
+		if (!isCamera(stack)) {
+			stack = player.getOffHandStack();
+			if (!isCamera(stack)) return;
+		}
+		CameraSettings settings = stack.getItem() instanceof FilmCameraItem
+				? FilmCameraItem.getSettings(stack)
+				: CameraItem.getSettings(stack);
+		if (!LensKind.hasLens(settings.lensType())) return;
+		int f = settings.focalLengthMm();
+		if (f <= 0) return;
+		cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(12.0 / f)));
+	}*/
+	//?} else {
 	@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D",
 			at = @At("RETURN"),
 			cancellable = true)
@@ -92,6 +126,7 @@ public class GameRendererMixin {
 		double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
 		cir.setReturnValue(vFovDegrees);
 	}
+	//?}
 
 	/**
 	 * Fired just before renderWorld() during long-exposure accumulation OR
