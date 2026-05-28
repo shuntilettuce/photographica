@@ -13,7 +13,8 @@ import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 //? if >=1.21.11 {
-/*import org.lwjgl.opengl.GL43;*/
+/*import org.lwjgl.opengl.GL33;
+import org.lwjgl.opengl.GL43;*/
 //?}
 
 import java.io.InputStream;
@@ -190,8 +191,19 @@ public final class EvfBlurRenderer {
         int prevActiveTU = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         int prevTex0 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        //? if >=1.21.11 {
+        /*// 1.21.11 binds sampler objects per texture unit (GlCommandEncoder.glBindSampler)
+        // that persist after MC's draws. Our shader would sample through those instead of
+        // the texture's own parameters, reading garbage. Unbind so our glTexParameteri wins.
+        int prevSampler0 = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
+        GL33.glBindSampler(0, 0);*/
+        //?}
         GL13.glActiveTexture(GL13.GL_TEXTURE1);
         int prevTex1 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        //? if >=1.21.11 {
+        /*int prevSampler1 = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
+        GL33.glBindSampler(1, 0);*/
+        //?}
         int[] prevViewport   = new int[4];
         int[] prevScissorBox = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT,    prevViewport);
@@ -269,8 +281,14 @@ public final class EvfBlurRenderer {
         if (blendWasEnabled) GL11.glEnable(GL11.GL_BLEND);
         GL13.glActiveTexture(GL13.GL_TEXTURE1);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex1);
+        //? if >=1.21.11 {
+        /*GL33.glBindSampler(1, prevSampler1);*/
+        //?}
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex0);
+        //? if >=1.21.11 {
+        /*GL33.glBindSampler(0, prevSampler0);*/
+        //?}
         GL13.glActiveTexture(prevActiveTU);
         GL30.glBindVertexArray(prevVao);
         GL20.glUseProgram(prevProgram);
