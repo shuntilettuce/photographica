@@ -1428,9 +1428,9 @@ public final class PhotoCapture {
 			double eDist = eye.distanceTo(entityHit.getPos());
 			if (eDist < bestDist) bestDist = eDist;
 		}
-		if (bestDist < maxDist) {
-			lastSceneDepthBlocks = (float) bestDist;
-		}*/
+		// Nothing within range (sky / far horizon) → treat as infinity so AF can
+		// reach the 999 stop, matching the old glReadPixels behaviour at the sky.
+		lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : 999.0f;*/
 		//?} else {
 		// Read from the currently bound framebuffer without switching — with Iris active,
 		// WorldRenderEvents.LAST fires while Iris's own FBO is still bound, so we must

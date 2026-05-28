@@ -170,9 +170,9 @@ public final class PhotoCapture {
             double eDist = eye.distanceTo(entityHit.getPos());
             if (eDist < bestDist) bestDist = eDist;
         }
-        if (bestDist < maxDist) {
-            lastSceneDepthBlocks = (float) bestDist;
-        }
+        // Nothing within range (sky / far horizon) → treat as infinity so AF can
+        // reach the 999 stop, matching the old glReadPixels behaviour at the sky.
+        lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : 999.0f;
         // Still capture depth texture for the EVF blur shader.
         int[] viewport = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);

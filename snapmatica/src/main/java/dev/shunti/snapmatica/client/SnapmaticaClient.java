@@ -119,6 +119,9 @@ public class SnapmaticaClient implements ClientModInitializer {
             if (settingsKey.wasPressed()) {
                 client.setScreen(new CameraScreen());
             }
+
+            // Auto-focus (AF / MOB) drives focusDistance while the viewfinder is active
+            AutoFocus.tick(client);
         });
 
         // ── HUD overlay (viewfinder, blackout, flash) ───────────────────────────
