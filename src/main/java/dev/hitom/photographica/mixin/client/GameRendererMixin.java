@@ -40,7 +40,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
 
+	//? if <1.21.11 {
 	@Shadow private boolean renderHand;
+	//?}
 
 	/** True when the hand was hidden for an in-progress video frame capture. */
 	@Unique private boolean photographica$videoHandSuppressed = false;
@@ -108,13 +110,17 @@ public class GameRendererMixin {
 					shift = At.Shift.BEFORE))
 	private void photographica$suppressHandBeforeAccumSample(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
 		// Suppress hand during long-exposure accumulation AND armor stand capture
+		//? if <1.21.11 {
 		if (PhotoCapture.isAccumulating() || PhotoCapture.armorStandCapturePending) {
 			this.renderHand = false;
 		}
+		//?}
 		// Suppress hand for the entire duration of recording so it never
 		// appears in any captured frame (user confirmed complete hide is fine).
 		if (VideoRecorder.isRecording()) {
+			//? if <1.21.11 {
 			this.renderHand = false;
+			//?}
 			photographica$videoHandSuppressed = true;
 		} else {
 			photographica$videoHandSuppressed = false;
@@ -141,9 +147,11 @@ public class GameRendererMixin {
 		PhotoCapture.captureIfPending();
 		VideoRecorder.captureFrameIfRecording();
 		// Restore renderHand for the vanilla renderHand() call that follows
+		//? if <1.21.11 {
 		if (wasAccumulating || wasArmorStand || photographica$videoHandSuppressed) {
 			this.renderHand = true;
 		}
+		//?}
 		photographica$videoHandSuppressed = false;
 	}
 
