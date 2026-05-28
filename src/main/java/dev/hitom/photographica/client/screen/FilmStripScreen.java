@@ -129,7 +129,10 @@ public class FilmStripScreen extends Screen {
             int ty = thumbAreaTop + (THUMB_MAX_H - thumb.guiH()) / 2;
             // Amber sprocket-hole border
             ctx.fill(tx - 1, ty - 1, tx + thumb.guiW() + 1, ty + thumb.guiH() + 1, 0xFFB07018);
-            //? if >=1.21.4 {
+            //? if >=1.21.11 {
+            /*ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, thumb.id(), tx, ty, 0f, 0f,
+                    thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH(), thumb.guiW(), thumb.guiH());*/
+            //?} else if >=1.21.4 {
             /*ctx.drawTexture(net.minecraft.client.render.RenderLayer::getGuiTextured, thumb.id(), tx, ty, 0f, 0f,
                     thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH(), thumb.guiW(), thumb.guiH());*/
             //?} else {
@@ -217,14 +220,16 @@ public class FilmStripScreen extends Screen {
                 forTexture = boxResample(inverted, physW, physH);
             }
 
+            String safeId = data.id().toString().replace('-', '_').toLowerCase();
+            Identifier texId = Identifier.of(Photographica.MOD_ID, "negthumb/" + safeId);
             //? if >=1.21.11 {
-            /*NativeImageBackedTexture tex = new NativeImageBackedTexture("photo", forTexture);*/
+            /*NativeImageBackedTexture tex = new NativeImageBackedTexture(() -> "negthumb/" + safeId, forTexture);*/
             //?} else {
             NativeImageBackedTexture tex = new NativeImageBackedTexture(forTexture);
             //?}
+            //? if <1.21.11 {
             tex.setFilter(true, false);
-            String safeId = data.id().toString().replace('-', '_').toLowerCase();
-            Identifier texId = Identifier.of(Photographica.MOD_ID, "negthumb/" + safeId);
+            //?}
             mc.getTextureManager().registerTexture(texId, tex);
             forTexture = null;
 

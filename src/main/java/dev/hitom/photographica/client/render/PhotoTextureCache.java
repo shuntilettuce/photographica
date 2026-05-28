@@ -50,7 +50,7 @@ public final class PhotoTextureCache {
             Identifier texId = Identifier.of(Photographica.MOD_ID, path);
             //? if >=1.21.11 {
             /*MinecraftClient.getInstance().getTextureManager()
-                    .registerTexture(texId, new NativeImageBackedTexture(path, image));*/
+                    .registerTexture(texId, new NativeImageBackedTexture(() -> path, image));*/
             //?} else {
             MinecraftClient.getInstance().getTextureManager()
                     .registerTexture(texId, new NativeImageBackedTexture(image));

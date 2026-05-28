@@ -99,14 +99,16 @@ public class PhotoViewerScreen extends Screen {
 				forTexture = boxResample(original, physW, physH);
 			}
 
-			//? if >=1.21.11 {
-            /*NativeImageBackedTexture tex = new NativeImageBackedTexture("photo", forTexture);*/
-            //?} else {
-            NativeImageBackedTexture tex = new NativeImageBackedTexture(forTexture);
-            //?}
-			tex.setFilter(true, false);
 			String safeId = id.toString().replace('-', '_').toLowerCase();
 			Identifier texId = Identifier.of(Photographica.MOD_ID, "photo/" + safeId);
+			//? if >=1.21.11 {
+			/*NativeImageBackedTexture tex = new NativeImageBackedTexture(() -> "photo/" + safeId, forTexture);*/
+			//?} else {
+			NativeImageBackedTexture tex = new NativeImageBackedTexture(forTexture);
+			//?}
+			//? if <1.21.11 {
+			tex.setFilter(true, false);
+			//?}
 			mc.getTextureManager().registerTexture(texId, tex);
 			// Ownership of forTexture transferred to the texture; null it out so
 			// the cleanup block below doesn't double-close it.
@@ -194,7 +196,10 @@ public class PhotoViewerScreen extends Screen {
 		ctx.fill(dx - 2, dy - 2, dx + dw + 2, dy + dh + 2, 0xFFFFFFFF);
 		ctx.fill(dx - 1, dy - 1, dx + dw + 1, dy + dh + 1, 0xFF000000);
 
-		//? if >=1.21.4 {
+		//? if >=1.21.11 {
+		/*ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, image.id, dx, dy, 0f, 0f,
+				image.texW, image.texH, image.texW, image.texH, dw, dh);*/
+		//?} else if >=1.21.4 {
 		/*ctx.drawTexture(net.minecraft.client.render.RenderLayer::getGuiTextured, image.id, dx, dy, 0f, 0f,
 				image.texW, image.texH, image.texW, image.texH, dw, dh);*/
 		//?} else {
