@@ -12,7 +12,8 @@ import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 //? if >=1.21.11 {
-/*import org.lwjgl.opengl.GL33;
+/*import org.lwjgl.opengl.GL14;
+import org.lwjgl.opengl.GL33;
 import org.lwjgl.opengl.GL43;*/
 //?}
 
@@ -82,8 +83,12 @@ public final class EvfBlurRenderer {
             if (depthTex != -1) GL11.glDeleteTextures(depthTex);
             depthTex = GL11.glGenTextures();
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
-            GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_DEPTH_COMPONENT32F,
-                    fw_, fh_, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT,
+            // Match the scene depth attachment's internal format (DEPTH32 =
+            // GL_DEPTH_COMPONENT32, fixed-point — NOT 32F). glCopyImageSubData
+            // requires both textures to share a format size class, so a 32F copy
+            // target silently fails (GL_INVALID_OPERATION), leaving garbage depth.
+            GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL14.GL_DEPTH_COMPONENT32,
+                    fw_, fh_, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_UNSIGNED_INT,
                     (java.nio.ByteBuffer) null);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);

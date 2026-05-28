@@ -147,10 +147,31 @@ public final class PhotoCapture {
         //? if >=1.21.11 {
         /*// In 1.21.11 glReadPixels(GL_DEPTH_COMPONENT) no longer reads the scene depth
         // because depth lives in a GpuTexture, not the legacy default FBO depth attachment.
-        // Use the crosshair raytrace result as a reliable, version-safe alternative.
-        net.minecraft.util.hit.HitResult hit = mc.crosshairTarget;
-        if (hit != null && hit.getType() != net.minecraft.util.hit.HitResult.Type.MISS) {
-            lastSceneDepthBlocks = (float) mc.player.getEyePos().distanceTo(hit.getPos());
+        // mc.crosshairTarget is capped at interaction reach (~4.5 blocks), so it MISSes
+        // for anything farther — leaving the focus plane and reticle frozen. Do our own
+        // long-range raycast (blocks + entities) so focus tracks distant subjects too.
+        final double maxDist = 256.0;
+        net.minecraft.util.math.Vec3d eye = mc.player.getCameraPosVec(1.0f);
+        net.minecraft.util.math.Vec3d look = mc.player.getRotationVec(1.0f);
+        net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
+        net.minecraft.util.hit.BlockHitResult blockHit = mc.world.raycast(
+                new net.minecraft.world.RaycastContext(eye, end,
+                        net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
+                        net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+        double bestDist = (blockHit != null
+                && blockHit.getType() != net.minecraft.util.hit.HitResult.Type.MISS)
+                ? eye.distanceTo(blockHit.getPos()) : maxDist;
+        net.minecraft.util.math.Box searchBox = mc.player.getBoundingBox()
+                .stretch(look.multiply(maxDist)).expand(1.0);
+        net.minecraft.util.hit.EntityHitResult entityHit =
+                net.minecraft.entity.projectile.ProjectileUtil.raycast(mc.player, eye, end,
+                        searchBox, e -> !e.isSpectator() && e.isAlive(), bestDist * bestDist);
+        if (entityHit != null) {
+            double eDist = eye.distanceTo(entityHit.getPos());
+            if (eDist < bestDist) bestDist = eDist;
+        }
+        if (bestDist < maxDist) {
+            lastSceneDepthBlocks = (float) bestDist;
         }
         // Still capture depth texture for the EVF blur shader.
         int[] viewport = new int[4];
