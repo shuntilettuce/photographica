@@ -1,5 +1,6 @@
 {
 	"required": true,
+	"refmap": "photographica.refmap.json",
 	"package": "dev.hitom.photographica.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
