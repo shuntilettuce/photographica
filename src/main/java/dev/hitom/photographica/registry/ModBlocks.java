@@ -72,7 +72,18 @@ public final class ModBlocks {
     );
 
     public static void register() {
-        // Register BlockItems
+        //? if >=1.21.11 {
+        /*Registry.register(Registries.ITEM, Identifier.of(Photographica.MOD_ID, "darkroom"),
+                new BlockItem(DARKROOM, itemSettings("darkroom")));
+        Registry.register(Registries.ITEM, Identifier.of(Photographica.MOD_ID, "printer"),
+                new BlockItem(PRINTER, itemSettings("printer")));
+        Registry.register(Registries.ITEM, Identifier.of(Photographica.MOD_ID, "enlarger"),
+                new BlockItem(ENLARGER, itemSettings("enlarger")));
+        Registry.register(Registries.ITEM, Identifier.of(Photographica.MOD_ID, "photo_frame"),
+                new BlockItem(PHOTO_FRAME, itemSettings("photo_frame")));
+        Registry.register(Registries.ITEM, Identifier.of(Photographica.MOD_ID, "photo_stand"),
+                new BlockItem(PHOTO_STAND, itemSettings("photo_stand")));*/
+        //?} else {
         Registry.register(Registries.ITEM,
                 Identifier.of(Photographica.MOD_ID, "darkroom"),
                 new BlockItem(DARKROOM, new Item.Settings()));
@@ -88,6 +99,7 @@ public final class ModBlocks {
         Registry.register(Registries.ITEM,
                 Identifier.of(Photographica.MOD_ID, "photo_stand"),
                 new BlockItem(PHOTO_STAND, new Item.Settings()));
+        //?}
 
         // Add to creative tab
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> {
@@ -98,4 +110,12 @@ public final class ModBlocks {
             entries.add(PHOTO_STAND.asItem());
         });
     }
+
+    //? if >=1.21.11 {
+    /*private static Item.Settings itemSettings(String name) {
+        net.minecraft.registry.RegistryKey<Item> k = net.minecraft.registry.RegistryKey.of(
+            net.minecraft.registry.RegistryKeys.ITEM, Identifier.of(Photographica.MOD_ID, name));
+        return new Item.Settings().registryKey(k);
+    }*/
+    //?}
 }
