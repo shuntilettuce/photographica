@@ -1402,6 +1402,15 @@ public final class PhotoCapture {
 			hand = mc.player.getOffHandStack();
 			if (!isAnyCamera(hand)) return;
 		}
+		//? if >=1.21.11 {
+		/*// In 1.21.11 the scene depth lives in a GpuTexture, not the legacy FBO depth
+		// attachment, so glReadPixels(GL_DEPTH_COMPONENT) returns stale/wrong data.
+		// Use the crosshair raytrace hit as a reliable, version-safe alternative.
+		net.minecraft.util.hit.HitResult hit = mc.crosshairTarget;
+		if (hit != null && hit.getType() != net.minecraft.util.hit.HitResult.Type.MISS) {
+			lastSceneDepthBlocks = (float) mc.player.getEyePos().distanceTo(hit.getPos());
+		}*/
+		//?} else {
 		// Read from the currently bound framebuffer without switching — with Iris active,
 		// WorldRenderEvents.LAST fires while Iris's own FBO is still bound, so we must
 		// not call fb.beginWrite() or we would switch to mc.getFramebuffer() whose depth
@@ -1421,6 +1430,7 @@ public final class PhotoCapture {
 		final float near = 0.05f;
 		final float far  = 512.0f;
 		lastSceneDepthBlocks = 2.0f * near * far / (far + near - ndc * (far - near));
+		//?}
 	}
 
 	/**

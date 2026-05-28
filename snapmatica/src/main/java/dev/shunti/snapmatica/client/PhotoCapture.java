@@ -144,6 +144,21 @@ public final class PhotoCapture {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || !mc.player.isSneaking()) return;
 
+        //? if >=1.21.11 {
+        /*// In 1.21.11 glReadPixels(GL_DEPTH_COMPONENT) no longer reads the scene depth
+        // because depth lives in a GpuTexture, not the legacy default FBO depth attachment.
+        // Use the crosshair raytrace result as a reliable, version-safe alternative.
+        net.minecraft.util.hit.HitResult hit = mc.crosshairTarget;
+        if (hit != null && hit.getType() != net.minecraft.util.hit.HitResult.Type.MISS) {
+            lastSceneDepthBlocks = (float) mc.player.getEyePos().distanceTo(hit.getPos());
+        }
+        // Still capture depth texture for the EVF blur shader.
+        int[] viewport = new int[4];
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
+        int vpW = viewport[2];
+        int vpH = viewport[3];
+        if (vpW > 0 && vpH > 0) EvfBlurRenderer.captureDepth(vpW, vpH);*/
+        //?} else {
         // Read from the currently bound framebuffer without switching.
         GL11.glGetError(); // clear any pending GL error
         int[] viewport = new int[4];
@@ -167,6 +182,7 @@ public final class PhotoCapture {
         final float near = 0.05f;
         final float far  = 512.0f;
         lastSceneDepthBlocks = 2.0f * near * far / (far + near - ndc * (far - near));
+        //?}
     }
 
     // ── Photo effects pipeline ──────────────────────────────────────────────────

@@ -32,5 +32,10 @@
 	"block.photographica.printer": "Printer",
 	"block.photographica.enlarger": "Enlarger",
 	"block.photographica.photo_frame": "Photo Frame",
-	"block.photographica.photo_stand": "Photo Stand"
+	"block.photographica.photo_stand": "Photo Stand",
+	"item.photographica.darkroom": "Portable Darkroom",
+	"item.photographica.printer": "Printer",
+	"item.photographica.enlarger": "Enlarger",
+	"item.photographica.photo_frame": "Photo Frame",
+	"item.photographica.photo_stand": "Photo Stand"
 }

@@ -118,7 +118,9 @@ public final class EvfBlurRenderer {
         MinecraftClient mc = MinecraftClient.getInstance();
         Framebuffer mainFb = mc.getFramebuffer();
         //? if >=1.21.11 {
-        /*int mainTex = 0;*/
+        /*com.mojang.blaze3d.textures.GpuTexture gpuTex = mainFb.getColorAttachment();
+        if (!(gpuTex instanceof net.minecraft.client.texture.GlTexture glTex)) return;
+        int mainTex = glTex.getGlId();*/
         //?} else {
         int mainTex = mainFb.getColorAttachment();
         //?}
