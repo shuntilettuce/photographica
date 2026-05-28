@@ -198,10 +198,10 @@ public class PhotoViewerScreen extends Screen {
 
 		//? if >=1.21.11 {
 		/*ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, image.id, dx, dy, 0f, 0f,
-				image.texW, image.texH, image.texW, image.texH, dw, dh);*/
+				dw, dh, image.texW, image.texH, image.texW, image.texH);*/
 		//?} else if >=1.21.4 {
 		/*ctx.drawTexture(net.minecraft.client.render.RenderLayer::getGuiTextured, image.id, dx, dy, 0f, 0f,
-				image.texW, image.texH, image.texW, image.texH, dw, dh);*/
+				dw, dh, image.texW, image.texH, image.texW, image.texH);*/
 		//?} else {
 		ctx.drawTexture(image.id, dx, dy, dw, dh, 0f, 0f,
 				image.texW, image.texH, image.texW, image.texH);
