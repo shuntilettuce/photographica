@@ -47,7 +47,7 @@ public class GameRendererMixin {
 	/** True when the hand was hidden for an in-progress video frame capture. */
 	@Unique private boolean photographica$videoHandSuppressed = false;
 
-	//? if >=1.21.11 {
+	//? if >=1.21.4 {
 	/*@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)F",
 			at = @At("RETURN"),
 			cancellable = true)

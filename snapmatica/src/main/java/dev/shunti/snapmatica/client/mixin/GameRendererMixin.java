@@ -22,8 +22,25 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
 
+    //? if <1.21.11 {
     @Shadow private boolean renderHand;
+    //?}
 
+    //? if >=1.21.4 {
+    /*@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)F",
+            at = @At("RETURN"),
+            cancellable = true)
+    private void snapmatica$applyFocalLength(Camera camera, float tickDelta, boolean changingFov,
+                                             CallbackInfoReturnable<Float> cir) {
+        PlayerEntity player = MinecraftClient.getInstance().player;
+        if (player == null) return;
+        if (!SnapmaticaClient.viewfinderSneakEnabled || !player.isSneaking()) return;
+        if (SnapmaticaClient.lensType == 0) return;
+        int f = SnapmaticaClient.focalLengthMm;
+        if (f <= 0) return;
+        cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(12.0 / f)));
+    }*/
+    //?} else {
     @Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D",
             at = @At("RETURN"),
             cancellable = true)
@@ -43,6 +60,7 @@ public class GameRendererMixin {
         double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
         cir.setReturnValue(vFovDegrees);
     }
+    //?}
 
     /**
      * Suppress hand rendering before renderWorld() when a photo capture is pending.
@@ -52,9 +70,11 @@ public class GameRendererMixin {
                     target = "Lnet/minecraft/client/render/GameRenderer;renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
                     shift = At.Shift.BEFORE))
     private void snapmatica$suppressHandBeforeCapture(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
+        //? if <1.21.11 {
         if (PhotoCapture.isCapturePending()) {
             this.renderHand = false;
         }
+        //?}
     }
 
     /**
@@ -68,8 +88,10 @@ public class GameRendererMixin {
     private void snapmatica$captureAfterComposite(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
         boolean wasCapturePending = PhotoCapture.isCapturePending();
         PhotoCapture.captureIfPending();
+        //? if <1.21.11 {
         if (wasCapturePending) {
             this.renderHand = true;
         }
+        //?}
     }
 }

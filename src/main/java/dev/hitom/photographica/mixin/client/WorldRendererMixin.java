@@ -38,6 +38,17 @@ public class WorldRendererMixin {
 			ci.cancel();
 		}
 	}*/
+	//?} else if >=1.21.4 {
+	/*@Inject(
+			method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;Lnet/minecraft/entity/Entity;DDDLnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;I)V",
+			at = @At("HEAD"),
+			cancellable = true
+	)
+	private void photographica$hideOutlineDuringCapture(CallbackInfo ci) {
+		if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) {
+			ci.cancel();
+		}
+	}*/
 	//?} else {
 	@Inject(
 			method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;Lnet/minecraft/entity/Entity;DDDLnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)V",
@@ -89,7 +100,8 @@ public class WorldRendererMixin {
 	@Redirect(
 			method = "render(Lnet/minecraft/client/render/RenderTickCounter;ZLnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/GameRenderer;Lnet/minecraft/client/render/LightmapTextureManager;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
 			at = @At(value = "INVOKE", ordinal = 3,
-					target = "Lnet/minecraft/client/render/Camera;getFocusedEntity()Lnet/minecraft/entity/Entity;")
+					target = "Lnet/minecraft/client/render/Camera;getFocusedEntity()Lnet/minecraft/entity/Entity;"),
+			require = 0
 	)
 	private Entity photographica$allowPlayerRenderDuringArmorStandCapture(Camera camera) {
 		if (PhotoCapture.armorStandCapturePending) {
