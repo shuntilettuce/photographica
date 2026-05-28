@@ -16,6 +16,7 @@ import dev.hitom.photographica.item.PhotoPaperItem;
 import dev.hitom.photographica.item.SdCardItem;
 import dev.hitom.photographica.item.VideoCameraItem;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroups;
 import net.minecraft.registry.Registries;
@@ -25,10 +26,17 @@ import net.minecraft.util.Identifier;
 public final class ModItems {
 	private ModItems() {}
 
+	//? if >=1.21.4 {
+	/*public static final Item VIDEO_CAMERA       = reg("video_camera",        new VideoCameraItem(new Item.Settings().equippable(EquipmentSlot.CHEST)));
+	public static final Item CAMERA             = reg("camera",              new CameraItem(new Item.Settings().equippable(EquipmentSlot.CHEST)));
+	public static final Item FILM_CAMERA        = reg("film_camera",         new FilmCameraItem(new Item.Settings().equippable(EquipmentSlot.CHEST)));
+	public static final Item MIRRORLESS_CAMERA  = reg("mirrorless_camera",   new MirrorlessCameraItem(new Item.Settings().equippable(EquipmentSlot.CHEST)));*/
+	//?} else {
 	public static final Item VIDEO_CAMERA       = reg("video_camera",        new VideoCameraItem(new Item.Settings()));
 	public static final Item CAMERA             = reg("camera",              new CameraItem(new Item.Settings()));
 	public static final Item FILM_CAMERA        = reg("film_camera",         new FilmCameraItem(new Item.Settings()));
 	public static final Item MIRRORLESS_CAMERA  = reg("mirrorless_camera",   new MirrorlessCameraItem(new Item.Settings()));
+	//?}
 	public static final Item LENS_PRIME_50      = reg("lens_prime_50mm",     new LensItem(new Item.Settings(), LensKind.PRIME_50MM));
 	public static final Item LENS_ZOOM_24_70    = reg("lens_zoom_24_70mm",   new LensItem(new Item.Settings(), LensKind.ZOOM_24_70));
 	public static final Item LENS_PRIME_35      = reg("lens_prime_35mm",     new LensItem(new Item.Settings(), LensKind.PRIME_35MM));

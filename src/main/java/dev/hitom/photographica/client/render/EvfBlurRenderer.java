@@ -117,7 +117,11 @@ public final class EvfBlurRenderer {
 
         MinecraftClient mc = MinecraftClient.getInstance();
         Framebuffer mainFb = mc.getFramebuffer();
+        //? if >=1.21.11 {
+        /*int mainTex = 0;*/
+        //?} else {
         int mainTex = mainFb.getColorAttachment();
+        //?}
         if (mainTex == 0) return;
 
         int fbW = mainFb.textureWidth;

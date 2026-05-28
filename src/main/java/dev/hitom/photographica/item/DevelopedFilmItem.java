@@ -8,9 +8,12 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
+//? if <1.21.4 {
 import net.minecraft.util.TypedActionResult;
+//?}
 import net.minecraft.world.World;
 
 import java.util.List;
@@ -24,6 +27,16 @@ public class DevelopedFilmItem extends Item {
         super(settings.maxCount(1));
     }
 
+    //? if >=1.21.4 {
+    /*@Override
+    public ActionResult use(World world, PlayerEntity user, Hand hand) {
+        ItemStack stack = user.getStackInHand(hand);
+        if (world.isClient) {
+            clientOpenFilmStrip.accept(stack);
+        }
+        return ActionResult.SUCCESS;
+    }*/
+    //?} else {
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
@@ -32,6 +45,7 @@ public class DevelopedFilmItem extends Item {
         }
         return TypedActionResult.success(stack, world.isClient);
     }
+    //?}
 
     @Override
     public Text getName(ItemStack stack) {

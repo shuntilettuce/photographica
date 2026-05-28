@@ -61,7 +61,11 @@ public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoS
 
         // 1. Align to facing direction (Y-axis rotation around block centre).
         matrices.translate(0.5, 0.5, 0.5);
+        //? if >=1.21.4 {
+        /*matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-facing.getPositiveHorizontalDegrees()));*/
+        //?} else {
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-facing.asRotation()));
+        //?}
         matrices.translate(-0.5, -0.5, -0.5);
 
         // 2. Tilt panel -22.5° around X matching model JSON rotation origin [8,1,12].

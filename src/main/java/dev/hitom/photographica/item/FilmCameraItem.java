@@ -10,9 +10,12 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
+//? if <1.21.4 {
 import net.minecraft.util.TypedActionResult;
+//?}
 import net.minecraft.world.World;
 
 import java.util.List;
@@ -28,7 +31,11 @@ import java.util.function.Consumer;
  *   - When the roll is full or manually rewound, the film state is moved
  *     onto a dedicated ExposedFilm item to be developed elsewhere.
  */
+//? if >=1.21.4 {
+/*public class FilmCameraItem extends Item {*/
+//?} else {
 public class FilmCameraItem extends Item implements net.minecraft.item.Equipment {
+//?}
 	public static Consumer<ItemStack> clientOpenScreen   = stack -> {};
 	public static Consumer<ItemStack> clientTakePhoto    = stack -> {};
 
@@ -36,10 +43,12 @@ public class FilmCameraItem extends Item implements net.minecraft.item.Equipment
 		super(settings.maxCount(1));
 	}
 
+	//? if <1.21.4 {
 	@Override
 	public net.minecraft.entity.EquipmentSlot getSlotType() {
 		return net.minecraft.entity.EquipmentSlot.CHEST;
 	}
+	//?}
 
 	public static CameraSettings getSettings(ItemStack stack) {
 		CameraSettings s = stack.get(ModDataComponents.CAMERA_SETTINGS);
@@ -87,10 +96,19 @@ public class FilmCameraItem extends Item implements net.minecraft.item.Equipment
 		tooltip.add(Text.literal("露出: " + expLabels[Math.max(0, Math.min(3, s.exposureMode()))]).formatted(Formatting.DARK_GRAY));
 	}
 
+	//? if >=1.21.4 {
+	/*@Override
+	public ActionResult use(World world, PlayerEntity user, Hand hand) {
+		ItemStack stack = user.getStackInHand(hand);
+		if (world.isClient) clientTakePhoto.accept(stack);
+		return ActionResult.SUCCESS;
+	}*/
+	//?} else {
 	@Override
 	public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
 		ItemStack stack = user.getStackInHand(hand);
 		if (world.isClient) clientTakePhoto.accept(stack);
 		return TypedActionResult.success(stack, world.isClient);
 	}
+	//?}
 }

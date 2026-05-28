@@ -54,7 +54,11 @@ public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoF
         matrices.push();
         // Rotate around the block centre to align with the block's facing direction.
         matrices.translate(0.5, 0.5, 0.5);
+        //? if >=1.21.4 {
+        /*matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-facing.getPositiveHorizontalDegrees()));*/
+        //?} else {
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-facing.asRotation()));
+        //?}
         matrices.translate(-0.5, -0.5, -0.5);
 
         MatrixStack.Entry entry = matrices.peek();

@@ -385,7 +385,14 @@ public final class PhotoCapture {
 			linearDepth = preRead != null ? preRead : readLinearDepth(fb, fbW, fbH);
 		}
 
+		//? if >=1.21.11 {
+		/*NativeImage[] rawRef = {null};
+		ScreenshotRecorder.takeScreenshot(fb, img -> rawRef[0] = img);
+		NativeImage raw = rawRef[0];
+		if (raw == null) { capturePending = false; return; }*/
+		//?} else {
 		NativeImage raw = ScreenshotRecorder.takeScreenshot(fb);
+		//?}
 
 		NativeImage cropped = null;
 		NativeImage downsampled = null;
@@ -466,7 +473,14 @@ public final class PhotoCapture {
 
 		// Take a color sample if the interval has elapsed.
 		if (now >= accumNextSampleMs && accumSamples < ACCUM_MAX_SAMPLES) {
+			//? if >=1.21.11 {
+			/*NativeImage[] frameRef = {null};
+			ScreenshotRecorder.takeScreenshot(fb, img -> frameRef[0] = img);
+			NativeImage frame = frameRef[0];
+			if (frame == null) return;*/
+			//?} else {
 			NativeImage frame = ScreenshotRecorder.takeScreenshot(fb);
+			//?}
 			NativeImage cropped = null;
 			NativeImage ds = null;
 			try {
@@ -483,7 +497,7 @@ public final class PhotoCapture {
 				if (w == accumW && h == accumH) {
 					for (int y = 0; y < h; y++) {
 						for (int x = 0; x < w; x++) {
-							int c = ds.getColor(x, y);
+							int c = getPixelAbgr(ds, x, y);
 							int idx = y * w + x;
 							accumR[idx] += c & 0xFF;
 							accumG[idx] += (c >> 8) & 0xFF;
@@ -534,7 +548,7 @@ public final class PhotoCapture {
 				int rv = clampCh(Math.round(r[idx] / n));
 				int gv = clampCh(Math.round(g[idx] / n));
 				int bv = clampCh(Math.round(b[idx] / n));
-				averaged.setColor(px, py, (0xFF << 24) | (bv << 16) | (gv << 8) | rv);
+				setPixelAbgr(averaged, px, py, (0xFF << 24) | (bv << 16) | (gv << 8) | rv);
 			}
 		}
 
@@ -902,7 +916,7 @@ public final class PhotoCapture {
 		NativeImage pass1 = new NativeImage(w, h, false);
 		for (int y = 0; y < h; y++) {
 			for (int x = 0; x < w; x++) {
-				int color = src.getColor(x, y);
+				int color = getPixelAbgr(src, x, y);
 				int a     = (color >>> 24) & 0xFF;
 				int blue  = (color >>> 16) & 0xFF;
 				int green = (color >>>  8) & 0xFF;
@@ -960,7 +974,7 @@ public final class PhotoCapture {
 					}
 				}
 
-				pass1.setColor(x, y, (a << 24) | (blue << 16) | (green << 8) | red);
+				setPixelAbgr(pass1, x, y, (a << 24) | (blue << 16) | (green << 8) | red);
 			}
 		}
 
@@ -1119,14 +1133,14 @@ public final class PhotoCapture {
 				int n = 0;
 				for (int dx = -radius; dx <= radius; dx++) {
 					int sx = Math.max(0, Math.min(w - 1, x + dx));
-					int c  = src.getColor(sx, y);
+					int c  = getPixelAbgr(src, sx, y);
 					aa += (c >>> 24) & 0xFF;
 					ba += (c >>> 16) & 0xFF;
 					ga += (c >>>  8) & 0xFF;
 					ra +=  c         & 0xFF;
 					n++;
 				}
-				dst.setColor(x, y,
+				setPixelAbgr(dst, x, y,
 						(((int)(aa / n)) << 24) | (((int)(ba / n)) << 16)
 						| (((int)(ga / n)) << 8) | (int)(ra / n));
 			}
@@ -1142,7 +1156,7 @@ public final class PhotoCapture {
 				long ra = 0, ga = 0, ba = 0, aa = 0;
 				for (int dy = -1; dy <= 1; dy++) {
 					for (int dx = -1; dx <= 1; dx++) {
-						int c = src.getColor(
+						int c = getPixelAbgr(src, 
 								Math.max(0, Math.min(w - 1, x + dx)),
 								Math.max(0, Math.min(h - 1, y + dy)));
 						aa += (c >>> 24) & 0xFF;
@@ -1151,7 +1165,7 @@ public final class PhotoCapture {
 						ra +=  c         & 0xFF;
 					}
 				}
-				dst.setColor(x, y,
+				setPixelAbgr(dst, x, y,
 						(((int)(aa / 9)) << 24) | (((int)(ba / 9)) << 16)
 						| (((int)(ga / 9)) << 8) | (int)(ra / 9));
 			}
@@ -1292,7 +1306,7 @@ public final class PhotoCapture {
 			for (int ix = 0; ix < iw; ix++) {
 				float coc = cocMap[iy * iw + ix];
 				if (coc < 0.5f) {
-					hBuf[iy * iw + ix] = src.getColor(ix, iy);
+					hBuf[iy * iw + ix] = getPixelAbgr(src, ix, iy);
 					continue;
 				}
 				int r = Math.min(maxR, (int) Math.ceil(coc));
@@ -1303,14 +1317,14 @@ public final class PhotoCapture {
 					// relative to us. Sharper neighbours (CoC < ours) are down-weighted.
 					float w = Math.min(1.0f, cocMap[iy * iw + sx] / coc);
 					if (w < 0.01f) continue;
-					int c = src.getColor(sx, iy);
+					int c = getPixelAbgr(src, sx, iy);
 					aa += ((c >>> 24) & 0xFF) * w;
 					ba += ((c >>> 16) & 0xFF) * w;
 					ga += ((c >>>  8) & 0xFF) * w;
 					ra += ( c         & 0xFF) * w;
 					tw += w;
 				}
-				hBuf[iy * iw + ix] = (tw < 0.01f) ? src.getColor(ix, iy)
+				hBuf[iy * iw + ix] = (tw < 0.01f) ? getPixelAbgr(src, ix, iy)
 						: ((clampCh(Math.round(aa / tw)) << 24)
 						| (clampCh(Math.round(ba / tw)) << 16)
 						| (clampCh(Math.round(ga / tw)) <<  8)
@@ -1324,7 +1338,7 @@ public final class PhotoCapture {
 			for (int iy = 0; iy < ih; iy++) {
 				float coc = cocMap[iy * iw + ix];
 				if (coc < 0.5f) {
-					result.setColor(ix, iy, src.getColor(ix, iy));
+					setPixelAbgr(result, ix, iy, getPixelAbgr(src, ix, iy));
 					continue;
 				}
 				int r = Math.min(maxR, (int) Math.ceil(coc));
@@ -1340,7 +1354,7 @@ public final class PhotoCapture {
 					ra += ( c         & 0xFF) * w;
 					tw += w;
 				}
-				result.setColor(ix, iy, (tw < 0.01f) ? hBuf[iy * iw + ix]
+				setPixelAbgr(result, ix, iy, (tw < 0.01f) ? hBuf[iy * iw + ix]
 						: ((clampCh(Math.round(aa / tw)) << 24)
 						| (clampCh(Math.round(ba / tw)) << 16)
 						| (clampCh(Math.round(ga / tw)) <<  8)
@@ -1372,7 +1386,7 @@ public final class PhotoCapture {
 				int n = 0;
 				for (int sy = sy0; sy < sy1; sy++) {
 					for (int sx = sx0; sx < sx1; sx++) {
-						int c = src.getColor(sx, sy);
+						int c = getPixelAbgr(src, sx, sy);
 						aa += (c >>> 24) & 0xFF;
 						ba += (c >>> 16) & 0xFF;
 						ga += (c >>> 8) & 0xFF;
@@ -1384,7 +1398,7 @@ public final class PhotoCapture {
 						| (((int) (ba / n)) << 16)
 						| (((int) (ga / n)) << 8)
 						| ((int) (ra / n));
-				dst.setColor(x, y, color);
+				setPixelAbgr(dst, x, y, color);
 			}
 		}
 		return dst;
@@ -1409,9 +1423,24 @@ public final class PhotoCapture {
 		NativeImage dst = new NativeImage(targetW, targetH, false);
 		for (int y = 0; y < targetH; y++) {
 			for (int x = 0; x < targetW; x++) {
-				dst.setColor(x, y, src.getColor(x + offX, y + offY));
+				setPixelAbgr(dst, x, y, getPixelAbgr(src, x + offX, y + offY));
 			}
 		}
 		return dst;
 	}
+
+	//? if >=1.21.4 {
+	/*private static int getPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y) {
+		int argb = img.getColorArgb(x, y);
+		int a=(argb>>>24)&0xFF; int r=(argb>>>16)&0xFF; int g=(argb>>>8)&0xFF; int b=argb&0xFF;
+		return (a<<24)|(b<<16)|(g<<8)|r;
+	}
+	private static void setPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y, int abgr) {
+		int a=(abgr>>>24)&0xFF; int b=(abgr>>>16)&0xFF; int g=(abgr>>>8)&0xFF; int r=abgr&0xFF;
+		img.setColorArgb(x, y, (a<<24)|(r<<16)|(g<<8)|b);
+	}*/
+	//?} else {
+	private static int getPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y) { return img.getColor(x, y); }
+	private static void setPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y, int abgr) { img.setColor(x, y, abgr); }
+	//?}
 }

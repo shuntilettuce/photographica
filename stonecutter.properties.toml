@@ -1,0 +1,19 @@
+# See https://stonecutter.kikugie.dev/wiki/config/properties
+mod_version = "0.1.0"
+maven_group = "dev.hitom.photographica"
+archives_base_name = "photographica"
+
+["1.21.1"]
+yarn_mappings = "1.21.1+build.3"
+loader_version = "0.16.5"
+fabric_version = "0.116.0+1.21.1"
+
+["1.21.4"]
+yarn_mappings = "1.21.4+build.8"
+loader_version = "0.16.14"
+fabric_version = "0.110.5+1.21.4"
+
+["1.21.11"]
+yarn_mappings = "1.21.11+build.6"
+loader_version = "0.16.14"
+fabric_version = "0.141.1+1.21.11"
