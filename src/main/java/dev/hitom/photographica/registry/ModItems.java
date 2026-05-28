@@ -27,10 +27,10 @@ public final class ModItems {
 	private ModItems() {}
 
 	//? if >=1.21.4 {
-	/*public static final Item VIDEO_CAMERA        = reg("video_camera",        s -> new VideoCameraItem(s.equippable(EquipmentSlot.CHEST)));
-	public static final Item CAMERA              = reg("camera",              s -> new CameraItem(s.equippable(EquipmentSlot.CHEST)));
-	public static final Item FILM_CAMERA         = reg("film_camera",         s -> new FilmCameraItem(s.equippable(EquipmentSlot.CHEST)));
-	public static final Item MIRRORLESS_CAMERA   = reg("mirrorless_camera",   s -> new MirrorlessCameraItem(s.equippable(EquipmentSlot.CHEST)));
+	/*public static final Item VIDEO_CAMERA        = reg("video_camera",        s -> new VideoCameraItem(chestEquippable(s)));
+	public static final Item CAMERA              = reg("camera",              s -> new CameraItem(chestEquippable(s)));
+	public static final Item FILM_CAMERA         = reg("film_camera",         s -> new FilmCameraItem(chestEquippable(s)));
+	public static final Item MIRRORLESS_CAMERA   = reg("mirrorless_camera",   s -> new MirrorlessCameraItem(chestEquippable(s)));
 	public static final Item LENS_PRIME_50       = reg("lens_prime_50mm",     s -> new LensItem(s, LensKind.PRIME_50MM));
 	public static final Item LENS_ZOOM_24_70     = reg("lens_zoom_24_70mm",   s -> new LensItem(s, LensKind.ZOOM_24_70));
 	public static final Item LENS_PRIME_35       = reg("lens_prime_35mm",     s -> new LensItem(s, LensKind.PRIME_35MM));
@@ -80,6 +80,21 @@ public final class ModItems {
 			net.minecraft.registry.RegistryKeys.ITEM, Identifier.of(Photographica.MOD_ID, name));
 		return Registry.register(Registries.ITEM, Identifier.of(Photographica.MOD_ID, name),
 			f.apply(new Item.Settings().registryKey(k)));
+	}
+
+	// Cameras occupy the chest slot. Vanilla's BipedEntityRenderer.getEquippedStack
+	// only surfaces a chest stack to renderArmor when ArmorFeatureRenderer.hasModel
+	// returns true, which requires the EquippableComponent to carry an assetId.
+	// Without it the stack is dropped before Fabric's ArmorRenderer can draw it, so
+	// the worn camera renders no model. The referenced asset JSON need not exist —
+	// Fabric cancels vanilla armor rendering before the asset is resolved.
+	private static Item.Settings chestEquippable(Item.Settings s) {
+		return s.component(net.minecraft.component.DataComponentTypes.EQUIPPABLE,
+			net.minecraft.component.type.EquippableComponent.builder(EquipmentSlot.CHEST)
+				.model(net.minecraft.registry.RegistryKey.of(
+					net.minecraft.item.equipment.EquipmentAssetKeys.REGISTRY_KEY,
+					Identifier.of(Photographica.MOD_ID, "camera")))
+				.build());
 	}*/
 	//?} else {
 	private static Item reg(String name, Item item) {
