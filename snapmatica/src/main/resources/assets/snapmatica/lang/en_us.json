@@ -1,5 +1,7 @@
 {
   "key.snapmatica.shoot": "Take Photo / Shutter",
   "key.snapmatica.settings": "Open Camera Settings",
-  "category.snapmatica": "Snapmatica"
+  "key.snapmatica.viewfinder_sneak": "Toggle Viewfinder (Sneak)",
+  "category.snapmatica": "Snapmatica",
+  "key.category.snapmatica.snapmatica": "Snapmatica"
 }

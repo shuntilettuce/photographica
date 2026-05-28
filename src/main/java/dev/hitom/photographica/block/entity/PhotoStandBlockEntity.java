@@ -30,7 +30,7 @@ public class PhotoStandBlockEntity extends BlockEntity {
     public void setPhoto(PhotoData data) {
         this.photoData = data;
         markDirty();
-        if (world != null && !world.isClient) {
+        if (world != null && !world.isClient()) {
             world.updateListeners(pos, getCachedState(), getCachedState(), Block.NOTIFY_ALL);
         }
     }
@@ -38,11 +38,24 @@ public class PhotoStandBlockEntity extends BlockEntity {
     public void clearPhoto() {
         this.photoData = null;
         markDirty();
-        if (world != null && !world.isClient) {
+        if (world != null && !world.isClient()) {
             world.updateListeners(pos, getCachedState(), getCachedState(), Block.NOTIFY_ALL);
         }
     }
 
+    //? if >=1.21.11 {
+    /*@Override
+    protected void writeData(net.minecraft.storage.WriteView view) {
+        super.writeData(view);
+        // TODO: serialize photoData for 1.21.11
+    }
+
+    @Override
+    protected void readData(net.minecraft.storage.ReadView view) {
+        super.readData(view);
+        // TODO: deserialize photoData for 1.21.11
+    }*/
+    //?} else {
     @Override
     protected void writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
         super.writeNbt(nbt, lookup);
@@ -63,6 +76,7 @@ public class PhotoStandBlockEntity extends BlockEntity {
             photoData = null;
         }
     }
+    //?}
 
     @Override
     public @Nullable Packet<ClientPlayPacketListener> toUpdatePacket() {

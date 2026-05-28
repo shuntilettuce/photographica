@@ -21,7 +21,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.state.StateManager;
-import net.minecraft.state.property.DirectionProperty;
+import net.minecraft.state.property.EnumProperty;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.hit.BlockHitResult;
@@ -36,7 +36,7 @@ import org.jetbrains.annotations.Nullable;
 public class PhotoFrameBlock extends BlockWithEntity {
 
     public static final MapCodec<PhotoFrameBlock> CODEC = createCodec(PhotoFrameBlock::new);
-    public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
+    public static final EnumProperty<Direction> FACING = Properties.HORIZONTAL_FACING;
 
     // 3:2 landscape shapes (12×8 face, 2px thick) matching the model geometry, one per facing direction.
     private static final VoxelShape SHAPE_SOUTH = VoxelShapes.cuboid(2.0/16, 4.0/16, 0,       14.0/16, 12.0/16, 2.0/16);
@@ -102,7 +102,7 @@ public class PhotoFrameBlock extends BlockWithEntity {
     @Override
     public ActionResult onUse(BlockState state, World world, BlockPos pos,
                                PlayerEntity player, BlockHitResult hit) {
-        if (world.isClient) return ActionResult.SUCCESS;
+        if (world.isClient()) return ActionResult.SUCCESS;
 
         BlockEntity be = world.getBlockEntity(pos);
         if (!(be instanceof PhotoFrameBlockEntity frame)) return ActionResult.PASS;
@@ -135,6 +135,20 @@ public class PhotoFrameBlock extends BlockWithEntity {
         return ActionResult.PASS;
     }
 
+    //? if >=1.21.11 {
+    /*@Override
+    protected void onStateReplaced(BlockState state, net.minecraft.server.world.ServerWorld world, BlockPos pos, boolean moved) {
+        if (world.getBlockEntity(pos) instanceof PhotoFrameBlockEntity frame) {
+            PhotoData photo = frame.getPhotoData();
+            if (photo != null) {
+                ItemStack photoStack = new ItemStack(ModItems.PHOTO);
+                photoStack.set(ModDataComponents.PHOTO_DATA, photo);
+                Block.dropStack(world, pos, photoStack);
+            }
+        }
+        super.onStateReplaced(state, world, pos, moved);
+    }*/
+    //?} else {
     @Override
     public void onStateReplaced(BlockState state, World world, BlockPos pos,
                                  BlockState newState, boolean moved) {
@@ -150,4 +164,5 @@ public class PhotoFrameBlock extends BlockWithEntity {
         }
         super.onStateReplaced(state, world, pos, newState, moved);
     }
+    //?}
 }

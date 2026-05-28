@@ -28,7 +28,11 @@ import java.util.UUID;
  * BER tilt matches model JSON: -22.5° around X, pivot at origin [8,1,12].
  */
 @Environment(EnvType.CLIENT)
+//? if >=1.21.11 {
+/*public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoStandBlockEntity, net.minecraft.client.render.block.entity.state.BlockEntityRenderState> {*/
+//?} else {
 public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoStandBlockEntity> {
+//?}
 
     // Inner black area of the 16×16 panel texture mapped onto the 12×8 face:
     // X: 3.5/16..12.5/16 (9 px), Y: 2/16..8/16 (6 px)  →  3:2
@@ -45,6 +49,17 @@ public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoS
 
     public PhotoStandBlockEntityRenderer(BlockEntityRendererFactory.Context ctx) {}
 
+    //? if >=1.21.11 {
+    /*@Override
+    public net.minecraft.client.render.block.entity.state.BlockEntityRenderState createRenderState() {
+        return new net.minecraft.client.render.block.entity.state.BlockEntityRenderState();
+    }
+
+    @Override
+    public void render(net.minecraft.client.render.block.entity.state.BlockEntityRenderState state, MatrixStack matrices, net.minecraft.client.render.command.OrderedRenderCommandQueue queue, net.minecraft.client.render.state.CameraRenderState camera) {
+        // Photo stand rendering not yet implemented for 1.21.11
+    }*/
+    //?} else {
     @Override
     public void render(PhotoStandBlockEntity entity, float tickDelta, MatrixStack matrices,
                        VertexConsumerProvider vertexConsumers, int light, int overlay) {
@@ -61,7 +76,11 @@ public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoS
 
         // 1. Align to facing direction (Y-axis rotation around block centre).
         matrices.translate(0.5, 0.5, 0.5);
+        //? if >=1.21.4 {
+        /*matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-facing.getPositiveHorizontalDegrees()));*/
+        //?} else {
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-facing.asRotation()));
+        //?}
         matrices.translate(-0.5, -0.5, -0.5);
 
         // 2. Tilt panel -22.5° around X matching model JSON rotation origin [8,1,12].
@@ -80,4 +99,5 @@ public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoS
 
         matrices.pop();
     }
+    //?}
 }

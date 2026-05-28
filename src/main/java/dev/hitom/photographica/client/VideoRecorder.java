@@ -279,7 +279,11 @@ public final class VideoRecorder {
         recordingArmorStandEntityId = armorStandEntityId;
         if (armorStandEntityId >= 0 && mc.world != null) {
             net.minecraft.entity.Entity stand = mc.world.getEntityById(armorStandEntityId);
+            //? if >=1.21.11 {
+            /*if (stand != null) mc.setCameraEntity(stand);*/
+            //?} else {
             if (stand != null) mc.cameraEntity = stand;
+            //?}
         }
 
         // Enable cinematic (smooth) camera for the duration of the recording so
@@ -299,7 +303,11 @@ public final class VideoRecorder {
         MinecraftClient mc = MinecraftClient.getInstance();
         // Restore player perspective if we were recording from an armor stand.
         if (recordingArmorStandEntityId >= 0) {
+            //? if >=1.21.11 {
+            /*if (mc.player != null) mc.setCameraEntity(mc.player);*/
+            //?} else {
             if (mc.player != null) mc.cameraEntity = mc.player;
+            //?}
             recordingArmorStandEntityId = -1;
         }
         // Restore the smooth-camera setting the player had before recording.
@@ -458,6 +466,15 @@ public final class VideoRecorder {
                 pendingVpW, pendingVpH,
                 pendingCropOffX, pendingCropOffY);
 
+        //? if >=1.21.11 {
+        /*NativeImage[] rawRef = {null};
+        ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), img -> rawRef[0] = img);
+        NativeImage raw = rawRef[0];
+        if (raw == null) {
+            nextFrameMs = recordStartMs + (long)((frameCount + 1) * 1000.0 / currentFps);
+            return;
+        }*/
+        //?} else {
         NativeImage raw;
         try {
             raw = ScreenshotRecorder.takeScreenshot(mc.getFramebuffer());
@@ -466,6 +483,7 @@ public final class VideoRecorder {
             nextFrameMs = recordStartMs + (long)((frameCount + 1) * 1000.0 / currentFps);
             return;
         }
+        //?}
 
         NativeImage cropped = cropTo16x9(raw);
         NativeImage frame   = boxDownsample(cropped, 1280);
@@ -592,7 +610,7 @@ public final class VideoRecorder {
             float dy = (py - halfH) / halfH;
             float dy2 = dy * dy;
             for (int px = 0; px < w; px++) {
-                int c = src.getColor(px, py);
+                int c = getPixelAbgr(src, px, py);
                 int a = (c >>> 24) & 0xFF;
                 int b = (c >>> 16) & 0xFF;
                 int g = (c >>>  8) & 0xFF;
@@ -608,7 +626,7 @@ public final class VideoRecorder {
                 g = clamp((int)(g * vf));
                 b = clamp((int)(b * vf));
 
-                pass1.setColor(px, py, (a << 24) | (b << 16) | (g << 8) | r);
+                setPixelAbgr(pass1, px, py, (a << 24) | (b << 16) | (g << 8) | r);
             }
         }
 
@@ -741,7 +759,7 @@ public final class VideoRecorder {
                 int blurLen = (int) Math.min(blurMag, maxBlurPx);
 
                 if (blurLen < 1) {
-                    pass3.setColor(px, py, pass2.getColor(px, py));
+                    setPixelAbgr(pass3, px, py, getPixelAbgr(pass2, px, py));
                     continue;
                 }
 
@@ -754,14 +772,14 @@ public final class VideoRecorder {
                     float wt = (blurLen - s + 1);
                     int sx = Math.max(0, Math.min(w - 1, px + (int)(s * ndx)));
                     int sy = Math.max(0, Math.min(h - 1, py + (int)(s * ndy)));
-                    int c  = pass2.getColor(sx, sy);
+                    int c  = getPixelAbgr(pass2, sx, sy);
                     aa += ((c >>> 24) & 0xFF) * wt;
                     ba += ((c >>> 16) & 0xFF) * wt;
                     ga += ((c >>>  8) & 0xFF) * wt;
                     ra += ( c         & 0xFF) * wt;
                     sumW += wt;
                 }
-                pass3.setColor(px, py,
+                setPixelAbgr(pass3, px, py,
                         (clamp((int)(aa / sumW)) << 24) | (clamp((int)(ba / sumW)) << 16)
                       | (clamp((int)(ga / sumW)) <<  8) |  clamp((int)(ra / sumW)));
             }
@@ -787,7 +805,7 @@ public final class VideoRecorder {
         // Sample every 8th pixel — sufficient for a histogram
         for (int py = 0; py < h; py += 8) {
             for (int px = 0; px < w; px += 8) {
-                int c = src.getColor(px, py);
+                int c = getPixelAbgr(src, px, py);
                 // NativeImage is ABGR; extract r, g, b correctly
                 int r =  c         & 0xFF;
                 int g = (c >>>  8) & 0xFF;
@@ -840,7 +858,7 @@ public final class VideoRecorder {
         for (int py = 0; py < h; py++) {
             prefR[0] = prefG[0] = prefB[0] = prefA[0] = 0;
             for (int px = 0; px < w; px++) {
-                int c = src.getColor(px, py);
+                int c = getPixelAbgr(src, px, py);
                 prefA[px + 1] = prefA[px] + ((c >>> 24) & 0xFF);
                 prefB[px + 1] = prefB[px] + ((c >>> 16) & 0xFF);
                 prefG[px + 1] = prefG[px] + ((c >>>  8) & 0xFF);
@@ -850,7 +868,7 @@ public final class VideoRecorder {
                 int r = (int) radiusMap[py * w + px];
                 int base = py * w + px;
                 if (r < 1) {
-                    int c = src.getColor(px, py);
+                    int c = getPixelAbgr(src, px, py);
                     dofTempA[base] = (c >>> 24) & 0xFF;
                     dofTempB[base] = (c >>> 16) & 0xFF;
                     dofTempG[base] = (c >>>  8) & 0xFF;
@@ -884,7 +902,7 @@ public final class VideoRecorder {
                 int r    = (int) radiusMap[py * w + px];
                 int base = py * w + px;
                 if (r < 1) {
-                    dst.setColor(px, py,
+                    setPixelAbgr(dst, px, py,
                             (dofTempA[base] << 24) | (dofTempB[base] << 16)
                           | (dofTempG[base] <<  8) |  dofTempR[base]);
                 } else {
@@ -894,7 +912,7 @@ public final class VideoRecorder {
                     int b   = (int)((vprefB[y1 + 1] - vprefB[y0]) / cnt);
                     int g   = (int)((vprefG[y1 + 1] - vprefG[y0]) / cnt);
                     int rv  = (int)((vprefR[y1 + 1] - vprefR[y0]) / cnt);
-                    dst.setColor(px, py, (a << 24) | (b << 16) | (g << 8) | rv);
+                    setPixelAbgr(dst, px, py, (a << 24) | (b << 16) | (g << 8) | rv);
                 }
             }
         }
@@ -1006,7 +1024,7 @@ public final class VideoRecorder {
         NativeImage dst = new NativeImage(tW, tH, false);
         for (int y = 0; y < tH; y++)
             for (int x = 0; x < tW; x++)
-                dst.setColor(x, y, src.getColor(x + offX, y + offY));
+                setPixelAbgr(dst, x, y, getPixelAbgr(src, x + offX, y + offY));
         return dst;
     }
 
@@ -1028,12 +1046,12 @@ public final class VideoRecorder {
                 int  n  = 0;
                 for (int sy = sy0; sy < sy1; sy++)
                     for (int sx = sx0; sx < sx1; sx++) {
-                        int c = src.getColor(sx, sy);
+                        int c = getPixelAbgr(src, sx, sy);
                         aa += (c >>> 24) & 0xFF; ba += (c >>> 16) & 0xFF;
                         ga += (c >>>  8) & 0xFF; ra +=  c         & 0xFF;
                         n++;
                     }
-                dst.setColor(x, y,
+                setPixelAbgr(dst, x, y,
                         ((int)(aa / n) << 24) | ((int)(ba / n) << 16)
                       | ((int)(ga / n) <<  8) |  (int)(ra / n));
             }
@@ -1069,4 +1087,19 @@ public final class VideoRecorder {
         if (files != null) for (File f : files) f.delete();
         dir.delete();
     }
+
+    //? if >=1.21.4 {
+    /*private static int getPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y) {
+        int argb = img.getColorArgb(x, y);
+        int a=(argb>>>24)&0xFF; int r=(argb>>>16)&0xFF; int g=(argb>>>8)&0xFF; int b=argb&0xFF;
+        return (a<<24)|(b<<16)|(g<<8)|r;
+    }
+    private static void setPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y, int abgr) {
+        int a=(abgr>>>24)&0xFF; int b=(abgr>>>16)&0xFF; int g=(abgr>>>8)&0xFF; int r=abgr&0xFF;
+        img.setColorArgb(x, y, (a<<24)|(r<<16)|(g<<8)|b);
+    }*/
+    //?} else {
+    private static int getPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y) { return img.getColor(x, y); }
+    private static void setPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y, int abgr) { img.setColor(x, y, abgr); }
+    //?}
 }

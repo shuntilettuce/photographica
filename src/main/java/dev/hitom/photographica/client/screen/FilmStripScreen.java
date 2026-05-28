@@ -129,8 +129,16 @@ public class FilmStripScreen extends Screen {
             int ty = thumbAreaTop + (THUMB_MAX_H - thumb.guiH()) / 2;
             // Amber sprocket-hole border
             ctx.fill(tx - 1, ty - 1, tx + thumb.guiW() + 1, ty + thumb.guiH() + 1, 0xFFB07018);
+            //? if >=1.21.11 {
+            /*ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, thumb.id(), tx, ty, 0f, 0f,
+                    thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH(), thumb.guiW(), thumb.guiH());*/
+            //?} else if >=1.21.4 {
+            /*ctx.drawTexture(net.minecraft.client.render.RenderLayer::getGuiTextured, thumb.id(), tx, ty, 0f, 0f,
+                    thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH(), thumb.guiW(), thumb.guiH());*/
+            //?} else {
             ctx.drawTexture(thumb.id(), tx, ty, thumb.guiW(), thumb.guiH(),
                     0f, 0f, thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH());
+            //?}
             // Amber negative-mask tint over colour film
             if (!FilmKind.isBW(filmType)) {
                 ctx.fill(tx, ty, tx + thumb.guiW(), ty + thumb.guiH(), NEGATIVE_TINT);
@@ -212,10 +220,16 @@ public class FilmStripScreen extends Screen {
                 forTexture = boxResample(inverted, physW, physH);
             }
 
-            NativeImageBackedTexture tex = new NativeImageBackedTexture(forTexture);
-            tex.setFilter(true, false);
             String safeId = data.id().toString().replace('-', '_').toLowerCase();
             Identifier texId = Identifier.of(Photographica.MOD_ID, "negthumb/" + safeId);
+            //? if >=1.21.11 {
+            /*NativeImageBackedTexture tex = new NativeImageBackedTexture(() -> "negthumb/" + safeId, forTexture);*/
+            //?} else {
+            NativeImageBackedTexture tex = new NativeImageBackedTexture(forTexture);
+            //?}
+            //? if <1.21.11 {
+            tex.setFilter(true, false);
+            //?}
             mc.getTextureManager().registerTexture(texId, tex);
             forTexture = null;
 
@@ -235,12 +249,12 @@ public class FilmStripScreen extends Screen {
         NativeImage dst = new NativeImage(w, h, false);
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                int c = src.getColor(x, y);
+                int c = getPixelAbgr(src, x, y);
                 int a =  (c >>> 24) & 0xFF;
                 int b = ~(c >>> 16) & 0xFF;
                 int g = ~(c >>>  8) & 0xFF;
                 int r = ~c          & 0xFF;
-                dst.setColor(x, y, (a << 24) | (b << 16) | (g << 8) | r);
+                setPixelAbgr(dst, x, y, (a << 24) | (b << 16) | (g << 8) | r);
             }
         }
         return dst;
@@ -263,12 +277,12 @@ public class FilmStripScreen extends Screen {
                 int n = 0;
                 for (int sy = sy0; sy < sy1; sy++)
                     for (int sx = sx0; sx < sx1; sx++) {
-                        int c = src.getColor(sx, sy);
+                        int c = getPixelAbgr(src, sx, sy);
                         aa += (c >>> 24) & 0xFF; ba += (c >>> 16) & 0xFF;
                         ga += (c >>>  8) & 0xFF; ra +=  c         & 0xFF;
                         n++;
                     }
-                dst.setColor(x, y, (((int)(aa/n))<<24)|(((int)(ba/n))<<16)
+                setPixelAbgr(dst, x, y, (((int)(aa/n))<<24)|(((int)(ba/n))<<16)
                         |(((int)(ga/n))<<8)|((int)(ra/n)));
             }
         }
@@ -290,4 +304,19 @@ public class FilmStripScreen extends Screen {
         int colon = dim.lastIndexOf(':');
         return colon >= 0 ? dim.substring(colon + 1) : dim;
     }
+
+    //? if >=1.21.4 {
+    /*private static int getPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y) {
+        int argb = img.getColorArgb(x, y);
+        int a=(argb>>>24)&0xFF; int r=(argb>>>16)&0xFF; int g=(argb>>>8)&0xFF; int b=argb&0xFF;
+        return (a<<24)|(b<<16)|(g<<8)|r;
+    }
+    private static void setPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y, int abgr) {
+        int a=(abgr>>>24)&0xFF; int b=(abgr>>>16)&0xFF; int g=(abgr>>>8)&0xFF; int r=abgr&0xFF;
+        img.setColorArgb(x, y, (a<<24)|(r<<16)|(g<<8)|b);
+    }*/
+    //?} else {
+    private static int getPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y) { return img.getColor(x, y); }
+    private static void setPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y, int abgr) { img.setColor(x, y, abgr); }
+    //?}
 }

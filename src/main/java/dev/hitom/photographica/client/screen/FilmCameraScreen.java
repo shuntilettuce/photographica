@@ -317,6 +317,15 @@ public class FilmCameraScreen extends Screen {
 		Map<Integer, Integer> result = new LinkedHashMap<>();
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.player == null) return result;
+		//? if >=1.21.11 {
+		/*for (ItemStack s : mc.player.getInventory().getMainStacks()) {
+			if (s.getItem() instanceof FilmRollItem fr)
+				result.merge(fr.filmType(), s.getCount(), Integer::sum);
+		}
+		ItemStack offHand = mc.player.getInventory().getStack(net.minecraft.entity.player.PlayerInventory.OFF_HAND_SLOT);
+		if (offHand.getItem() instanceof FilmRollItem fr)
+			result.merge(fr.filmType(), offHand.getCount(), Integer::sum);*/
+		//?} else {
 		for (ItemStack s : mc.player.getInventory().main) {
 			if (s.getItem() instanceof FilmRollItem fr)
 				result.merge(fr.filmType(), s.getCount(), Integer::sum);
@@ -325,6 +334,7 @@ public class FilmCameraScreen extends Screen {
 			if (s.getItem() instanceof FilmRollItem fr)
 				result.merge(fr.filmType(), s.getCount(), Integer::sum);
 		}
+		//?}
 		return result;
 	}
 
@@ -335,12 +345,20 @@ public class FilmCameraScreen extends Screen {
 		kinds.add(settings.lensType());
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.player != null) {
+			//? if >=1.21.11 {
+			/*for (ItemStack s : mc.player.getInventory().getMainStacks()) {
+				if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
+			}
+			ItemStack offHand = mc.player.getInventory().getStack(net.minecraft.entity.player.PlayerInventory.OFF_HAND_SLOT);
+			if (offHand.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);*/
+			//?} else {
 			for (ItemStack s : mc.player.getInventory().main) {
 				if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
 			}
 			for (ItemStack s : mc.player.getInventory().offHand) {
 				if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
 			}
+			//?}
 		}
 		return new ArrayList<>(kinds);
 	}

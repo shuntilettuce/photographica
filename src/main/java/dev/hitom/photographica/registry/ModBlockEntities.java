@@ -6,6 +6,7 @@ import dev.hitom.photographica.block.entity.EnlargerBlockEntity;
 import dev.hitom.photographica.block.entity.PhotoFrameBlockEntity;
 import dev.hitom.photographica.block.entity.PhotoStandBlockEntity;
 import dev.hitom.photographica.block.entity.PrinterBlockEntity;
+import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
@@ -18,35 +19,35 @@ public final class ModBlockEntities {
             Registry.register(
                     Registries.BLOCK_ENTITY_TYPE,
                     Identifier.of(Photographica.MOD_ID, "darkroom"),
-                    BlockEntityType.Builder.create(DarkroomBlockEntity::new, ModBlocks.DARKROOM).build(null)
+                    FabricBlockEntityTypeBuilder.create(DarkroomBlockEntity::new, ModBlocks.DARKROOM).build()
             );
 
     public static final BlockEntityType<PrinterBlockEntity> PRINTER =
             Registry.register(
                     Registries.BLOCK_ENTITY_TYPE,
                     Identifier.of(Photographica.MOD_ID, "printer"),
-                    BlockEntityType.Builder.create(PrinterBlockEntity::new, ModBlocks.PRINTER).build(null)
+                    FabricBlockEntityTypeBuilder.create(PrinterBlockEntity::new, ModBlocks.PRINTER).build()
             );
 
     public static final BlockEntityType<EnlargerBlockEntity> ENLARGER =
             Registry.register(
                     Registries.BLOCK_ENTITY_TYPE,
                     Identifier.of(Photographica.MOD_ID, "enlarger"),
-                    BlockEntityType.Builder.create(EnlargerBlockEntity::new, ModBlocks.ENLARGER).build(null)
+                    FabricBlockEntityTypeBuilder.create(EnlargerBlockEntity::new, ModBlocks.ENLARGER).build()
             );
 
     public static final BlockEntityType<PhotoFrameBlockEntity> PHOTO_FRAME =
             Registry.register(
                     Registries.BLOCK_ENTITY_TYPE,
                     Identifier.of(Photographica.MOD_ID, "photo_frame"),
-                    BlockEntityType.Builder.create(PhotoFrameBlockEntity::new, ModBlocks.PHOTO_FRAME).build(null)
+                    FabricBlockEntityTypeBuilder.create(PhotoFrameBlockEntity::new, ModBlocks.PHOTO_FRAME).build()
             );
 
     public static final BlockEntityType<PhotoStandBlockEntity> PHOTO_STAND =
             Registry.register(
                     Registries.BLOCK_ENTITY_TYPE,
                     Identifier.of(Photographica.MOD_ID, "photo_stand"),
-                    BlockEntityType.Builder.create(PhotoStandBlockEntity::new, ModBlocks.PHOTO_STAND).build(null)
+                    FabricBlockEntityTypeBuilder.create(PhotoStandBlockEntity::new, ModBlocks.PHOTO_STAND).build()
             );
 
     public static void register() {

@@ -99,10 +99,16 @@ public class PhotoViewerScreen extends Screen {
 				forTexture = boxResample(original, physW, physH);
 			}
 
-			NativeImageBackedTexture tex = new NativeImageBackedTexture(forTexture);
-			tex.setFilter(true, false);
 			String safeId = id.toString().replace('-', '_').toLowerCase();
 			Identifier texId = Identifier.of(Photographica.MOD_ID, "photo/" + safeId);
+			//? if >=1.21.11 {
+			/*NativeImageBackedTexture tex = new NativeImageBackedTexture(() -> "photo/" + safeId, forTexture);*/
+			//?} else {
+			NativeImageBackedTexture tex = new NativeImageBackedTexture(forTexture);
+			//?}
+			//? if <1.21.11 {
+			tex.setFilter(true, false);
+			//?}
 			mc.getTextureManager().registerTexture(texId, tex);
 			// Ownership of forTexture transferred to the texture; null it out so
 			// the cleanup block below doesn't double-close it.
@@ -136,7 +142,7 @@ public class PhotoViewerScreen extends Screen {
 				int n = 0;
 				for (int sy = sy0; sy < sy1; sy++) {
 					for (int sx = sx0; sx < sx1; sx++) {
-						int c = src.getColor(sx, sy);
+						int c = getPixelAbgr(src, sx, sy);
 						aa += (c >>> 24) & 0xFF;
 						ba += (c >>> 16) & 0xFF;
 						ga += (c >>> 8) & 0xFF;
@@ -148,7 +154,7 @@ public class PhotoViewerScreen extends Screen {
 						| (((int) (ba / n)) << 16)
 						| (((int) (ga / n)) << 8)
 						| ((int) (ra / n));
-				dst.setColor(x, y, color);
+				setPixelAbgr(dst, x, y, color);
 			}
 		}
 		return dst;
@@ -190,8 +196,16 @@ public class PhotoViewerScreen extends Screen {
 		ctx.fill(dx - 2, dy - 2, dx + dw + 2, dy + dh + 2, 0xFFFFFFFF);
 		ctx.fill(dx - 1, dy - 1, dx + dw + 1, dy + dh + 1, 0xFF000000);
 
+		//? if >=1.21.11 {
+		/*ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, image.id, dx, dy, 0f, 0f,
+				image.texW, image.texH, image.texW, image.texH, dw, dh);*/
+		//?} else if >=1.21.4 {
+		/*ctx.drawTexture(net.minecraft.client.render.RenderLayer::getGuiTextured, image.id, dx, dy, 0f, 0f,
+				image.texW, image.texH, image.texW, image.texH, dw, dh);*/
+		//?} else {
 		ctx.drawTexture(image.id, dx, dy, dw, dh, 0f, 0f,
 				image.texW, image.texH, image.texW, image.texH);
+		//?}
 
 		// Fogging overlay — washes out photos exposed to light during handling/development.
 		if (data.fogged()) {
@@ -229,4 +243,19 @@ public class PhotoViewerScreen extends Screen {
 	public boolean shouldPause() {
 		return false;
 	}
+
+	//? if >=1.21.4 {
+	/*private static int getPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y) {
+		int argb = img.getColorArgb(x, y);
+		int a=(argb>>>24)&0xFF; int r=(argb>>>16)&0xFF; int g=(argb>>>8)&0xFF; int b=argb&0xFF;
+		return (a<<24)|(b<<16)|(g<<8)|r;
+	}
+	private static void setPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y, int abgr) {
+		int a=(abgr>>>24)&0xFF; int b=(abgr>>>16)&0xFF; int g=(abgr>>>8)&0xFF; int r=abgr&0xFF;
+		img.setColorArgb(x, y, (a<<24)|(r<<16)|(g<<8)|b);
+	}*/
+	//?} else {
+	private static int getPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y) { return img.getColor(x, y); }
+	private static void setPixelAbgr(net.minecraft.client.texture.NativeImage img, int x, int y, int abgr) { img.setColor(x, y, abgr); }
+	//?}
 }

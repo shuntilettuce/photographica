@@ -94,7 +94,11 @@ public class DarkroomScreenHandler extends ScreenHandler {
                 return true;
             }
 
+            //? if >=1.21.11 {
+            /*boolean inLight = ((net.minecraft.server.network.ServerPlayerEntity) player).getEntityWorld().getLightLevel(player.getBlockPos()) > 7;*/
+            //?} else {
             boolean inLight = player.getWorld().getLightLevel(player.getBlockPos()) > 7;
+            //?}
             int tanksUsed = 0;
 
             for (int i = 0; i < 3; i++) {

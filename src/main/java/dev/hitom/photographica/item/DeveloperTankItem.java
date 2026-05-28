@@ -8,10 +8,17 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ActionResult;
+//? if >=1.21.4 {
+/*import net.minecraft.item.consume.UseAction;*/
+//?} else {
 import net.minecraft.util.UseAction;
+//?}
 import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
+//? if <1.21.4 {
 import net.minecraft.util.TypedActionResult;
+//?}
 import net.minecraft.world.World;
 
 /**
@@ -39,15 +46,23 @@ public class DeveloperTankItem extends Item {
 		return UseAction.NONE;
 	}
 
+	//? if >=1.21.4 {
+	/*@Override
+	public ActionResult use(World world, PlayerEntity user, Hand hand) {
+		user.setCurrentHand(hand);
+		return ActionResult.CONSUME;
+	}*/
+	//?} else {
 	@Override
 	public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
 		user.setCurrentHand(hand);
 		return TypedActionResult.consume(user.getStackInHand(hand));
 	}
+	//?}
 
 	@Override
 	public void usageTick(World world, LivingEntity user, ItemStack stack, int remainingUseTicks) {
-		if (!world.isClient) return;
+		if (!world.isClient()) return;
 		if (!(user instanceof PlayerEntity player)) return;
 		int elapsed = USE_TICKS - remainingUseTicks;
 		int bars = elapsed * 10 / USE_TICKS;
@@ -57,7 +72,7 @@ public class DeveloperTankItem extends Item {
 
 	@Override
 	public ItemStack finishUsing(ItemStack stack, World world, LivingEntity user) {
-		if (world.isClient && user instanceof PlayerEntity) {
+		if (world.isClient() && user instanceof PlayerEntity) {
 			sendDevelop();
 		}
 		return stack;

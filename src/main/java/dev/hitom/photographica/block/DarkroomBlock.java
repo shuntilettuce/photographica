@@ -48,7 +48,7 @@ public class DarkroomBlock extends BlockWithEntity {
     @Override
     public ActionResult onUse(BlockState state, World world, BlockPos pos,
                                PlayerEntity player, BlockHitResult hit) {
-        if (world.isClient) return ActionResult.SUCCESS;
+        if (world.isClient()) return ActionResult.SUCCESS;
         BlockEntity be = world.getBlockEntity(pos);
         if (be instanceof DarkroomBlockEntity darkroom) {
             player.openHandledScreen(darkroom);
@@ -56,6 +56,17 @@ public class DarkroomBlock extends BlockWithEntity {
         return ActionResult.CONSUME;
     }
 
+    //? if >=1.21.11 {
+    /*@Override
+    protected void onStateReplaced(BlockState state, net.minecraft.server.world.ServerWorld world, BlockPos pos, boolean moved) {
+        BlockEntity be = world.getBlockEntity(pos);
+        if (be instanceof DarkroomBlockEntity darkroom) {
+            ItemScatterer.spawn(world, pos, darkroom);
+            world.updateComparators(pos, this);
+        }
+        super.onStateReplaced(state, world, pos, moved);
+    }*/
+    //?} else {
     @Override
     public void onStateReplaced(BlockState state, World world, BlockPos pos,
                                  BlockState newState, boolean moved) {
@@ -68,4 +79,5 @@ public class DarkroomBlock extends BlockWithEntity {
         }
         super.onStateReplaced(state, world, pos, newState, moved);
     }
+    //?}
 }
