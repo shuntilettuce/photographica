@@ -11,6 +11,9 @@ import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
+//? if >=1.21.11 {
+/*import org.lwjgl.opengl.GL43;*/
+//?}
 
 import java.io.InputStream;
 import java.nio.FloatBuffer;
@@ -39,6 +42,10 @@ public final class EvfBlurRenderer {
     private static int depthTexW = 0;
     private static int depthTexH = 0;
 
+    //? if >=1.21.11 {
+    /*private static int writeBackFbo = -1;*/
+    //?}
+
     private static int locInSampler  = -1;
     private static int locDepthSamp  = -1;
     private static int locBlurDir    = -1;
@@ -55,26 +62,42 @@ public final class EvfBlurRenderer {
     /** GPU-side depth buffer copy. Call during WorldRenderEvents.LAST. */
     public static void captureDepth(int fbW, int fbH) {
         //? if >=1.21.11 {
-        /*// In 1.21.11 glCopyTexImage2D can't read scene depth because it lives in a
-        // GpuTexture, not the legacy FBO depth attachment.  Borrow the GL ID directly.
-        net.minecraft.client.gl.Framebuffer mainFb =
+        /*// In 1.21.11, GameRenderer clears the depth texture before HUD rendering,
+        // so we can't borrow the GL ID — we must copy before it gets cleared.
+        net.minecraft.client.gl.Framebuffer mainFb_ =
                 net.minecraft.client.MinecraftClient.getInstance().getFramebuffer();
-        if (mainFb == null) return;
-        com.mojang.blaze3d.textures.GpuTexture depthGpu = mainFb.getDepthAttachment();
-        if (!(depthGpu instanceof net.minecraft.client.texture.GlTexture glDepth)) return;
-        int glId = glDepth.getGlId();
-        if (glId <= 0) return;
-        // Disable depth-compare mode so the shader can sample raw float values.
+        if (mainFb_ == null) return;
+        com.mojang.blaze3d.textures.GpuTexture depthGpu_ = mainFb_.getDepthAttachment();
+        if (!(depthGpu_ instanceof net.minecraft.client.texture.GlTexture glDepth_)) return;
+        int srcDepthId_ = glDepth_.getGlId();
+        if (srcDepthId_ <= 0) return;
+        int fw_ = mainFb_.textureWidth;
+        int fh_ = mainFb_.textureHeight;
+        if (fw_ <= 0 || fh_ <= 0) return;
         int prevActiveTU_ = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         int prevTex2D_    = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, glId);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, 0);
+        if (depthTex == -1 || depthTexW != fw_ || depthTexH != fh_) {
+            if (depthTex != -1) GL11.glDeleteTextures(depthTex);
+            depthTex = GL11.glGenTextures();
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
+            GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_DEPTH_COMPONENT32F,
+                    fw_, fh_, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT,
+                    (java.nio.ByteBuffer) null);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, 0);
+            depthTexW = fw_;
+            depthTexH = fh_;
+        }
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex2D_);
         GL13.glActiveTexture(prevActiveTU_);
-        depthTex  = glId;
-        depthTexW = mainFb.textureWidth;
-        depthTexH = mainFb.textureHeight;*/
+        GL43.glCopyImageSubData(
+                srcDepthId_, GL11.GL_TEXTURE_2D, 0, 0, 0, 0,
+                depthTex,    GL11.GL_TEXTURE_2D, 0, 0, 0, 0,
+                fw_, fh_, 1);*/
         //?} else {
         if (fbW <= 0 || fbH <= 0) return;
 
@@ -188,7 +211,14 @@ public final class EvfBlurRenderer {
         int scW = (int)((fx2 - fx) * scale);
         int scH = (int)((fy2 - fy) * scale);
 
+        //? if >=1.21.11 {
+        /*if (writeBackFbo == -1) writeBackFbo = GL30.glGenFramebuffers();
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                GL11.GL_TEXTURE_2D, mainTex, 0);*/
+        //?} else {
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
+        //?}
         GL11.glViewport(0, 0, fbW, fbH);
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
         GL11.glScissor(scX, scY, scW, scH);
@@ -196,6 +226,11 @@ public final class EvfBlurRenderer {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
         GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+
+        //? if >=1.21.11 {
+        /*GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                GL11.GL_TEXTURE_2D, 0, 0);*/
+        //?}
 
         // Restore GL state
         if (!scissorWasEnabled) GL11.glDisable(GL11.GL_SCISSOR_TEST);
