@@ -48,7 +48,7 @@ public class VideoCameraItem extends Item implements Equipment {
     /*@Override
     public ActionResult use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
-        if (world.isClient) {
+        if (world.isClient()) {
             clientToggleRecord.accept(stack);
         }
         return ActionResult.SUCCESS;
@@ -57,10 +57,10 @@ public class VideoCameraItem extends Item implements Equipment {
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
-        if (world.isClient) {
+        if (world.isClient()) {
             clientToggleRecord.accept(stack);
         }
-        return TypedActionResult.success(stack, world.isClient);
+        return TypedActionResult.success(stack, world.isClient());
     }
     //?}
 

@@ -108,7 +108,11 @@ public class Photographica implements ModInitializer {
 			context.server().execute(() -> {
 				ItemStack camera = player.getStackInHand(Hand.MAIN_HAND);
 				if (!(camera.getItem() instanceof CameraItem) && !(camera.getItem() instanceof MirrorlessCameraItem)) return;
+				//? if >=1.21.11 {
+				/*ServerWorld world = (ServerWorld) player.getEntityWorld();*/
+				//?} else {
 				ServerWorld world = player.getServerWorld();
+				//?}
 				BlockPos pos = player.getBlockPos();
 				PhotoData photoData = new PhotoData(
 						payload.id(), player.getName().getString(), world.getTime(),
@@ -141,7 +145,11 @@ public class Photographica implements ModInitializer {
 				FilmRollData film = FilmCameraItem.getFilm(camera);
 				if (film.totalExposures() == 0 || film.isExposed() || !film.wound()) return;
 
+				//? if >=1.21.11 {
+				/*ServerWorld world = (ServerWorld) player.getEntityWorld();*/
+				//?} else {
 				ServerWorld world = player.getServerWorld();
+				//?}
 				BlockPos pos = player.getBlockPos();
 				PhotoData shot = new PhotoData(
 						payload.id(), player.getName().getString(), world.getTime(),
@@ -214,7 +222,11 @@ public class Photographica implements ModInitializer {
 					return;
 				}
 				// Opening the back in light fogs all latent frames.
+				//? if >=1.21.11 {
+				/*ServerWorld world = (ServerWorld) player.getEntityWorld();*/
+				//?} else {
 				ServerWorld world = player.getServerWorld();
+				//?}
 				int light = world.getLightLevel(player.getBlockPos());
 				if (light > 0 && !film.isEmpty()) {
 					film = film.withFoggedExposures();
@@ -244,7 +256,11 @@ public class Photographica implements ModInitializer {
 		ServerPlayNetworking.registerGlobalReceiver(DevelopFilmPayload.ID, (payload, context) -> {
 			ServerPlayerEntity player = context.player();
 			context.server().execute(() -> {
+				//? if >=1.21.11 {
+				/*ServerWorld world = (ServerWorld) player.getEntityWorld();*/
+				//?} else {
 				ServerWorld world = player.getServerWorld();
+				//?}
 				BlockPos pos = player.getBlockPos();
 				boolean inLight = world.getLightLevel(pos) > 7;
 				PlayerInventory inv = player.getInventory();
@@ -343,7 +359,11 @@ public class Photographica implements ModInitializer {
 		// UpdateArmorStandCameraPayload: update camera settings on an armor stand
 		ServerPlayNetworking.registerGlobalReceiver(UpdateArmorStandCameraPayload.ID, (payload, context) -> {
 			context.server().execute(() -> {
+				//? if >=1.21.11 {
+				/*net.minecraft.entity.Entity entity = context.player().getEntityWorld().getEntityById(payload.entityId());*/
+				//?} else {
 				net.minecraft.entity.Entity entity = context.player().getServerWorld().getEntityById(payload.entityId());
+				//?}
 				if (!(entity instanceof ArmorStandEntity stand)) return;
 				// Try MAINHAND first, then OFFHAND
 				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND, EquipmentSlot.CHEST}) {
@@ -376,7 +396,11 @@ public class Photographica implements ModInitializer {
 		ServerPlayNetworking.registerGlobalReceiver(CreatePhotoFromArmorStandPayload.ID, (payload, context) -> {
 			ServerPlayerEntity player = context.player();
 			context.server().execute(() -> {
+				//? if >=1.21.11 {
+				/*net.minecraft.entity.Entity entity = player.getEntityWorld().getEntityById(payload.entityId());*/
+				//?} else {
 				net.minecraft.entity.Entity entity = player.getServerWorld().getEntityById(payload.entityId());
+				//?}
 				if (!(entity instanceof ArmorStandEntity stand)) return;
 				ItemStack camera = null;
 				EquipmentSlot cameraSlot = null;
@@ -388,7 +412,11 @@ public class Photographica implements ModInitializer {
 				}
 				if (camera == null) return;
 
+				//? if >=1.21.11 {
+				/*ServerWorld world = (ServerWorld) player.getEntityWorld();*/
+				//?} else {
 				ServerWorld world = player.getServerWorld();
+				//?}
 				BlockPos pos = stand.getBlockPos();
 				PhotoData photoData = new PhotoData(
 						payload.id(), player.getName().getString(), world.getTime(),

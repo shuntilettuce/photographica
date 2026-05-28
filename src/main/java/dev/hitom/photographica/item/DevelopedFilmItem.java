@@ -31,7 +31,7 @@ public class DevelopedFilmItem extends Item {
     /*@Override
     public ActionResult use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
-        if (world.isClient) {
+        if (world.isClient()) {
             clientOpenFilmStrip.accept(stack);
         }
         return ActionResult.SUCCESS;
@@ -40,10 +40,10 @@ public class DevelopedFilmItem extends Item {
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
-        if (world.isClient) {
+        if (world.isClient()) {
             clientOpenFilmStrip.accept(stack);
         }
-        return TypedActionResult.success(stack, world.isClient);
+        return TypedActionResult.success(stack, world.isClient());
     }
     //?}
 

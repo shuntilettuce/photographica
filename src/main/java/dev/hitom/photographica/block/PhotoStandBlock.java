@@ -92,7 +92,7 @@ public class PhotoStandBlock extends BlockWithEntity {
     @Override
     public ActionResult onUse(BlockState state, World world, BlockPos pos,
                                PlayerEntity player, BlockHitResult hit) {
-        if (world.isClient) return ActionResult.SUCCESS;
+        if (world.isClient()) return ActionResult.SUCCESS;
 
         BlockEntity be = world.getBlockEntity(pos);
         if (!(be instanceof PhotoStandBlockEntity stand)) return ActionResult.PASS;

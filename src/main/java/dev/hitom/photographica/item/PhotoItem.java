@@ -35,7 +35,7 @@ public class PhotoItem extends Item {
 		if (data == null) {
 			return ActionResult.PASS;
 		}
-		if (world.isClient) {
+		if (world.isClient()) {
 			clientOpenViewer.accept(data);
 		}
 		return ActionResult.SUCCESS;
@@ -48,10 +48,10 @@ public class PhotoItem extends Item {
 		if (data == null) {
 			return TypedActionResult.pass(stack);
 		}
-		if (world.isClient) {
+		if (world.isClient()) {
 			clientOpenViewer.accept(data);
 		}
-		return TypedActionResult.success(stack, world.isClient);
+		return TypedActionResult.success(stack, world.isClient());
 	}
 	//?}
 

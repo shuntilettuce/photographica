@@ -100,15 +100,15 @@ public class FilmCameraItem extends Item implements net.minecraft.item.Equipment
 	/*@Override
 	public ActionResult use(World world, PlayerEntity user, Hand hand) {
 		ItemStack stack = user.getStackInHand(hand);
-		if (world.isClient) clientTakePhoto.accept(stack);
+		if (world.isClient()) clientTakePhoto.accept(stack);
 		return ActionResult.SUCCESS;
 	}*/
 	//?} else {
 	@Override
 	public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
 		ItemStack stack = user.getStackInHand(hand);
-		if (world.isClient) clientTakePhoto.accept(stack);
-		return TypedActionResult.success(stack, world.isClient);
+		if (world.isClient()) clientTakePhoto.accept(stack);
+		return TypedActionResult.success(stack, world.isClient());
 	}
 	//?}
 }

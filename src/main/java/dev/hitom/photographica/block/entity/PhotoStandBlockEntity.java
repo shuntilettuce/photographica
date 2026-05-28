@@ -30,7 +30,7 @@ public class PhotoStandBlockEntity extends BlockEntity {
     public void setPhoto(PhotoData data) {
         this.photoData = data;
         markDirty();
-        if (world != null && !world.isClient) {
+        if (world != null && !world.isClient()) {
             world.updateListeners(pos, getCachedState(), getCachedState(), Block.NOTIFY_ALL);
         }
     }
@@ -38,7 +38,7 @@ public class PhotoStandBlockEntity extends BlockEntity {
     public void clearPhoto() {
         this.photoData = null;
         markDirty();
-        if (world != null && !world.isClient) {
+        if (world != null && !world.isClient()) {
             world.updateListeners(pos, getCachedState(), getCachedState(), Block.NOTIFY_ALL);
         }
     }
