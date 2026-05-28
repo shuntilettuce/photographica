@@ -21,7 +21,7 @@ import net.minecraft.util.Identifier;
 public final class ModBlocks {
     private ModBlocks() {}
 
-    //? if >=1.21.11 {
+    //? if >=1.21.4 {
     /*public static final Block DARKROOM = Registry.register(
             Registries.BLOCK, Identifier.of(Photographica.MOD_ID, "darkroom"),
             new DarkroomBlock(bs("darkroom")
@@ -114,7 +114,7 @@ public final class ModBlocks {
     //?}
 
     public static void register() {
-        //? if >=1.21.11 {
+        //? if >=1.21.4 {
         /*Registry.register(Registries.ITEM, Identifier.of(Photographica.MOD_ID, "darkroom"),
                 new BlockItem(DARKROOM, is("darkroom")));
         Registry.register(Registries.ITEM, Identifier.of(Photographica.MOD_ID, "printer"),
@@ -152,7 +152,7 @@ public final class ModBlocks {
         });
     }
 
-    //? if >=1.21.11 {
+    //? if >=1.21.4 {
     /*private static AbstractBlock.Settings bs(String name) {
         net.minecraft.registry.RegistryKey<Block> k = net.minecraft.registry.RegistryKey.of(
             net.minecraft.registry.RegistryKeys.BLOCK, Identifier.of(Photographica.MOD_ID, name));
