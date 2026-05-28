@@ -8,6 +8,7 @@
 		"EntityRendererMixin",
 		"GameRendererMixin",
 		"MouseMixin",
+		"PlayerEntityRendererMixin",
 		"WorldRendererMixin"
 	],
 	"injectors": {
