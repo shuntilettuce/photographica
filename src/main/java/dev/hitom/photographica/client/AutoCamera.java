@@ -196,7 +196,11 @@ public final class AutoCamera {
 		double best = Double.MAX_VALUE;
 		for (LivingEntity e : mc.world.getEntitiesByClass(LivingEntity.class,
 				mc.player.getBoundingBox().expand(50.0), ent -> ent != mc.player && ent.isAlive())) {
+			//? if >=1.21.11 {
+			/*Vec3d toEnt = e.getEntityPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);*/
+			//?} else {
 			Vec3d toEnt = e.getPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);
+			//?}
 			double dist = toEnt.length();
 			if (dist < 0.1) continue;
 			if (toEnt.normalize().dotProduct(look) >= MOB_CONE_COS && dist < best) best = dist;
@@ -239,7 +243,11 @@ public final class AutoCamera {
 				LivingEntity.class,
 				stand.getBoundingBox().expand(50.0),
 				ent -> ent.isAlive())) {
+			//? if >=1.21.11 {
+			/*Vec3d toEnt = e.getEntityPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);*/
+			//?} else {
 			Vec3d toEnt = e.getPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);
+			//?}
 			double dist = toEnt.length();
 			if (dist < 0.1) continue;
 			if (toEnt.normalize().dotProduct(look) >= MOB_CONE_COS) {

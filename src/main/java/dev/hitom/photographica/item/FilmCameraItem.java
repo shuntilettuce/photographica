@@ -78,6 +78,25 @@ public class FilmCameraItem extends Item implements net.minecraft.item.Equipment
 		return f != null && f.totalExposures() > 0;
 	}
 
+	//? if >=1.21.11 {
+	/*@Override
+	public void appendTooltip(ItemStack stack, Item.TooltipContext context, net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay, java.util.function.Consumer<Text> tooltipSink, TooltipType type) {
+		CameraSettings s = getSettings(stack);
+		tooltipSink.accept(Text.literal("レンズ: " + LensKind.displayName(s.lensType())).formatted(Formatting.GRAY));
+		FilmRollData film = getFilm(stack);
+		if (film.totalExposures() == 0) {
+			tooltipSink.accept(Text.literal("フィルム: 未装填").formatted(Formatting.RED));
+		} else if (film.isExposed()) {
+			tooltipSink.accept(Text.literal("フィルム: 撮影済 " + film.usedExposures() + "/" + film.totalExposures() + "枚").formatted(Formatting.YELLOW));
+		} else {
+			String wind = film.wound() ? "§a巻上済§r" : "§c要巻上§r";
+			tooltipSink.accept(Text.of("フィルム: " + FilmKind.displayName(film.filmType())
+					+ "  " + film.usedExposures() + "/" + film.totalExposures() + "枚  " + wind));
+		}
+		String[] expLabels = {"M", "Av", "Tv", "P"};
+		tooltipSink.accept(Text.literal("露出: " + expLabels[Math.max(0, Math.min(3, s.exposureMode()))]).formatted(Formatting.DARK_GRAY));
+	}*/
+	//?} else {
 	@Override
 	public void appendTooltip(ItemStack stack, TooltipContext context, List<Text> tooltip, TooltipType type) {
 		CameraSettings s = getSettings(stack);
@@ -95,6 +114,7 @@ public class FilmCameraItem extends Item implements net.minecraft.item.Equipment
 		String[] expLabels = {"M", "Av", "Tv", "P"};
 		tooltip.add(Text.literal("露出: " + expLabels[Math.max(0, Math.min(3, s.exposureMode()))]).formatted(Formatting.DARK_GRAY));
 	}
+	//?}
 
 	//? if >=1.21.4 {
 	/*@Override

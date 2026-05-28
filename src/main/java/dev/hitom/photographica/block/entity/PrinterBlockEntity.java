@@ -85,6 +85,19 @@ public class PrinterBlockEntity extends BlockEntity implements Inventory, NamedS
         inventory.clear();
     }
 
+    //? if >=1.21.11 {
+    /*@Override
+    protected void writeData(net.minecraft.storage.WriteView view) {
+        super.writeData(view);
+        // TODO: serialize inventory for 1.21.11
+    }
+
+    @Override
+    protected void readData(net.minecraft.storage.ReadView view) {
+        super.readData(view);
+        // TODO: deserialize inventory for 1.21.11
+    }*/
+    //?} else {
     @Override
     protected void writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registryLookup) {
         super.writeNbt(nbt, registryLookup);
@@ -96,4 +109,5 @@ public class PrinterBlockEntity extends BlockEntity implements Inventory, NamedS
         super.readNbt(nbt, registryLookup);
         Inventories.readNbt(nbt, inventory, registryLookup);
     }
+    //?}
 }

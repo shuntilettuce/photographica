@@ -135,6 +135,20 @@ public class PhotoFrameBlock extends BlockWithEntity {
         return ActionResult.PASS;
     }
 
+    //? if >=1.21.11 {
+    /*@Override
+    protected void onStateReplaced(BlockState state, net.minecraft.server.world.ServerWorld world, BlockPos pos, boolean moved) {
+        if (world.getBlockEntity(pos) instanceof PhotoFrameBlockEntity frame) {
+            PhotoData photo = frame.getPhotoData();
+            if (photo != null) {
+                ItemStack photoStack = new ItemStack(ModItems.PHOTO);
+                photoStack.set(ModDataComponents.PHOTO_DATA, photo);
+                Block.dropStack(world, pos, photoStack);
+            }
+        }
+        super.onStateReplaced(state, world, pos, moved);
+    }*/
+    //?} else {
     @Override
     public void onStateReplaced(BlockState state, World world, BlockPos pos,
                                  BlockState newState, boolean moved) {
@@ -150,4 +164,5 @@ public class PhotoFrameBlock extends BlockWithEntity {
         }
         super.onStateReplaced(state, world, pos, newState, moved);
     }
+    //?}
 }

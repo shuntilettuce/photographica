@@ -21,6 +21,19 @@ public class ExposedFilmItem extends Item {
 		super(settings.maxCount(16));
 	}
 
+	//? if >=1.21.11 {
+	/*@Override
+	public void appendTooltip(ItemStack stack, Item.TooltipContext context, net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay, java.util.function.Consumer<Text> tooltipSink, TooltipType type) {
+		FilmRollData f = stack.get(ModDataComponents.FILM_ROLL);
+		if (f == null) {
+			tooltipSink.accept(Text.literal("§c(空のフィルム)"));
+			return;
+		}
+		tooltipSink.accept(Text.literal("§7" + FilmKind.displayName(f.filmType())));
+		tooltipSink.accept(Text.literal("§e撮影済 " + f.usedExposures() + "/" + f.totalExposures() + " 枚"));
+		tooltipSink.accept(Text.literal("§8暗室で現像してください"));
+	}*/
+	//?} else {
 	@Override
 	public void appendTooltip(ItemStack stack, TooltipContext context, List<Text> tooltip, TooltipType type) {
 		FilmRollData f = stack.get(ModDataComponents.FILM_ROLL);
@@ -32,4 +45,5 @@ public class ExposedFilmItem extends Item {
 		tooltip.add(Text.literal("§e撮影済 " + f.usedExposures() + "/" + f.totalExposures() + " 枚"));
 		tooltip.add(Text.literal("§8暗室で現像してください"));
 	}
+	//?}
 }

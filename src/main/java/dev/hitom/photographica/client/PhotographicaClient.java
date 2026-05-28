@@ -43,7 +43,9 @@ import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.render.OverlayTexture;
-//? if >=1.21.4 {
+//? if >=1.21.11 {
+/*import net.minecraft.item.ItemDisplayContext;*/
+//?} else if >=1.21.4 {
 /*import net.minecraft.item.ModelTransformationMode;*/
 //?} else {
 import net.minecraft.client.render.model.json.ModelTransformationMode;
@@ -150,7 +152,11 @@ public class PhotographicaClient implements ClientModInitializer {
 			if (standId >= 0 && client.world != null) {
 				net.minecraft.entity.Entity stand = client.world.getEntityById(standId);
 				if (stand != null) {
+					//? if >=1.21.11 {
+					/*client.setCameraEntity(stand);*/
+					//?} else {
 					client.cameraEntity = stand;
+					//?}
 				} else {
 					VideoRecorder.stopRecording();
 				}
@@ -169,8 +175,13 @@ public class PhotographicaClient implements ClientModInitializer {
 				}
 				if (stack.getItem() instanceof FilmCameraItem) {
 					ClientPlayNetworking.send(new WindFilmPayload());
+					//? if >=1.21.11 {
+					/*client.getSoundManager().play(PositionedSoundInstance.ui(
+							SoundEvents.BLOCK_LEVER_CLICK, 0.7f, 1.6f));*/
+					//?} else {
 					client.getSoundManager().play(PositionedSoundInstance.master(
 							SoundEvents.BLOCK_LEVER_CLICK, 0.7f, 1.6f));
+					//?}
 				}
 			}
 			if (loadSdCardKey.wasPressed()) {
@@ -230,7 +241,9 @@ public class PhotographicaClient implements ClientModInitializer {
 
 		// Render all four camera item models on the player's chest when worn.
 		// Uses the humanoid body bone for correct rotation with body/head animations.
-		//? if >=1.21.4 {
+		//? if >=1.21.11 {
+		/*// Camera armor rendering not yet implemented for 1.21.11*/
+		//?} else if >=1.21.4 {
 		/*ArmorRenderer.register((matrices, vertexConsumers, stack, state, slot, light, contextModel) -> {
 			if (slot != EquipmentSlot.CHEST) return;
 			matrices.push();

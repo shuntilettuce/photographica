@@ -255,7 +255,11 @@ public class SdCardBrowserScreen extends Screen {
                 forTexture = boxResample(original, physW, physH);
             }
 
+            //? if >=1.21.11 {
+            /*NativeImageBackedTexture tex = new NativeImageBackedTexture("photo", forTexture);*/
+            //?} else {
             NativeImageBackedTexture tex = new NativeImageBackedTexture(forTexture);
+            //?}
             tex.setFilter(true, false);
             String safeId = data.id().toString().replace('-', '_').toLowerCase();
             Identifier texId = Identifier.of(Photographica.MOD_ID, "thumb/" + safeId);

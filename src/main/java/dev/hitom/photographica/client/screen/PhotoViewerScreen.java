@@ -99,7 +99,11 @@ public class PhotoViewerScreen extends Screen {
 				forTexture = boxResample(original, physW, physH);
 			}
 
-			NativeImageBackedTexture tex = new NativeImageBackedTexture(forTexture);
+			//? if >=1.21.11 {
+            /*NativeImageBackedTexture tex = new NativeImageBackedTexture("photo", forTexture);*/
+            //?} else {
+            NativeImageBackedTexture tex = new NativeImageBackedTexture(forTexture);
+            //?}
 			tex.setFilter(true, false);
 			String safeId = id.toString().replace('-', '_').toLowerCase();
 			Identifier texId = Identifier.of(Photographica.MOD_ID, "photo/" + safeId);

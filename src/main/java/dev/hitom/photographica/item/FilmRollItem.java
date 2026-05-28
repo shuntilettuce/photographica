@@ -35,6 +35,15 @@ public class FilmRollItem extends Item {
 		return s;
 	}
 
+	//? if >=1.21.11 {
+	/*@Override
+	public void appendTooltip(ItemStack stack, Item.TooltipContext context, net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay, java.util.function.Consumer<Text> tooltipSink, TooltipType type) {
+		FilmRollData f = stack.get(ModDataComponents.FILM_ROLL);
+		int ft = f != null ? f.filmType() : filmType;
+		tooltipSink.accept(Text.literal("§7" + FilmKind.displayName(ft)));
+		tooltipSink.accept(Text.literal("§8新品 (未装填)"));
+	}*/
+	//?} else {
 	@Override
 	public void appendTooltip(ItemStack stack, TooltipContext context, List<Text> tooltip, TooltipType type) {
 		FilmRollData f = stack.get(ModDataComponents.FILM_ROLL);
@@ -42,4 +51,5 @@ public class FilmRollItem extends Item {
 		tooltip.add(Text.literal("§7" + FilmKind.displayName(ft)));
 		tooltip.add(Text.literal("§8新品 (未装填)"));
 	}
+	//?}
 }

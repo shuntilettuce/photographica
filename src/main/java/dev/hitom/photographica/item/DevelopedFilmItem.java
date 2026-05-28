@@ -52,6 +52,26 @@ public class DevelopedFilmItem extends Item {
         return Text.literal("現像済フィルム").formatted(Formatting.GOLD);
     }
 
+    //? if >=1.21.11 {
+    /*@Override
+    public void appendTooltip(ItemStack stack, Item.TooltipContext context, net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay, java.util.function.Consumer<Text> tooltipSink, TooltipType type) {
+        FilmRollData film = stack.get(ModDataComponents.FILM_ROLL);
+        if (film == null) {
+            tooltipSink.accept(Text.literal("§c(空)"));
+            return;
+        }
+        tooltipSink.accept(Text.literal("§e現像済ネガ: " + film.exposures().size() + "枚"));
+        int max = Math.min(3, film.exposures().size());
+        for (int i = 0; i < max; i++) {
+            PhotoData p = film.exposures().get(i);
+            String fogInfo = p.fogged() ? " §c[感光]§8" : "";
+            tooltipSink.accept(Text.literal("§8  " + (i + 1) + ". " + p.id().toString().substring(0, 8) + fogInfo));
+        }
+        if (film.exposures().size() > max) {
+            tooltipSink.accept(Text.literal("§8  ...他" + (film.exposures().size() - max) + "枚"));
+        }
+    }*/
+    //?} else {
     @Override
     public void appendTooltip(ItemStack stack, TooltipContext context, List<Text> tooltip, TooltipType type) {
         FilmRollData film = stack.get(ModDataComponents.FILM_ROLL);
@@ -70,4 +90,5 @@ public class DevelopedFilmItem extends Item {
             tooltip.add(Text.literal("§8  ...他" + (film.exposures().size() - max) + "枚"));
         }
     }
+    //?}
 }

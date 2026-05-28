@@ -56,6 +56,17 @@ public class EnlargerBlock extends BlockWithEntity {
         return ActionResult.CONSUME;
     }
 
+    //? if >=1.21.11 {
+    /*@Override
+    protected void onStateReplaced(BlockState state, net.minecraft.server.world.ServerWorld world, BlockPos pos, boolean moved) {
+        BlockEntity be = world.getBlockEntity(pos);
+        if (be instanceof EnlargerBlockEntity enlarger) {
+            ItemScatterer.spawn(world, pos, enlarger);
+            world.updateComparators(pos, this);
+        }
+        super.onStateReplaced(state, world, pos, moved);
+    }*/
+    //?} else {
     @Override
     public void onStateReplaced(BlockState state, World world, BlockPos pos,
                                  BlockState newState, boolean moved) {
@@ -68,4 +79,5 @@ public class EnlargerBlock extends BlockWithEntity {
         }
         super.onStateReplaced(state, world, pos, newState, moved);
     }
+    //?}
 }

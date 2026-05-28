@@ -273,9 +273,15 @@ public class CameraScreen extends Screen {
 		kinds.add(settings.lensType());
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.player != null) {
+			//? if >=1.21.11 {
+			/*for (ItemStack s : mc.player.getInventory().getMainStacks()) {
+				if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
+			}*/
+			//?} else {
 			for (ItemStack s : mc.player.getInventory().main) {
 				if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
 			}
+			//?}
 			for (ItemStack s : mc.player.getInventory().offHand) {
 				if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
 			}

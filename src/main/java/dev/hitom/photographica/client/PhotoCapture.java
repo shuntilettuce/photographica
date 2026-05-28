@@ -171,8 +171,13 @@ public final class PhotoCapture {
 
 		if (!LensKind.hasLens(settings.lensType())) {
 			mc.player.sendMessage(Text.literal("⚠ レンズが取り付けられていません"), true);
+			//? if >=1.21.11 {
+			/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+					SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));*/
+			//?} else {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
+			//?}
 			return;
 		}
 
@@ -180,15 +185,25 @@ public final class PhotoCapture {
 		if (!isFilm) {
 			if (!cameraStack.contains(ModDataComponents.SD_CARD)) {
 				mc.player.sendMessage(Text.literal("⚠ SDカードが装填されていません"), true);
+				//? if >=1.21.11 {
+				/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));*/
+				//?} else {
 				mc.getSoundManager().play(PositionedSoundInstance.master(
 						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
+				//?}
 				return;
 			}
 			SdCardData sd = cameraStack.get(ModDataComponents.SD_CARD);
 			if (sd != null && sd.isFull()) {
 				mc.player.sendMessage(Text.literal("⚠ SDカードがいっぱいです"), true);
+				//? if >=1.21.11 {
+				/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));*/
+				//?} else {
 				mc.getSoundManager().play(PositionedSoundInstance.master(
 						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
+				//?}
 				return;
 			}
 		}
@@ -198,8 +213,13 @@ public final class PhotoCapture {
 			FilmRollData film = FilmCameraItem.getFilm(cameraStack);
 			if (film.totalExposures() == 0) {
 				mc.player.sendMessage(Text.literal("⚠ フィルムが装填されていません"), true);
+				//? if >=1.21.11 {
+				/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.5f, 0.7f));*/
+				//?} else {
 				mc.getSoundManager().play(PositionedSoundInstance.master(
 						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.5f, 0.7f));
+				//?}
 				return;
 			}
 			if (film.isExposed()) {
@@ -208,8 +228,13 @@ public final class PhotoCapture {
 			}
 			if (!film.wound()) {
 				mc.player.sendMessage(Text.literal("⚠ フィルムを巻き上げてください"), true);
+				//? if >=1.21.11 {
+				/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+						SoundEvents.BLOCK_LEVER_CLICK, 0.5f, 0.9f));*/
+				//?} else {
 				mc.getSoundManager().play(PositionedSoundInstance.master(
 						SoundEvents.BLOCK_LEVER_CLICK, 0.5f, 0.9f));
+				//?}
 				return;
 			}
 		}
@@ -228,10 +253,17 @@ public final class PhotoCapture {
 			timerLastTickMs = now; // start ticking immediately
 			// Film: soft initial wind-up click; Digital: confirmation beep
 			boolean timerIsFilm = cameraStack.getItem() instanceof FilmCameraItem;
+			//? if >=1.21.11 {
+			/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(),
+					timerIsFilm ? 0.5f : 1.0f,
+					timerIsFilm ? 0.85f : 1.2f));*/
+			//?} else {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(),
 					timerIsFilm ? 0.5f : 1.0f,
 					timerIsFilm ? 0.85f : 1.2f));
+			//?}
 			return;
 		}
 
@@ -270,14 +302,29 @@ public final class PhotoCapture {
 
 		// Shutter sound — mechanical SLR / mirrorless / film SLR.
 		if (isFilm) {
+			//? if >=1.21.11 {
+			/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+					SoundEvents.BLOCK_PISTON_CONTRACT, 1.2f, 1.4f));*/
+			//?} else {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_PISTON_CONTRACT, 1.2f, 1.4f));
+			//?}
 		} else if (isMirrorless) {
+			//? if >=1.21.11 {
+			/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 0.6f, 1.8f));*/
+			//?} else {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 0.6f, 1.8f));
+			//?}
 		} else {
+			//? if >=1.21.11 {
+			/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 1.5f, 0.9f));*/
+			//?} else {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 1.5f, 0.9f));
+			//?}
 		}
 	}
 
@@ -389,7 +436,7 @@ public final class PhotoCapture {
 		/*NativeImage[] rawRef = {null};
 		ScreenshotRecorder.takeScreenshot(fb, img -> rawRef[0] = img);
 		NativeImage raw = rawRef[0];
-		if (raw == null) { capturePending = false; return; }*/
+		if (raw == null) return;*/
 		//?} else {
 		NativeImage raw = ScreenshotRecorder.takeScreenshot(fb);
 		//?}
@@ -612,8 +659,13 @@ public final class PhotoCapture {
 
 	/** Called by the HUD callback when the mirror-down click is due. */
 	public static void playMirrorDownClick() {
+		//? if >=1.21.11 {
+		/*MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.ui(
+				SoundEvents.BLOCK_TRIPWIRE_CLICK_OFF, 1.3f, 1.0f));*/
+		//?} else {
 		MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(
 				SoundEvents.BLOCK_TRIPWIRE_CLICK_OFF, 1.3f, 1.0f));
+		//?}
 	}
 
 	/**
@@ -643,8 +695,13 @@ public final class PhotoCapture {
 					timerLastTickMs = now;
 					// Alternating slight pitch variation gives a more mechanical feel
 					float pitch = (timerLastTickMs / tickInterval % 2 == 0) ? 0.85f : 0.90f;
+					//? if >=1.21.11 {
+					/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+							SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.45f, pitch));*/
+					//?} else {
 					mc.getSoundManager().play(PositionedSoundInstance.master(
 							SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.45f, pitch));
+					//?}
 				}
 			} else {
 				// --- Digital camera: one beep per second, ascending pitch ---
@@ -660,8 +717,13 @@ public final class PhotoCapture {
 						case 4  -> 1.2f;
 						default -> 1.1f;
 					};
+					//? if >=1.21.11 {
+					/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+							SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.8f, pitch));*/
+					//?} else {
 					mc.getSoundManager().play(PositionedSoundInstance.master(
 							SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.8f, pitch));
+					//?}
 				}
 			}
 		}
@@ -675,10 +737,17 @@ public final class PhotoCapture {
 			timerArmorStandEntityId = -1;
 
 			// Final click — slightly louder/higher than the ticks
+			//? if >=1.21.11 {
+			/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(),
+					isFilmTimer ? 0.7f : 1.0f,
+					isFilmTimer ? 1.1f : 2.0f));*/
+			//?} else {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(),
 					isFilmTimer ? 0.7f : 1.0f,
 					isFilmTimer ? 1.1f : 2.0f));
+			//?}
 
 			if (standId >= 0) {
 				// Armor stand timer: arm capture from armor stand perspective
@@ -714,8 +783,13 @@ public final class PhotoCapture {
 
 		if (!LensKind.hasLens(settings.lensType())) {
 			mc.player.sendMessage(Text.literal("⚠ レンズが取り付けられていません"), true);
+			//? if >=1.21.11 {
+			/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+					SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));*/
+			//?} else {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
+			//?}
 			return;
 		}
 
@@ -723,8 +797,13 @@ public final class PhotoCapture {
 		if (!isFilm) {
 			if (!cameraStack.contains(ModDataComponents.SD_CARD)) {
 				mc.player.sendMessage(Text.literal("⚠ SDカードが装填されていません"), true);
+				//? if >=1.21.11 {
+				/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));*/
+				//?} else {
 				mc.getSoundManager().play(PositionedSoundInstance.master(
 						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
+				//?}
 				return;
 			}
 			SdCardData sd = cameraStack.get(ModDataComponents.SD_CARD);
@@ -764,10 +843,17 @@ public final class PhotoCapture {
 			timerArmorStandEntityId = entityId;
 			timerLastTickMs = now; // start ticking immediately
 			boolean timerIsFilmStand = cameraStack.getItem() instanceof FilmCameraItem;
+			//? if >=1.21.11 {
+			/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(),
+					timerIsFilmStand ? 0.5f : 1.0f,
+					timerIsFilmStand ? 0.85f : 1.2f));*/
+			//?} else {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(),
 					timerIsFilmStand ? 0.5f : 1.0f,
 					timerIsFilmStand ? 0.85f : 1.2f));
+			//?}
 			return;
 		}
 
@@ -849,14 +935,29 @@ public final class PhotoCapture {
 
 		// Shutter sound
 		if (isFilm) {
+			//? if >=1.21.11 {
+			/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+					SoundEvents.BLOCK_PISTON_CONTRACT, 1.2f, 1.4f));*/
+			//?} else {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_PISTON_CONTRACT, 1.2f, 1.4f));
+			//?}
 		} else if (isMirrorless) {
+			//? if >=1.21.11 {
+			/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 0.6f, 1.8f));*/
+			//?} else {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 0.6f, 1.8f));
+			//?}
 		} else {
+			//? if >=1.21.11 {
+			/*mc.getSoundManager().play(PositionedSoundInstance.ui(
+					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 1.5f, 0.9f));*/
+			//?} else {
 			mc.getSoundManager().play(PositionedSoundInstance.master(
 					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 1.5f, 0.9f));
+			//?}
 		}
 	}
 
@@ -1185,7 +1286,9 @@ public final class PhotoCapture {
 	 * Near/far clip values are Minecraft defaults (0.05 / 512 blocks).
 	 */
 	private static float[] readLinearDepth(Framebuffer fb, int fbW, int fbH) {
+		//? if <1.21.11 {
 		fb.beginWrite(false); // binds the FBO
+		//?}
 		FloatBuffer buf = BufferUtils.createFloatBuffer(fbW * fbH);
 		GL11.glReadPixels(0, 0, fbW, fbH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
 

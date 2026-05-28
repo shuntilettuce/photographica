@@ -26,7 +26,11 @@ import java.util.UUID;
  *   - Matrix is rotated to match the block's FACING before drawing.
  */
 @Environment(EnvType.CLIENT)
+//? if >=1.21.11 {
+/*public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoFrameBlockEntity, net.minecraft.client.render.block.entity.state.BlockEntityRenderState> {*/
+//?} else {
 public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoFrameBlockEntity> {
+//?}
 
     // Inner black area of the 16×16 frame texture (px 2..13) mapped onto the 12×8 face:
     // X: 2+(2/16)*12 = 3.5, X: 2+(14/16)*12 = 12.5  →  9 px wide
@@ -39,6 +43,17 @@ public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoF
 
     public PhotoFrameBlockEntityRenderer(BlockEntityRendererFactory.Context ctx) {}
 
+    //? if >=1.21.11 {
+    /*@Override
+    public net.minecraft.client.render.block.entity.state.BlockEntityRenderState createRenderState() {
+        return new net.minecraft.client.render.block.entity.state.BlockEntityRenderState();
+    }
+
+    @Override
+    public void render(net.minecraft.client.render.block.entity.state.BlockEntityRenderState state, MatrixStack matrices, net.minecraft.client.render.command.OrderedRenderCommandQueue queue, net.minecraft.client.render.state.CameraRenderState camera) {
+        // Photo frame rendering not yet implemented for 1.21.11
+    }*/
+    //?} else {
     @Override
     public void render(PhotoFrameBlockEntity entity, float tickDelta, MatrixStack matrices,
                        VertexConsumerProvider vertexConsumers, int light, int overlay) {
@@ -73,4 +88,5 @@ public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoF
 
         matrices.pop();
     }
+    //?}
 }

@@ -442,7 +442,11 @@ public class Photographica implements ModInitializer {
 		ServerPlayNetworking.registerGlobalReceiver(TakeFilmPhotoFromArmorStandPayload.ID, (payload, context) -> {
 			ServerPlayerEntity player = context.player();
 			context.server().execute(() -> {
+				//? if >=1.21.11 {
+				/*net.minecraft.entity.Entity entity = player.getEntityWorld().getEntityById(payload.entityId());*/
+				//?} else {
 				net.minecraft.entity.Entity entity = player.getServerWorld().getEntityById(payload.entityId());
+				//?}
 				if (!(entity instanceof ArmorStandEntity stand)) return;
 				ItemStack camera = null;
 				EquipmentSlot cameraSlot = null;
@@ -457,7 +461,11 @@ public class Photographica implements ModInitializer {
 				FilmRollData film = FilmCameraItem.getFilm(camera);
 				if (film.totalExposures() == 0 || film.isExposed() || !film.wound()) return;
 
+				//? if >=1.21.11 {
+				/*ServerWorld world = (ServerWorld) player.getEntityWorld();*/
+				//?} else {
 				ServerWorld world = player.getServerWorld();
+				//?}
 				BlockPos pos = stand.getBlockPos();
 				PhotoData shot = new PhotoData(
 						payload.id(), player.getName().getString(), world.getTime(),
@@ -477,7 +485,11 @@ public class Photographica implements ModInitializer {
 		ServerPlayNetworking.registerGlobalReceiver(EquipCameraToArmorStandPayload.ID, (payload, context) -> {
 			ServerPlayerEntity player = context.player();
 			context.server().execute(() -> {
+				//? if >=1.21.11 {
+				/*net.minecraft.entity.Entity entity = player.getEntityWorld().getEntityById(payload.entityId());*/
+				//?} else {
 				net.minecraft.entity.Entity entity = player.getServerWorld().getEntityById(payload.entityId());
+				//?}
 				if (!(entity instanceof ArmorStandEntity stand)) return;
 
 				// Safety: reject if stand already has a camera
@@ -510,7 +522,11 @@ public class Photographica implements ModInitializer {
 		ServerPlayNetworking.registerGlobalReceiver(UnequipCameraFromArmorStandPayload.ID, (payload, context) -> {
 			ServerPlayerEntity player = context.player();
 			context.server().execute(() -> {
+				//? if >=1.21.11 {
+				/*net.minecraft.entity.Entity entity = player.getEntityWorld().getEntityById(payload.entityId());*/
+				//?} else {
 				net.minecraft.entity.Entity entity = player.getServerWorld().getEntityById(payload.entityId());
+				//?}
 				if (!(entity instanceof ArmorStandEntity stand)) return;
 
 				// Find the camera slot
@@ -571,8 +587,14 @@ public class Photographica implements ModInitializer {
 				inv.setStack(11, new ItemStack(ModItems.LENS_PRIME_85));
 				player.sendMessage(Text.literal("§a[Dev] Photographica test items given! Game mode: Creative"), false);
 				// Set daytime so the world is visible
+				//? if >=1.21.11 {
+				/*server.getCommandManager().execute(
+					server.getCommandManager().getDispatcher().parse("time set day", server.getCommandSource()),
+					"time set day");*/
+				//?} else {
 				server.getCommandManager().executeWithPrefix(
 						server.getCommandSource(), "time set day");
+				//?}
 			}
 		});
 	}

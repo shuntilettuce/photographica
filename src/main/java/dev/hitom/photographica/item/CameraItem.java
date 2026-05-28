@@ -50,6 +50,23 @@ public class CameraItem extends Item implements net.minecraft.item.Equipment {
 		stack.set(ModDataComponents.CAMERA_SETTINGS, settings);
 	}
 
+	//? if >=1.21.11 {
+	/*@Override
+	public void appendTooltip(ItemStack stack, Item.TooltipContext context, net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay, java.util.function.Consumer<Text> tooltipSink, TooltipType type) {
+		CameraSettings s = getSettings(stack);
+		tooltipSink.accept(Text.literal("レンズ: " + LensKind.displayName(s.lensType())).formatted(Formatting.GRAY));
+		if (stack.contains(ModDataComponents.SD_CARD)) {
+			SdCardData sd = stack.get(ModDataComponents.SD_CARD);
+			int count = sd != null ? sd.photos().size() : 0;
+			int cap   = sd != null ? sd.capacity()      : SdCardData.DEFAULT_CAPACITY;
+			tooltipSink.accept(Text.literal("SD: " + count + "/" + cap + "枚").formatted(Formatting.GREEN));
+		} else {
+			tooltipSink.accept(Text.literal("SD: 未挿入").formatted(Formatting.DARK_GRAY));
+		}
+		String[] expLabels = {"M", "Av", "Tv", "P"};
+		tooltipSink.accept(Text.literal("露出: " + expLabels[Math.max(0, Math.min(3, s.exposureMode()))]).formatted(Formatting.DARK_GRAY));
+	}*/
+	//?} else {
 	@Override
 	public void appendTooltip(ItemStack stack, TooltipContext context, List<Text> tooltip, TooltipType type) {
 		CameraSettings s = getSettings(stack);
@@ -65,6 +82,7 @@ public class CameraItem extends Item implements net.minecraft.item.Equipment {
 		String[] expLabels = {"M", "Av", "Tv", "P"};
 		tooltip.add(Text.literal("露出: " + expLabels[Math.max(0, Math.min(3, s.exposureMode()))]).formatted(Formatting.DARK_GRAY));
 	}
+	//?}
 
 	//? if >=1.21.4 {
 	/*@Override
