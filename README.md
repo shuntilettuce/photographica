@@ -57,4 +57,4 @@ This mod was developed with the assistance of [Claude Code](https://claude.ai/co
 
 ## License
 
-[MIT](LICENSE) — © 2024 hitom
+[MIT](LICENSE) — © 2024 shunti
