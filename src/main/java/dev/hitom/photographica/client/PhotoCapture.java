@@ -433,13 +433,70 @@ public final class PhotoCapture {
 		}
 
 		//? if >=1.21.11 {
-		/*NativeImage[] rawRef = {null};
-		ScreenshotRecorder.takeScreenshot(fb, img -> rawRef[0] = img);
-		NativeImage raw = rawRef[0];
-		if (raw == null) return;*/
-		//?} else {
-		NativeImage raw = ScreenshotRecorder.takeScreenshot(fb);
+		/*final UUID fId = id;
+		final CameraSettings fSettings = settings;
+		final boolean fIsFilm = isFilm;
+		final int fCaptureStandId = captureStandId;
+		final float[] fLinearDepth = linearDepth;
+		final int fFbW = fbW;
+		final int fFbH = fbH;
+		ScreenshotRecorder.takeScreenshot(fb, raw -> {
+			if (raw == null) return;
+			NativeImage cropped = null;
+			NativeImage downsampled = null;
+			NativeImage processed = null;
+			try {
+				cropped = cropTo3to2(raw);
+				downsampled = boxDownsample(cropped, 1280);
+				processed = applyPhotographicEffects(downsampled, fSettings, fLinearDepth, fFbW, fFbH, true);
+				File dir = new File(mc.runDirectory, "photographica/photos");
+				if (!dir.exists() && !dir.mkdirs()) {
+					Photographica.LOGGER.error("Could not create photo dir: {}", dir);
+					return;
+				}
+				File outFile = new File(dir, fId + ".png");
+				processed.writeTo(outFile);
+				Photographica.LOGGER.info("Photo saved: {} ({}x{})",
+						outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
+			} catch (IOException e) {
+				Photographica.LOGGER.error("Photo capture failed", e);
+			} finally {
+				if (processed != null) processed.close();
+				if (downsampled != null && downsampled != cropped && downsampled != raw) downsampled.close();
+				if (cropped != null && cropped != raw) cropped.close();
+				raw.close();
+			}
+			if (fCaptureStandId >= 0) {
+				if (fIsFilm) {
+					ClientPlayNetworking.send(new TakeFilmPhotoFromArmorStandPayload(fId, fSettings, fCaptureStandId));
+					if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て・フィルム)"), true);
+				} else {
+					ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(fId, fSettings, fCaptureStandId));
+					if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て)"), true);
+				}
+				if (mc.player != null) mc.setCameraEntity(mc.player);
+				if (savedArmorStandPerspective != null) {
+					mc.options.setPerspective(savedArmorStandPerspective);
+					savedArmorStandPerspective = null;
+				}
+				armorStandCapturePending = false;
+				armorStandFocalLength = 0;
+			} else if (fIsFilm) {
+				ClientPlayNetworking.send(new TakeFilmPhotoPayload(fId, fSettings));
+				if (mc.player != null) {
+					mc.player.sendMessage(Text.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), true);
+				}
+			} else {
+				ClientPlayNetworking.send(new CreatePhotoPayload(fId, fSettings));
+				if (mc.player != null) {
+					mc.player.sendMessage(Text.literal("📸 撮影"), true);
+				}
+			}
+		});
+		return;*/
 		//?}
+		//? if <1.21.11 {
+		NativeImage raw = ScreenshotRecorder.takeScreenshot(fb);
 
 		NativeImage cropped = null;
 		NativeImage downsampled = null;
@@ -493,6 +550,7 @@ public final class PhotoCapture {
 				mc.player.sendMessage(Text.literal("📸 撮影"), true);
 			}
 		}
+		//?}
 	}
 
 	/**
@@ -521,13 +579,41 @@ public final class PhotoCapture {
 		// Take a color sample if the interval has elapsed.
 		if (now >= accumNextSampleMs && accumSamples < ACCUM_MAX_SAMPLES) {
 			//? if >=1.21.11 {
-			/*NativeImage[] frameRef = {null};
-			ScreenshotRecorder.takeScreenshot(fb, img -> frameRef[0] = img);
-			NativeImage frame = frameRef[0];
-			if (frame == null) return;*/
+			/*ScreenshotRecorder.takeScreenshot(fb, frame -> {
+				if (frame == null) return;
+				NativeImage cropped = null;
+				NativeImage ds = null;
+				try {
+					cropped = cropTo3to2(frame);
+					ds = boxDownsample(cropped, 1280);
+					int w = ds.getWidth();
+					int h = ds.getHeight();
+					if (accumR == null) {
+						accumW = w; accumH = h;
+						accumR = new float[w * h];
+						accumG = new float[w * h];
+						accumB = new float[w * h];
+					}
+					if (w == accumW && h == accumH) {
+						for (int y = 0; y < h; y++) {
+							for (int x = 0; x < w; x++) {
+								int c = getPixelAbgr(ds, x, y);
+								int idx = y * w + x;
+								accumR[idx] += c & 0xFF;
+								accumG[idx] += (c >> 8) & 0xFF;
+								accumB[idx] += (c >> 16) & 0xFF;
+							}
+						}
+						accumSamples++;
+					}
+				} finally {
+					if (ds != null && ds != cropped && ds != frame) ds.close();
+					if (cropped != null && cropped != frame) cropped.close();
+					frame.close();
+				}
+			});*/
 			//?} else {
 			NativeImage frame = ScreenshotRecorder.takeScreenshot(fb);
-			//?}
 			NativeImage cropped = null;
 			NativeImage ds = null;
 			try {
@@ -558,6 +644,7 @@ public final class PhotoCapture {
 				if (cropped != null && cropped != frame) cropped.close();
 				frame.close();
 			}
+			//?}
 			accumNextSampleMs = now + accumSampleIntervalMs;
 		}
 
