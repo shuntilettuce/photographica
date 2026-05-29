@@ -5,67 +5,69 @@ import dev.hitom.photographica.block.entity.PhotoFrameBlockEntity;
 import dev.hitom.photographica.component.PhotoData;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.resources.Identifier;
 import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
+import com.mojang.blaze3d.vertex.PoseStack;
 
-import java.util.UUID;
-
-/**
- * Renders the photo image onto the front face of a photo frame block.
- *
- * Coordinate system (FACING=SOUTH, i.e. default model orientation):
- *   - Model occupies [2,4,0]→[14,12,2] in block units (12×8 = 3:2 landscape).
- *   - Photo quad drawn at z = 2/16 + ε, covering the full model face.
- *   - Matrix is rotated to match the block's FACING before drawing.
- */
 @Environment(EnvType.CLIENT)
-public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoFrameBlockEntity> {
+public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoFrameBlockEntity, PhotoFrameBlockEntityRenderer.State> {
 
-    // Inner black area of the 16×16 frame texture (px 2..13) mapped onto the 12×8 face:
-    // X: 2+(2/16)*12 = 3.5, X: 2+(14/16)*12 = 12.5  →  9 px wide
-    // Y: 12-(2/16)*8 = 11,  Y: 12-(14/16)*8 = 5      →  6 px tall  (3:2)
     private static final float X0 = 3.5f / 16f;
     private static final float X1 = 12.5f / 16f;
     private static final float Y0 = 5f  / 16f;
     private static final float Y1 = 11f / 16f;
-    private static final float Z  = 2f / 16f + 0.001f; // just in front of model south face
+    private static final float Z  = 2f / 16f + 0.001f;
 
     public PhotoFrameBlockEntityRenderer(BlockEntityRendererProvider.Context ctx) {}
 
     @Override
-    public void render(PhotoFrameBlockEntity entity, float tickDelta, PoseStack matrices,
-                       MultiBufferSource vertexConsumers, int light, int overlay) {
+    public State createRenderState() {
+        return new State();
+    }
+
+    @Override
+    public void extractRenderState(PhotoFrameBlockEntity entity, State state, float partialTick,
+                                   Vec3 cameraPos, ModelFeatureRenderer.CrumblingOverlay crumbling) {
+        BlockEntityRenderState.extractBase(entity, state, crumbling);
         PhotoData photo = entity.getPhotoData();
-        if (photo == null) return;
+        state.texId = photo != null ? PhotoTextureCache.getOrLoad(photo.id()) : null;
+        state.facing = entity.getBlockState().getValue(PhotoFrameBlock.FACING);
+    }
 
-        UUID photoId = photo.id();
-        ResourceLocation texId = PhotoTextureCache.getOrLoad(photoId);
-        if (texId == null) return;
-
-        Direction facing = entity.getBlockState().getValue(PhotoFrameBlock.FACING);
+    @Override
+    public void submit(State state, PoseStack matrices, SubmitNodeCollector nodes, CameraRenderState cameraState) {
+        if (state.texId == null) return;
 
         matrices.pushPose();
-        // Rotate around the block centre to align with the block's facing direction.
         matrices.translate(0.5, 0.5, 0.5);
-        matrices.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-facing.toYRot()));
+        matrices.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-state.facing.toYRot()));
         matrices.translate(-0.5, -0.5, -0.5);
 
-        PoseStack.Pose entry = matrices.last();
-        VertexConsumer vc = vertexConsumers.getBuffer(RenderType.entityCutoutNoCull(texId));
+        int light = state.lightCoords;
+        int overlay = OverlayTexture.NO_OVERLAY;
+        float x0 = X0, x1 = X1, y0 = Y0, y1 = Y1, z = Z;
 
-        // Quad facing +Z (south) – CCW winding from viewer looking in −Z direction.
-        // UV: (0,0) = top-left of image, (1,1) = bottom-right.
-        vc.vertex(entry, X0, Y0, Z).setColor(255, 255, 255, 255).setUv(0f, 1f).setOverlay(overlay).setLight(light).setNormal(entry, 0f, 0f, 1f);
-        vc.vertex(entry, X1, Y0, Z).setColor(255, 255, 255, 255).setUv(1f, 1f).setOverlay(overlay).setLight(light).setNormal(entry, 0f, 0f, 1f);
-        vc.vertex(entry, X1, Y1, Z).setColor(255, 255, 255, 255).setUv(1f, 0f).setOverlay(overlay).setLight(light).setNormal(entry, 0f, 0f, 1f);
-        vc.vertex(entry, X0, Y1, Z).setColor(255, 255, 255, 255).setUv(0f, 0f).setOverlay(overlay).setLight(light).setNormal(entry, 0f, 0f, 1f);
+        nodes.submitCustomGeometry(matrices, RenderTypes.entityCutout(state.texId), (pose, vc) -> {
+            vc.addVertex(pose, x0, y0, z).setColor(255, 255, 255, 255).setUv(0f, 1f).setOverlay(overlay).setLight(light).setNormal(pose, 0f, 0f, 1f);
+            vc.addVertex(pose, x1, y0, z).setColor(255, 255, 255, 255).setUv(1f, 1f).setOverlay(overlay).setLight(light).setNormal(pose, 0f, 0f, 1f);
+            vc.addVertex(pose, x1, y1, z).setColor(255, 255, 255, 255).setUv(1f, 0f).setOverlay(overlay).setLight(light).setNormal(pose, 0f, 0f, 1f);
+            vc.addVertex(pose, x0, y1, z).setColor(255, 255, 255, 255).setUv(0f, 0f).setOverlay(overlay).setLight(light).setNormal(pose, 0f, 0f, 1f);
+        });
 
         matrices.popPose();
+    }
+
+    public static class State extends BlockEntityRenderState {
+        public Identifier texId;
+        public Direction facing;
     }
 }

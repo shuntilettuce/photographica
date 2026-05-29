@@ -5,7 +5,7 @@ import dev.hitom.photographica.component.SdCardData;
 import dev.hitom.photographica.screen.PrinterScreenHandler;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -15,12 +15,9 @@ import net.minecraft.world.item.ItemStack;
 public class PrinterScreen extends AbstractContainerScreen<PrinterScreenHandler> {
 
     public PrinterScreen(PrinterScreenHandler handler, Inventory playerInventory, Component title) {
-        super(handler, playerInventory, title);
-        this.imageWidth  = 176;
-        this.imageHeight = 176;
+        super(handler, playerInventory, title, 176, 176);
     }
 
-    @Override
     protected void init() {
         super.init();
         int x = this.leftPos, y = this.topPos;
@@ -30,8 +27,7 @@ public class PrinterScreen extends AbstractContainerScreen<PrinterScreenHandler>
                 b -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 1)));
     }
 
-    @Override
-    protected void renderBg(GuiGraphics ctx, float delta, int mouseX, int mouseY) {
+    public void extractContents(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         int x = this.leftPos, y = this.topPos, w = imageWidth, h = imageHeight;
 
         GuiHelper.drawPanel(ctx, x, y, w, h);
@@ -66,31 +62,30 @@ public class PrinterScreen extends AbstractContainerScreen<PrinterScreenHandler>
     }
 
     @Override
-    public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
-        this.renderBackground(ctx, mouseX, mouseY, delta);
-        super.render(ctx, mouseX, mouseY, delta);
-        this.renderTooltip(ctx, mouseX, mouseY);
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+        this.extractBackground(ctx, mouseX, mouseY, delta);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
+        this.extractTooltip(ctx, mouseX, mouseY);
     }
 
-    @Override
-    protected void renderLabels(GuiGraphics ctx, int mouseX, int mouseY) {
+    protected void extractLabels(GuiGraphicsExtractor ctx, int mouseX, int mouseY) {
         // Pip + title
         ctx.fill(3, 5, 6, 8, GuiHelper.SAFELIGHT);
-        ctx.drawString(font, Component.literal("PRINTER"), 9, 5, GuiHelper.CREAM, false);
+        ctx.text(font, Component.literal("PRINTER"), 9, 5, GuiHelper.CREAM, false);
 
         // LCD text top-right (format)
-        ctx.drawString(font, Component.literal("JPG"), imageWidth - 41, 4, GuiHelper.EMBER, false);
+        ctx.text(font, Component.literal("JPG"), imageWidth - 41, 4, GuiHelper.EMBER, false);
 
         // Left mini-LCD labels
-        ctx.drawString(font, Component.literal("USB-C"), 8, 37, GuiHelper.SAFELIGHT, false);
-        ctx.drawString(font, Component.literal("A6"),    8, 47, GuiHelper.EMBER,     false);
+        ctx.text(font, Component.literal("USB-C"), 8, 37, GuiHelper.SAFELIGHT, false);
+        ctx.text(font, Component.literal("A6"),    8, 47, GuiHelper.EMBER,     false);
 
         // Slot labels (BRASS_BRIGHT, above slots)
-        ctx.drawString(font, Component.literal("SD"),    38, 24, GuiHelper.BRASS_BRIGHT, false);
-        ctx.drawString(font, Component.literal("PAPER"), 74, 24, GuiHelper.BRASS_BRIGHT, false);
+        ctx.text(font, Component.literal("SD"),    38, 24, GuiHelper.BRASS_BRIGHT, false);
+        ctx.text(font, Component.literal("PAPER"), 74, 24, GuiHelper.BRASS_BRIGHT, false);
 
         // Right of paper slot: queue label + photo count
-        ctx.drawString(font, Component.literal("QUEUE"), 102, 36, GuiHelper.CREAM_DIM, false);
+        ctx.text(font, Component.literal("QUEUE"), 102, 36, GuiHelper.CREAM_DIM, false);
 
         // Photo count from SD card
         ItemStack sd = this.menu.getSlot(0).getItem();
@@ -98,12 +93,12 @@ public class PrinterScreen extends AbstractContainerScreen<PrinterScreenHandler>
             SdCardData data = sd.getOrDefault(ModDataComponents.SD_CARD, SdCardData.EMPTY);
             if (!data.isEmpty()) {
                 String count = data.photos().size() + "ph";
-                ctx.drawString(font, Component.literal(count), 104, 45, GuiHelper.EMBER, false);
+                ctx.text(font, Component.literal(count), 104, 45, GuiHelper.EMBER, false);
             }
         }
 
         // Nameplate text
-        ctx.drawCenteredString(font,
+        ctx.centeredText(font,
                 Component.literal("P-7 · DYE SUBLIMATION"),
                 imageWidth / 2, 82, GuiHelper.CREAM_DIM);
     }

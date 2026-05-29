@@ -5,7 +5,7 @@ import dev.hitom.photographica.component.CameraSettings;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.util.UUID;
 
@@ -14,7 +14,7 @@ import java.util.UUID;
  */
 public record CreatePhotoPayload(UUID id, CameraSettings settings) implements CustomPacketPayload {
 	public static final CustomPacketPayload.Type<CreatePhotoPayload> ID =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(Photographica.MOD_ID, "create_photo"));
+			new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(Photographica.MOD_ID, "create_photo"));
 
 	public static final StreamCodec<RegistryFriendlyByteBuf, CreatePhotoPayload> CODEC = new StreamCodec<>() {
 		@Override

@@ -2,7 +2,7 @@ package dev.shunti.snapmatica.client;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -117,15 +117,15 @@ public class CameraScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, 0xC0101010);
     }
 
     @Override
-    public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
-        renderBackground(ctx, mouseX, mouseY, delta);
-        ctx.drawCenteredString(font, Component.literal("SNAPMATICA CAMERA"), width / 2, 10, 0xFFE8DCC4);
-        super.render(ctx, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+        extractBackground(ctx, mouseX, mouseY, delta);
+        ctx.centeredText(font, Component.literal("SNAPMATICA CAMERA"), width / 2, 10, 0xFFE8DCC4);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
     }
 
     @Override

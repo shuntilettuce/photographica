@@ -17,7 +17,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -66,7 +66,6 @@ public class FilmCameraScreen extends Screen {
         this.settings = FilmCameraItem.getSettings(stack);
     }
 
-    @Override
     protected void init() {
         int cx = width / 2;
         int top = height / 2 - 110;
@@ -247,10 +246,10 @@ public class FilmCameraScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics ctx, int mouseX, int mouseY, float delta) {}
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {}
 
     @Override
-    public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, 0xFF101010);
 
         // Draw dark panel background
@@ -285,12 +284,12 @@ public class FilmCameraScreen extends Screen {
                     + "  ·  " + wound;
             statusColor = GuiHelper.CREAM;
         }
-        ctx.drawCenteredString(font, Component.literal(status), cx, py + 216, statusColor);
+        ctx.centeredText(font, Component.literal(status), cx, py + 216, statusColor);
 
-        super.render(ctx, mouseX, mouseY, delta);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
 
         // Title text on nameplate
-        ctx.drawCenteredString(font, Component.literal("FILM CAMERA"), cx, py + 6, GuiHelper.CREAM);
+        ctx.centeredText(font, Component.literal("FILM CAMERA"), cx, py + 6, GuiHelper.CREAM);
     }
 
     /** Sends pending settings to the server without closing the screen. */
@@ -317,11 +316,9 @@ public class FilmCameraScreen extends Screen {
         Map<Integer, Integer> result = new LinkedHashMap<>();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return result;
-        for (ItemStack s : mc.player.getInventory().items) {
-            if (s.getItem() instanceof FilmRollItem fr)
-                result.merge(fr.filmType(), s.getCount(), Integer::sum);
-        }
-        for (ItemStack s : mc.player.getInventory().offhand) {
+        net.minecraft.world.entity.player.Inventory inv = mc.player.getInventory();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack s = inv.getItem(i);
             if (s.getItem() instanceof FilmRollItem fr)
                 result.merge(fr.filmType(), s.getCount(), Integer::sum);
         }
@@ -335,10 +332,9 @@ public class FilmCameraScreen extends Screen {
         kinds.add(settings.lensType());
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {
-            for (ItemStack s : mc.player.getInventory().items) {
-                if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
-            }
-            for (ItemStack s : mc.player.getInventory().offhand) {
+            net.minecraft.world.entity.player.Inventory inv2 = mc.player.getInventory();
+            for (int i = 0; i < inv2.getContainerSize(); i++) {
+                ItemStack s = inv2.getItem(i);
                 if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
             }
         }

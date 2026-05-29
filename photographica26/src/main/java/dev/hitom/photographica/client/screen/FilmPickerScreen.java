@@ -5,7 +5,7 @@ import dev.hitom.photographica.network.LoadFilmPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -41,7 +41,6 @@ public class FilmPickerScreen extends Screen {
         return HEADER_H + types.size() * ROW_H + 6 + ROW_H + PAD;
     }
 
-    @Override
     protected void init() {
         int px = width  / 2 - PANEL_W / 2;
         int py = height / 2 - panelH() / 2;
@@ -71,10 +70,10 @@ public class FilmPickerScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics ctx, int mouseX, int mouseY, float delta) {}
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {}
 
     @Override
-    public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         int px = width  / 2 - PANEL_W / 2;
         int py = height / 2 - panelH() / 2;
 
@@ -84,10 +83,10 @@ public class FilmPickerScreen extends Screen {
         GuiHelper.drawPanel(ctx, px, py, PANEL_W, panelH());
         GuiHelper.drawNameplate(ctx, px + 6, py + 5, PANEL_W - 12);
         GuiHelper.drawRule(ctx, px + 6, py + 17, PANEL_W - 12);
-        ctx.drawCenteredString(font,
+        ctx.centeredText(font,
                 Component.literal("フィルム選択"), width / 2, py + 6, GuiHelper.CREAM);
 
-        super.render(ctx, mouseX, mouseY, delta);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
     }
 
     @Override

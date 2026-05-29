@@ -5,8 +5,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 /**
  * HUD overlay for the Camcorder item.
@@ -32,7 +31,7 @@ public final class VideoRecorderHud {
     private static final long DONE_HOLD_MS  = 2000L;
     private static final long DONE_FADE_MS  = 3000L;
 
-    public static void render(GuiGraphics ctx, net.fabricmc.fabric.api.client.rendering.v1.DeltaTracker tickCounter) {
+    public static void extractRenderState(GuiGraphicsExtractor ctx, net.minecraft.client.DeltaTracker tickCounter) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.options.hideGui || mc.screen != null) return;
 
@@ -47,7 +46,7 @@ public final class VideoRecorderHud {
 
     // ── Recording banner ───────────────────────────────────────────────────────
 
-    private static void renderRecording(GuiGraphics ctx, Minecraft mc) {
+    private static void renderRecording(GuiGraphicsExtractor ctx, Minecraft mc) {
         Font tr = mc.font;
         int sw = ctx.guiWidth();
 
@@ -74,13 +73,13 @@ public final class VideoRecorderHud {
         int x = sw - bannerW - 8;  // top-right corner
 
         ctx.fill(x - 2, y - 2, x + bannerW, y + 10, BG_DARK);
-        ctx.drawString(tr, recLabel,  x + padding,           y, RED_BRIGHT, false);
-        ctx.drawString(tr, timeLabel, x + padding + w1 + 8,  y, timeColor,  false);
+        ctx.text(tr, recLabel,  x + padding,           y, RED_BRIGHT, false);
+        ctx.text(tr, timeLabel, x + padding + w1 + 8,  y, timeColor,  false);
     }
 
     // ── Post-processing banner ─────────────────────────────────────────────────
 
-    private static void renderPostProcessing(GuiGraphics ctx, Minecraft mc) {
+    private static void renderPostProcessing(GuiGraphicsExtractor ctx, Minecraft mc) {
         Font tr = mc.font;
         int sw  = ctx.guiWidth();
 
@@ -97,7 +96,7 @@ public final class VideoRecorderHud {
         ctx.fill(panelX, panelY, panelX + panelW, panelY + panelH, BG_DARK);
 
         // Message text
-        ctx.drawCenteredString(tr, "⚙ " + msg,
+        ctx.centeredText(tr, "⚙ " + msg,
                 sw / 2, panelY + 4, CREAM);
 
         // Progress bar
@@ -110,7 +109,7 @@ public final class VideoRecorderHud {
 
     // ── Done banner ────────────────────────────────────────────────────────────
 
-    private static void renderDone(GuiGraphics ctx, Minecraft mc) {
+    private static void renderDone(GuiGraphicsExtractor ctx, Minecraft mc) {
         long now  = System.currentTimeMillis();
         long age  = now - VideoRecorder.getDoneAtMs();
         long total = DONE_HOLD_MS + DONE_FADE_MS;
@@ -135,7 +134,7 @@ public final class VideoRecorderHud {
         String msg = VideoRecorder.getPpMessage();
 
         int col = ((alpha << 24) & 0xFF000000) | (GREEN_SOFT & 0x00FFFFFF);
-        ctx.drawCenteredString(tr, msg, sw / 2, 12, col);
+        ctx.centeredText(tr, msg, sw / 2, 12, col);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

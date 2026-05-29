@@ -13,7 +13,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.network.chat.Component;
 
@@ -42,7 +42,7 @@ public final class ViewfinderHud {
 	private static final int SAFELIGHT      = 0xFFC2362B;
 	private static final int EMBER          = 0xFFE08A3C;
 
-	public static void render(GuiGraphics ctx, net.fabricmc.fabric.api.client.rendering.v1.DeltaTracker tickCounter) {
+	public static void extractRenderState(GuiGraphicsExtractor ctx, net.minecraft.client.DeltaTracker tickCounter) {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null || mc.options.hideGui) return;
 		// Viewfinder only active while the player holds Shift
@@ -133,7 +133,7 @@ public final class ViewfinderHud {
 				SHUTTERS[clampIdx(s.shutterSpeedIdx(), SHUTTERS.length)],
 				s.iso(),
 				focalPart);
-		ctx.drawString(tr, exposure, fx + 6, fy2 - tr.lineHeight - 14, COLOR_TEXT, true);
+		ctx.text(tr, exposure, fx + 6, fy2 - tr.lineHeight - 14, COLOR_TEXT, true);
 
 		// Exposure meter — horizontal scale centred in the frame, ±3 EV range
 		renderExposureMeter(ctx, s, fx, fx2, fy2);
@@ -144,17 +144,17 @@ public final class ViewfinderHud {
 		String hint2 = "Ctrl+Alt⟳ MF距離";
 		int hint1W = tr.width(hint1);
 		int hint2W = tr.width(hint2);
-		ctx.drawString(tr, hint1, fx2 - hint1W - 6, fy2 - tr.lineHeight * 2 - 16, 0x80FFFFFF, true);
-		ctx.drawString(tr, hint2, fx2 - hint2W - 6, fy2 - tr.lineHeight - 14, 0x80FFFFFF, true);
+		ctx.text(tr, hint1, fx2 - hint1W - 6, fy2 - tr.lineHeight * 2 - 16, 0x80FFFFFF, true);
+		ctx.text(tr, hint2, fx2 - hint2W - 6, fy2 - tr.lineHeight - 14, 0x80FFFFFF, true);
 
 		// Lens label (top-left of frame)
-		ctx.drawString(tr, LensKind.displayName(s.lensType()), fx + 6, fy + 4, COLOR_TEXT_DIM, true);
+		ctx.text(tr, LensKind.displayName(s.lensType()), fx + 6, fy + 4, COLOR_TEXT_DIM, true);
 
 		// Hand-shake warning — shown when shutter is slower than the safe speed (1/focal_length)
 		if (hasLens) {
 			double safeShutter = 1.0 / s.focalLengthMm();
 			if (s.shutterSeconds() > safeShutter * 1.5) {
-				ctx.drawString(tr, "⚠ ブレ", fx + 6, fy + 4 + tr.lineHeight + 2, 0xFFFF5555, true);
+				ctx.text(tr, "⚠ ブレ", fx + 6, fy + 4 + tr.lineHeight + 2, 0xFFFF5555, true);
 			}
 		}
 
@@ -165,14 +165,14 @@ public final class ViewfinderHud {
 		String focusLabel = focusLabels[Math.max(0, Math.min(focusLabels.length - 1, s.focusMode()))];
 		String modeStr = expLabel + " | " + focusLabel;
 		int modeLabelY = fy + 4 + tr.lineHeight * 2 + 4;
-		ctx.drawString(tr, modeStr, fx + 6, modeLabelY, 0xFFCCCCFF, true);
+		ctx.text(tr, modeStr, fx + 6, modeLabelY, 0xFFCCCCFF, true);
 
 		// Hand indicator (top-right). Mirrorless shows "EVF" badge before the hand label.
 		String handLabel = offhand ? "OFF" : "MAIN";
 		String handPrefix = isMirrorless ? "§bEVF §r" : "";
 		String handFull = handPrefix + handLabel;
 		int handW = tr.width(Component.literal(handFull));
-		ctx.drawString(tr, handFull, fx2 - handW - 6, fy + 4, COLOR_TEXT_DIM, true);
+		ctx.text(tr, handFull, fx2 - handW - 6, fy + 4, COLOR_TEXT_DIM, true);
 
 		// Film state — frame counter and wind indicator (top-right of frame, below hand label)
 		if (isFilm && film != null) {
@@ -190,12 +190,12 @@ public final class ViewfinderHud {
 				color = 0xFFFFFFFF;
 			}
 			int fw = tr.width(Component.literal(filmLabel));
-			ctx.drawString(tr, filmLabel, fx2 - fw - 6, fy + 4 + tr.lineHeight + 2, color, true);
+			ctx.text(tr, filmLabel, fx2 - fw - 6, fy + 4 + tr.lineHeight + 2, color, true);
 
 			if (film.totalExposures() > 0 && !film.isExposed() && !film.wound()) {
 				String w = "⚠ 巻き上げてください";
 				int ww = tr.width(w);
-				ctx.drawString(tr, w, (fx + fx2 - ww) / 2, fy2 - tr.lineHeight - 32, 0xFFFFAA00, true);
+				ctx.text(tr, w, (fx + fx2 - ww) / 2, fy2 - tr.lineHeight - 32, 0xFFFFAA00, true);
 			}
 		}
 
@@ -203,10 +203,10 @@ public final class ViewfinderHud {
 		if (!hasLens) {
 			String warn = "⚠ レンズが取り付けられていません";
 			int ww = tr.width(warn);
-			ctx.drawString(tr, warn, (fx + fx2 - ww) / 2, fy + frameH / 2 - tr.lineHeight - 2, 0xFFFF5555, true);
+			ctx.text(tr, warn, (fx + fx2 - ww) / 2, fy + frameH / 2 - tr.lineHeight - 2, 0xFFFF5555, true);
 			String lensHint = "操作設定でキーを割り当てて → レンズ";
 			int hw = tr.width(lensHint);
-			ctx.drawString(tr, lensHint, (fx + fx2 - hw) / 2, fy + frameH / 2 + 4, COLOR_TEXT_DIM, true);
+			ctx.text(tr, lensHint, (fx + fx2 - hw) / 2, fy + frameH / 2 + 4, COLOR_TEXT_DIM, true);
 		}
 
 		// Self-timer countdown
@@ -217,7 +217,7 @@ public final class ViewfinderHud {
 			int countColor = remSec <= 1 ? 0xFFFF4444 : 0xFFFFFFFF;
 			ctx.pose().pushMatrix();
 			ctx.pose().scale(3.0f, 3.0f);
-			ctx.drawString(tr, countStr,
+			ctx.text(tr, countStr,
 					(sw / 2 - tr.width(countStr) * 3 / 2) / 3,
 					(sh / 2 - tr.lineHeight * 3 / 2) / 3 - 20,
 					countColor, true);
@@ -228,7 +228,7 @@ public final class ViewfinderHud {
 	/**
 	 * Renders a classic camera exposure meter at the bottom of the viewfinder.
 	 */
-	private static void renderExposureMeter(GuiGraphics ctx, dev.hitom.photographica.component.CameraSettings s,
+	private static void renderExposureMeter(GuiGraphicsExtractor ctx, dev.hitom.photographica.component.CameraSettings s,
 	                                        int fx, int fx2, int fy2) {
 		final int METER_W = 120;
 		int meterX  = (fx + fx2 - METER_W) / 2;
@@ -258,7 +258,7 @@ public final class ViewfinderHud {
 	/**
 	 * Draws an L-shaped corner bracket anchored at (ax, ay) extending in (dx, dy) direction.
 	 */
-	private static void drawBracket(GuiGraphics ctx, int ax, int ay, int len, int thick,
+	private static void drawBracket(GuiGraphicsExtractor ctx, int ax, int ay, int len, int thick,
 	                                int dx, int dy, int color) {
 		// Horizontal stroke
 		int hx1 = dx > 0 ? ax : ax - len;
@@ -294,7 +294,7 @@ public final class ViewfinderHud {
 	/**
 	 * EVF live preview overlays for mirrorless cameras.
 	 */
-	private static void renderEvfPreview(GuiGraphics ctx, CameraSettings s,
+	private static void renderEvfPreview(GuiGraphicsExtractor ctx, CameraSettings s,
 	                                     int fx, int fy, int fx2, int fy2) {
 		// --- Exposure tint ---
 		double ev = s.evDeviation();

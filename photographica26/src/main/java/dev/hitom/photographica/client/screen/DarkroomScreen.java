@@ -3,7 +3,7 @@ package dev.hitom.photographica.client.screen;
 import dev.hitom.photographica.screen.DarkroomScreenHandler;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -12,12 +12,9 @@ import net.minecraft.world.entity.player.Inventory;
 public class DarkroomScreen extends AbstractContainerScreen<DarkroomScreenHandler> {
 
     public DarkroomScreen(DarkroomScreenHandler handler, Inventory playerInventory, Component title) {
-        super(handler, playerInventory, title);
-        this.imageWidth  = 176;
-        this.imageHeight = 186;
+        super(handler, playerInventory, title, 176, 186);
     }
 
-    @Override
     protected void init() {
         super.init();
 
@@ -28,8 +25,7 @@ public class DarkroomScreen extends AbstractContainerScreen<DarkroomScreenHandle
                 b -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 1)));
     }
 
-    @Override
-    protected void renderBg(GuiGraphics ctx, float delta, int mouseX, int mouseY) {
+    public void extractContents(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         int x = this.leftPos, y = this.topPos, w = imageWidth, h = imageHeight;
 
         GuiHelper.drawPanel(ctx, x, y, w, h);
@@ -70,39 +66,38 @@ public class DarkroomScreen extends AbstractContainerScreen<DarkroomScreenHandle
     }
 
     @Override
-    public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
-        this.renderBackground(ctx, mouseX, mouseY, delta);
-        super.render(ctx, mouseX, mouseY, delta);
-        this.renderTooltip(ctx, mouseX, mouseY);
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+        this.extractBackground(ctx, mouseX, mouseY, delta);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
+        this.extractTooltip(ctx, mouseX, mouseY);
     }
 
-    @Override
-    protected void renderLabels(GuiGraphics ctx, int mouseX, int mouseY) {
+    protected void extractLabels(GuiGraphicsExtractor ctx, int mouseX, int mouseY) {
         // Pip + title
         ctx.fill(3, 5, 6, 8, GuiHelper.SAFELIGHT);
-        ctx.drawString(font, Component.literal("PORTABLE DARKROOM"), 9, 5, GuiHelper.CREAM, false);
+        ctx.text(font, Component.literal("PORTABLE DARKROOM"), 9, 5, GuiHelper.CREAM, false);
 
         // LCD text "SAFE"
-        ctx.drawString(font, Component.literal("SAFE"),
+        ctx.text(font, Component.literal("SAFE"),
                 imageWidth - 41, 4, GuiHelper.SAFELIGHT, false);
 
         // Slot labels
-        ctx.drawString(font, Component.literal("FILM"),  43, 45, GuiHelper.CREAM_DIM, false);
-        ctx.drawString(font, Component.literal("CHEM"), 132, 45, GuiHelper.EMBER,     false);
+        ctx.text(font, Component.literal("FILM"),  43, 45, GuiHelper.CREAM_DIM, false);
+        ctx.text(font, Component.literal("CHEM"), 132, 45, GuiHelper.EMBER,     false);
 
         // Camera slot labels
-        ctx.drawString(font, Component.literal("CAMERA"), 100, 54, GuiHelper.BRASS_BRIGHT, false);
-        ctx.drawString(font, Component.literal("IN"),       50, 54, GuiHelper.CREAM_DIM,   false);
+        ctx.text(font, Component.literal("CAMERA"), 100, 54, GuiHelper.BRASS_BRIGHT, false);
+        ctx.text(font, Component.literal("IN"),       50, 54, GuiHelper.CREAM_DIM,   false);
 
         // Camera loaded pip + status text
         boolean cameraLoaded = this.menu.getSlot(4).hasItem();
         ctx.fill(72, 58, 75, 61, cameraLoaded ? GuiHelper.SAFELIGHT : GuiHelper.PIP_OFF);
         if (cameraLoaded) {
-            ctx.drawString(font, Component.literal("LOADED"), 100, 62, GuiHelper.CREAM_DIM, false);
+            ctx.text(font, Component.literal("LOADED"), 100, 62, GuiHelper.CREAM_DIM, false);
         }
 
         // Nameplate text
-        ctx.drawCenteredString(font,
+        ctx.centeredText(font,
                 Component.literal("DR-1 · 35MM CHEMICAL BATH"),
                 imageWidth / 2, 95, GuiHelper.CREAM_DIM);
     }

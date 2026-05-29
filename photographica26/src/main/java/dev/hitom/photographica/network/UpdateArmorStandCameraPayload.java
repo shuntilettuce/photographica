@@ -5,11 +5,11 @@ import dev.hitom.photographica.component.CameraSettings;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public record UpdateArmorStandCameraPayload(int entityId, CameraSettings settings) implements CustomPacketPayload {
 	public static final CustomPacketPayload.Type<UpdateArmorStandCameraPayload> ID =
-			new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(Photographica.MOD_ID, "update_armor_stand_camera"));
+			new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(Photographica.MOD_ID, "update_armor_stand_camera"));
 
 	public static final StreamCodec<RegistryFriendlyByteBuf, UpdateArmorStandCameraPayload> CODEC =
 			new StreamCodec<>() {

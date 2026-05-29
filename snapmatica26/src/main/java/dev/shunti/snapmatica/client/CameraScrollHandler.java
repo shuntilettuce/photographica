@@ -34,7 +34,7 @@ public final class CameraScrollHandler {
 
         int dir = delta > 0 ? 1 : -1;
 
-        long win = mc.getWindow().getWindow();
+        com.mojang.blaze3d.platform.Window win = mc.getWindow();
         boolean ctrl = InputConstants.isKeyDown(win, GLFW.GLFW_KEY_LEFT_CONTROL)
                 || InputConstants.isKeyDown(win, GLFW.GLFW_KEY_RIGHT_CONTROL);
         boolean alt = InputConstants.isKeyDown(win, GLFW.GLFW_KEY_LEFT_ALT)

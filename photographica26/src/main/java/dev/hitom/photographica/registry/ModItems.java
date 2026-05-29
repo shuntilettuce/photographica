@@ -15,17 +15,18 @@ import dev.hitom.photographica.item.PhotoItem;
 import dev.hitom.photographica.item.PhotoPaperItem;
 import dev.hitom.photographica.item.SdCardItem;
 import dev.hitom.photographica.item.VideoCameraItem;
-import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
+import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.equipment.EquipmentAsset;
+import net.minecraft.world.item.equipment.EquipmentAssets;
 import net.minecraft.world.item.equipment.Equippable;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.core.registries.Registries;
 
 import java.util.function.Function;
@@ -58,9 +59,9 @@ public final class ModItems {
 
 	private static Item reg(String name, Function<Item.Properties, Item> f) {
 		ResourceKey<Item> k = ResourceKey.create(Registries.ITEM,
-				ResourceLocation.fromNamespaceAndPath(Photographica.MOD_ID, name));
+				Identifier.fromNamespaceAndPath(Photographica.MOD_ID, name));
 		return Registry.register(BuiltInRegistries.ITEM,
-				ResourceLocation.fromNamespaceAndPath(Photographica.MOD_ID, name),
+				Identifier.fromNamespaceAndPath(Photographica.MOD_ID, name),
 				f.apply(new Item.Properties().setId(k)));
 	}
 
@@ -71,13 +72,13 @@ public final class ModItems {
 		return s.component(DataComponents.EQUIPPABLE,
 			Equippable.builder(EquipmentSlot.CHEST)
 				.setAsset(ResourceKey.create(
-					EquipmentAsset.REGISTRY_KEY,
-					ResourceLocation.fromNamespaceAndPath(Photographica.MOD_ID, "camera")))
+					EquipmentAssets.ROOT_ID,
+					Identifier.fromNamespaceAndPath(Photographica.MOD_ID, "camera")))
 				.build());
 	}
 
 	public static void register() {
-		ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.TOOLS_AND_UTILITIES).register(entries -> {
+		CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.TOOLS_AND_UTILITIES).register(entries -> {
 			entries.accept(VIDEO_CAMERA);
 			entries.accept(CAMERA);
 			entries.accept(MIRRORLESS_CAMERA);

@@ -31,16 +31,17 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.resources.ResourceLocation;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.minecraft.resources.Identifier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.item.ItemDisplayContext;
-import net.minecraft.client.sounds.PositionedSoundInstance;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.client.Options;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
@@ -79,28 +80,28 @@ public class PhotographicaClient implements ClientModInitializer {
 		MenuScreens.register(ModScreenHandlers.PRINTER, PrinterScreen::new);
 		MenuScreens.register(ModScreenHandlers.ENLARGER, EnlargerScreen::new);
 
-		KeyMapping.Category photographicaCategory = KeyMapping.Category.create(ResourceLocation.fromNamespaceAndPath("photographica", "photographica"));
-		KeyMapping settingsKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+		KeyMapping.Category photographicaCategory = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("photographica", "photographica"));
+		KeyMapping settingsKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.photographica.camera_settings",
-				net.minecraft.client.KeyMapping.Type.KEYSYM,
+				InputConstants.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				photographicaCategory
 		));
-		KeyMapping windKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+		KeyMapping windKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.photographica.wind_film",
-				net.minecraft.client.KeyMapping.Type.KEYSYM,
+				InputConstants.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				photographicaCategory
 		));
-		KeyMapping loadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+		KeyMapping loadSdCardKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.photographica.load_sd_card",
-				net.minecraft.client.KeyMapping.Type.KEYSYM,
+				InputConstants.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				photographicaCategory
 		));
-		KeyMapping unloadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+		KeyMapping unloadSdCardKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.photographica.unload_sd_card",
-				net.minecraft.client.KeyMapping.Type.KEYSYM,
+				InputConstants.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				photographicaCategory
 		));
@@ -132,7 +133,7 @@ public class PhotographicaClient implements ClientModInitializer {
 				}
 				if (stack.getItem() instanceof FilmCameraItem) {
 					ClientPlayNetworking.send(new WindFilmPayload());
-					client.getSoundManager().play(PositionedSoundInstance.ui(
+					client.getSoundManager().play(SimpleSoundInstance.forUI(
 							SoundEvents.LEVER_CLICK, 0.7f, 1.6f));
 				}
 			}
@@ -144,9 +145,9 @@ public class PhotographicaClient implements ClientModInitializer {
 			}
 		});
 
-		HudRenderCallback.EVENT.register(ViewfinderHud::render);
-		HudRenderCallback.EVENT.register(VideoRecorderHud::render);
-		HudRenderCallback.EVENT.register((ctx, tick) -> {
+		HudElementRegistry.addFirst(Identifier.fromNamespaceAndPath("photographica", "viewfinder"), ViewfinderHud::extractRenderState);
+		HudElementRegistry.addFirst(Identifier.fromNamespaceAndPath("photographica", "video_recorder"), VideoRecorderHud::extractRenderState);
+		HudElementRegistry.addFirst(Identifier.fromNamespaceAndPath("photographica", "flash"), (ctx, tick) -> {
 			long now = System.currentTimeMillis();
 
 			if (PhotoCapture.secondClickAtMs > 0 && now >= PhotoCapture.secondClickAtMs) {
@@ -174,7 +175,7 @@ public class PhotographicaClient implements ClientModInitializer {
 			}
 		});
 
-		WorldRenderEvents.END_MAIN.register(ctx -> {
+		LevelRenderEvents.END_MAIN.register(ctx -> {
 			PhotoCapture.onWorldRenderEnd();
 			VideoRecorder.onWorldRenderEnd();
 		});
@@ -191,17 +192,17 @@ public class PhotographicaClient implements ClientModInitializer {
 			Minecraft mc = Minecraft.getInstance();
 			if (mc.level == null || mc.player == null) return;
 			matrices.pushPose();
-			// Align with the body's current rotation (1.21.11 renamed rotate→applyTransform)
-			contextModel.body.applyTransform(matrices);
+			// Align with the body's current rotation
+			contextModel.body.translateAndRotate(matrices);
 			matrices.translate(0.0, 0.12, -0.175);
 			matrices.mulPose(com.mojang.math.Axis.XP.rotationDegrees(180f));
 			matrices.scale(0.35f, 0.35f, 0.35f);
-			// 1.21.11 renders items through an ItemRenderState submitted to the queue.
-			net.minecraft.client.renderer.item.ItemRenderState itemState =
-					new net.minecraft.client.renderer.item.ItemRenderState();
-			mc.getItemModelResolver().updateForLivingEntity(
+			// Render items through an ItemStackRenderState submitted to the queue.
+			net.minecraft.client.renderer.item.ItemStackRenderState itemState =
+					new net.minecraft.client.renderer.item.ItemStackRenderState();
+			mc.getItemModelResolver().updateForLiving(
 					itemState, stack, ItemDisplayContext.FIXED, mc.player);
-			itemState.render(matrices, queue, light, OverlayTexture.NO_OVERLAY, 0);
+			itemState.submit(matrices, queue, light, OverlayTexture.NO_OVERLAY, 0);
 			matrices.popPose();
 		}, ModItems.VIDEO_CAMERA, ModItems.CAMERA, ModItems.MIRRORLESS_CAMERA, ModItems.FILM_CAMERA);
 

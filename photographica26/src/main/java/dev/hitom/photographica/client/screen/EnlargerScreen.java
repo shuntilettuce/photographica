@@ -5,7 +5,7 @@ import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.screen.EnlargerScreenHandler;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -15,12 +15,9 @@ import net.minecraft.world.item.ItemStack;
 public class EnlargerScreen extends AbstractContainerScreen<EnlargerScreenHandler> {
 
     public EnlargerScreen(EnlargerScreenHandler handler, Inventory playerInventory, Component title) {
-        super(handler, playerInventory, title);
-        this.imageWidth  = 176;
-        this.imageHeight = 176;
+        super(handler, playerInventory, title, 176, 176);
     }
 
-    @Override
     protected void init() {
         super.init();
         int x = this.leftPos, y = this.topPos;
@@ -30,8 +27,7 @@ public class EnlargerScreen extends AbstractContainerScreen<EnlargerScreenHandle
                 b -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 1)));
     }
 
-    @Override
-    protected void renderBg(GuiGraphics ctx, float delta, int mouseX, int mouseY) {
+    public void extractContents(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         int x = this.leftPos, y = this.topPos, w = imageWidth, h = imageHeight;
 
         GuiHelper.drawPanel(ctx, x, y, w, h);
@@ -74,28 +70,27 @@ public class EnlargerScreen extends AbstractContainerScreen<EnlargerScreenHandle
     }
 
     @Override
-    public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
-        this.renderBackground(ctx, mouseX, mouseY, delta);
-        super.render(ctx, mouseX, mouseY, delta);
-        this.renderTooltip(ctx, mouseX, mouseY);
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+        this.extractBackground(ctx, mouseX, mouseY, delta);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
+        this.extractTooltip(ctx, mouseX, mouseY);
     }
 
-    @Override
-    protected void renderLabels(GuiGraphics ctx, int mouseX, int mouseY) {
+    protected void extractLabels(GuiGraphicsExtractor ctx, int mouseX, int mouseY) {
         // Pip + title
         ctx.fill(3, 5, 6, 8, GuiHelper.SAFELIGHT);
-        ctx.drawString(font, Component.literal("ENLARGER"), 9, 5, GuiHelper.CREAM, false);
+        ctx.text(font, Component.literal("ENLARGER"), 9, 5, GuiHelper.CREAM, false);
 
         // LCD text top-right (timer)
-        ctx.drawString(font, Component.literal("12s"), imageWidth - 41, 4, GuiHelper.EMBER, false);
+        ctx.text(font, Component.literal("12s"), imageWidth - 41, 4, GuiHelper.EMBER, false);
 
         // Left mini-LCD labels
-        ctx.drawString(font, Component.literal("f/8"), 8, 37, GuiHelper.SAFELIGHT, false);
-        ctx.drawString(font, Component.literal("12s"), 8, 47, GuiHelper.EMBER, false);
+        ctx.text(font, Component.literal("f/8"), 8, 37, GuiHelper.SAFELIGHT, false);
+        ctx.text(font, Component.literal("12s"), 8, 47, GuiHelper.EMBER, false);
 
         // Slot labels (BRASS_BRIGHT, above slots)
-        ctx.drawString(font, Component.literal("NEG"),   36, 24, GuiHelper.BRASS_BRIGHT, false);
-        ctx.drawString(font, Component.literal("PAPER"), 74, 24, GuiHelper.BRASS_BRIGHT, false);
+        ctx.text(font, Component.literal("NEG"),   36, 24, GuiHelper.BRASS_BRIGHT, false);
+        ctx.text(font, Component.literal("PAPER"), 74, 24, GuiHelper.BRASS_BRIGHT, false);
 
         // Film roll exposure count (on neg slot if film loaded)
         ItemStack film = this.menu.getSlot(0).getItem();
@@ -104,12 +99,12 @@ public class EnlargerScreen extends AbstractContainerScreen<EnlargerScreenHandle
             if (data != null && !data.exposures().isEmpty()) {
                 String count = data.exposures().size() + "fr";
                 int tx = 44 + 8 - font.width(count) / 2;
-                ctx.drawString(font, Component.literal(count), tx, 35, GuiHelper.EMBER, false);
+                ctx.text(font, Component.literal(count), tx, 35, GuiHelper.EMBER, false);
             }
         }
 
         // Nameplate text
-        ctx.drawCenteredString(font,
+        ctx.centeredText(font,
                 Component.literal("DURST M605 · COLD HEAD"),
                 imageWidth / 2, 82, GuiHelper.CREAM_DIM);
     }

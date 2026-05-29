@@ -194,7 +194,7 @@ public final class VideoRecorder {
 
         recording = true;
         if (mc.player != null)
-            mc.player.displayClientMessage(Component.literal("● REC 開始"), true);
+            mc.gui.setOverlayMessage(Component.literal("● REC 開始"), false);
     }
 
     public static void stopRecording() {
@@ -209,7 +209,7 @@ public final class VideoRecorder {
         // Restore the smooth-camera setting the player had before recording.
         mc.options.smoothCamera = prevSmoothCamera;
         if (mc.player != null)
-            mc.player.displayClientMessage(Component.literal("■ 録画停止 — 後処理中..."), true);
+            mc.gui.setOverlayMessage(Component.literal("■ 録画停止 — 後処理中..."), false);
 
         final List<FrameMeta> metas    = new ArrayList<>(frameMetas);
         final File            rawSnap  = rawDir;
@@ -300,8 +300,8 @@ public final class VideoRecorder {
         float ap  = VideoCameraItem.getSettings(recordingStack).aperture();
 
         Camera camera = mc.gameRenderer != null ? mc.gameRenderer.getMainCamera() : null;
-        float yaw   = (camera != null && camera.isInitialized()) ? camera.getYRot()   : mc.player.getYRot();
-        float pitch = (camera != null && camera.isInitialized()) ? camera.getXRot() : mc.player.getXRot();
+        float yaw   = (camera != null && camera.isInitialized()) ? camera.yRot()   : mc.player.getYRot();
+        float pitch = (camera != null && camera.isInitialized()) ? camera.xRot() : mc.player.getXRot();
 
         float deltaYaw, deltaPitch;
         if (prevFrameValid) {
@@ -340,8 +340,8 @@ public final class VideoRecorder {
         frameCount++;
         nextFrameMs = recordStartMs + (long)(frameCount * 1000.0 / currentFps);
         if (frameCount == currentFps * 60 && mc.player != null)
-            mc.player.displayClientMessage(Component.literal("⚠ 残り 1:00"), true);
-        Screenshot.grab(mc.getMainRenderTarget(), raw -> {
+            mc.gui.setOverlayMessage(Component.literal("⚠ 残り 1:00"), false);
+        Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> {
             if (raw == null) return;
             NativeImage cropped_ = cropTo16x9(raw);
             NativeImage frame_   = boxDownsample(cropped_, 1280);
@@ -850,14 +850,14 @@ public final class VideoRecorder {
         dir.delete();
     }
 
-    // In 1.21.11 NativeImage uses getPixelRGBA/setPixelRGBA.
+    // NativeImage.getPixel() returns ARGB; convert to ABGR for internal use.
     private static int getPixelAbgr(NativeImage img, int x, int y) {
-        int argb = img.getPixelRGBA(x, y);
+        int argb = img.getPixel(x, y);
         int a=(argb>>>24)&0xFF; int r=(argb>>>16)&0xFF; int g=(argb>>>8)&0xFF; int b=argb&0xFF;
         return (a<<24)|(b<<16)|(g<<8)|r;
     }
     private static void setPixelAbgr(NativeImage img, int x, int y, int abgr) {
         int a=(abgr>>>24)&0xFF; int b=(abgr>>>16)&0xFF; int g=(abgr>>>8)&0xFF; int r=abgr&0xFF;
-        img.setPixelRGBA(x, y, (a<<24)|(r<<16)|(g<<8)|b);
+        img.setPixel(x, y, (a<<24)|(r<<16)|(g<<8)|b);
     }
 }

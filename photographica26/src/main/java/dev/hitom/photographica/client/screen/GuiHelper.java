@@ -1,7 +1,7 @@
 package dev.hitom.photographica.client.screen;
 
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 class GuiHelper {
     // ── Safelight color palette (ARGB 0xAARRGGBB) ──────────────────────────────
@@ -27,12 +27,12 @@ class GuiHelper {
     static final int TEXT_DARK     = CREAM;
 
     // ── Convenience fill ────────────────────────────────────────────────────────
-    static void fill(GuiGraphics ctx, int x1, int y1, int x2, int y2, int color) {
+    static void fill(GuiGraphicsExtractor ctx, int x1, int y1, int x2, int y2, int color) {
         ctx.fill(x1, y1, x2, y2, color);
     }
 
     // ── Panel (main panel surface with bevel) ────────────────────────────────────
-    static void drawPanel(GuiGraphics ctx, int x, int y, int w, int h) {
+    static void drawPanel(GuiGraphicsExtractor ctx, int x, int y, int w, int h) {
         ctx.fill(x, y, x + w, y + h, PANEL);
         // outer border (brass)
         ctx.fill(x,         y,         x + w,     y + 1,     BRASS_DIM);
@@ -48,7 +48,7 @@ class GuiHelper {
 
     // ── Slot (normal, brass ring) ────────────────────────────────────────────────
     // ix,iy = top-left of the inner 16×16 area (absolute screen coords)
-    static void drawSlot(GuiGraphics ctx, int ix, int iy) {
+    static void drawSlot(GuiGraphicsExtractor ctx, int ix, int iy) {
         ctx.fill(ix - 2, iy - 2, ix + 18, iy + 18, PANEL_SHADOW);  // outer border
         ctx.fill(ix - 1, iy - 1, ix + 17, iy + 17, BRASS_DIM);     // brass ring
         ctx.fill(ix - 1, iy - 1, ix + 17, iy,      FRAME_LO);      // top bevel
@@ -59,7 +59,7 @@ class GuiHelper {
     }
 
     // ── Slot HOT (safelight red ring) ────────────────────────────────────────────
-    static void drawSlotHot(GuiGraphics ctx, int ix, int iy) {
+    static void drawSlotHot(GuiGraphicsExtractor ctx, int ix, int iy) {
         ctx.fill(ix - 2, iy - 2, ix + 18, iy + 18, PANEL_SHADOW);
         ctx.fill(ix - 1, iy - 1, ix + 17, iy + 17, SAFELIGHT_DIM);
         ctx.fill(ix - 1, iy - 1, ix + 17, iy,      FRAME_LO);
@@ -70,7 +70,7 @@ class GuiHelper {
     }
 
     // ── Slot EMBER (orange ring) ──────────────────────────────────────────────────
-    static void drawSlotEmber(GuiGraphics ctx, int ix, int iy) {
+    static void drawSlotEmber(GuiGraphicsExtractor ctx, int ix, int iy) {
         ctx.fill(ix - 2, iy - 2, ix + 18, iy + 18, PANEL_SHADOW);
         ctx.fill(ix - 1, iy - 1, ix + 17, iy + 17, EMBER_DIM);
         ctx.fill(ix - 1, iy - 1, ix + 17, iy,      FRAME_LO);
@@ -81,13 +81,13 @@ class GuiHelper {
     }
 
     // ── Rule (2px separator: shadow + highlight) ─────────────────────────────────
-    static void drawRule(GuiGraphics ctx, int x, int y, int w) {
+    static void drawRule(GuiGraphicsExtractor ctx, int x, int y, int w) {
         ctx.fill(x, y,     x + w, y + 1, PANEL_SHADOW);
         ctx.fill(x, y + 1, x + w, y + 2, PANEL_LIGHT);
     }
 
     // ── Nameplate (9px brass strip + 1px shadow) ─────────────────────────────────
-    static void drawNameplate(GuiGraphics ctx, int x, int y, int w) {
+    static void drawNameplate(GuiGraphicsExtractor ctx, int x, int y, int w) {
         ctx.fill(x, y,     x + w, y + 1, 0xFFEFC88A);   // top inner highlight
         ctx.fill(x, y + 1, x + w, y + 3, BRASS_BRIGHT); // bright brass
         ctx.fill(x, y + 3, x + w, y + 6, BRASS);        // mid brass
@@ -97,7 +97,7 @@ class GuiHelper {
     }
 
     // ── LCD display background ────────────────────────────────────────────────────
-    static void drawLcd(GuiGraphics ctx, int x, int y, int w, int h) {
+    static void drawLcd(GuiGraphicsExtractor ctx, int x, int y, int w, int h) {
         ctx.fill(x - 1, y - 1, x + w + 1, y + h + 1, BRASS_DIM);  // outer border
         ctx.fill(x, y, x + w, y + h, 0xFF1A0A06);                  // dark background
         ctx.fill(x, y, x + w, y + 1, 0xFF2A0D08);                  // inner top bevel
@@ -105,7 +105,7 @@ class GuiHelper {
     }
 
     // ── Well (engraved trough) ────────────────────────────────────────────────────
-    static void drawWell(GuiGraphics ctx, int x, int y, int w, int h) {
+    static void drawWell(GuiGraphicsExtractor ctx, int x, int y, int w, int h) {
         ctx.fill(x,         y,         x + w,     y + h,     0xFF110D0A);
         ctx.fill(x,         y,         x + w,     y + 1,     PANEL_SHADOW);
         ctx.fill(x,         y,         x + 1,     y + h,     PANEL_SHADOW);
@@ -118,22 +118,22 @@ class GuiHelper {
     static final int PIP_RED   = SAFELIGHT;
     static final int PIP_EMBER = EMBER;
 
-    static void drawPip(GuiGraphics ctx, int x, int y, int color) {
+    static void drawPip(GuiGraphicsExtractor ctx, int x, int y, int color) {
         ctx.fill(x, y, x + 3, y + 3, color);
     }
 
     // ── Separator alias (for legacy callers) ──────────────────────────────────────
-    static void drawSeparator(GuiGraphics ctx, int x, int y, int w) {
+    static void drawSeparator(GuiGraphicsExtractor ctx, int x, int y, int w) {
         drawRule(ctx, x, y, w);
     }
 
     // ── SlotBox alias (for legacy callers) ────────────────────────────────────────
-    static void drawSlotBox(GuiGraphics ctx, int x, int y) {
+    static void drawSlotBox(GuiGraphicsExtractor ctx, int x, int y) {
         drawSlot(ctx, x, y);
     }
 
     // ── Player inventory slot grid (36 slots: 3×9 main + 9 hotbar) ───────────────
-    static void drawPlayerInventory(GuiGraphics ctx, int panelX, int panelY, int invY, int hotbarY) {
+    static void drawPlayerInventory(GuiGraphicsExtractor ctx, int panelX, int panelY, int invY, int hotbarY) {
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
                 drawSlot(ctx, panelX + 8 + col * 18, panelY + invY + row * 18);

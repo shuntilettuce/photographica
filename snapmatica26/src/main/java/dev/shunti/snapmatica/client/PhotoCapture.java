@@ -64,7 +64,7 @@ public final class PhotoCapture {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        Screenshot.grab(mc.getMainRenderTarget(), raw -> processScreenshot(mc, raw));
+        Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> processScreenshot(mc, raw));
     }
 
     private static void processScreenshot(Minecraft mc, NativeImage raw) {
@@ -279,9 +279,8 @@ public final class PhotoCapture {
              |  clamp((int)(origA*inv+blrA*weight));
     }
 
-    // NativeImage in blaze3d 26.1 uses getPixelRGBA / setPixelRGBA (ABGR packed)
-    private static int getPixel(NativeImage img, int x, int y) { return img.getPixelRGBA(x, y); }
-    private static void setPixel(NativeImage img, int x, int y, int abgr) { img.setPixelRGBA(x, y, abgr); }
+    private static int getPixel(NativeImage img, int x, int y) { return img.getPixel(x, y); }
+    private static void setPixel(NativeImage img, int x, int y, int abgr) { img.setPixel(x, y, abgr); }
 
     private static float vignetteStrength(float aperture) {
         if (aperture <= 1.4f) return 0.70f; if (aperture <= 2.0f) return 0.55f;

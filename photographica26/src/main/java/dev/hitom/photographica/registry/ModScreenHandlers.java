@@ -7,7 +7,7 @@ import dev.hitom.photographica.screen.PrinterScreenHandler;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Registry;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.flag.FeatureFlags;
 
 public final class ModScreenHandlers {
@@ -16,21 +16,21 @@ public final class ModScreenHandlers {
     public static final MenuType<DarkroomScreenHandler> DARKROOM =
             Registry.register(
                     BuiltInRegistries.MENU,
-                    ResourceLocation.fromNamespaceAndPath(Photographica.MOD_ID, "darkroom"),
+                    Identifier.fromNamespaceAndPath(Photographica.MOD_ID, "darkroom"),
                     new MenuType<>(DarkroomScreenHandler::new, FeatureFlags.DEFAULT_FLAGS)
             );
 
     public static final MenuType<PrinterScreenHandler> PRINTER =
             Registry.register(
                     BuiltInRegistries.MENU,
-                    ResourceLocation.fromNamespaceAndPath(Photographica.MOD_ID, "printer"),
+                    Identifier.fromNamespaceAndPath(Photographica.MOD_ID, "printer"),
                     new MenuType<>(PrinterScreenHandler::new, FeatureFlags.DEFAULT_FLAGS)
             );
 
     public static final MenuType<EnlargerScreenHandler> ENLARGER =
             Registry.register(
                     BuiltInRegistries.MENU,
-                    ResourceLocation.fromNamespaceAndPath(Photographica.MOD_ID, "enlarger"),
+                    Identifier.fromNamespaceAndPath(Photographica.MOD_ID, "enlarger"),
                     new MenuType<>(EnlargerScreenHandler::new, FeatureFlags.DEFAULT_FLAGS)
             );
 

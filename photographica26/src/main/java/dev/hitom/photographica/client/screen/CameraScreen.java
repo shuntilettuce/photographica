@@ -14,7 +14,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -56,7 +56,6 @@ public class CameraScreen extends Screen {
         this.settings = CameraItem.getSettings(stack);
     }
 
-    @Override
     protected void init() {
         int cx = width / 2;
         int top = height / 2 - 123;
@@ -222,10 +221,10 @@ public class CameraScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics ctx, int mouseX, int mouseY, float delta) {}
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {}
 
     @Override
-    public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, 0xFF101010);
 
         // Draw dark panel background
@@ -243,10 +242,10 @@ public class CameraScreen extends Screen {
         // Rule below nameplate
         GuiHelper.drawRule(ctx, px + 6, py + 17, panelW - 12);
 
-        super.render(ctx, mouseX, mouseY, delta);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
 
         // Title text
-        ctx.drawCenteredString(font, Component.literal("CAMERA SETTINGS"), cx, py + 6, GuiHelper.CREAM);
+        ctx.centeredText(font, Component.literal("CAMERA SETTINGS"), cx, py + 6, GuiHelper.CREAM);
     }
 
     private void flushSettings() {
@@ -274,10 +273,9 @@ public class CameraScreen extends Screen {
         kinds.add(settings.lensType());
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {
-            for (ItemStack s : mc.player.getInventory().items) {
-                if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
-            }
-            for (ItemStack s : mc.player.getInventory().offhand) {
+            net.minecraft.world.entity.player.Inventory inv = mc.player.getInventory();
+            for (int i = 0; i < inv.getContainerSize(); i++) {
+                ItemStack s = inv.getItem(i);
                 if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
             }
         }

@@ -8,7 +8,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.UseAnim;
+import net.minecraft.world.item.ItemUseAnimation;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -35,8 +35,8 @@ public class DeveloperTankItem extends Item {
 	}
 
 	@Override
-	public UseAnim getUseAnimation(ItemStack stack) {
-		return UseAnim.NONE;
+	public ItemUseAnimation getUseAnimation(ItemStack stack) {
+		return ItemUseAnimation.NONE;
 	}
 
 	@Override
@@ -52,7 +52,7 @@ public class DeveloperTankItem extends Item {
 		int elapsed = USE_TICKS - remainingUseTicks;
 		int bars = elapsed * 10 / USE_TICKS;
 		String bar = "█".repeat(bars) + "░".repeat(10 - bars);
-		player.displayClientMessage(Component.literal("§b現像中... [" + bar + "]"), true);
+		net.minecraft.client.Minecraft.getInstance().gui.setOverlayMessage(Component.literal("§b現像中... [" + bar + "]"), false);
 	}
 
 	@Override

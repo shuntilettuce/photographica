@@ -4,7 +4,7 @@ import dev.hitom.photographica.Photographica;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 /**
  * Sent by the client when the player presses "取り出す" in a camera settings screen
@@ -13,7 +13,7 @@ import net.minecraft.resources.ResourceLocation;
  */
 public record UnequipCameraFromArmorStandPayload(int entityId) implements CustomPacketPayload {
     public static final CustomPacketPayload.Type<UnequipCameraFromArmorStandPayload> ID =
-            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(Photographica.MOD_ID, "unequip_camera_from_armor_stand"));
+            new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(Photographica.MOD_ID, "unequip_camera_from_armor_stand"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, UnequipCameraFromArmorStandPayload> CODEC =
             new StreamCodec<>() {

@@ -14,8 +14,8 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.BlockPos;
-import net.minecraft.storage.WriteView;
-import net.minecraft.storage.ReadView;
+import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.level.storage.ValueInput;
 import org.jetbrains.annotations.Nullable;
 
 public class DarkroomBlockEntity extends BlockEntity implements Container, MenuProvider {
@@ -84,14 +84,14 @@ public class DarkroomBlockEntity extends BlockEntity implements Container, MenuP
     }
 
     @Override
-    protected void writeData(WriteView view) {
-        super.writeData(view);
+    protected void saveAdditional(ValueOutput view) {
+        super.saveAdditional(view);
         ContainerHelper.saveAllItems(view, inventory);
     }
 
     @Override
-    protected void readData(ReadView view) {
-        super.readData(view);
+    protected void loadAdditional(ValueInput view) {
+        super.loadAdditional(view);
         ContainerHelper.loadAllItems(view, inventory);
     }
 }

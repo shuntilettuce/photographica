@@ -56,9 +56,9 @@ public final class EvfBlurRenderer {
     public static void captureDepth(int fbW, int fbH) {
         RenderTarget mainFb = Minecraft.getInstance().getMainRenderTarget();
         if (mainFb == null) return;
-        GpuTexture depthGpu = mainFb.getDepthAttachment();
+        GpuTexture depthGpu = mainFb.getDepthTexture();
         if (!(depthGpu instanceof GlTexture glDepth)) return;
-        int srcDepthId = glDepth.getId();
+        int srcDepthId = glDepth.glId();
         if (srcDepthId <= 0) return;
         int fw = mainFb.width;
         int fh = mainFb.height;
@@ -98,9 +98,9 @@ public final class EvfBlurRenderer {
 
         Minecraft mc = Minecraft.getInstance();
         RenderTarget mainFb = mc.getMainRenderTarget();
-        GpuTexture gpuTex = mainFb.getColorAttachment();
+        GpuTexture gpuTex = mainFb.getColorTexture();
         if (!(gpuTex instanceof GlTexture glTex)) return;
-        int mainTex = glTex.getId();
+        int mainTex = glTex.glId();
         if (mainTex == 0) return;
 
         int fbW = mainFb.width;

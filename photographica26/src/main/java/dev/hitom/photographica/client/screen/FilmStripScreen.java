@@ -8,13 +8,13 @@ import dev.hitom.photographica.component.PhotoData;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
 import java.io.File;
@@ -29,7 +29,7 @@ import java.util.List;
 @Environment(EnvType.CLIENT)
 public class FilmStripScreen extends Screen {
 
-    private record ThumbImage(ResourceLocation id, int texW, int texH, int guiW, int guiH) {}
+    private record ThumbImage(Identifier id, int texW, int texH, int guiW, int guiH) {}
 
     private static final String[] SHUTTERS = {
             "30\"", "15\"", "8\"", "4\"", "2\"", "1\"",
@@ -65,7 +65,6 @@ public class FilmStripScreen extends Screen {
         }
     }
 
-    @Override
     protected void init() {
         if (!exposures.isEmpty() && loadedForIndex != index) {
             loadThumb(exposures.get(index));
@@ -96,10 +95,10 @@ public class FilmStripScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics ctx, int mouseX, int mouseY, float delta) {}
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {}
 
     @Override
-    public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, 0xFF101010);
 
         int cx = width / 2;
@@ -109,12 +108,12 @@ public class FilmStripScreen extends Screen {
         GuiHelper.drawPanel(ctx, px, py, PANEL_W, PANEL_H);
         GuiHelper.drawNameplate(ctx, px + 6, py + 5, PANEL_W - 12);
         GuiHelper.drawRule(ctx, px + 6, py + 17, PANEL_W - 12);
-        ctx.drawCenteredString(font, Component.literal("NEGATIVE"), cx, py + 6, GuiHelper.BRASS_BRIGHT);
+        ctx.centeredText(font, Component.literal("NEGATIVE"), cx, py + 6, GuiHelper.BRASS_BRIGHT);
 
         if (exposures.isEmpty()) {
-            ctx.drawCenteredString(font,
+            ctx.centeredText(font,
                     Component.literal("NO EXPOSURES"), cx, py + PANEL_H / 2 - 5, GuiHelper.CREAM_FAINT);
-            super.render(ctx, mouseX, mouseY, delta);
+            super.extractRenderState(ctx, mouseX, mouseY, delta);
             return;
         }
 
@@ -122,7 +121,7 @@ public class FilmStripScreen extends Screen {
         if (thumbMissing) {
             ctx.fill(cx - THUMB_MAX_W / 2, thumbAreaTop,
                     cx + THUMB_MAX_W / 2, thumbAreaTop + THUMB_MAX_H, 0xFF1A1000);
-            ctx.drawCenteredString(font,
+            ctx.centeredText(font,
                     Component.literal("[ NO FILE ]"),
                     cx, thumbAreaTop + THUMB_MAX_H / 2 - 4, GuiHelper.CREAM_FAINT);
         } else if (thumb != null) {
@@ -130,7 +129,7 @@ public class FilmStripScreen extends Screen {
             int ty = thumbAreaTop + (THUMB_MAX_H - thumb.guiH()) / 2;
             // Amber sprocket-hole border
             ctx.fill(tx - 1, ty - 1, tx + thumb.guiW() + 1, ty + thumb.guiH() + 1, 0xFFB07018);
-            ctx.blit(RenderType::guiTextured, thumb.id(), tx, ty, 0f, 0f,
+            ctx.blit(RenderPipelines.GUI_TEXTURED, thumb.id(), tx, ty, 0f, 0f,
                     thumb.guiW(), thumb.guiH(), thumb.texW(), thumb.texH());
             // Amber negative-mask tint over colour film
             if (!FilmKind.isBW(filmType)) {
@@ -143,7 +142,7 @@ public class FilmStripScreen extends Screen {
         int lineH = font.lineHeight + 2;
 
         String counter = (index + 1) + " / " + exposures.size();
-        ctx.drawCenteredString(font, Component.literal(counter), cx, metaY, GuiHelper.CREAM);
+        ctx.centeredText(font, Component.literal(counter), cx, metaY, GuiHelper.CREAM);
         metaY += lineH;
 
         String exposure = String.format("F%.1f  %s  ISO%d  %dmm",
@@ -151,18 +150,18 @@ public class FilmStripScreen extends Screen {
                 shutterLabel(p.cameraAtCapture().shutterSpeedIdx()),
                 p.cameraAtCapture().iso(),
                 p.cameraAtCapture().focalLengthMm());
-        ctx.drawCenteredString(font, Component.literal(exposure), cx, metaY, GuiHelper.BRASS_BRIGHT);
+        ctx.centeredText(font, Component.literal(exposure), cx, metaY, GuiHelper.BRASS_BRIGHT);
         metaY += lineH;
 
         String loc = shortDim(p.dimension()) + "  (" + p.x() + ", " + p.y() + ", " + p.z() + ")";
-        ctx.drawCenteredString(font, Component.literal(loc), cx, metaY, GuiHelper.CREAM_DIM);
+        ctx.centeredText(font, Component.literal(loc), cx, metaY, GuiHelper.CREAM_DIM);
 
         if (p.fogged()) {
             metaY += lineH;
-            ctx.drawCenteredString(font, Component.literal("⚠ 光被り"), cx, metaY, GuiHelper.EMBER);
+            ctx.centeredText(font, Component.literal("⚠ 光被り"), cx, metaY, GuiHelper.EMBER);
         }
 
-        super.render(ctx, mouseX, mouseY, delta);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
     }
 
     // -------------------------------------------------------------------------
@@ -214,7 +213,7 @@ public class FilmStripScreen extends Screen {
             }
 
             String safeId = data.id().toString().replace('-', '_').toLowerCase();
-            ResourceLocation texId = ResourceLocation.fromNamespaceAndPath(Photographica.MOD_ID, "negthumb/" + safeId);
+            Identifier texId = Identifier.fromNamespaceAndPath(Photographica.MOD_ID, "negthumb/" + safeId);
             final NativeImage finalTexture = forTexture;
             forTexture = null;
             DynamicTexture tex = new DynamicTexture(() -> "negthumb/" + safeId, finalTexture);
@@ -293,12 +292,12 @@ public class FilmStripScreen extends Screen {
     }
 
     private static int getPixelAbgr(NativeImage img, int x, int y) {
-        int argb = img.getPixelRGBA(x, y);
+        int argb = img.getPixel(x, y);
         int a=(argb>>>24)&0xFF; int r=(argb>>>16)&0xFF; int g=(argb>>>8)&0xFF; int b=argb&0xFF;
         return (a<<24)|(b<<16)|(g<<8)|r;
     }
     private static void setPixelAbgr(NativeImage img, int x, int y, int abgr) {
         int a=(abgr>>>24)&0xFF; int b=(abgr>>>16)&0xFF; int g=(abgr>>>8)&0xFF; int r=abgr&0xFF;
-        img.setPixelRGBA(x, y, (a<<24)|(r<<16)|(g<<8)|b);
+        img.setPixel(x, y, (a<<24)|(r<<16)|(g<<8)|b);
     }
 }

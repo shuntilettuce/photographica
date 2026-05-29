@@ -4,7 +4,7 @@ import dev.hitom.photographica.Photographica;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.RenderTarget;
+import com.mojang.blaze3d.pipeline.RenderTarget;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -79,9 +79,9 @@ public final class EvfBlurRenderer {
         // glCopyImageSubData (OGL 4.3) copies texture-to-texture with no FBO setup.
         RenderTarget mainFb_ = Minecraft.getInstance().getMainRenderTarget();
         if (mainFb_ == null) return;
-        com.mojang.blaze3d.textures.GpuTexture depthGpu_ = mainFb_.getDepthAttachment();
-        if (!(depthGpu_ instanceof net.minecraft.client.renderer.texture.GlTexture glDepth_)) return;
-        int srcDepthId_ = glDepth_.getGlId();
+        com.mojang.blaze3d.textures.GpuTexture depthGpu_ = mainFb_.getDepthTexture();
+        if (!(depthGpu_ instanceof com.mojang.blaze3d.opengl.GlTexture glDepth_)) return;
+        int srcDepthId_ = glDepth_.glId();
         if (srcDepthId_ <= 0) return;
         int fw_ = mainFb_.width;
         int fh_ = mainFb_.height;
@@ -133,9 +133,9 @@ public final class EvfBlurRenderer {
 
         Minecraft mc = Minecraft.getInstance();
         RenderTarget mainFb = mc.getMainRenderTarget();
-        com.mojang.blaze3d.textures.GpuTexture gpuTex = mainFb.getColorAttachment();
-        if (!(gpuTex instanceof net.minecraft.client.renderer.texture.GlTexture glTex)) return;
-        int mainTex = glTex.getGlId();
+        com.mojang.blaze3d.textures.GpuTexture gpuTex = mainFb.getColorTexture();
+        if (!(gpuTex instanceof com.mojang.blaze3d.opengl.GlTexture glTex)) return;
+        int mainTex = glTex.glId();
         if (mainTex == 0) return;
 
         int fbW = mainFb.width;

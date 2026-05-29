@@ -33,7 +33,7 @@ public class WorldRendererMixin {
 
     /**
      * Vanilla LevelRenderer.renderLevel() skips drawing a {@code LocalPlayer} when
-     * {@code camera.getEntity() != entity}. This is intentional for spectating
+     * {@code camera.entity() != entity}. This is intentional for spectating
      * (you shouldn't see your own floating body), but it also fires when the mod
      * redirects the camera to an armor-stand for a photo — making the player
      * invisible in the shot.
@@ -53,6 +53,6 @@ public class WorldRendererMixin {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null) return mc.player;
         }
-        return camera.getEntity();
+        return camera.entity();
     }
 }

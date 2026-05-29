@@ -1,7 +1,7 @@
 package dev.hitom.photographica.client.screen;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 
@@ -12,7 +12,7 @@ public class SafelightButton extends Button {
     private final Style style;
 
     private SafelightButton(int x, int y, int w, Component msg, OnPress action, Style style) {
-        super(x, y, w, 20, msg, action, DEFAULT_NARRATION_SUPPLIER);
+        super(x, y, w, 20, msg, action, DEFAULT_NARRATION);
         this.style = style;
     }
 
@@ -28,8 +28,7 @@ public class SafelightButton extends Button {
         return new SafelightButton(x, y, w, msg, action, Style.GHOST);
     }
 
-    @Override
-    protected void renderWidget(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
+    protected void extractContents(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         int x = getX(), y = getY(), w = getWidth();
         ctx.fill(x, y, x + w, y + 20, GuiHelper.FRAME_LO);
         switch (style) {
@@ -56,6 +55,6 @@ public class SafelightButton extends Button {
             default      -> GuiHelper.CREAM;
         };
         var tr = Minecraft.getInstance().font;
-        ctx.drawCenteredString(tr, getMessage(), x + w / 2, y + 6, textColor);
+        ctx.centeredText(tr, getMessage(), x + w / 2, y + 6, textColor);
     }
 }

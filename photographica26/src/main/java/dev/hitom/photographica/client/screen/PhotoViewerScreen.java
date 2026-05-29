@@ -5,13 +5,13 @@ import dev.hitom.photographica.component.PhotoData;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -27,7 +27,7 @@ import java.util.UUID;
  */
 @Environment(EnvType.CLIENT)
 public class PhotoViewerScreen extends Screen {
-    private record LoadedImage(ResourceLocation id, int texW, int texH, int guiW, int guiH) {}
+    private record LoadedImage(Identifier id, int texW, int texH, int guiW, int guiH) {}
 
     private final PhotoData data;
     private final Screen parent;
@@ -44,7 +44,6 @@ public class PhotoViewerScreen extends Screen {
         this.parent = parent;
     }
 
-    @Override
     protected void init() {
         // Regenerate the texture on every init (covers initial open and window resize).
         image = null;
@@ -100,7 +99,7 @@ public class PhotoViewerScreen extends Screen {
             }
 
             String safeId = id.toString().replace('-', '_').toLowerCase();
-            ResourceLocation texId = ResourceLocation.fromNamespaceAndPath(Photographica.MOD_ID, "photo/" + safeId);
+            Identifier texId = Identifier.fromNamespaceAndPath(Photographica.MOD_ID, "photo/" + safeId);
             final NativeImage finalTexture = forTexture;
             forTexture = null;
             DynamicTexture tex = new DynamicTexture(() -> "photo/" + safeId, finalTexture);
@@ -153,21 +152,21 @@ public class PhotoViewerScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float deltaTicks) {
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float deltaTicks) {
         // Override to no-op — the inherited renderBackground calls applyBlur which
-        // would blur both the world AND our already-drawn photo via super.render().
+        // would blur both the world AND our already-drawn photo via super.extractRenderState().
         // We draw our own simple darken in render() instead.
     }
 
     @Override
-    public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, 0xC0101010);
 
         if (missing) {
-            ctx.drawCenteredString(font,
+            ctx.centeredText(font,
                     Component.literal("[ 写真ファイルが見つかりません ]"),
                     width / 2, height / 2 - 6, 0xFFFF5555);
-            ctx.drawCenteredString(font,
+            ctx.centeredText(font,
                     Component.literal(data.id().toString()),
                     width / 2, height / 2 + 8, 0xFF808080);
         } else if (image != null) {
@@ -175,10 +174,10 @@ public class PhotoViewerScreen extends Screen {
         }
 
         renderMetadata(ctx);
-        super.render(ctx, mouseX, mouseY, delta);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
     }
 
-    private void renderImage(GuiGraphics ctx) {
+    private void renderImage(GuiGraphicsExtractor ctx) {
         int dw = image.guiW;
         int dh = image.guiH;
         int dx = (width - dw) / 2;
@@ -188,19 +187,19 @@ public class PhotoViewerScreen extends Screen {
         ctx.fill(dx - 2, dy - 2, dx + dw + 2, dy + dh + 2, 0xFFFFFFFF);
         ctx.fill(dx - 1, dy - 1, dx + dw + 1, dy + dh + 1, 0xFF000000);
 
-        ctx.blit(RenderType::guiTextured, image.id, dx, dy, 0f, 0f,
+        ctx.blit(RenderPipelines.GUI_TEXTURED, image.id, dx, dy, 0f, 0f,
                 dw, dh, image.texW, image.texH);
 
         // Fogging overlay — washes out photos exposed to light during handling/development.
         if (data.fogged()) {
             ctx.fill(dx, dy, dx + dw, dy + dh, 0xC8FFFFFF);
-            ctx.drawCenteredString(font,
+            ctx.centeredText(font,
                     Component.literal("§c光被り"),
                     dx + dw / 2, dy + dh / 2 - 4, 0xFFFF4444);
         }
     }
 
-    private void renderMetadata(GuiGraphics ctx) {
+    private void renderMetadata(GuiGraphicsExtractor ctx) {
         String header = "撮影者: " + data.photographer();
         String exposure = String.format("F%.1f  ISO%d  %dmm",
                 data.cameraAtCapture().aperture(),
@@ -209,9 +208,9 @@ public class PhotoViewerScreen extends Screen {
         String location = String.format("%s (%d, %d, %d)",
                 data.dimension(), data.x(), data.y(), data.z());
 
-        ctx.drawCenteredString(font, Component.literal(header), width / 2, 6, 0xFFFFFFFF);
-        ctx.drawString(font, Component.literal(exposure), 8, height - 40, 0xFFB0B0B0, true);
-        ctx.drawString(font, Component.literal(location), 8, height - 28, 0xFF808080, true);
+        ctx.centeredText(font, Component.literal(header), width / 2, 6, 0xFFFFFFFF);
+        ctx.text(font, Component.literal(exposure), 8, height - 40, 0xFFB0B0B0, true);
+        ctx.text(font, Component.literal(location), 8, height - 28, 0xFF808080, true);
     }
 
     @Override
@@ -229,12 +228,12 @@ public class PhotoViewerScreen extends Screen {
     }
 
     private static int getPixelAbgr(NativeImage img, int x, int y) {
-        int argb = img.getPixelRGBA(x, y);
+        int argb = img.getPixel(x, y);
         int a=(argb>>>24)&0xFF; int r=(argb>>>16)&0xFF; int g=(argb>>>8)&0xFF; int b=argb&0xFF;
         return (a<<24)|(b<<16)|(g<<8)|r;
     }
     private static void setPixelAbgr(NativeImage img, int x, int y, int abgr) {
         int a=(abgr>>>24)&0xFF; int b=(abgr>>>16)&0xFF; int g=(abgr>>>8)&0xFF; int r=abgr&0xFF;
-        img.setPixelRGBA(x, y, (a<<24)|(r<<16)|(g<<8)|b);
+        img.setPixel(x, y, (a<<24)|(r<<16)|(g<<8)|b);
     }
 }

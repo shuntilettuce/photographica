@@ -94,7 +94,7 @@ public class DarkroomScreenHandler extends AbstractContainerMenu {
                 return true;
             }
 
-            boolean inLight = ((ServerPlayer) player).serverLevel().getLightEmission(player.blockPosition()) > 7;
+            boolean inLight = ((ServerPlayer) player).level().getLightEmission(player.blockPosition()) > 7;
             int tanksUsed = 0;
 
             for (int i = 0; i < 3; i++) {

@@ -60,7 +60,6 @@ public class PhotoFrameBlock extends BaseEntityBlock {
         return RenderShape.MODEL;
     }
 
-    @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         builder.add(FACING);
     }
@@ -74,12 +73,10 @@ public class PhotoFrameBlock extends BaseEntityBlock {
         };
     }
 
-    @Override
     protected VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext ctx) {
         return shapeFor(state);
     }
 
-    @Override
     protected VoxelShape getCollisionShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext ctx) {
         return shapeFor(state);
     }
@@ -100,7 +97,6 @@ public class PhotoFrameBlock extends BaseEntityBlock {
         return null;
     }
 
-    @Override
     protected InteractionResult useWithoutItem(BlockState state, net.minecraft.world.level.Level world,
                                                BlockPos pos, Player player, BlockHitResult hit) {
         if (world.isClientSide()) return InteractionResult.SUCCESS;
@@ -137,7 +133,7 @@ public class PhotoFrameBlock extends BaseEntityBlock {
     }
 
     @Override
-    protected void onRemove(BlockState state, ServerLevel world, BlockPos pos, boolean moved) {
+    protected void affectNeighborsAfterRemoval(BlockState state, ServerLevel world, BlockPos pos, boolean moved) {
         if (world.getBlockEntity(pos) instanceof PhotoFrameBlockEntity frame) {
             PhotoData photo = frame.getPhotoData();
             if (photo != null) {
@@ -146,6 +142,6 @@ public class PhotoFrameBlock extends BaseEntityBlock {
                 Block.popResource(world, pos, photoStack);
             }
         }
-        super.onRemove(state, world, pos, moved);
+        super.affectNeighborsAfterRemoval(state, world, pos, moved);
     }
 }

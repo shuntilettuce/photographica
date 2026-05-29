@@ -7,7 +7,7 @@ import dev.hitom.photographica.network.UnequipCameraFromArmorStandPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -36,7 +36,6 @@ public class VideoCameraScreen extends Screen {
         this.armorStandEntityId = armorStandEntityId;
     }
 
-    @Override
     protected void init() {
         int cx  = width / 2;
         int top = height / 2 - 60;
@@ -98,10 +97,10 @@ public class VideoCameraScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics ctx, int mouseX, int mouseY, float delta) {}
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {}
 
     @Override
-    public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, 0xFF101010);
 
         int cx     = width / 2;
@@ -115,9 +114,9 @@ public class VideoCameraScreen extends Screen {
         GuiHelper.drawNameplate(ctx, px + 6, py + 5, panelW - 12);
         GuiHelper.drawRule(ctx, px + 6, py + 17, panelW - 12);
 
-        super.render(ctx, mouseX, mouseY, delta);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
 
-        ctx.drawCenteredString(font, Component.literal("CAMCORDER"), cx, py + 6, GuiHelper.CREAM);
+        ctx.centeredText(font, Component.literal("CAMCORDER"), cx, py + 6, GuiHelper.CREAM);
     }
 
     private void addRow(int cx, int y, String label,

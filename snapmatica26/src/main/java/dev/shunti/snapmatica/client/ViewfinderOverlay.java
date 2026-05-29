@@ -5,7 +5,7 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 
 @Environment(EnvType.CLIENT)
@@ -19,7 +19,7 @@ public final class ViewfinderOverlay {
     private static final String[] LENS_NAMES =
             {"No Lens","50mm Prime","24-70mm Zoom","35mm Prime","85mm Prime","14mm UWA","70-200mm Zoom","100mm Macro"};
 
-    public static void render(GuiGraphics ctx, DeltaTracker tickCounter) {
+    public static void extractRenderState(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.options.hideGui) return;
         long now = System.currentTimeMillis();
@@ -75,31 +75,31 @@ public final class ViewfinderOverlay {
         boolean hasLens = SnapmaticaClient.lensType != 0;
         String fp = hasLens ? (SnapmaticaClient.focalLengthMm+"mm") : "No Lens";
         int si = Math.max(0, Math.min(SHUTTERS.length-1, SnapmaticaClient.shutterSpeedIdx));
-        ctx.drawString(font, String.format("F%s  %s  ISO%d  %s",
+        ctx.text(font, String.format("F%s  %s  ISO%d  %s",
                 fmt(SnapmaticaClient.aperture), SHUTTERS[si], SnapmaticaClient.iso, fp),
                 fx+6, fy2-font.lineHeight-14, 0xFFE8DCC4, true);
 
         renderExposureMeter(ctx, fx, fx2, fy2);
 
-        ctx.drawString(font,
+        ctx.text(font,
                 LENS_NAMES[Math.max(0, Math.min(LENS_NAMES.length-1, SnapmaticaClient.lensType))],
                 fx+6, fy+4, 0xFF9A8D72, true);
 
         if (hasLens) {
             double safe = 1.0 / SnapmaticaClient.focalLengthMm;
             if (SnapmaticaClient.SHUTTER_SECONDS[si] > safe * 1.5)
-                ctx.drawString(font, "WARN Blur", fx+6, fy+4+font.lineHeight+2, 0xFFFF5555, true);
+                ctx.text(font, "WARN Blur", fx+6, fy+4+font.lineHeight+2, 0xFFFF5555, true);
         }
 
         String[] el  = {"M","Av","Tv","P"};
         String[] fl2 = {"MF","AF","MOB"};
-        ctx.drawString(font,
+        ctx.text(font,
                 el[clampIdx(SnapmaticaClient.exposureMode,4)]
                 + " | " + fl2[clampIdx(SnapmaticaClient.focusMode,3)],
                 fx+6, fy+4+font.lineHeight*2+4, 0xFFCCCCFF, true);
     }
 
-    private static void renderEvfPreview(GuiGraphics ctx, int fx, int fy, int fx2, int fy2) {
+    private static void renderEvfPreview(GuiGraphicsExtractor ctx, int fx, int fy, int fx2, int fy2) {
         double ev = computeEvDeviation();
         double ae = Math.abs(ev);
         if (ae > 0.3) {
@@ -141,7 +141,7 @@ public final class ViewfinderOverlay {
         }
     }
 
-    private static void renderExposureMeter(GuiGraphics ctx, int fx, int fx2, int fy2) {
+    private static void renderExposureMeter(GuiGraphicsExtractor ctx, int fx, int fx2, int fy2) {
         final int MW = 120;
         int mx  = (fx + fx2 - MW) / 2;
         int mcx = mx + MW / 2;
@@ -194,7 +194,7 @@ public final class ViewfinderOverlay {
         if (ap <= 11f)  return 0.05f; return 0.02f;
     }
 
-    private static void drawBracket(GuiGraphics ctx, int ax, int ay, int len, int t,
+    private static void drawBracket(GuiGraphicsExtractor ctx, int ax, int ay, int len, int t,
                                     int dx, int dy, int color) {
         ctx.fill(dx>0?ax:ax-len, dy>0?ay:ay-t, dx>0?ax+len:ax, dy>0?ay+t:ay, color);
         ctx.fill(dx>0?ax:ax-t, dy>0?ay:ay-len, dx>0?ax+t:ax, dy>0?ay+len:ay, color);

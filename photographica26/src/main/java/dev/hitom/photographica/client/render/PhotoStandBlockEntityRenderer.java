@@ -5,78 +5,79 @@ import dev.hitom.photographica.block.entity.PhotoStandBlockEntity;
 import dev.hitom.photographica.component.PhotoData;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.resources.Identifier;
 import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
+import com.mojang.blaze3d.vertex.PoseStack;
 
-import java.util.UUID;
-
-/**
- * Renders the photo onto the angled panel of a photo stand block.
- *
- * Model layout (FACING=SOUTH, y=0):
- *   - Panel element [2,1,12]→[14,10,14], south face at z=14 is the photo surface.
- *   - Base element [1,0,2]→[15,2,14] flat on the ground.
- *
- * Photo is drawn with a 2px frame border, centred 3:2 in the 12×9 panel.
- * BER tilt matches model JSON: -22.5° around X, pivot at origin [8,1,12].
- */
 @Environment(EnvType.CLIENT)
-public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoStandBlockEntity> {
+public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoStandBlockEntity, PhotoStandBlockEntityRenderer.State> {
 
-    // Inner black area of the 16×16 panel texture mapped onto the 12×8 face:
-    // X: 3.5/16..12.5/16 (9 px), Y: 2/16..8/16 (6 px)  →  3:2
     private static final float X0 = 3.5f / 16f;
     private static final float X1 = 12.5f / 16f;
     private static final float Y0 = 2f   / 16f;
     private static final float Y1 = 8f   / 16f;
 
-    // Panel south face (z=14/16); photo rendered just in front of it.
     private static final float PANEL_Z = 14f / 16f + 0.001f;
-    // Tilt pivot: must match model JSON rotation origin exactly.
     private static final float PIVOT_Y = 1f  / 16f;
     private static final float PIVOT_Z = 12f / 16f;
 
     public PhotoStandBlockEntityRenderer(BlockEntityRendererProvider.Context ctx) {}
 
     @Override
-    public void render(PhotoStandBlockEntity entity, float tickDelta, PoseStack matrices,
-                       MultiBufferSource vertexConsumers, int light, int overlay) {
+    public State createRenderState() {
+        return new State();
+    }
+
+    @Override
+    public void extractRenderState(PhotoStandBlockEntity entity, State state, float partialTick,
+                                   Vec3 cameraPos, ModelFeatureRenderer.CrumblingOverlay crumbling) {
+        BlockEntityRenderState.extractBase(entity, state, crumbling);
         PhotoData photo = entity.getPhotoData();
-        if (photo == null) return;
+        state.texId = photo != null ? PhotoTextureCache.getOrLoad(photo.id()) : null;
+        state.facing = entity.getBlockState().getValue(PhotoStandBlock.FACING);
+    }
 
-        UUID photoId = photo.id();
-        ResourceLocation texId = PhotoTextureCache.getOrLoad(photoId);
-        if (texId == null) return;
-
-        Direction facing = entity.getBlockState().getValue(PhotoStandBlock.FACING);
+    @Override
+    public void submit(State state, PoseStack matrices, SubmitNodeCollector nodes, CameraRenderState cameraState) {
+        if (state.texId == null) return;
 
         matrices.pushPose();
 
         // 1. Align to facing direction (Y-axis rotation around block centre).
         matrices.translate(0.5, 0.5, 0.5);
-        matrices.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-facing.toYRot()));
+        matrices.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-state.facing.toYRot()));
         matrices.translate(-0.5, -0.5, -0.5);
 
-        // 2. Tilt panel -22.5° around X matching model JSON rotation origin [8,1,12].
+        // 2. Tilt panel -22.5 degrees around X matching model JSON rotation origin [8,1,12].
         matrices.translate(0.5f, PIVOT_Y, PIVOT_Z);
         matrices.mulPose(com.mojang.math.Axis.XP.rotationDegrees(-22.5f));
         matrices.translate(-0.5f, -PIVOT_Y, -PIVOT_Z);
 
-        PoseStack.Pose entry = matrices.last();
-        VertexConsumer vc = vertexConsumers.getBuffer(RenderType.entityCutoutNoCull(texId));
+        int light = state.lightCoords;
+        int overlay = OverlayTexture.NO_OVERLAY;
+        float x0 = X0, x1 = X1, y0 = Y0, y1 = Y1, panelZ = PANEL_Z;
 
-        // Quad facing +Z (south) — CCW winding from viewer looking in −Z.
-        vc.vertex(entry, X0, Y0, PANEL_Z).setColor(255, 255, 255, 255).setUv(0f, 1f).setOverlay(overlay).setLight(light).setNormal(entry, 0f, 0f, 1f);
-        vc.vertex(entry, X1, Y0, PANEL_Z).setColor(255, 255, 255, 255).setUv(1f, 1f).setOverlay(overlay).setLight(light).setNormal(entry, 0f, 0f, 1f);
-        vc.vertex(entry, X1, Y1, PANEL_Z).setColor(255, 255, 255, 255).setUv(1f, 0f).setOverlay(overlay).setLight(light).setNormal(entry, 0f, 0f, 1f);
-        vc.vertex(entry, X0, Y1, PANEL_Z).setColor(255, 255, 255, 255).setUv(0f, 0f).setOverlay(overlay).setLight(light).setNormal(entry, 0f, 0f, 1f);
+        nodes.submitCustomGeometry(matrices, RenderTypes.entityCutout(state.texId), (pose, vc) -> {
+            vc.addVertex(pose, x0, y0, panelZ).setColor(255, 255, 255, 255).setUv(0f, 1f).setOverlay(overlay).setLight(light).setNormal(pose, 0f, 0f, 1f);
+            vc.addVertex(pose, x1, y0, panelZ).setColor(255, 255, 255, 255).setUv(1f, 1f).setOverlay(overlay).setLight(light).setNormal(pose, 0f, 0f, 1f);
+            vc.addVertex(pose, x1, y1, panelZ).setColor(255, 255, 255, 255).setUv(1f, 0f).setOverlay(overlay).setLight(light).setNormal(pose, 0f, 0f, 1f);
+            vc.addVertex(pose, x0, y1, panelZ).setColor(255, 255, 255, 255).setUv(0f, 0f).setOverlay(overlay).setLight(light).setNormal(pose, 0f, 0f, 1f);
+        });
 
         matrices.popPose();
+    }
+
+    public static class State extends BlockEntityRenderState {
+        public Identifier texId;
+        public Direction facing;
     }
 }

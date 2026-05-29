@@ -10,8 +10,8 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.core.BlockPos;
-import net.minecraft.storage.WriteView;
-import net.minecraft.storage.ReadView;
+import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.Nullable;
@@ -46,25 +46,17 @@ public class PhotoFrameBlockEntity extends BlockEntity {
     }
 
     @Override
-    protected void writeData(WriteView view) {
-        super.writeData(view);
+    protected void saveAdditional(ValueOutput view) {
+        super.saveAdditional(view);
         if (photoData != null) {
-            DataResult<Tag> result = PhotoData.CODEC.encodeStart(NbtOps.INSTANCE, photoData);
-            result.result().ifPresent(el -> view.store("Photo", el));
+            view.store("Photo", PhotoData.CODEC, photoData);
         }
     }
 
     @Override
-    protected void readData(ReadView view) {
-        super.readData(view);
-        Tag photoTag = view.read("Photo", Tag.class).orElse(null);
-        if (photoTag != null) {
-            PhotoData.CODEC.parse(NbtOps.INSTANCE, photoTag)
-                    .result()
-                    .ifPresent(d -> photoData = d);
-        } else {
-            photoData = null;
-        }
+    protected void loadAdditional(ValueInput view) {
+        super.loadAdditional(view);
+        photoData = view.read("Photo", PhotoData.CODEC).orElse(null);
     }
 
     @Override

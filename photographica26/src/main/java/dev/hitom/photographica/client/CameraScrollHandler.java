@@ -52,8 +52,8 @@ public final class CameraScrollHandler {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null || mc.screen != null) return false;
 
-		boolean alt = InputConstants.isKeyDown(mc.getWindow().getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
-				|| InputConstants.isKeyDown(mc.getWindow().getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
+		boolean alt = InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
+				|| InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
 
 		// Alt + scroll = video camera zoom (works regardless of sneaking)
 		if (alt) {
@@ -82,8 +82,8 @@ public final class CameraScrollHandler {
 				: CameraItem.getSettings(stack);
 		int dir = delta > 0 ? 1 : -1;
 
-		boolean ctrl = InputConstants.isKeyDown(mc.getWindow().getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
-				|| InputConstants.isKeyDown(mc.getWindow().getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
+		boolean ctrl = InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
+				|| InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
 		// alt already declared above
 		// Shift is always held (viewfinder baseline = sneaking), so it is not a modifier.
 

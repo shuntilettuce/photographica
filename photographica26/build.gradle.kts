@@ -1,11 +1,11 @@
 plugins {
-    id("fabric-loom") version "1.15.5"
+    id("net.fabricmc.fabric-loom") version "1.16-SNAPSHOT"
     id("maven-publish")
 }
 
 val mcVersion     = "26.1.2"
 val loaderVersion = "0.19.2"
-val fabricVersion = "0.150.0+26.1.2"
+val fabricVersion = "0.149.1+26.1.2"
 val modVersion    = "0.2.0"
 
 version = "$modVersion+$mcVersion"
@@ -15,21 +15,13 @@ base {
     archivesName = "photographica"
 }
 
-loom {
-    mixin {
-        useLegacyMixinAp.set(true)
-        add(sourceSets.main.get(), "photographica.refmap.json")
-    }
-}
 
 repositories {}
 
 dependencies {
     minecraft("com.mojang:minecraft:$mcVersion")
-    // officialMojangMappings() once Mojang publishes 26.1.x mappings (stopped at 1.21.11)
-    mappings(loom.officialMojangMappings())
-    modImplementation("net.fabricmc:fabric-loader:$loaderVersion")
-    modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
+    implementation("net.fabricmc:fabric-loader:$loaderVersion")
+    implementation("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
 }
 
 tasks.processResources {

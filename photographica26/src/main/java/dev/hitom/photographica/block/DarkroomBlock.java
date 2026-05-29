@@ -47,7 +47,6 @@ public class DarkroomBlock extends BaseEntityBlock {
         return null;
     }
 
-    @Override
     protected InteractionResult useWithoutItem(BlockState state, net.minecraft.world.level.Level world,
                                                BlockPos pos, Player player, BlockHitResult hit) {
         if (world.isClientSide()) return InteractionResult.SUCCESS;
@@ -59,12 +58,12 @@ public class DarkroomBlock extends BaseEntityBlock {
     }
 
     @Override
-    protected void onRemove(BlockState state, ServerLevel world, BlockPos pos, boolean moved) {
+    protected void affectNeighborsAfterRemoval(BlockState state, ServerLevel world, BlockPos pos, boolean moved) {
         BlockEntity be = world.getBlockEntity(pos);
         if (be instanceof DarkroomBlockEntity darkroom) {
             Containers.dropContents(world, pos, darkroom);
             world.updateNeighbourForOutputSignal(pos, this);
         }
-        super.onRemove(state, world, pos, moved);
+        super.affectNeighborsAfterRemoval(state, world, pos, moved);
     }
 }
