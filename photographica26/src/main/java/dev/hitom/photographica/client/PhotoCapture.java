@@ -356,8 +356,12 @@ public final class PhotoCapture {
 		final float[] fLinearDepth = linearDepth;
 		final int fFbW = fbW;
 		final int fFbH = fbH;
+		Photographica.LOGGER.info("[PhotoCapture] fb={}x{}, window={}x{}",
+				fb.width, fb.height,
+				mc.getWindow().getWidth(), mc.getWindow().getHeight());
 		Screenshot.takeScreenshot(fb, raw -> {
 			if (raw == null) return;
+			Photographica.LOGGER.info("[PhotoCapture] raw={}x{}", raw.getWidth(), raw.getHeight());
 			NativeImage cropped = null;
 			NativeImage downsampled = null;
 			NativeImage processed = null;
