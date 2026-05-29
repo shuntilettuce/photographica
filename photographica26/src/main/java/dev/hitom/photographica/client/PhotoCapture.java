@@ -288,30 +288,18 @@ public final class PhotoCapture {
 		boolean evfActive = isEvfActive(mc);
 
 		if (evfActive || pendingId != null) {
-			int[] viewport = new int[4];
-			GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
-			int vpW = viewport[2];
-			int vpH = viewport[3];
-			if (vpW > 0 && vpH > 0) {
-				// EVF: GPU-side copy (no CPU readback — fast enough for every frame)
+			// Use the render target dimensions directly — GL_VIEWPORT is unreliable in
+			// MC 26.1's CommandEncoder-based pipeline, and glReadPixels(GL_DEPTH_COMPONENT)
+			// returns stale data because depth lives in a GpuTexture, not the legacy FBO.
+			RenderTarget mainFb = mc.getMainRenderTarget();
+			int fbW = mainFb.width;
+			int fbH = mainFb.height;
+			if (fbW > 0 && fbH > 0) {
 				if (evfActive) {
-					dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(vpW, vpH);
+					dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(fbW, fbH);
 				}
-				// Photo capture: full CPU readback for per-pixel DoF processing
-				if (pendingId != null) {
-					FloatBuffer buf = BufferUtils.createFloatBuffer(vpW * vpH);
-					GL11.glReadPixels(0, 0, vpW, vpH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
-					float[] depth = new float[vpW * vpH];
-					final float near = 0.05f, far = 512.0f;
-					for (int i = 0; i < depth.length; i++) {
-						float d = buf.get(i);
-						float ndc = 2.0f * d - 1.0f;
-						depth[i] = 2.0f * near * far / (far + near - ndc * (far - near));
-					}
-					pendingLinearDepth = depth;
-					pendingDepthFbW = vpW;
-					pendingDepthFbH = vpH;
-				}
+				// Depth readback via glReadPixels is broken in MC 26.1; DoF is handled
+				// in captureIfPending() using fb.width/height without a pre-read.
 			}
 		}
 	}
@@ -354,16 +342,12 @@ public final class PhotoCapture {
 		pendingIsFilm = false;
 		pendingArmorStandEntityId = -1;
 
-		// Use depth pre-read during WorldRenderEvents.END_MAIN if available.
-		float[] preRead = pendingLinearDepth;
 		pendingLinearDepth = null;
 		float[] linearDepth = null;
-		int fbW = preRead != null ? pendingDepthFbW : fb.width;
-		int fbH = preRead != null ? pendingDepthFbH : fb.height;
-		if (LensKind.hasLens(settings.lensType())
-				&& settings.aperture() <= 5.6f) {
-			linearDepth = preRead != null ? preRead : readLinearDepth(fb, fbW, fbH);
-		}
+		// Always use the framebuffer's own dimensions — stale glReadPixels depth is
+		// unusable in MC 26.1, so DoF blur is skipped rather than applied with wrong data.
+		int fbW = fb.width;
+		int fbH = fb.height;
 
 		final UUID fId = id;
 		final CameraSettings fSettings = settings;
@@ -436,11 +420,11 @@ public final class PhotoCapture {
 		RenderTarget fb = mc.getMainRenderTarget();
 		long now = System.currentTimeMillis();
 
-		// First tick: steal the depth pre-read and hand off pendingId.
+		// First tick: initialise accumulation state and consume the pending capture id.
 		if (accumSamples == 0 && pendingId != null) {
-			accumDepth = pendingLinearDepth;
-			accumDepthFbW = pendingDepthFbW;
-			accumDepthFbH = pendingDepthFbH;
+			accumDepth = null; // depth readback is unavailable in MC 26.1
+			accumDepthFbW = fb.width;
+			accumDepthFbH = fb.height;
 			pendingLinearDepth = null;
 			pendingId = null;
 		}
