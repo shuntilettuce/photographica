@@ -2,14 +2,14 @@
   "required": true,
   "refmap": "photographica.refmap.json",
   "package": "dev.hitom.photographica.mixin.client",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_25",
   "client": [
-    "MultiPlayerGameModeMixin",
+    "ClientPlayerInteractionManagerMixin",
     "EntityRendererMixin",
     "GameRendererMixin",
     "MouseMixin",
-    "AvatarRendererMixin",
-    "LevelRendererMixin"
+    "PlayerEntityRendererMixin",
+    "WorldRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
