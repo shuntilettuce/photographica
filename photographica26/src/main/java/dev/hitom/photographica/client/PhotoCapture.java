@@ -372,8 +372,11 @@ public final class PhotoCapture {
 				raw.writeToFile(new java.io.File(debugDir, "debug_raw_" + fId + ".png").toPath());
 
 				cropped = cropTo3to2(raw);
+				Photographica.LOGGER.info("[PhotoCapture] cropped={}x{}", cropped.getWidth(), cropped.getHeight());
 				downsampled = boxDownsample(cropped, 1280);
+				Photographica.LOGGER.info("[PhotoCapture] downsampled={}x{}", downsampled.getWidth(), downsampled.getHeight());
 				processed = applyPhotographicEffects(downsampled, fSettings, fLinearDepth, fFbW, fFbH, true);
+				Photographica.LOGGER.info("[PhotoCapture] processed={}x{}", processed.getWidth(), processed.getHeight());
 				File dir = new File(mc.gameDirectory, "photographica/photos");
 				if (!dir.exists() && !dir.mkdirs()) {
 					Photographica.LOGGER.error("Could not create photo dir: {}", dir);
