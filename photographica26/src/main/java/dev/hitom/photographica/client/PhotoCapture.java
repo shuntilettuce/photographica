@@ -366,6 +366,11 @@ public final class PhotoCapture {
 			NativeImage downsampled = null;
 			NativeImage processed = null;
 			try {
+				// DEBUG: save raw framebuffer dump to inspect capture content
+				File debugDir = new File(mc.gameDirectory, "photographica/photos");
+				if (!debugDir.exists()) debugDir.mkdirs();
+				raw.writeToFile(new java.io.File(debugDir, "debug_raw_" + fId + ".png").toPath());
+
 				cropped = cropTo3to2(raw);
 				downsampled = boxDownsample(cropped, 1280);
 				processed = applyPhotographicEffects(downsampled, fSettings, fLinearDepth, fFbW, fFbH, true);
