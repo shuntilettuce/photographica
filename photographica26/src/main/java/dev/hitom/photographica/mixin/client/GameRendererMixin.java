@@ -78,8 +78,15 @@ public class GameRendererMixin {
             return VideoRecorder.videoFov;
         }
 
-        // FOV change only applies while the viewfinder is active (Shift held)
-        if (!player.isShiftKeyDown()) return -1;
+        // FOV change only applies while the viewfinder is active (Shift held).
+        // If a capture is queued and the player released Shift between pressing the
+        // shutter and the actual render frame, keep the lens FOV so the photo matches
+        // what the viewfinder was showing.
+        if (!player.isShiftKeyDown()) {
+            double pendingFov = PhotoCapture.getPendingCaptureFovDeg();
+            if (pendingFov > 0) return pendingFov;
+            return -1;
+        }
 
         ItemStack stack = player.getMainHandItem();
         if (!isCamera(stack)) {

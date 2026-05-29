@@ -149,6 +149,19 @@ public final class PhotoCapture {
 	/** Returns true during multi-frame long-exposure accumulation (excludes single-frame captures). */
 	public static boolean isAccumulating() { return accumId != null; }
 
+	/**
+	 * Returns the vertical FOV (degrees) for a queued capture, or ≤0 if none.
+	 * Used by GameRendererMixin to keep the lens FOV even if the player releases Shift
+	 * between pressing the shutter and the actual capture frame.
+	 */
+	public static double getPendingCaptureFovDeg() {
+		CameraSettings s = pendingSettings;
+		if (s == null || !LensKind.hasLens(s.lensType())) return -1;
+		int f = s.focalLengthMm();
+		if (f <= 0) return -1;
+		return Math.toDegrees(2.0 * Math.atan(12.0 / f));
+	}
+
 	/** Called when the player presses the shutter (game thread). */
 	public static void take(ItemStack cameraStack) {
 		Minecraft mc = Minecraft.getInstance();
