@@ -27,7 +27,7 @@ import dev.hitom.photographica.network.UnloadSdCardPayload;
 import dev.hitom.photographica.network.WindFilmPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.ArmorRenderer;
-import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
+import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -180,9 +180,9 @@ public class PhotographicaClient implements ClientModInitializer {
 			VideoRecorder.onWorldRenderEnd();
 		});
 
-		BlockEntityRenderers.register(ModBlockEntities.PHOTO_FRAME,
+		BlockEntityRendererRegistry.register(ModBlockEntities.PHOTO_FRAME,
 				PhotoFrameBlockEntityRenderer::new);
-		BlockEntityRenderers.register(ModBlockEntities.PHOTO_STAND,
+		BlockEntityRendererRegistry.register(ModBlockEntities.PHOTO_STAND,
 				PhotoStandBlockEntityRenderer::new);
 
 		// Render all four camera item models on the player's chest when worn.
