@@ -42,24 +42,14 @@ public class ClientPlayerInteractionManagerMixin {
      * Primary hook: fires for position-sensitive entity interaction (the path armor
      * stands actually use — returns CONSUME when removing an item from a slot).
      */
-    @Inject(method = "interactWithEntity",
+    @Inject(
+            method = "interact(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/EntityHitResult;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;",
             at = @At("HEAD"),
-            cancellable = true)
+            cancellable = true,
+            require = 0
+    )
     private void photographica$openArmorStandCameraScreenAt(
             Player player, Entity entity, EntityHitResult hitResult, InteractionHand hand,
-            CallbackInfoReturnable<InteractionResult> cir) {
-        tryOpenCameraScreen(player, entity, hand, cir);
-    }
-
-    /**
-     * Fallback hook: fires when interactAt returns PASS (no position-sensitive action).
-     * Kept in case some code path reaches here instead of interactWithEntity.
-     */
-    @Inject(method = "interact",
-            at = @At("HEAD"),
-            cancellable = true)
-    private void photographica$openArmorStandCameraScreen(
-            Player player, Entity entity, InteractionHand hand,
             CallbackInfoReturnable<InteractionResult> cir) {
         tryOpenCameraScreen(player, entity, hand, cir);
     }
