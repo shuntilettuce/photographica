@@ -307,8 +307,10 @@ public final class PhotoCapture {
 			if (fbW > 0 && fbH > 0) {
 				// captureDepth copies the scene depth to a GPU texture via glCopyImageSubData.
 				// This works for both EVF preview blur and the DoF readback for photo capture.
+				// captureDepth must run at END_MAIN while the depth buffer is still valid.
+				// applyScheduledBlur() is called later (after renderLevel returns) so mainFb
+				// already has the current frame's colour content.
 				dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(fbW, fbH);
-				dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur();
 
 				if (pendingId != null) {
 					// GPU→CPU readback for software DoF in applyDepthOfField().
@@ -323,6 +325,17 @@ public final class PhotoCapture {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Called from GameRendererMixin AFTER captureIfPending(), so photos are clean.
+	 * Applies the EVF DoF blur directly to mainFb — safe here because renderLevel()
+	 * has fully returned and the command encoder has written the current frame.
+	 */
+	public static void applyEvfBlur() {
+		Minecraft mc = Minecraft.getInstance();
+		if (!isEvfActive(mc)) return;
+		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur();
 	}
 
 	private static boolean isEvfActive(Minecraft mc) {

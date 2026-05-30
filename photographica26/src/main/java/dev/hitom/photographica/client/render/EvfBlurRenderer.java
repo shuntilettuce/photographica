@@ -165,12 +165,17 @@ public final class EvfBlurRenderer {
 
     /**
      * Executes the scheduled blur and writes the result directly back into mainTex.
-     * Must be called from onWorldRenderEnd() where raw GL is safe and HUD has not started.
-     * After this returns, the blurred scene is already in mainTex; the HUD draws on top.
+     * Call AFTER the command encoder has flushed the world render (i.e. after
+     * GameRenderer.renderLevel() returns), so mainTex already contains the current frame.
+     * Must NOT be called inside extractRenderState() (CommandEncoder state corruption).
      */
     public static void applyScheduledBlur() {
-        if (!blurScheduled) return;
+        if (!blurScheduled) {
+            return;
+        }
         blurScheduled = false;
+        Photographica.LOGGER.info("[Photographica] applyScheduledBlur executing: aperture={} focusDist={}",
+                scheduledAperture, scheduledFocusDist);
         renderBlur(scheduledFx, scheduledFy, scheduledFx2, scheduledFy2,
                 scheduledFocusDist, scheduledAperture);
     }
@@ -241,13 +246,22 @@ public final class EvfBlurRenderer {
 
     private static void renderBlur(int fx, int fy, int fx2, int fy2,
                                    float focusDist, float aperture) {
-        if (depthTex == -1) return;
+        if (depthTex == -1) {
+            Photographica.LOGGER.warn("[Photographica] renderBlur: depthTex not captured yet");
+            return;
+        }
         float maxBlurPx = Math.min(80.0f / (aperture * aperture), 32.0f);
-        if (maxBlurPx < 0.5f) return;
+        if (maxBlurPx < 0.5f) {
+            Photographica.LOGGER.warn("[Photographica] renderBlur: maxBlurPx too small ({})", maxBlurPx);
+            return;
+        }
 
         Minecraft mc = Minecraft.getInstance();
         RenderTarget mainFb = mc.getMainRenderTarget();
-        if (mainFb == null) return;
+        if (mainFb == null) {
+            Photographica.LOGGER.warn("[Photographica] renderBlur: mainFb is null");
+            return;
+        }
         com.mojang.blaze3d.textures.GpuTexture gpuTex = mainFb.getColorTexture();
         if (!(gpuTex instanceof GlTexture glTex)) {
             Photographica.LOGGER.warn("[Photographica] renderBlur: mainTex is not GlTexture ({})",
@@ -255,7 +269,10 @@ public final class EvfBlurRenderer {
             return;
         }
         int mainTexId = glTex.glId();
-        if (mainTexId == 0) return;
+        if (mainTexId == 0) {
+            Photographica.LOGGER.warn("[Photographica] renderBlur: mainTexId is 0");
+            return;
+        }
 
         int fbW = mainFb.width;
         int fbH = mainFb.height;
@@ -332,15 +349,20 @@ public final class EvfBlurRenderer {
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
         // ---- Pass 2: Vertical blur, auxTex → mainTex (write-back) ----
-        // Writing directly to mainTex here is safe: onWorldRenderEnd() fires before HUD rendering,
-        // so the CommandEncoder has not started and our GL writes persist into the final output.
-        // The HUD (bezels, overlays, text) then renders on top of the blurred scene.
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
         GL11.glViewport(0, 0, fbW, fbH);
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
         GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+
+        // DIAGNOSTIC: Overwrite mainTex with bright green to verify write-back is visible.
+        // If the screen turns green while the viewfinder is open, write-back is working.
+        // If no green appears, writes to mainTex are being discarded or overwritten.
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        GL11.glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+        GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
+        GL11.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
         // ---- Restore GL state ----
         if (scissorWasEnabled) GL11.glEnable(GL11.GL_SCISSOR_TEST);
@@ -358,6 +380,8 @@ public final class EvfBlurRenderer {
         GL30.glBindVertexArray(prevVao);
         GL20.glUseProgram(prevProgram);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
+        Photographica.LOGGER.info("[Photographica] renderBlur: GL passes completed (mainTexId={} fbW={} fbH={})",
+                mainTexId, fbW, fbH);
     }
 
     private static void ensureInit(int fbW, int fbH) {

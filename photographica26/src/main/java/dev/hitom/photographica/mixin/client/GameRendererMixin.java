@@ -126,6 +126,9 @@ public class GameRendererMixin {
     private void photographica$captureAfterComposite(DeltaTracker deltaTracker, boolean tick, CallbackInfo ci) {
         PhotoCapture.captureIfPending();
         VideoRecorder.captureFrameIfRecording();
+        // Apply EVF blur after capture so photos remain unblurred.
+        // renderLevel() has returned → command encoder has flushed → mainFb has current content.
+        PhotoCapture.applyEvfBlur();
         photographica$videoHandSuppressed = false;
     }
 
