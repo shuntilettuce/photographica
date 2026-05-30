@@ -81,8 +81,34 @@ public final class ViewfinderHud {
 		boolean isMirrorless = stack.getItem() instanceof MirrorlessCameraItem;
 
 		// EVF real-time DoF blur (mirrorless only, before any overlays).
+		// renderBlur() writes H+V Gaussian blur to blurOutDynTex via raw GL FBOs.
+		// We then draw it via ctx.blit(GpuTextureView, ...) so it goes through
+		// CommandEncoder and is visible in MC 26.1.
 		if (isMirrorless && LensKind.hasLens(s.lensType()) && s.aperture() < 8.0f) {
-			EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture());
+			int fw = fx2 - fx;
+			int fh = fy2 - fy;
+			boolean blurred = EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture());
+			if (blurred) {
+				com.mojang.blaze3d.textures.GpuTextureView texView = EvfBlurRenderer.getBlurTexView();
+				com.mojang.blaze3d.textures.GpuSampler texSampler  = EvfBlurRenderer.getBlurSampler();
+				if (texView != null && texSampler != null) {
+					com.mojang.blaze3d.pipeline.RenderTarget mainFb = mc.getMainRenderTarget();
+					int fbW = mainFb.width;
+					int fbH = mainFb.height;
+					if (fbW > 0 && fbH > 0) {
+						double gs = mc.getWindow().getGuiScale();
+						// UV coords: map viewfinder GUI region → blurOutDynTex physical pixels.
+						// blurOutDynTex is GL-convention (V=0 at bottom), so V is flipped:
+						//   GUI top  → texture V = 1 - fy *gs/fbH  (larger V = higher up in GL)
+						//   GUI bottom → texture V = 1 - fy2*gs/fbH  (smaller V)
+						float u0 = (float)(fx  * gs) / fbW;
+						float v0 = 1.0f - (float)(fy  * gs) / fbH;
+						float u1 = (float)(fx2 * gs) / fbW;
+						float v1 = 1.0f - (float)(fy2 * gs) / fbH;
+						ctx.blit(texView, texSampler, fx, fy, fw, fh, u0, v0, u1, v1);
+					}
+				}
+			}
 		}
 
 		// Bezels (dim outside frame)

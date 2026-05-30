@@ -4,7 +4,11 @@ import dev.hitom.photographica.Photographica;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -14,7 +18,6 @@ import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL33;
-import org.lwjgl.opengl.GL43;
 
 import java.io.InputStream;
 import java.nio.FloatBuffer;
@@ -53,8 +56,13 @@ public final class EvfBlurRenderer {
     private static int blitReadFbo = -1;
     private static int blitDrawFbo = -1;
 
-    // 1.21.11: dedicated write-back FBO targeting colorAttachment
-    private static int writeBackFbo = -1;
+    // Pass-2 output: DynamicTexture registered with MC so ctx.blit() can sample it.
+    // We render the V-blur result into this texture via blurOutFbo, then ViewfinderHud
+    // draws it with ctx.blit(getBlurTexView(), getBlurSampler(), ...) which goes through
+    // CommandEncoder and is visible in MC 26.1.
+    private static DynamicTexture blurOutDynTex = null;
+    private static int blurOutFbo  = -1;
+    private static int blurOutGlId = -1;
 
     // Uniform locations
     private static int locInSampler  = -1;
@@ -144,32 +152,45 @@ public final class EvfBlurRenderer {
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDraw);
     }
 
+    /** Returns the GpuTextureView of the blur output texture for use with ctx.blit(). */
+    public static GpuTextureView getBlurTexView() {
+        return blurOutDynTex != null ? blurOutDynTex.getTextureView() : null;
+    }
+
+    /** Returns the GpuSampler of the blur output texture for use with ctx.blit(). */
+    public static GpuSampler getBlurSampler() {
+        return blurOutDynTex != null ? blurOutDynTex.getSampler() : null;
+    }
+
     /**
-     * Applies depth-aware two-pass Gaussian blur to the viewfinder area.
-     * Each pixel's blur radius is derived from its depth vs focusDist,
-     * so in-focus pixels stay sharp while out-of-focus pixels blur.
+     * Applies depth-aware two-pass Gaussian blur to the scene.
+     * Pass 1: H-blur mainTex → auxTex (full screen).
+     * Pass 2: V-blur auxTex → blurOutDynTex (full screen).
+     * Returns true if blur was applied; ViewfinderHud must then call ctx.blit()
+     * with getBlurTexView()/getBlurSampler() to display the result.
      *
-     * fx/fy/fx2/fy2 are in scaled GUI coordinates.
+     * fx/fy/fx2/fy2 are in scaled GUI coordinates (only used for maxBlurPx calculation).
      */
-    public static void renderBlur(int fx, int fy, int fx2, int fy2,
-                                  float focusDist, float aperture) {
-        if (depthTex == -1) return; // depth not captured yet
+    public static boolean renderBlur(int fx, int fy, int fx2, int fy2,
+                                     float focusDist, float aperture) {
+        if (depthTex == -1) return false; // depth not captured yet
         float maxBlurPx = Math.min(80.0f / (aperture * aperture), 32.0f);
-        if (maxBlurPx < 0.5f) return;
+        if (maxBlurPx < 0.5f) return false;
 
         Minecraft mc = Minecraft.getInstance();
         RenderTarget mainFb = mc.getMainRenderTarget();
         com.mojang.blaze3d.textures.GpuTexture gpuTex = mainFb.getColorTexture();
-        if (!(gpuTex instanceof com.mojang.blaze3d.opengl.GlTexture glTex)) return;
+        if (!(gpuTex instanceof com.mojang.blaze3d.opengl.GlTexture glTex)) return false;
         int mainTex = glTex.glId();
-        if (mainTex == 0) return;
+        if (mainTex == 0) return false;
 
         int fbW = mainFb.width;
         int fbH = mainFb.height;
-        if (fbW <= 0 || fbH <= 0) return;
+        if (fbW <= 0 || fbH <= 0) return false;
 
         ensureInit(fbW, fbH);
-        if (program == -1) return;
+        if (program == -1) return false;
+        if (blurOutFbo == -1) return false;
 
         // ---- Save GL state ----
         int prevProgram  = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
@@ -224,34 +245,19 @@ public final class EvfBlurRenderer {
         GL20.glUniform2f(locBlurDir, 1.0f, 0.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
-        // ---- Pass 2: Vertical blur, aux → main (scissored to viewfinder) ----
-        double scale = mc.getWindow().getGuiScale();
-        int scX = (int)(fx  * scale);
-        int scY = fbH - (int)(fy2 * scale);
-        int scW = (int)((fx2 - fx) * scale);
-        int scH = (int)((fy2 - fy) * scale);
-
-        // In 1.21.11, HUD uses GuiRenderState extracted then drawn by GuiRenderer.
-        // prevFbo (FBO 0 or transient) gets overwritten by presentTexture().
-        // Write pass-2 output directly into colorAttachment so GuiRenderer sees it.
-        if (writeBackFbo == -1) writeBackFbo = GL30.glGenFramebuffers();
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
-        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
-                GL11.GL_TEXTURE_2D, mainTex, 0);
+        // ---- Pass 2: Vertical blur, aux → blurOutDynTex (full screen) ----
+        // We write to blurOutDynTex (a DynamicTexture registered with MC).
+        // ViewfinderHud then draws it via ctx.blit(getBlurTexView(), getBlurSampler(), ...)
+        // which goes through CommandEncoder and is visible in MC 26.1.
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, blurOutFbo);
         GL11.glViewport(0, 0, fbW, fbH);
-        GL11.glEnable(GL11.GL_SCISSOR_TEST);
-        GL11.glScissor(scX, scY, scW, scH);
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
         GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
-        // Detach mainTex from write-back FBO so the texture stays clean for Minecraft.
-        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
-                GL11.GL_TEXTURE_2D, 0, 0);
-
         // ---- Restore GL state ----
-        if (!scissorWasEnabled) GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        if (scissorWasEnabled) GL11.glEnable(GL11.GL_SCISSOR_TEST);
         GL11.glScissor(prevScissorBox[0], prevScissorBox[1], prevScissorBox[2], prevScissorBox[3]);
         GL11.glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
         if (depthWasEnabled) GL11.glEnable(GL11.GL_DEPTH_TEST);
@@ -266,6 +272,7 @@ public final class EvfBlurRenderer {
         GL30.glBindVertexArray(prevVao);
         GL20.glUseProgram(prevProgram);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
+        return true;
     }
 
     // -------------------------------------------------------------------------
@@ -355,6 +362,17 @@ public final class EvfBlurRenderer {
             GL30.glDeleteFramebuffers(auxFbo);
             GL11.glDeleteTextures(auxTex);
         }
+        if (blurOutFbo != -1) {
+            GL30.glDeleteFramebuffers(blurOutFbo);
+            blurOutFbo = -1;
+            blurOutGlId = -1;
+        }
+        if (blurOutDynTex != null) {
+            blurOutDynTex.close();
+            blurOutDynTex = null;
+        }
+
+        // H-blur intermediate texture (raw GL, RGBA8)
         auxTex = GL11.glGenTextures();
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
         GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, w, h, 0,
@@ -371,9 +389,31 @@ public final class EvfBlurRenderer {
                 GL11.GL_TEXTURE_2D, auxTex, 0);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
 
+        // V-blur output texture: DynamicTexture so ctx.blit(GpuTextureView, ...) can sample it.
+        blurOutDynTex = new DynamicTexture("evf_blur_output", w, h, false);
+        com.mojang.blaze3d.textures.GpuTexture gpuOut = blurOutDynTex.getTexture();
+        if (gpuOut instanceof GlTexture glOut) {
+            blurOutGlId = glOut.glId();
+            blurOutFbo = GL30.glGenFramebuffers();
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, blurOutFbo);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                    GL11.GL_TEXTURE_2D, blurOutGlId, 0);
+            int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
+            if (status != GL30.GL_FRAMEBUFFER_COMPLETE) {
+                Photographica.LOGGER.error("[Photographica] blurOutFbo incomplete: {}", status);
+                GL30.glDeleteFramebuffers(blurOutFbo);
+                blurOutFbo = -1;
+                blurOutGlId = -1;
+            }
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+        } else {
+            Photographica.LOGGER.error("[Photographica] blurOutDynTex is not backed by GlTexture: {}",
+                    gpuOut == null ? "null" : gpuOut.getClass().getName());
+        }
+
         auxW = w;
         auxH = h;
-        Photographica.LOGGER.debug("EvfBlur aux FBO resized to {}x{}", w, h);
+        Photographica.LOGGER.debug("EvfBlur aux/blurOut FBOs resized to {}x{}", w, h);
     }
 
     private static String readResource(String path) throws Exception {
@@ -436,8 +476,12 @@ public final class EvfBlurRenderer {
         if (auxFbo      != -1) { GL30.glDeleteFramebuffers(auxFbo);      auxFbo      = -1; }
         if (auxTex      != -1) { GL11.glDeleteTextures(auxTex);          auxTex      = -1; }
         if (depthTex    != -1) { GL11.glDeleteTextures(depthTex);        depthTex    = -1; }
-        if (blitReadFbo  != -1) { GL30.glDeleteFramebuffers(blitReadFbo);   blitReadFbo  = -1; }
-        if (blitDrawFbo  != -1) { GL30.glDeleteFramebuffers(blitDrawFbo);   blitDrawFbo  = -1; }
-        if (writeBackFbo != -1) { GL30.glDeleteFramebuffers(writeBackFbo); writeBackFbo = -1; }
+        if (blitReadFbo != -1) { GL30.glDeleteFramebuffers(blitReadFbo); blitReadFbo = -1; }
+        if (blitDrawFbo != -1) { GL30.glDeleteFramebuffers(blitDrawFbo); blitDrawFbo = -1; }
+        if (blurOutFbo  != -1) { GL30.glDeleteFramebuffers(blurOutFbo);  blurOutFbo  = -1; }
+        if (blurOutDynTex != null) { blurOutDynTex.close(); blurOutDynTex = null; }
+        blurOutGlId = -1;
+        auxW = 0; auxH = 0;
+        depthTexW = 0; depthTexH = 0;
     }
 }
