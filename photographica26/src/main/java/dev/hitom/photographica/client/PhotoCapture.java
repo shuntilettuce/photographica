@@ -301,18 +301,25 @@ public final class PhotoCapture {
 		boolean evfActive = isEvfActive(mc);
 
 		if (evfActive || pendingId != null) {
-			// Use the render target dimensions directly — GL_VIEWPORT is unreliable in
-			// MC 26.1's CommandEncoder-based pipeline, and glReadPixels(GL_DEPTH_COMPONENT)
-			// returns stale data because depth lives in a GpuTexture, not the legacy FBO.
 			RenderTarget mainFb = mc.getMainRenderTarget();
 			int fbW = mainFb.width;
 			int fbH = mainFb.height;
 			if (fbW > 0 && fbH > 0) {
-				if (evfActive) {
-					dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(fbW, fbH);
+				// captureDepth copies the scene depth to a GPU texture via glCopyImageSubData.
+				// This works for both EVF preview blur and the DoF readback for photo capture.
+				dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(fbW, fbH);
+
+				if (pendingId != null) {
+					// GPU→CPU readback for software DoF in applyDepthOfField().
+					// One-shot stall per shutter press — acceptable latency.
+					float[] depth = dev.hitom.photographica.client.render.EvfBlurRenderer
+							.readLinearDepthCpu(fbW, fbH);
+					if (depth != null) {
+						pendingLinearDepth = depth;
+						pendingDepthFbW = fbW;
+						pendingDepthFbH = fbH;
+					}
 				}
-				// Depth readback via glReadPixels is broken in MC 26.1; DoF is handled
-				// in captureIfPending() using fb.width/height without a pre-read.
 			}
 		}
 	}
@@ -355,12 +362,12 @@ public final class PhotoCapture {
 		pendingIsFilm = false;
 		pendingArmorStandEntityId = -1;
 
+		float[] linearDepth = pendingLinearDepth;
+		int fbW = (pendingDepthFbW > 0) ? pendingDepthFbW : fb.width;
+		int fbH = (pendingDepthFbH > 0) ? pendingDepthFbH : fb.height;
 		pendingLinearDepth = null;
-		float[] linearDepth = null;
-		// Always use the framebuffer's own dimensions — stale glReadPixels depth is
-		// unusable in MC 26.1, so DoF blur is skipped rather than applied with wrong data.
-		int fbW = fb.width;
-		int fbH = fb.height;
+		pendingDepthFbW = 0;
+		pendingDepthFbH = 0;
 
 		final UUID fId = id;
 		final CameraSettings fSettings = settings;
@@ -435,10 +442,12 @@ public final class PhotoCapture {
 
 		// First tick: initialise accumulation state and consume the pending capture id.
 		if (accumSamples == 0 && pendingId != null) {
-			accumDepth = null; // depth readback is unavailable in MC 26.1
-			accumDepthFbW = fb.width;
-			accumDepthFbH = fb.height;
+			accumDepth = pendingLinearDepth;
+			accumDepthFbW = (pendingDepthFbW > 0) ? pendingDepthFbW : fb.width;
+			accumDepthFbH = (pendingDepthFbH > 0) ? pendingDepthFbH : fb.height;
 			pendingLinearDepth = null;
+			pendingDepthFbW = 0;
+			pendingDepthFbH = 0;
 			pendingId = null;
 		}
 

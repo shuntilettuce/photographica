@@ -357,6 +357,35 @@ public final class EvfBlurRenderer {
         }
     }
 
+    /**
+     * Reads the last captured depth texture back to CPU as linearised depth (blocks).
+     * Returns null if no depth has been captured yet or dimensions don't match.
+     * Causes a GPU→CPU stall; only call once per photo capture.
+     */
+    public static float[] readLinearDepthCpu(int fbW, int fbH) {
+        if (depthTex == -1 || depthTexW != fbW || depthTexH != fbH) return null;
+
+        int prevActiveTU = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        int prevTex2D = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
+        FloatBuffer buf = BufferUtils.createFloatBuffer(fbW * fbH);
+        GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex2D);
+        GL13.glActiveTexture(prevActiveTU);
+
+        final float near = 0.05f;
+        final float far  = 512.0f;
+        float[] linear = new float[fbW * fbH];
+        for (int i = 0; i < linear.length; i++) {
+            float d   = buf.get(i);
+            float ndc = 2.0f * d - 1.0f;
+            linear[i] = 2.0f * near * far / (far + near - ndc * (far - near));
+        }
+        return linear;
+    }
+
     public static void close() {
         if (program     != -1) { GL20.glDeleteProgram(program);          program     = -1; }
         if (vao         != -1) { GL30.glDeleteVertexArrays(vao);         vao         = -1; }
