@@ -81,33 +81,11 @@ public final class ViewfinderHud {
 		boolean isMirrorless = stack.getItem() instanceof MirrorlessCameraItem;
 
 		// EVF real-time DoF blur (mirrorless only, before any overlays).
-		// Raw GL must not run inside extractRenderState() — it corrupts GlCommandEncoder's cached
-		// state and causes text to render at wrong scales. Instead we schedule the GL work for
-		// PhotoCapture.onWorldRenderEnd() (safe time) and blit the result from the previous frame.
+		// scheduleBlur() stores parameters only — no raw GL here.
+		// applyScheduledBlur() in onWorldRenderEnd() applies the blur and writes the result
+		// directly into mainTex before the HUD starts, so no blit is needed here.
 		if (isMirrorless && LensKind.hasLens(s.lensType()) && s.aperture() < 8.0f) {
 			EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture());
-			if (EvfBlurRenderer.isBlurReady()) {
-				com.mojang.blaze3d.textures.GpuTextureView texView = EvfBlurRenderer.getBlurTexView();
-				com.mojang.blaze3d.textures.GpuSampler texSampler  = EvfBlurRenderer.getBlurSampler();
-				if (texView != null && texSampler != null) {
-					com.mojang.blaze3d.pipeline.RenderTarget mainFb = mc.getMainRenderTarget();
-					int fbW = mainFb.width;
-					int fbH = mainFb.height;
-					if (fbW > 0 && fbH > 0) {
-						double gs = mc.getWindow().getGuiScale();
-						// UV coords: map viewfinder GUI region → blurOutDynTex physical pixels.
-						// blurOutDynTex is GL-convention (V=0 at bottom), so V is flipped:
-						//   GUI top    → texture V = 1 - fy *gs/fbH
-						//   GUI bottom → texture V = 1 - fy2*gs/fbH
-						float u0 = (float)(fx  * gs) / fbW;
-						float v0 = 1.0f - (float)(fy  * gs) / fbH;
-						float u1 = (float)(fx2 * gs) / fbW;
-						float v1 = 1.0f - (float)(fy2 * gs) / fbH;
-						// fx2,fy2 are the opposite corner, not width/height
-						ctx.blit(texView, texSampler, fx, fy, fx2, fy2, u0, v0, u1, v1);
-					}
-				}
-			}
 		}
 
 		// Bezels (dim outside frame)
