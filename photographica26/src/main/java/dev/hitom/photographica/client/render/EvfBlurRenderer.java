@@ -49,6 +49,10 @@ public final class EvfBlurRenderer {
     private static int depthTexW = 0;
     private static int depthTexH = 0;
 
+    // FBOs used for glBlitFramebuffer-based depth copy (more compatible than glCopyImageSubData)
+    private static int blitReadFbo = -1;
+    private static int blitDrawFbo = -1;
+
     // 1.21.11: dedicated write-back FBO targeting colorAttachment
     private static int writeBackFbo = -1;
 
@@ -69,53 +73,75 @@ public final class EvfBlurRenderer {
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
 
     /**
-     * Copies the current framebuffer's depth buffer into a texture (GPU-side, no
-     * CPU readback). Must be called during WorldRenderEvents.END_MAIN while the scene
-     * depth buffer is still intact (before Iris composites).
+     * Copies the scene depth buffer into our own GPU texture so the EVF blur shader
+     * can sample it during HUD rendering (after MC clears the main depth).
+     * Uses glBlitFramebuffer which is more compatible than glCopyImageSubData.
      */
     public static void captureDepth(int fbW, int fbH) {
-        // In 1.21.11, GameRenderer clears the depth texture before HUD rendering,
-        // so we can't borrow the GL ID — we must copy before it gets cleared.
-        // glCopyImageSubData (OGL 4.3) copies texture-to-texture with no FBO setup.
-        RenderTarget mainFb_ = Minecraft.getInstance().getMainRenderTarget();
-        if (mainFb_ == null) return;
-        com.mojang.blaze3d.textures.GpuTexture depthGpu_ = mainFb_.getDepthTexture();
-        if (!(depthGpu_ instanceof com.mojang.blaze3d.opengl.GlTexture glDepth_)) return;
-        int srcDepthId_ = glDepth_.glId();
-        if (srcDepthId_ <= 0) return;
-        int fw_ = mainFb_.width;
-        int fh_ = mainFb_.height;
-        if (fw_ <= 0 || fh_ <= 0) return;
-        int prevActiveTU_ = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
-        int prevTex2D_    = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        RenderTarget mainFb = Minecraft.getInstance().getMainRenderTarget();
+        if (mainFb == null) return;
+        com.mojang.blaze3d.textures.GpuTexture depthGpu = mainFb.getDepthTexture();
+        if (!(depthGpu instanceof com.mojang.blaze3d.opengl.GlTexture glDepth)) {
+            Photographica.LOGGER.error("[Photographica] captureDepth: depth is not GlTexture ({})",
+                    depthGpu == null ? "null" : depthGpu.getClass().getName());
+            return;
+        }
+        int srcId = glDepth.glId();
+        if (srcId <= 0) return;
+        int fw = mainFb.width;
+        int fh = mainFb.height;
+        if (fw <= 0 || fh <= 0) return;
+
+        // Allocate / reallocate our copy texture.
+        int prevActiveTU = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        // Allocate/reallocate our own depth copy texture when resolution changes.
-        if (depthTex == -1 || depthTexW != fw_ || depthTexH != fh_) {
+        int prevTex2D = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        if (depthTex == -1 || depthTexW != fw || depthTexH != fh) {
             if (depthTex != -1) GL11.glDeleteTextures(depthTex);
             depthTex = GL11.glGenTextures();
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
-            // Match the scene depth attachment's internal format (DEPTH32 =
-            // GL_DEPTH_COMPONENT32, fixed-point — NOT 32F). glCopyImageSubData
-            // requires both textures to share a format size class, so a 32F copy
-            // target silently fails (GL_INVALID_OPERATION), leaving garbage depth.
             GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL14.GL_DEPTH_COMPONENT32,
-                    fw_, fh_, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_UNSIGNED_INT,
+                    fw, fh, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT,
                     (java.nio.ByteBuffer) null);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, 0);
-            depthTexW = fw_;
-            depthTexH = fh_;
+            depthTexW = fw;
+            depthTexH = fh;
         }
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex2D_);
-        GL13.glActiveTexture(prevActiveTU_);
-        // Copy scene depth into our own texture before GameRenderer clears it.
-        GL43.glCopyImageSubData(
-                srcDepthId_, GL11.GL_TEXTURE_2D, 0, 0, 0, 0,
-                depthTex,    GL11.GL_TEXTURE_2D, 0, 0, 0, 0,
-                fw_, fh_, 1);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex2D);
+        GL13.glActiveTexture(prevActiveTU);
+
+        // Save FBO bindings.
+        int prevRead = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int prevDraw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+
+        // Attach MC's depth texture to a read FBO.
+        if (blitReadFbo == -1) blitReadFbo = GL30.glGenFramebuffers();
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, blitReadFbo);
+        GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
+                GL11.GL_TEXTURE_2D, srcId, 0);
+
+        // Attach our copy texture to a draw FBO.
+        if (blitDrawFbo == -1) blitDrawFbo = GL30.glGenFramebuffers();
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, blitDrawFbo);
+        GL30.glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
+                GL11.GL_TEXTURE_2D, depthTex, 0);
+
+        int rs = GL30.glCheckFramebufferStatus(GL30.GL_READ_FRAMEBUFFER);
+        int ds = GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER);
+        if (rs == GL30.GL_FRAMEBUFFER_COMPLETE && ds == GL30.GL_FRAMEBUFFER_COMPLETE) {
+            GL30.glBlitFramebuffer(0, 0, fw, fh, 0, 0, fw, fh,
+                    GL11.GL_DEPTH_BUFFER_BIT, GL11.GL_NEAREST);
+        } else {
+            Photographica.LOGGER.error("[Photographica] captureDepth: FBO incomplete read={} draw={}", rs, ds);
+        }
+
+        // Restore.
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDraw);
     }
 
     /**
@@ -358,22 +384,39 @@ public final class EvfBlurRenderer {
     }
 
     /**
-     * Reads the last captured depth texture back to CPU as linearised depth (blocks).
-     * Returns null if no depth has been captured yet or dimensions don't match.
-     * Causes a GPU→CPU stall; only call once per photo capture.
+     * Reads the scene depth directly from MC's main framebuffer depth texture to CPU.
+     * Uses a temporary read FBO + glReadPixels (more reliable than glGetTexImage on a copy).
+     * Returns null if depth is unavailable. GPU→CPU stall — call once per capture only.
      */
     public static float[] readLinearDepthCpu(int fbW, int fbH) {
-        if (depthTex == -1 || depthTexW != fbW || depthTexH != fbH) return null;
+        RenderTarget mainFb = Minecraft.getInstance().getMainRenderTarget();
+        if (mainFb == null) return null;
+        com.mojang.blaze3d.textures.GpuTexture depthGpu = mainFb.getDepthTexture();
+        if (!(depthGpu instanceof com.mojang.blaze3d.opengl.GlTexture glDepth)) return null;
+        int depthId = glDepth.glId();
+        if (depthId <= 0) return null;
 
-        int prevActiveTU = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        int prevTex2D = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        int prevRead = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
 
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
-        FloatBuffer buf = BufferUtils.createFloatBuffer(fbW * fbH);
-        GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex2D);
-        GL13.glActiveTexture(prevActiveTU);
+        // Attach MC's depth texture to a temporary read FBO.
+        int readFbo = GL30.glGenFramebuffers();
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, readFbo);
+        GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
+                GL11.GL_TEXTURE_2D, depthId, 0);
+
+        FloatBuffer buf = null;
+        int status = GL30.glCheckFramebufferStatus(GL30.GL_READ_FRAMEBUFFER);
+        if (status == GL30.GL_FRAMEBUFFER_COMPLETE) {
+            buf = BufferUtils.createFloatBuffer(fbW * fbH);
+            GL11.glReadPixels(0, 0, fbW, fbH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
+        } else {
+            Photographica.LOGGER.error("[Photographica] readLinearDepthCpu: FBO incomplete {}", status);
+        }
+
+        GL30.glDeleteFramebuffers(readFbo);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);
+
+        if (buf == null) return null;
 
         final float near = 0.05f;
         final float far  = 512.0f;
@@ -393,6 +436,8 @@ public final class EvfBlurRenderer {
         if (auxFbo      != -1) { GL30.glDeleteFramebuffers(auxFbo);      auxFbo      = -1; }
         if (auxTex      != -1) { GL11.glDeleteTextures(auxTex);          auxTex      = -1; }
         if (depthTex    != -1) { GL11.glDeleteTextures(depthTex);        depthTex    = -1; }
+        if (blitReadFbo  != -1) { GL30.glDeleteFramebuffers(blitReadFbo);   blitReadFbo  = -1; }
+        if (blitDrawFbo  != -1) { GL30.glDeleteFramebuffers(blitDrawFbo);   blitDrawFbo  = -1; }
         if (writeBackFbo != -1) { GL30.glDeleteFramebuffers(writeBackFbo); writeBackFbo = -1; }
     }
 }

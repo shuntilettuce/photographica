@@ -933,7 +933,7 @@ public final class PhotoCapture {
 
 		// Pass 2: Depth-of-field blur
 		NativeImage pass2;
-		if (linearDepth != null && n <= 5.6) {
+		if (linearDepth != null && n < 8.0) {
 			pass2 = applyDepthOfField(pass1, settings, linearDepth, w, h, fbW, fbH);
 			pass1.close();
 		} else {

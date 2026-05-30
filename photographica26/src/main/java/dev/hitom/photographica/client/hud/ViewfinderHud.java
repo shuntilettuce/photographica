@@ -81,8 +81,7 @@ public final class ViewfinderHud {
 		boolean isMirrorless = stack.getItem() instanceof MirrorlessCameraItem;
 
 		// EVF real-time DoF blur (mirrorless only, before any overlays).
-		if (isMirrorless && LensKind.hasLens(s.lensType())
-				&& s.aperture() < 8.0f && s.focusDistance() < 999.0f) {
+		if (isMirrorless && LensKind.hasLens(s.lensType()) && s.aperture() < 8.0f) {
 			EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture());
 		}
 
