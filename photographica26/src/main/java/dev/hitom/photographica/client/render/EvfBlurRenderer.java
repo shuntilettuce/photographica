@@ -64,6 +64,15 @@ public final class EvfBlurRenderer {
     private static int blurOutFbo  = -1;
     private static int blurOutGlId = -1;
 
+    // Scheduled blur: ViewfinderHud calls scheduleBlur() during extractRenderState() (no raw GL
+    // allowed there). PhotoCapture.onWorldRenderEnd() calls applyScheduledBlur() where raw GL is
+    // safe. isBlurReady() tells ViewfinderHud whether a valid result exists to blit.
+    private static boolean blurScheduled   = false;
+    private static boolean blurReady       = false;
+    private static float   scheduledFocusDist = 0f;
+    private static float   scheduledAperture  = 0f;
+    private static int     scheduledFx = 0, scheduledFy = 0, scheduledFx2 = 0, scheduledFy2 = 0;
+
     // Uniform locations
     private static int locInSampler  = -1;
     private static int locDepthSamp  = -1;
@@ -160,6 +169,33 @@ public final class EvfBlurRenderer {
     /** Returns the GpuSampler of the blur output texture for use with ctx.blit(). */
     public static GpuSampler getBlurSampler() {
         return blurOutDynTex != null ? blurOutDynTex.getSampler() : null;
+    }
+
+    /**
+     * Called from ViewfinderHud.extractRenderState() to request a DoF blur next world-render end.
+     * Raw GL must NOT be called inside extractRenderState() — store params here only.
+     */
+    public static void scheduleBlur(int fx, int fy, int fx2, int fy2,
+                                    float focusDist, float aperture) {
+        scheduledFx = fx; scheduledFy = fy;
+        scheduledFx2 = fx2; scheduledFy2 = fy2;
+        scheduledFocusDist = focusDist;
+        scheduledAperture  = aperture;
+        blurScheduled = true;
+    }
+
+    /** Returns true if a completed blur result is ready to blit. */
+    public static boolean isBlurReady() { return blurReady; }
+
+    /**
+     * Executes the scheduled blur using raw GL.
+     * Must be called from PhotoCapture.onWorldRenderEnd() where raw GL is safe.
+     */
+    public static void applyScheduledBlur() {
+        if (!blurScheduled) return;
+        blurScheduled = false;
+        blurReady = renderBlur(scheduledFx, scheduledFy, scheduledFx2, scheduledFy2,
+                scheduledFocusDist, scheduledAperture);
     }
 
     /**
@@ -483,5 +519,7 @@ public final class EvfBlurRenderer {
         blurOutGlId = -1;
         auxW = 0; auxH = 0;
         depthTexW = 0; depthTexH = 0;
+        blurScheduled = false;
+        blurReady = false;
     }
 }

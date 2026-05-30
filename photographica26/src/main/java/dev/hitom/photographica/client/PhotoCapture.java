@@ -308,6 +308,7 @@ public final class PhotoCapture {
 				// captureDepth copies the scene depth to a GPU texture via glCopyImageSubData.
 				// This works for both EVF preview blur and the DoF readback for photo capture.
 				dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(fbW, fbH);
+				dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur();
 
 				if (pendingId != null) {
 					// GPU→CPU readback for software DoF in applyDepthOfField().
