@@ -188,7 +188,7 @@ public class PhotoViewerScreen extends Screen {
         ctx.fill(dx - 1, dy - 1, dx + dw + 1, dy + dh + 1, 0xFF000000);
 
         ctx.blit(RenderPipelines.GUI_TEXTURED, image.id, dx, dy, 0f, 0f,
-                dw, dh, image.texW, image.texH);
+                dw, dh, image.texW, image.texH, image.texW, image.texH);
 
         // Fogging overlay — washes out photos exposed to light during handling/development.
         if (data.fogged()) {

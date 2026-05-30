@@ -138,7 +138,7 @@ public class SdCardBrowserScreen extends Screen {
             // Thin frame around thumbnail
             ctx.fill(tx - 1, ty - 1, tx + thumb.guiW() + 1, ty + thumb.guiH() + 1, 0xFF9B6F30);
             ctx.blit(RenderPipelines.GUI_TEXTURED, thumb.id(), tx, ty, 0f, 0f,
-                    thumb.guiW(), thumb.guiH(), thumb.texW(), thumb.texH());
+                    thumb.guiW(), thumb.guiH(), thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH());
         }
 
         // Metadata block below thumbnail

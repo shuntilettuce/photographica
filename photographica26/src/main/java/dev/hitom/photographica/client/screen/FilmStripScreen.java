@@ -130,7 +130,7 @@ public class FilmStripScreen extends Screen {
             // Amber sprocket-hole border
             ctx.fill(tx - 1, ty - 1, tx + thumb.guiW() + 1, ty + thumb.guiH() + 1, 0xFFB07018);
             ctx.blit(RenderPipelines.GUI_TEXTURED, thumb.id(), tx, ty, 0f, 0f,
-                    thumb.guiW(), thumb.guiH(), thumb.texW(), thumb.texH());
+                    thumb.guiW(), thumb.guiH(), thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH());
             // Amber negative-mask tint over colour film
             if (!FilmKind.isBW(filmType)) {
                 ctx.fill(tx, ty, tx + thumb.guiW(), ty + thumb.guiH(), NEGATIVE_TINT);
