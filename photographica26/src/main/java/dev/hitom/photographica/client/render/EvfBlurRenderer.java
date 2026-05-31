@@ -174,8 +174,6 @@ public final class EvfBlurRenderer {
             return;
         }
         blurScheduled = false;
-        Photographica.LOGGER.info("[Photographica] applyScheduledBlur executing: aperture={} focusDist={}",
-                scheduledAperture, scheduledFocusDist);
         renderBlur(scheduledFx, scheduledFy, scheduledFx2, scheduledFy2,
                 scheduledFocusDist, scheduledAperture);
     }
@@ -356,14 +354,6 @@ public final class EvfBlurRenderer {
         GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
-        // DIAGNOSTIC: Overwrite mainTex with bright green to verify write-back is visible.
-        // If the screen turns green while the viewfinder is open, write-back is working.
-        // If no green appears, writes to mainTex are being discarded or overwritten.
-        GL11.glDisable(GL11.GL_SCISSOR_TEST);
-        GL11.glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
-        GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
-        GL11.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-
         // ---- Restore GL state ----
         if (scissorWasEnabled) GL11.glEnable(GL11.GL_SCISSOR_TEST);
         GL11.glScissor(prevScissorBox[0], prevScissorBox[1], prevScissorBox[2], prevScissorBox[3]);
@@ -380,8 +370,6 @@ public final class EvfBlurRenderer {
         GL30.glBindVertexArray(prevVao);
         GL20.glUseProgram(prevProgram);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
-        Photographica.LOGGER.info("[Photographica] renderBlur: GL passes completed (mainTexId={} fbW={} fbH={})",
-                mainTexId, fbW, fbH);
     }
 
     private static void ensureInit(int fbW, int fbH) {
