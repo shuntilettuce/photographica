@@ -82,6 +82,18 @@ public class GameRendererMixin {
             return VideoRecorder.videoFov;
         }
 
+        // Safety valve: if neither hand holds a camera and no capture is queued,
+        // make sure any stale armor-stand state is cleared and return vanilla FOV.
+        ItemStack main = player.getMainHandItem();
+        ItemStack off  = player.getOffhandItem();
+        boolean holdingCamera = isCamera(main) || isCamera(off)
+                || main.getItem() instanceof VideoCameraItem
+                || off.getItem() instanceof VideoCameraItem;
+        if (!holdingCamera && PhotoCapture.getPendingCaptureFovDeg() <= 0) {
+            PhotoCapture.clearArmorStandState();
+            return -1;
+        }
+
         // FOV change only applies while the viewfinder is active (Shift held).
         // If a capture is queued and the player released Shift between pressing the
         // shutter and the actual render frame, keep the lens FOV so the photo matches

@@ -154,6 +154,19 @@ public final class PhotoCapture {
 	 * Used by GameRendererMixin to keep the lens FOV even if the player releases Shift
 	 * between pressing the shutter and the actual capture frame.
 	 */
+	/** Clears any stuck armor-stand FOV override state. Safe to call at any time. */
+	public static void clearArmorStandState() {
+		if (!armorStandCapturePending) return;
+		Minecraft mc = Minecraft.getInstance();
+		if (mc.player != null) mc.setCameraEntity(mc.player);
+		if (savedArmorStandPerspective != null) {
+			mc.options.setCameraType(savedArmorStandPerspective);
+			savedArmorStandPerspective = null;
+		}
+		armorStandCapturePending = false;
+		armorStandFocalLength = 0;
+	}
+
 	public static double getPendingCaptureFovDeg() {
 		CameraSettings s = pendingSettings;
 		if (s == null || !LensKind.hasLens(s.lensType())) return -1;
@@ -383,6 +396,18 @@ public final class PhotoCapture {
 		pendingDepthFbW = 0;
 		pendingDepthFbH = 0;
 
+		// Restore camera entity and perspective immediately so the FOV override
+		// is cleared regardless of whether the screenshot callback fires.
+		if (captureStandId >= 0) {
+			if (mc.player != null) mc.setCameraEntity(mc.player);
+			if (savedArmorStandPerspective != null) {
+				mc.options.setCameraType(savedArmorStandPerspective);
+				savedArmorStandPerspective = null;
+			}
+			armorStandCapturePending = false;
+			armorStandFocalLength = 0;
+		}
+
 		final UUID fId = id;
 		final CameraSettings fSettings = settings;
 		final boolean fIsFilm = isFilm;
@@ -424,13 +449,6 @@ public final class PhotoCapture {
 					ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(fId, fSettings, fCaptureStandId));
 					if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影 (防具立て)"), false);
 				}
-				if (mc.player != null) mc.setCameraEntity(mc.player);
-				if (savedArmorStandPerspective != null) {
-					mc.options.setCameraType(savedArmorStandPerspective);
-					savedArmorStandPerspective = null;
-				}
-				armorStandCapturePending = false;
-				armorStandFocalLength = 0;
 			} else if (fIsFilm) {
 				ClientPlayNetworking.send(new TakeFilmPhotoPayload(fId, fSettings));
 				if (mc.player != null) {
