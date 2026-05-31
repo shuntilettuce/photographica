@@ -32,21 +32,20 @@ public class WorldRendererMixin {
     }
 
     /**
-     * Vanilla LevelRenderer.renderLevel() skips drawing a {@code LocalPlayer} when
-     * {@code camera.entity() != entity}. This is intentional for spectating
-     * (you shouldn't see your own floating body), but it also fires when the mod
-     * redirects the camera to an armor-stand for a photo — making the player
-     * invisible in the shot.
+     * Vanilla LevelRenderer.extractVisibleEntities() skips a LocalPlayer entity when
+     * camera.entity() != entity (the "spectator floating body" guard). This also
+     * fires when the mod redirects the camera to an armor-stand for a photo, making
+     * the player invisible in the shot.
      *
-     * We redirect the getFocusedEntity() call (ordinal 3) to return {@code mc.player}
-     * during an armor-stand capture so the comparison evaluates to {@code false}
-     * and the player entity is rendered normally.
+     * Ordinal 3 is the fourth Camera.entity() call in extractVisibleEntities — the
+     * one used in the LocalPlayer skip check:
+     *   if (entity instanceof LocalPlayer && camera.entity() != entity) → skip
+     * Returning mc.player makes the comparison evaluate to false, so the player renders.
      */
     @Redirect(
-            method = "fillEntityRenderStates(Lnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/culling/Frustum;Lnet/minecraft/client/DeltaTracker;Lnet/minecraft/client/renderer/LevelRenderer$RenderChunkStorage;)V",
+            method = "extractVisibleEntities(Lnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/culling/Frustum;Lnet/minecraft/client/DeltaTracker;Lnet/minecraft/client/renderer/state/level/LevelRenderState;)V",
             at = @At(value = "INVOKE", ordinal = 3,
-                    target = "Lnet/minecraft/client/Camera;getEntity()Lnet/minecraft/world/entity/Entity;"),
-            require = 0
+                    target = "Lnet/minecraft/client/Camera;entity()Lnet/minecraft/world/entity/Entity;")
     )
     private Entity photographica$allowPlayerRenderDuringArmorStandCapture(Camera camera) {
         if (PhotoCapture.armorStandCapturePending) {
