@@ -1205,7 +1205,7 @@ public final class PhotoCapture {
 		float aperture  = settings.aperture();
 		float focusDist = settings.focusDistance();
 
-		float maxBlurPx = 80.0f / (aperture * aperture);
+		float maxBlurPx = Math.min(32.0f, 80.0f / (aperture * aperture));
 		int   maxR      = Math.max(1, (int) Math.ceil(maxBlurPx));
 
 		int croppedW, croppedH, cropOffX, cropOffY;
@@ -1252,11 +1252,13 @@ public final class PhotoCapture {
 					continue;
 				}
 				int r = Math.min(maxR, (int) Math.ceil(coc));
+				float sigma = Math.max(coc * 0.5f, 1.0f);
 				float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
 				for (int dx = -r; dx <= r; dx++) {
 					int sx = Math.max(0, Math.min(iw - 1, ix + dx));
-					float w = Math.min(1.0f, cocMap[iy * iw + sx] / coc);
-					if (w < 0.01f) continue;
+					float gauss = (float) Math.exp(-(float)(dx * dx) / (2.0f * sigma * sigma));
+					float w = gauss * Math.min(1.0f, cocMap[iy * iw + sx] / coc);
+					if (w < 0.001f) continue;
 					int c = getPixelAbgr(src, sx, iy);
 					aa += ((c >>> 24) & 0xFF) * w;
 					ba += ((c >>> 16) & 0xFF) * w;
@@ -1264,7 +1266,7 @@ public final class PhotoCapture {
 					ra += ( c         & 0xFF) * w;
 					tw += w;
 				}
-				hBuf[iy * iw + ix] = (tw < 0.01f) ? getPixelAbgr(src, ix, iy)
+				hBuf[iy * iw + ix] = (tw < 0.001f) ? getPixelAbgr(src, ix, iy)
 						: ((clampCh(Math.round(aa / tw)) << 24)
 						| (clampCh(Math.round(ba / tw)) << 16)
 						| (clampCh(Math.round(ga / tw)) <<  8)
@@ -1282,11 +1284,13 @@ public final class PhotoCapture {
 					continue;
 				}
 				int r = Math.min(maxR, (int) Math.ceil(coc));
+				float sigma = Math.max(coc * 0.5f, 1.0f);
 				float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
 				for (int dy = -r; dy <= r; dy++) {
 					int sy = Math.max(0, Math.min(ih - 1, iy + dy));
-					float w = Math.min(1.0f, cocMap[sy * iw + ix] / coc);
-					if (w < 0.01f) continue;
+					float gauss = (float) Math.exp(-(float)(dy * dy) / (2.0f * sigma * sigma));
+					float w = gauss * Math.min(1.0f, cocMap[sy * iw + ix] / coc);
+					if (w < 0.001f) continue;
 					int c = hBuf[sy * iw + ix];
 					aa += ((c >>> 24) & 0xFF) * w;
 					ba += ((c >>> 16) & 0xFF) * w;
@@ -1294,7 +1298,7 @@ public final class PhotoCapture {
 					ra += ( c         & 0xFF) * w;
 					tw += w;
 				}
-				setPixelAbgr(result, ix, iy, (tw < 0.01f) ? hBuf[iy * iw + ix]
+				setPixelAbgr(result, ix, iy, (tw < 0.001f) ? hBuf[iy * iw + ix]
 						: ((clampCh(Math.round(aa / tw)) << 24)
 						| (clampCh(Math.round(ba / tw)) << 16)
 						| (clampCh(Math.round(ga / tw)) <<  8)
