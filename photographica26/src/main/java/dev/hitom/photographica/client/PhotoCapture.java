@@ -1166,28 +1166,34 @@ public final class PhotoCapture {
 		// attachment, so glReadPixels(GL_DEPTH_COMPONENT) returns stale/wrong data.
 		// mc.hitResult is capped at interaction reach (~4.5 blocks), so it MISSes
 		// for anything farther — leaving the focus plane and reticle frozen. Do our own
-		// long-range raycast (blocks + entities) so focus tracks distant subjects too.
-		final double maxDist = 256.0;
-		net.minecraft.world.phys.Vec3 eye = mc.player.getEyePosition(1.0f);
+		// long-range block raycast + short-range entity scan so focus tracks distant
+		// subjects and can reach infinity (snapFocus threshold to 999m is ~316m).
+		final double maxBlockDist  = 1000.0; // must exceed ~316 m for infinity to be reachable
+		final double maxEntityDist = 50.0;   // entity AF limited to nearby mobs
+		net.minecraft.world.phys.Vec3 eye  = mc.player.getEyePosition(1.0f);
 		net.minecraft.world.phys.Vec3 look = mc.player.getViewVector(1.0f);
-		net.minecraft.world.phys.Vec3 end = eye.add(look.scale(maxDist));
+		// Long-range block raycast
 		net.minecraft.world.phys.BlockHitResult blockHit = mc.level.clip(
-				new net.minecraft.world.level.ClipContext(eye, end,
+				new net.minecraft.world.level.ClipContext(
+						eye, eye.add(look.scale(maxBlockDist)),
 						net.minecraft.world.level.ClipContext.Block.OUTLINE,
 						net.minecraft.world.level.ClipContext.Fluid.NONE, mc.player));
 		double bestDist = (blockHit != null
 				&& blockHit.getType() != net.minecraft.world.phys.HitResult.Type.MISS)
-				? eye.distanceTo(blockHit.getLocation()) : maxDist;
-		net.minecraft.world.phys.AABB searchBox = mc.player.getBoundingBox()
-				.expandTowards(look.scale(maxDist)).inflate(1.0);
+				? eye.distanceTo(blockHit.getLocation()) : maxBlockDist;
+		// Short-range entity scan (separate from block scan to avoid huge bounding box)
+		net.minecraft.world.phys.Vec3 entityEnd = eye.add(look.scale(maxEntityDist));
+		net.minecraft.world.phys.AABB entityBox = mc.player.getBoundingBox()
+				.expandTowards(look.scale(maxEntityDist)).inflate(1.0);
 		net.minecraft.world.phys.EntityHitResult entityHit =
-				net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(mc.player, eye, end,
-						searchBox, e -> !e.isSpectator() && e.isAlive(), bestDist * bestDist);
+				net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(mc.player, eye, entityEnd,
+						entityBox, e -> !e.isSpectator() && e.isAlive(), maxEntityDist * maxEntityDist);
 		if (entityHit != null) {
 			double eDist = eye.distanceTo(entityHit.getLocation());
 			if (eDist < bestDist) bestDist = eDist;
 		}
-		lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : 999.0f;
+		// Clamp to 999 (∞) — snapFocus will map anything ≥316m to the 999m stop
+		lastSceneDepthBlocks = (float) Math.min(bestDist, 999.0);
 	}
 
 	/**

@@ -2,6 +2,7 @@ package dev.hitom.photographica.mixin.client;
 
 import dev.hitom.photographica.client.PhotoCapture;
 import dev.hitom.photographica.client.VideoRecorder;
+import dev.hitom.photographica.client.render.EvfBlurRenderer;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.item.CameraItem;
@@ -50,6 +51,9 @@ public class GameRendererMixin {
 
         CameraRenderState camState = gameRenderState.levelRenderState.cameraRenderState;
         if (camState == null || camState.projectionMatrix == null) return;
+
+        // Keep EvfBlurRenderer in sync with the actual far clip plane.
+        EvfBlurRenderer.currentDepthFar = camState.depthFar;
 
         Minecraft mc = Minecraft.getInstance();
         float aspect = (float) mc.getWindow().getWidth() / (float) mc.getWindow().getHeight();
@@ -124,6 +128,11 @@ public class GameRendererMixin {
                     target = "Lnet/minecraft/client/renderer/GameRenderer;renderLevel(Lnet/minecraft/client/DeltaTracker;)V",
                     shift = At.Shift.AFTER))
     private void photographica$captureAfterComposite(DeltaTracker deltaTracker, boolean tick, CallbackInfo ci) {
+        // Sync depthFar every frame so EvfBlurRenderer always has the current value
+        // (applyFocalLength fires only when FOV is overridden, so this is the reliable path).
+        CameraRenderState camState = gameRenderState.levelRenderState.cameraRenderState;
+        if (camState != null) EvfBlurRenderer.currentDepthFar = camState.depthFar;
+
         PhotoCapture.captureIfPending();
         VideoRecorder.captureFrameIfRecording();
         // Apply EVF blur after capture so photos remain unblurred.

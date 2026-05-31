@@ -58,6 +58,10 @@ public final class EvfBlurRenderer {
     private static int writeBackFbo    = -1;
     private static int writeBackFbTex  = 0;  // GL id of the texture currently attached
 
+    // Set by GameRendererMixin each frame from CameraRenderState.depthFar.
+    // Must match the projection matrix far plane for correct depth linearization.
+    public static float currentDepthFar = 512f;
+
     // Scheduled blur parameters: set by ViewfinderHud.extractRenderState() (no raw GL there),
     // consumed by applyScheduledBlur() in onWorldRenderEnd() where raw GL is safe.
     private static boolean blurScheduled      = false;
@@ -76,7 +80,7 @@ public final class EvfBlurRenderer {
     private static int locFar        = -1;
 
     private static final float NEAR = 0.05f;
-    // FAR is computed dynamically from render settings — see computeDepthFar()
+    // FAR is computed dynamically from render settings — see currentDepthFar
 
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
 
@@ -212,7 +216,7 @@ public final class EvfBlurRenderer {
         if (buf == null) return null;
 
         final float near = NEAR;
-        final float far  = computeDepthFar();
+        final float far  = currentDepthFar;
         float[] linear = new float[fbW * fbH];
         for (int i = 0; i < linear.length; i++) {
             float d   = buf.get(i);
@@ -332,7 +336,7 @@ public final class EvfBlurRenderer {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
         GL20.glUniform1i(locDepthSamp, 1);
 
-        float depthFar = computeDepthFar();
+        float depthFar = currentDepthFar;
         GL20.glUniform2f(locPixelSize, 1.0f / fbW, 1.0f / fbH);
         GL20.glUniform1f(locFocusDist, focusDist);
         GL20.glUniform1f(locMaxBlurPx, maxBlurPx);
@@ -371,15 +375,6 @@ public final class EvfBlurRenderer {
         GL30.glBindVertexArray(prevVao);
         GL20.glUseProgram(prevProgram);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
-    }
-
-    /** Replicates Camera.update() formula: max(renderDist * 64, cloudRange * 16). */
-    private static float computeDepthFar() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.options == null) return 512f;
-        float rdFar = mc.options.getEffectiveRenderDistance() * 64f;
-        float cloudFar = ((Integer) mc.options.cloudRange().get()) * 16f;
-        return Math.max(rdFar, cloudFar);
     }
 
     private static void ensureInit(int fbW, int fbH) {
