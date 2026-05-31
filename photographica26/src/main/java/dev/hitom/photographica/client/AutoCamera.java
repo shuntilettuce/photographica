@@ -137,7 +137,7 @@ public final class AutoCamera {
 	// Helpers
 	// -------------------------------------------------------------------------
 
-	private static float snapFocus(float depth) {
+	public static float snapFocus(float depth) {
 		depth = Math.max(0.01f, depth);
 		float logDepth = (float) Math.log(depth);
 		float best = FOCUS_STOPS.get(0);

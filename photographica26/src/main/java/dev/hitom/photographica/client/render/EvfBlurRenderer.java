@@ -76,7 +76,7 @@ public final class EvfBlurRenderer {
     private static int locFar        = -1;
 
     private static final float NEAR = 0.05f;
-    private static final float FAR  = 512.0f;
+    // FAR is computed dynamically from render settings — see computeDepthFar()
 
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
 
@@ -211,8 +211,8 @@ public final class EvfBlurRenderer {
 
         if (buf == null) return null;
 
-        final float near = 0.05f;
-        final float far  = 512.0f;
+        final float near = NEAR;
+        final float far  = computeDepthFar();
         float[] linear = new float[fbW * fbH];
         for (int i = 0; i < linear.length; i++) {
             float d   = buf.get(i);
@@ -332,11 +332,12 @@ public final class EvfBlurRenderer {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
         GL20.glUniform1i(locDepthSamp, 1);
 
+        float depthFar = computeDepthFar();
         GL20.glUniform2f(locPixelSize, 1.0f / fbW, 1.0f / fbH);
         GL20.glUniform1f(locFocusDist, focusDist);
         GL20.glUniform1f(locMaxBlurPx, maxBlurPx);
         GL20.glUniform1f(locNear, NEAR);
-        GL20.glUniform1f(locFar,  FAR);
+        GL20.glUniform1f(locFar,  depthFar);
 
         // ---- Pass 1: Horizontal blur, mainTex → auxTex ----
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, auxFbo);
@@ -370,6 +371,15 @@ public final class EvfBlurRenderer {
         GL30.glBindVertexArray(prevVao);
         GL20.glUseProgram(prevProgram);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
+    }
+
+    /** Replicates Camera.update() formula: max(renderDist * 64, cloudRange * 16). */
+    private static float computeDepthFar() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.options == null) return 512f;
+        float rdFar = mc.options.getEffectiveRenderDistance() * 64f;
+        float cloudFar = ((Integer) mc.options.cloudRange().get()) * 16f;
+        return Math.max(rdFar, cloudFar);
     }
 
     private static void ensureInit(int fbW, int fbH) {

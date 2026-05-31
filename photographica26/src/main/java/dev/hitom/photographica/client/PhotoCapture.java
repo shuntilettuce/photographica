@@ -771,11 +771,11 @@ public final class PhotoCapture {
 		net.minecraft.world.entity.Entity entity = mc.level.getEntity(entityId);
 		if (!(entity instanceof net.minecraft.world.entity.decoration.ArmorStand stand)) return;
 
-		// AF: snap focus from the armor stand's eye position / facing direction
-		if (settings.focusMode() != CameraSettings.FOCUS_MF) {
-			float snappedDepth = AutoCamera.snapFocusFromArmorStand(stand, mc.level);
-			settings = settings.withFocusDistance(snappedDepth);
-		}
+		// Always auto-focus from the armor stand's perspective before capture.
+		// The camera may have been aimed in a different direction when used handheld,
+		// so the stored focus distance is irrelevant for a tripod shot.
+		settings = settings.withFocusDistance(
+				AutoCamera.snapFocusFromArmorStand(stand, mc.level));
 
 		lastCaptureMs = now;
 		motionBlurEnabled = true; // armor stand = always stable

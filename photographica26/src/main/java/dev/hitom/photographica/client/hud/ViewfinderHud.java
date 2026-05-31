@@ -85,7 +85,17 @@ public final class ViewfinderHud {
 		// applyScheduledBlur() in onWorldRenderEnd() applies the blur and writes the result
 		// directly into mainTex before the HUD starts, so no blit is needed here.
 		if (isMirrorless && LensKind.hasLens(s.lensType()) && s.aperture() < 8.0f) {
-			EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture());
+			// For AF/AF-C modes, compute focus from current scene depth directly rather
+			// than waiting for AutoCamera.tick() to update the ItemStack (avoids 1-tick lag
+			// and ensures the EVF shows correct blur the instant the viewfinder opens).
+			float evfFocusDist;
+			if (s.focusMode() != dev.hitom.photographica.component.CameraSettings.FOCUS_MF) {
+				evfFocusDist = dev.hitom.photographica.client.AutoCamera.snapFocus(
+						dev.hitom.photographica.client.PhotoCapture.lastSceneDepthBlocks);
+			} else {
+				evfFocusDist = s.focusDistance();
+			}
+			EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2, evfFocusDist, s.aperture());
 		}
 
 		// Bezels (dim outside frame)
