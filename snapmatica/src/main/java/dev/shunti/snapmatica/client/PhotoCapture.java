@@ -36,6 +36,10 @@ public final class PhotoCapture {
     private static long lastShotMs   = 0L;
     private static boolean capturePending = false;
 
+    private static volatile float[] pendingLinearDepth = null;
+    private static volatile int pendingDepthFbW = 0;
+    private static volatile int pendingDepthFbH = 0;
+
     private static final long COOLDOWN_MS = 700L;
 
     // ── Public API ──────────────────────────────────────────────────────────────
@@ -75,8 +79,29 @@ public final class PhotoCapture {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
 
+        // Capture depth for photo DoF (GPU→CPU stall, once per shutter press).
+        net.minecraft.client.gl.Framebuffer mainFb = mc.getFramebuffer();
+        int fbW = mainFb.textureWidth;
+        int fbH = mainFb.textureHeight;
+        if (fbW > 0 && fbH > 0) {
+            EvfBlurRenderer.captureDepth(fbW, fbH);
+            float[] depth = EvfBlurRenderer.readLinearDepthCpu(fbW, fbH);
+            if (depth != null) {
+                pendingLinearDepth = depth;
+                pendingDepthFbW    = fbW;
+                pendingDepthFbH    = fbH;
+            }
+        }
+
+        final float[] capturedDepth = pendingLinearDepth;
+        final int capturedFbW = pendingDepthFbW;
+        final int capturedFbH = pendingDepthFbH;
+        pendingLinearDepth = null;
+        pendingDepthFbW = 0;
+        pendingDepthFbH = 0;
+
         //? if >=1.21.11 {
-        /*ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), raw -> processScreenshot(mc, raw));*/
+        /*ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), raw -> processScreenshot(mc, raw, capturedDepth, capturedFbW, capturedFbH));*/
         //?} else {
         NativeImage raw;
         try {
@@ -85,11 +110,11 @@ public final class PhotoCapture {
             System.err.println("[Snapmatica] Screenshot failed: " + e.getMessage());
             return;
         }
-        processScreenshot(mc, raw);
+        processScreenshot(mc, raw, capturedDepth, capturedFbW, capturedFbH);
         //?}
     }
 
-    private static void processScreenshot(MinecraftClient mc, NativeImage raw) {
+    private static void processScreenshot(MinecraftClient mc, NativeImage raw, float[] linearDepth, int fbW, int fbH) {
         // ── Crop to 3:2 aspect ratio ────────────────────────────────────────────
         int w = raw.getWidth();
         int h = raw.getHeight();
@@ -113,7 +138,7 @@ public final class PhotoCapture {
         raw.close();
 
         // ── Apply photo effects ─────────────────────────────────────────────────
-        NativeImage processed = applyPhotoEffects(cropped);
+        NativeImage processed = applyPhotoEffects(cropped, linearDepth, fbW, fbH);
         cropped.close();
 
         // ── Save to disk ────────────────────────────────────────────────────────
@@ -150,7 +175,7 @@ public final class PhotoCapture {
         // mc.crosshairTarget is capped at interaction reach (~4.5 blocks), so it MISSes
         // for anything farther — leaving the focus plane and reticle frozen. Do our own
         // long-range raycast (blocks + entities) so focus tracks distant subjects too.
-        final double maxDist = 256.0;
+        final double maxDist = 1000.0;
         net.minecraft.util.math.Vec3d eye = mc.player.getCameraPosVec(1.0f);
         net.minecraft.util.math.Vec3d look = mc.player.getRotationVec(1.0f);
         net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
@@ -178,7 +203,11 @@ public final class PhotoCapture {
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
         int vpW = viewport[2];
         int vpH = viewport[3];
-        if (vpW > 0 && vpH > 0) EvfBlurRenderer.captureDepth(vpW, vpH);*/
+        if (vpW > 0 && vpH > 0) {
+            int rd = mc.options.getViewDistance().getValue();
+            EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
+            EvfBlurRenderer.captureDepth(vpW, vpH);
+        }*/
         //?} else {
         // Read from the currently bound framebuffer without switching.
         GL11.glGetError(); // clear any pending GL error
@@ -189,6 +218,8 @@ public final class PhotoCapture {
         if (vpW <= 0 || vpH <= 0) return;
 
         // GPU-side depth copy for EVF DoF blur (no CPU readback).
+        int rd = mc.options.getViewDistance().getValue();
+        EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
         EvfBlurRenderer.captureDepth(vpW, vpH);
 
         int cx = vpW / 2;
@@ -201,7 +232,7 @@ public final class PhotoCapture {
 
         // Reconstruct linear depth in world units (blocks ≈ metres)
         final float near = 0.05f;
-        final float far  = 512.0f;
+        final float far  = EvfBlurRenderer.currentDepthFar;
         lastSceneDepthBlocks = 2.0f * near * far / (far + near - ndc * (far - near));
         //?}
     }
@@ -213,7 +244,7 @@ public final class PhotoCapture {
      * exposure compensation, vignetting, ISO noise, tone curve,
      * highlight rolloff, and depth‑of‑field blur.
      */
-    private static NativeImage applyPhotoEffects(NativeImage src) {
+    private static NativeImage applyPhotoEffects(NativeImage src, float[] linearDepth, int fbW, int fbH) {
         int w = src.getWidth();
         int h = src.getHeight();
 
@@ -226,7 +257,6 @@ public final class PhotoCapture {
         // DOF parameters
         float focusDist = SnapmaticaClient.focusDistance;
         float depthCenter = lastSceneDepthBlocks;          // blocks at centre
-        float depthMeters = depthCenter;                    // 1 block ≈ 1 metre (approx)
 
         NativeImage dst = new NativeImage(w, h, false);
 
@@ -275,123 +305,101 @@ public final class PhotoCapture {
             }
         }
 
-        // ── Depth‑of‑field blur ────────────────────────────────────────────────
-        // Simple separable box blur, repeated. Full implementation would use
-        // a proper Gaussian or bokeh kernel with depth awareness.
-        if (SnapmaticaClient.aperture < 8.0f && focusDist < 999.0f) {
-            float dofStrength = (8.0f - SnapmaticaClient.aperture) / 6.6f; // 0..1
-            if (dofStrength > 0.01f) {
-                int blurPasses = (int)(dofStrength * 3);   // 1 … 3
-                int radius = 1 + (int)(dofStrength * 4);   // 1 … 5 px
-                for (int pass = 0; pass < blurPasses; pass++) {
-                    dst = boxBlur(dst, radius, focusDist, depthCenter);
+        // Pass 2: Depth-of-field blur
+        NativeImage pass2;
+        if (linearDepth != null && SnapmaticaClient.aperture < 8.0f) {
+            pass2 = applyDepthOfField(dst, SnapmaticaClient.aperture, focusDist,
+                                       linearDepth, w, h, fbW, fbH);
+            dst.close();
+        } else {
+            pass2 = dst;
+        }
+        return pass2;
+    }
+
+    private static NativeImage applyDepthOfField(NativeImage src,
+                                                  float aperture, float focusDist,
+                                                  float[] linearDepth,
+                                                  int iw, int ih, int fbW, int fbH) {
+        float maxBlurPx = Math.min(32.0f, 80.0f / (aperture * aperture));
+        int   maxR      = Math.max(1, (int) Math.ceil(maxBlurPx));
+
+        int croppedW, croppedH, cropOffX, cropOffY;
+        if ((float) fbW / fbH > 1.5f) {
+            croppedH = fbH; croppedW = Math.round(fbH * 1.5f);
+            cropOffX = (fbW - croppedW) / 2; cropOffY = 0;
+        } else {
+            croppedW = fbW; croppedH = Math.round(fbW / 1.5f);
+            cropOffX = 0; cropOffY = (fbH - croppedH) / 2;
+        }
+
+        boolean infinityFocus = (focusDist >= 999.0f);
+        float nearLimit = infinityFocus ? (10.0f / aperture) : 0.0f;
+        float[] cocMap = new float[iw * ih];
+        for (int iy = 0; iy < ih; iy++) {
+            for (int ix = 0; ix < iw; ix++) {
+                int fx    = Math.max(0, Math.min(fbW - 1, cropOffX + ix * croppedW / iw));
+                int fy_gl = Math.max(0, Math.min(fbH - 1, fbH - 1 - (cropOffY + iy * croppedH / ih)));
+                float depth = linearDepth[fy_gl * fbW + fx];
+                float coc;
+                if (infinityFocus) {
+                    coc = Math.min(maxBlurPx, maxBlurPx * nearLimit / Math.max(depth, 0.05f));
+                } else {
+                    float r = depth / focusDist;
+                    coc = (depth <= focusDist) ? (1.0f - r) * maxBlurPx : ((r - 1.0f) / r) * maxBlurPx;
                 }
+                cocMap[iy * iw + ix] = Math.min(coc, maxBlurPx);
             }
         }
 
-        return dst;
-    }
-
-    // ── Separable box blur with simple depth weighting ──────────────────────────
-
-    private static NativeImage boxBlur(NativeImage src, int radius,
-                                       float focusDist, float depthCenter) {
-        int w = src.getWidth();
-        int h = src.getHeight();
-        NativeImage tmp = new NativeImage(w, h, false);
-
-        // Horizontal pass
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                float weight = depthWeight(y, h, radius, focusDist, depthCenter);
-                if (weight <= 0f) {
-                    setPixelAbgr(tmp, x, y, getPixelAbgr(src, x, y));
-                    continue;
+        int[] hBuf = new int[iw * ih];
+        for (int iy = 0; iy < ih; iy++) {
+            for (int ix = 0; ix < iw; ix++) {
+                float coc = cocMap[iy * iw + ix];
+                if (coc < 0.5f) { hBuf[iy * iw + ix] = getPixelAbgr(src, ix, iy); continue; }
+                int r = Math.min(maxR, (int) Math.ceil(coc));
+                float sigma = Math.max(coc * 0.5f, 1.0f);
+                float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
+                for (int dx = -r; dx <= r; dx++) {
+                    int sx = Math.max(0, Math.min(iw - 1, ix + dx));
+                    float gauss = (float) Math.exp(-(float)(dx * dx) / (2.0f * sigma * sigma));
+                    float w = gauss * Math.min(1.0f, cocMap[iy * iw + sx] / coc);
+                    if (w < 0.001f) continue;
+                    int c = getPixelAbgr(src, sx, iy);
+                    aa += ((c >>> 24) & 0xFF) * w; ba += ((c >>> 16) & 0xFF) * w;
+                    ga += ((c >>>  8) & 0xFF) * w; ra += ( c         & 0xFF) * w;
+                    tw += w;
                 }
-                int ar = 0, ag = 0, ab = 0, aa = 0;
-                int count = 0;
-                for (int k = -radius; k <= radius; k++) {
-                    int sx = x + k;
-                    if (sx < 0 || sx >= w) continue;
-                    int c = getPixelAbgr(src, sx, y);
-                    ar += (c >>> 24) & 0xFF;
-                    ag += (c >>> 16) & 0xFF;
-                    ab += (c >>>  8) & 0xFF;
-                    aa += c & 0xFF;
-                    count++;
-                }
-                if (count == 0) { setPixelAbgr(tmp, x, y, getPixelAbgr(src, x, y)); continue; }
-                int nc = ( (ar / count) << 24 ) | ( (ag / count) << 16 ) | ( (ab / count) << 8 ) | ( aa / count );
-                setPixelAbgr(tmp, x, y, blendWithOriginal(getPixelAbgr(src, x, y), nc, weight));
+                hBuf[iy * iw + ix] = (tw < 0.001f) ? getPixelAbgr(src, ix, iy)
+                        : ((clamp(Math.round(aa / tw)) << 24) | (clamp(Math.round(ba / tw)) << 16)
+                         | (clamp(Math.round(ga / tw)) <<  8) |  clamp(Math.round(ra / tw)));
             }
         }
 
-        // Vertical pass
-        NativeImage dst = new NativeImage(w, h, false);
-        for (int x = 0; x < w; x++) {
-            for (int y = 0; y < h; y++) {
-                float weight = depthWeight(y, h, radius, focusDist, depthCenter);
-                if (weight <= 0f) {
-                    setPixelAbgr(dst, x, y, getPixelAbgr(tmp, x, y));
-                    continue;
+        NativeImage result = new NativeImage(iw, ih, false);
+        for (int ix = 0; ix < iw; ix++) {
+            for (int iy = 0; iy < ih; iy++) {
+                float coc = cocMap[iy * iw + ix];
+                if (coc < 0.5f) { setPixelAbgr(result, ix, iy, getPixelAbgr(src, ix, iy)); continue; }
+                int r = Math.min(maxR, (int) Math.ceil(coc));
+                float sigma = Math.max(coc * 0.5f, 1.0f);
+                float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
+                for (int dy = -r; dy <= r; dy++) {
+                    int sy = Math.max(0, Math.min(ih - 1, iy + dy));
+                    float gauss = (float) Math.exp(-(float)(dy * dy) / (2.0f * sigma * sigma));
+                    float w = gauss * Math.min(1.0f, cocMap[sy * iw + ix] / coc);
+                    if (w < 0.001f) continue;
+                    int c = hBuf[sy * iw + ix];
+                    aa += ((c >>> 24) & 0xFF) * w; ba += ((c >>> 16) & 0xFF) * w;
+                    ga += ((c >>>  8) & 0xFF) * w; ra += ( c         & 0xFF) * w;
+                    tw += w;
                 }
-                int ar = 0, ag = 0, ab = 0, aa = 0;
-                int count = 0;
-                for (int k = -radius; k <= radius; k++) {
-                    int sy = y + k;
-                    if (sy < 0 || sy >= h) continue;
-                    int c = getPixelAbgr(tmp, x, sy);
-                    ar += (c >>> 24) & 0xFF;
-                    ag += (c >>> 16) & 0xFF;
-                    ab += (c >>>  8) & 0xFF;
-                    aa += c & 0xFF;
-                    count++;
-                }
-                if (count == 0) { setPixelAbgr(dst, x, y, getPixelAbgr(tmp, x, y)); continue; }
-                int nc = ( (ar / count) << 24 ) | ( (ag / count) << 16 ) | ( (ab / count) << 8 ) | ( aa / count );
-                setPixelAbgr(dst, x, y, blendWithOriginal(getPixelAbgr(tmp, x, y), nc, weight));
+                setPixelAbgr(result, ix, iy, (tw < 0.001f) ? hBuf[iy * iw + ix]
+                        : ((clamp(Math.round(aa / tw)) << 24) | (clamp(Math.round(ba / tw)) << 16)
+                         | (clamp(Math.round(ga / tw)) <<  8) |  clamp(Math.round(ra / tw))));
             }
         }
-        tmp.close();
-        return dst;
-    }
-
-    /**
-     * Simple depth weight based on screen Y-coordinate.
-     * Assumes the centre of the screen is at focus distance,
-     * top/bottom are farther away (ground/sky).
-     */
-    private static float depthWeight(int y, int h, int radius,
-                                     float focusDist, float depthCenter) {
-        // Normalised Y: 0 = top, 0.5 = centre, 1 = bottom
-        float ny = (float) y / h;
-        // Simple parabolic: blur more at top/bottom, less at centre
-        float distFromCenter = Math.abs(ny - 0.5f) * 2f; // 0..1
-        float strength = Math.min(1f, distFromCenter * 1.5f);
-        // Reduce strength when aperture is small (f/8+)
-        float ap = SnapmaticaClient.aperture;
-        float apFactor = Math.min(1f, (8f - ap) / 6.6f);
-        return strength * apFactor * 0.7f;
-    }
-
-    private static int blendWithOriginal(int orig, int blurred, float weight) {
-        int origR = (orig >>> 24) & 0xFF;
-        int origG = (orig >>> 16) & 0xFF;
-        int origB = (orig >>>  8) & 0xFF;
-        int origA =  orig        & 0xFF;
-
-        int blrR = (blurred >>> 24) & 0xFF;
-        int blrG = (blurred >>> 16) & 0xFF;
-        int blrB = (blurred >>>  8) & 0xFF;
-        int blrA =  blurred        & 0xFF;
-
-        float inv = 1f - weight;
-        int r = clamp((int)(origR * inv + blrR * weight));
-        int g = clamp((int)(origG * inv + blrG * weight));
-        int b = clamp((int)(origB * inv + blrB * weight));
-        int a = clamp((int)(origA * inv + blrA * weight));
-
-        return (r << 24) | (g << 16) | (b << 8) | a;
+        return result;
     }
 
     // ── Pixel access (NativeImage format changed in 1.21.4) ─────────────────────

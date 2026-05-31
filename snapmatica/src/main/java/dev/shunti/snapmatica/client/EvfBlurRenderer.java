@@ -58,7 +58,7 @@ public final class EvfBlurRenderer {
     private static int locFar        = -1;
 
     private static final float NEAR = 0.05f;
-    private static final float FAR  = 512.0f;
+    public static float currentDepthFar = 512.0f;
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
 
     /** GPU-side depth buffer copy. Call during WorldRenderEvents.LAST. */
@@ -211,7 +211,7 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locFocusDist, focusDist);
         GL20.glUniform1f(locMaxBlurPx, maxBlurPx);
         GL20.glUniform1f(locNear, NEAR);
-        GL20.glUniform1f(locFar,  FAR);
+        GL20.glUniform1f(locFar, currentDepthFar);
 
         // Pass 1: Horizontal blur, main → aux
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, auxFbo);
@@ -269,6 +269,24 @@ public final class EvfBlurRenderer {
         GL30.glBindVertexArray(prevVao);
         GL20.glUseProgram(prevProgram);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
+    }
+
+    public static float[] readLinearDepthCpu(int fbW, int fbH) {
+        if (depthTex == -1 || depthTexW != fbW || depthTexH != fbH) return null;
+        java.nio.FloatBuffer buf = BufferUtils.createFloatBuffer(fbW * fbH);
+        int prevTex = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
+        GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex);
+        final float near = NEAR;
+        final float far  = currentDepthFar;
+        float[] linear = new float[fbW * fbH];
+        for (int i = 0; i < linear.length; i++) {
+            float d   = buf.get(i);
+            float ndc = 2.0f * d - 1.0f;
+            linear[i] = 2.0f * near * far / (far + near - ndc * (far - near));
+        }
+        return linear;
     }
 
     private static void ensureInit(int fbW, int fbH) {
