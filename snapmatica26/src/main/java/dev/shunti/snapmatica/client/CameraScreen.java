@@ -38,9 +38,10 @@ public class CameraScreen extends Screen {
     @Override
     protected void init() {
         int cx  = width / 2;
-        int top = 60;
+        int rowHeight = 22;
+        int contentH = 6 * rowHeight + 16 + 20;
+        int top = Math.max(24, (height - contentH) / 2);
         int row = 0;
-        int rowHeight = 26;
         int btnWidth  = 130;
 
         int exposureMode = SnapmaticaClient.exposureMode;

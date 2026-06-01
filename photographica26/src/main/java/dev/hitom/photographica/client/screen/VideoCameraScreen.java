@@ -38,7 +38,9 @@ public class VideoCameraScreen extends Screen {
 
     protected void init() {
         int cx  = width / 2;
-        int top = height / 2 - 60;
+        int panelH = 130;
+        int py = Math.max(4, (height - panelH) / 2);
+        int top = py + 16;
         int row = 0;
 
         // Aperture row
@@ -104,11 +106,10 @@ public class VideoCameraScreen extends Screen {
         ctx.fill(0, 0, this.width, this.height, 0xFF101010);
 
         int cx     = width / 2;
-        int top    = height / 2 - 60;
         int panelW = 320;
         int panelH = 130;
         int px     = cx - panelW / 2;
-        int py     = top - 16;
+        int py     = Math.max(4, (height - panelH) / 2);
 
         GuiHelper.drawPanel(ctx, px, py, panelW, panelH);
         GuiHelper.drawNameplate(ctx, px + 6, py + 5, panelW - 12);
