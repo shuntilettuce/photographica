@@ -58,13 +58,15 @@ public class CameraScreen extends Screen {
 
     protected void init() {
         int cx = width / 2;
-        int top = height / 2 - 123;
+        int panelH = 282;
+        int py = Math.max(4, (height - panelH) / 2);
+        int top = py + 16;
         int row = 0;
 
         // Aperture — disabled when auto controls it (Tv or P)
         boolean apAuto = settings.exposureMode() == CameraSettings.EXP_TV
                 || settings.exposureMode() == CameraSettings.EXP_P;
-        addRow(cx, top + row++ * 22, "絞り",
+        addRow(cx, top + row++ * 20, "絞り",
                 () -> apAuto ? "AUTO" : "F" + formatFloat(settings.aperture()),
                 step -> {
                     int idx = clampStep(APERTURES.indexOf(settings.aperture()), step, APERTURES.size());
@@ -74,12 +76,12 @@ public class CameraScreen extends Screen {
         // Shutter — disabled when auto controls it (Av or P)
         boolean ssAuto = settings.exposureMode() == CameraSettings.EXP_AV
                 || settings.exposureMode() == CameraSettings.EXP_P;
-        addRow(cx, top + row++ * 22, "シャッター",
+        addRow(cx, top + row++ * 20, "シャッター",
                 () -> ssAuto ? "AUTO" : SHUTTERS[clampIdx(settings.shutterSpeedIdx(), SHUTTERS.length)],
                 step -> settings = withShutter(clampStep(settings.shutterSpeedIdx(), step, SHUTTERS.length)),
                 !ssAuto);
 
-        addRow(cx, top + row++ * 22, "ISO感度",
+        addRow(cx, top + row++ * 20, "ISO感度",
                 () -> "ISO " + ISOS.get(clampIdx(ISOS.indexOf(settings.iso()), ISOS.size())),
                 step -> {
                     int idx = clampStep(ISOS.indexOf(settings.iso()), step, ISOS.size());
@@ -89,7 +91,7 @@ public class CameraScreen extends Screen {
         // Focus distance — disabled when AF or MOB
         boolean focusAuto = settings.focusMode() != CameraSettings.FOCUS_MF;
         String focusAutoLabel = settings.focusMode() == CameraSettings.FOCUS_MOB ? "MOB" : "AF";
-        addRow(cx, top + row++ * 22, "フォーカス",
+        addRow(cx, top + row++ * 20, "フォーカス",
                 () -> focusAuto ? focusAutoLabel : formatFocus(settings.focusDistance()),
                 step -> {
                     int curIdx = nearestIdxFloat(FOCUS_VALUES, settings.focusDistance());
@@ -99,7 +101,7 @@ public class CameraScreen extends Screen {
 
         // Focal length row
         boolean focalEditable = LensKind.isZoom(settings.lensType());
-        addRow(cx, top + row++ * 22, "焦点距離",
+        addRow(cx, top + row++ * 20, "焦点距離",
                 () -> {
                     if (!LensKind.hasLens(settings.lensType())) return "—";
                     return settings.focalLengthMm() + "mm";
@@ -113,7 +115,7 @@ public class CameraScreen extends Screen {
                     settings = withFocalLength(stops.get(newIdx));
                 }, focalEditable);
 
-        addRow(cx, top + row++ * 22, "レンズ",
+        addRow(cx, top + row++ * 20, "レンズ",
                 () -> LensKind.displayName(settings.lensType()),
                 step -> {
                     List<Integer> available = availableLensKinds();
@@ -127,19 +129,19 @@ public class CameraScreen extends Screen {
                 }, true);
 
         // Exposure mode row (M / Av / Tv / P)
-        addRow(cx, top + row++ * 22, "露出モード",
+        addRow(cx, top + row++ * 20, "露出モード",
                 () -> EXP_MODE_LABELS[Math.max(0, Math.min(EXP_MODE_LABELS.length - 1, settings.exposureMode()))],
                 step -> settings = withExposureMode(clampStep(settings.exposureMode(), step, EXP_MODE_LABELS.length)),
                 true);
 
         // Focus mode row (MF / AF / MOB)
-        addRow(cx, top + row++ * 22, "フォーカスモード",
+        addRow(cx, top + row++ * 20, "フォーカスモード",
                 () -> FOCUS_MODE_LABELS[Math.max(0, Math.min(FOCUS_MODE_LABELS.length - 1, settings.focusMode()))],
                 step -> settings = withFocusMode(clampStep(settings.focusMode(), step, FOCUS_MODE_LABELS.length)),
                 true);
 
         // Self-timer
-        addRow(cx, top + row++ * 22, "タイマー",
+        addRow(cx, top + row++ * 20, "タイマー",
                 () -> {
                     int t = settings.timerSeconds();
                     return t == 0 ? "なし" : t + "秒";
@@ -155,14 +157,14 @@ public class CameraScreen extends Screen {
                 }, true);
 
         // Motion blur — enables long-exposure frame accumulation for tripod / slow shutter shots
-        addRow(cx, top + row++ * 22, "モーションブラー",
+        addRow(cx, top + row++ * 20, "モーションブラー",
                 () -> settings.motionBlur() ? "§aON" : "§cOFF",
                 step -> {
                     settings = settings.withMotionBlur(!settings.motionBlur());
                     dirty = true;
                 }, true);
 
-        int btnY = top + row * 22 + 14;
+        int btnY = py + 230;
         if (armorStandEntityId >= 0) {
             // Armor stand mode: "Shoot" | "Remove camera" | "Close"
             addRenderableWidget(SafelightButton.primary(cx - 105, btnY, 100,
@@ -229,11 +231,10 @@ public class CameraScreen extends Screen {
 
         // Draw dark panel background
         int cx = width / 2;
-        int top = height / 2 - 123;
         int panelW = 320;
-        int panelH = 302;
+        int panelH = 282;
         int px = cx - panelW / 2;
-        int py = top - 16;
+        int py = Math.max(4, (height - panelH) / 2);
         GuiHelper.drawPanel(ctx, px, py, panelW, panelH);
 
         // Nameplate at top of panel
