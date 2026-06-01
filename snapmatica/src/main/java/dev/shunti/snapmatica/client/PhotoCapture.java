@@ -79,20 +79,7 @@ public final class PhotoCapture {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
 
-        // Capture depth for photo DoF (GPU→CPU stall, once per shutter press).
-        net.minecraft.client.gl.Framebuffer mainFb = mc.getFramebuffer();
-        int fbW = mainFb.textureWidth;
-        int fbH = mainFb.textureHeight;
-        if (fbW > 0 && fbH > 0) {
-            EvfBlurRenderer.captureDepth(fbW, fbH);
-            float[] depth = EvfBlurRenderer.readLinearDepthCpu(fbW, fbH);
-            if (depth != null) {
-                pendingLinearDepth = depth;
-                pendingDepthFbW    = fbW;
-                pendingDepthFbH    = fbH;
-            }
-        }
-
+        // Depth was already captured in onWorldRenderEnd() while the depth buffer was valid.
         final float[] capturedDepth = pendingLinearDepth;
         final int capturedFbW = pendingDepthFbW;
         final int capturedFbH = pendingDepthFbH;
@@ -207,6 +194,14 @@ public final class PhotoCapture {
             int rd = mc.options.getViewDistance().getValue();
             EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
             EvfBlurRenderer.captureDepth(vpW, vpH);
+            if (capturePending) {
+                float[] depth = EvfBlurRenderer.readLinearDepthCpu(vpW, vpH);
+                if (depth != null) {
+                    pendingLinearDepth = depth;
+                    pendingDepthFbW    = vpW;
+                    pendingDepthFbH    = vpH;
+                }
+            }
         }*/
         //?} else {
         // Read from the currently bound framebuffer without switching.
@@ -217,10 +212,18 @@ public final class PhotoCapture {
         int vpH = viewport[3];
         if (vpW <= 0 || vpH <= 0) return;
 
-        // GPU-side depth copy for EVF DoF blur (no CPU readback).
+        // GPU-side depth copy for EVF DoF blur.
         int rd = mc.options.getViewDistance().getValue();
         EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
         EvfBlurRenderer.captureDepth(vpW, vpH);
+        if (capturePending) {
+            float[] depth = EvfBlurRenderer.readLinearDepthCpu(vpW, vpH);
+            if (depth != null) {
+                pendingLinearDepth = depth;
+                pendingDepthFbW    = vpW;
+                pendingDepthFbH    = vpH;
+            }
+        }
 
         int cx = vpW / 2;
         int cy = vpH / 2;

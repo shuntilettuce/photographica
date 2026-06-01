@@ -68,20 +68,7 @@ public final class PhotoCapture {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        // Capture depth for photo DoF (GPU→CPU stall, once per shutter press).
-        com.mojang.blaze3d.pipeline.RenderTarget mainFb = mc.getMainRenderTarget();
-        int fbW = mainFb.width;
-        int fbH = mainFb.height;
-        if (fbW > 0 && fbH > 0) {
-            EvfBlurRenderer.captureDepth(fbW, fbH);
-            float[] depth = EvfBlurRenderer.readLinearDepthCpu(fbW, fbH);
-            if (depth != null) {
-                pendingLinearDepth = depth;
-                pendingDepthFbW    = fbW;
-                pendingDepthFbH    = fbH;
-            }
-        }
-
+        // Depth was already captured in onWorldRenderEnd() while the depth buffer was valid.
         final float[] capturedDepth = pendingLinearDepth;
         final int capturedFbW = pendingDepthFbW;
         final int capturedFbH = pendingDepthFbH;
@@ -89,7 +76,7 @@ public final class PhotoCapture {
         pendingDepthFbW = 0;
         pendingDepthFbH = 0;
 
-        Screenshot.takeScreenshot(mainFb, raw -> processScreenshot(mc, raw, capturedDepth, capturedFbW, capturedFbH));
+        Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> processScreenshot(mc, raw, capturedDepth, capturedFbW, capturedFbH));
     }
 
     private static void processScreenshot(Minecraft mc, NativeImage raw, float[] linearDepth, int fbW, int fbH) {
@@ -170,6 +157,14 @@ public final class PhotoCapture {
             EvfBlurRenderer.currentDepthFar = Math.max(
                     mc.options.renderDistance().get() * 64f, 256f);
             EvfBlurRenderer.captureDepth(vpW, vpH);
+            if (capturePending) {
+                float[] depth = EvfBlurRenderer.readLinearDepthCpu(vpW, vpH);
+                if (depth != null) {
+                    pendingLinearDepth = depth;
+                    pendingDepthFbW    = vpW;
+                    pendingDepthFbH    = vpH;
+                }
+            }
         }
     }
 
