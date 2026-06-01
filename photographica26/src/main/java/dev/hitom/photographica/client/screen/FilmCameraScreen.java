@@ -168,7 +168,7 @@ public class FilmCameraScreen extends Screen {
 
         FilmRollData film = FilmCameraItem.getFilm(stack);
         boolean loaded = film.totalExposures() > 0;
-        int btnY = top + row * 22 + 14;
+        int btnY = top + row * 22 + 26;
 
         if (armorStandEntityId >= 0) {
             // Armor stand mode: "Shoot" | "Remove camera" | "Close"
@@ -256,7 +256,7 @@ public class FilmCameraScreen extends Screen {
         int cx = width / 2;
         int top = height / 2 - 110;
         int panelW = 320;
-        int panelH = 302;
+        int panelH = 320;
         int px = cx - panelW / 2;
         int py = top - 16;
         GuiHelper.drawPanel(ctx, px, py, panelW, panelH);
@@ -284,7 +284,7 @@ public class FilmCameraScreen extends Screen {
                     + "  ·  " + wound;
             statusColor = GuiHelper.CREAM;
         }
-        ctx.centeredText(font, Component.literal(status), cx, py + 216, statusColor);
+        ctx.centeredText(font, Component.literal(status), cx, py + 234, statusColor);
 
         super.extractRenderState(ctx, mouseX, mouseY, delta);
 
