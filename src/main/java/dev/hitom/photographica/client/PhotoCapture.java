@@ -1496,12 +1496,11 @@ public final class PhotoCapture {
 		}
 
 		// Per-pixel CoC (Circle of Confusion) in image pixels.
-		// Infinity focus (focusDist >= 999): coc = maxBlurPx * nearLimit / depth
-		//   where nearLimit = 10/aperture (f/2→5 m, f/4→2.5 m).
-		//   Objects closer than nearLimit are fully blurred; farther objects clear up as 1/depth.
+		// Infinity focus (focusDist >= 999): thin-lens formula CoC_mm = f² / (A*(d - f))
 		// Finite focus: standard near/far CoC formula.
 		boolean infinityFocus = (focusDist >= 999.0f);
-		float nearLimit = infinityFocus ? (10.0f / aperture) : 0.0f;
+		float focalM = settings.focalLengthMm() / 1000f;
+		float pxPerMm = (float) ih / 24.0f;  // 24mm sensor height maps to ih pixels
 		float[] cocMap = new float[iw * ih];
 		for (int iy = 0; iy < ih; iy++) {
 			for (int ix = 0; ix < iw; ix++) {
@@ -1510,7 +1509,9 @@ public final class PhotoCapture {
 				float depth = linearDepth[fy_gl * fbW + fx];
 				float coc;
 				if (infinityFocus) {
-					coc = Math.min(maxBlurPx, maxBlurPx * nearLimit / Math.max(depth, 0.05f));
+					float depthM = Math.max(depth, focalM * 1.001f);
+					float cocM = (focalM * focalM) / (aperture * (depthM - focalM));
+					coc = Math.min(maxBlurPx, cocM * 1000f * pxPerMm * 0.5f);
 				} else {
 					float r = depth / focusDist;
 					coc = (depth <= focusDist)
