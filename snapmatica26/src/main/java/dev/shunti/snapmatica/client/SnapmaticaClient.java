@@ -30,6 +30,9 @@ public class SnapmaticaClient implements ClientModInitializer {
     public static int     focusMode       = 0;
     public static boolean motionBlur      = false;
 
+    public static int     autoShutterIdx  = 10;
+    public static float   autoAperture    = 5.6f;
+
     public static boolean viewfinderSneakEnabled = true;
 
     public static final double[] SHUTTER_SECONDS = {
@@ -75,6 +78,7 @@ public class SnapmaticaClient implements ClientModInitializer {
             }
 
             AutoFocus.tick(client);
+            updateAutoValues();
         });
 
         HudElementRegistry.addFirst(
@@ -85,5 +89,46 @@ public class SnapmaticaClient implements ClientModInitializer {
         LevelRenderEvents.END_MAIN.register(ctx -> PhotoCapture.onWorldRenderEnd());
 
         System.out.println("[Snapmatica] Initialized.");
+    }
+
+    public static void updateAutoValues() {
+        boolean ssAuto = (exposureMode == 1 || exposureMode == 3);
+        boolean apAuto = (exposureMode == 2 || exposureMode == 3);
+
+        if (ssAuto) {
+            float ap = apAuto ? 5.6f : aperture;
+            double targetSS = ap * ap * 400.0 / (30.0 * 31.36 * iso);
+            autoShutterIdx = nearestShutterIdx(targetSS);
+        } else {
+            autoShutterIdx = shutterSpeedIdx;
+        }
+
+        if (apAuto) {
+            double ss = SHUTTER_SECONDS[Math.max(0, Math.min(SHUTTER_SECONDS.length - 1, shutterSpeedIdx))];
+            double targetAp = 5.6 * Math.sqrt(ss * 30.0 * iso / 400.0);
+            autoAperture = nearestAperture((float) Math.max(1.4, Math.min(22.0, targetAp)));
+        } else {
+            autoAperture = aperture;
+        }
+    }
+
+    private static int nearestShutterIdx(double ss) {
+        int best = 0; double bestDiff = Double.MAX_VALUE;
+        for (int i = 0; i < SHUTTER_SECONDS.length; i++) {
+            double d = Math.abs(SHUTTER_SECONDS[i] - ss);
+            if (d < bestDiff) { bestDiff = d; best = i; }
+        }
+        return best;
+    }
+
+    private static final float[] APERTURE_STOPS = {1.4f, 2.0f, 2.8f, 4.0f, 5.6f, 8.0f, 11.0f, 16.0f, 22.0f};
+
+    private static float nearestAperture(float ap) {
+        float best = APERTURE_STOPS[0]; float bestDiff = Float.MAX_VALUE;
+        for (float a : APERTURE_STOPS) {
+            float d = Math.abs(a - ap);
+            if (d < bestDiff) { bestDiff = d; best = a; }
+        }
+        return best;
     }
 }

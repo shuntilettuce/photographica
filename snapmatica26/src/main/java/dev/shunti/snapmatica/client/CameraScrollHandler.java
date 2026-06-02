@@ -68,6 +68,7 @@ public final class CameraScrollHandler {
         int idx = nearestIdx(APERTURES, SnapmaticaClient.aperture);
         int newIdx = Math.max(0, Math.min(APERTURES.size() - 1, idx - dir));
         SnapmaticaClient.aperture = APERTURES.get(newIdx);
+        SnapmaticaClient.updateAutoValues();
     }
 
     private static void adjustShutterSpeed(int dir) {

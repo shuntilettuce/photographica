@@ -94,6 +94,7 @@ public final class CameraScrollHandler {
         // Scroll up → open aperture → lower f-number
         int newIdx = Math.max(0, Math.min(APERTURES.size() - 1, idx - dir));
         SnapmaticaClient.aperture = APERTURES.get(newIdx);
+        SnapmaticaClient.updateAutoValues();
     }
 
     private static void adjustShutterSpeed(int dir) {

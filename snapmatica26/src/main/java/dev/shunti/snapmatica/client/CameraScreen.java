@@ -51,7 +51,7 @@ public class CameraScreen extends Screen {
                 () -> apAuto ? "AUTO" : "F" + fmt(SnapmaticaClient.aperture),
                 btnWidth,
                 step -> { int idx = findClosest(APERTURES, SnapmaticaClient.aperture);
-                    idx = clampStep(idx, step, APERTURES.size()); SnapmaticaClient.aperture = APERTURES.get(idx); },
+                    idx = clampStep(idx, step, APERTURES.size()); SnapmaticaClient.aperture = APERTURES.get(idx); SnapmaticaClient.updateAutoValues(); },
                 !apAuto);
 
         boolean ssAuto = exposureMode == EXP_AV || exposureMode == EXP_P;
@@ -65,7 +65,7 @@ public class CameraScreen extends Screen {
                 () -> "ISO " + ISOS.get(clampIdx(findClosestInt(ISOS, SnapmaticaClient.iso), ISOS.size())),
                 btnWidth,
                 step -> { int idx = findClosestInt(ISOS, SnapmaticaClient.iso);
-                    idx = clampStep(idx, step, ISOS.size()); SnapmaticaClient.iso = ISOS.get(idx); },
+                    idx = clampStep(idx, step, ISOS.size()); SnapmaticaClient.iso = ISOS.get(idx); SnapmaticaClient.updateAutoValues(); },
                 true);
 
         boolean focusAuto = SnapmaticaClient.focusMode != FOCUS_MF;
@@ -80,7 +80,7 @@ public class CameraScreen extends Screen {
         addRow2(cx, top + row++ * rowHeight, "Exp. Mode",
                 () -> EXP_MODE_LABELS[clampIdx(SnapmaticaClient.exposureMode, EXP_MODE_LABELS.length)],
                 btnWidth,
-                step -> SnapmaticaClient.exposureMode = clampStep(SnapmaticaClient.exposureMode, step, EXP_MODE_LABELS.length),
+                step -> { SnapmaticaClient.exposureMode = clampStep(SnapmaticaClient.exposureMode, step, EXP_MODE_LABELS.length); SnapmaticaClient.updateAutoValues(); },
                 true);
 
         addRow2(cx, top + row++ * rowHeight, "Focus Mode",

@@ -59,7 +59,8 @@ public final class PhotoCapture {
         long now = System.currentTimeMillis();
         if (now - lastShotMs < COOLDOWN_MS) return;
 
-        int shutterIdx = SnapmaticaClient.shutterSpeedIdx;
+        int em = SnapmaticaClient.exposureMode;
+        int shutterIdx = (em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx;
         double shutterSec = SnapmaticaClient.SHUTTER_SECONDS[
                 Math.max(0, Math.min(SnapmaticaClient.SHUTTER_SECONDS.length - 1, shutterIdx))];
         long shutterMs = Math.min(1500, (long)(shutterSec * 1000));

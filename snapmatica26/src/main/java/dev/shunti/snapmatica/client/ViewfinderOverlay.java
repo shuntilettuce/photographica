@@ -74,9 +74,11 @@ public final class ViewfinderOverlay {
         Font font = mc.font;
         boolean hasLens = SnapmaticaClient.lensType != 0;
         String fp = hasLens ? (SnapmaticaClient.focalLengthMm+"mm") : "No Lens";
-        int si = Math.max(0, Math.min(SHUTTERS.length-1, SnapmaticaClient.shutterSpeedIdx));
+        int em = SnapmaticaClient.exposureMode;
+        int si = clampIdx((em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx, SHUTTERS.length);
+        float dispAp = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
         ctx.text(font, String.format("F%s  %s  ISO%d  %s",
-                fmt(SnapmaticaClient.aperture), SHUTTERS[si], SnapmaticaClient.iso, fp),
+                fmt(dispAp), SHUTTERS[si], SnapmaticaClient.iso, fp),
                 fx+6, fy2-font.lineHeight-14, 0xFFE8DCC4, true);
 
         renderExposureMeter(ctx, fx, fx2, fy2);
@@ -161,9 +163,11 @@ public final class ViewfinderOverlay {
     }
 
     private static double computeEvDeviation() {
-        double ss = SnapmaticaClient.SHUTTER_SECONDS[
-                clampIdx(SnapmaticaClient.shutterSpeedIdx, SHUTTERS.length)];
-        return Math.log(ss * 60.0 * Math.pow(5.6 / SnapmaticaClient.aperture, 2)
+        int em = SnapmaticaClient.exposureMode;
+        int si = (em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx;
+        float ap = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
+        double ss = SnapmaticaClient.SHUTTER_SECONDS[clampIdx(si, SHUTTERS.length)];
+        return Math.log(ss * 30.0 * Math.pow(5.6 / ap, 2)
                 * (SnapmaticaClient.iso / 400.0)) / Math.log(2.0);
     }
 

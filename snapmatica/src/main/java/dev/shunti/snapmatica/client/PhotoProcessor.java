@@ -12,12 +12,14 @@ public final class PhotoProcessor {
 
     /** Returns the exposure‑compensation multiplier (1.0 = neutral). */
     public static double exposureFactor() {
-        float aperture   = SnapmaticaClient.aperture;
-        int iso          = SnapmaticaClient.iso;
-        double shutter   = SnapmaticaClient.SHUTTER_SECONDS[SnapmaticaClient.shutterSpeedIdx];
+        int em = SnapmaticaClient.exposureMode;
+        // In auto modes use the computed auto values so photos land at centered exposure.
+        int shutterIdx = (em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx;
+        float aperture = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
+        int iso        = SnapmaticaClient.iso;
+        double shutter = SnapmaticaClient.SHUTTER_SECONDS[Math.max(0, Math.min(SnapmaticaClient.SHUTTER_SECONDS.length - 1, shutterIdx))];
 
-        // Neutral point matches defaults (f/5.6, 1/30 s, ISO 400) → factor = 1.0,
-        // so the default photo looks identical to the viewfinder preview.
+        // Neutral: f/5.6, 1/30 s, ISO 400 → factor = 1.0
         final double neutralAperture = 5.6;
         final double neutralShutter  = 1.0 / 30.0;
         final int    neutralIso      = 400;
