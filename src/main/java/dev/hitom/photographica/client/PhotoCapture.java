@@ -30,6 +30,8 @@ import net.minecraft.text.Text;
 import java.io.File;
 import java.io.IOException;
 import java.nio.FloatBuffer;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -454,7 +456,7 @@ public final class PhotoCapture {
 					Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 					return;
 				}
-				File outFile = new File(dir, fId + ".png");
+				File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + ".png");
 				processed.writeTo(outFile);
 				Photographica.LOGGER.info("Photo saved: {} ({}x{})",
 						outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
@@ -510,7 +512,7 @@ public final class PhotoCapture {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 				return;
 			}
-			File outFile = new File(dir, id + ".png");
+			File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + ".png");
 			processed.writeTo(outFile);
 			Photographica.LOGGER.info("Photo saved: {} ({}x{})",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
@@ -695,7 +697,7 @@ public final class PhotoCapture {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 				return;
 			}
-			File outFile = new File(dir, id + ".png");
+			File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + ".png");
 			processed.writeTo(outFile);
 			Photographica.LOGGER.info("Long-exposure photo saved: {} ({}x{}, {} frames accumulated)",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight(), n);
