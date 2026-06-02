@@ -615,6 +615,7 @@ public final class PhotoCapture {
 		accumW = 0; accumH = 0;
 		accumDepth = null;
 		accumDepthFbW = 0; accumDepthFbH = 0;
+		pendingSettings = null;
 	}
 
 	/** Called by the HUD callback when the mirror-down click is due. */
