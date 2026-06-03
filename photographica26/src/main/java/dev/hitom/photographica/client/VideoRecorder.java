@@ -82,6 +82,9 @@ public final class VideoRecorder {
     private static boolean prevFrameValid    = false;
     private static float   smoothedDeltaYaw  = 0f;
     private static float   smoothedDeltaPitch = 0f;
+    // Previous-frame world position of the player, used to derive the true
+    // translational velocity while riding (horse / minecart / boat).
+    private static net.minecraft.world.phys.Vec3 prevPlayerPos = net.minecraft.world.phys.Vec3.ZERO;
 
     // ── Depth-buffer read ──────────────────────────────────────────────────────
     private static float[]     pendingDepthGrid  = null;
@@ -163,6 +166,7 @@ public final class VideoRecorder {
         prevFramePitch    = 0f;
         smoothedDeltaYaw  = 0f;
         smoothedDeltaPitch = 0f;
+        prevPlayerPos     = net.minecraft.world.phys.Vec3.ZERO;
         frameCount    = 0;
         recordStartMs = System.currentTimeMillis();
         nextFrameMs   = recordStartMs;
@@ -296,7 +300,16 @@ public final class VideoRecorder {
             focusCandidateFrames = 0;
         }
 
-        Vec3 vel = mc.player.getDeltaMovement();
+        // When riding (horse, minecart, boat...) the player's own velocity is ~0
+        // because the vehicle carries the motion. Derive the real camera velocity
+        // from the frame-to-frame position delta instead so motion blur tracks it.
+        Vec3 vel;
+        if (mc.player.isPassenger() && prevFrameValid && currentFps > 0) {
+            vel = mc.player.position().subtract(prevPlayerPos).scale(currentFps / 20.0);
+        } else {
+            vel = mc.player.getDeltaMovement();
+        }
+        prevPlayerPos = mc.player.position();
         float ap  = VideoCameraItem.getSettings(recordingStack).aperture();
 
         Camera camera = mc.gameRenderer != null ? mc.gameRenderer.getMainCamera() : null;

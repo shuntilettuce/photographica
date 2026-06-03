@@ -138,6 +138,8 @@ public final class VideoRecorder {
     /** EMA-smoothed angular deltas — damp single-frame mouse spikes. */
     private static float   smoothedDeltaYaw  = 0f;
     private static float   smoothedDeltaPitch = 0f;
+    /** Previous-frame world position — derives true velocity while riding. */
+    private static Vec3d   prevPlayerPos     = Vec3d.ZERO;
 
     // ── Depth-buffer read ──────────────────────────────────────────────────────
     /** Pending depth grid from onWorldRenderEnd(), consumed by captureFrameIfRecording(). */
@@ -257,6 +259,7 @@ public final class VideoRecorder {
         prevFramePitch    = 0f;
         smoothedDeltaYaw  = 0f;
         smoothedDeltaPitch = 0f;
+        prevPlayerPos     = Vec3d.ZERO;
         frameCount    = 0;
         recordStartMs = System.currentTimeMillis();
         nextFrameMs   = recordStartMs;
@@ -423,7 +426,21 @@ public final class VideoRecorder {
         }
         // ─────────────────────────────────────────────────────────────────────
 
-        Vec3d vel = mc.player.getVelocity();
+        // When riding (horse, minecart, boat...) the player's own velocity is ~0
+        // because the vehicle carries the motion. Derive the real camera velocity
+        // from the frame-to-frame position delta instead so motion blur tracks it.
+        Vec3d vel;
+        //? if >=1.21.11 {
+        /*Vec3d curPlayerPos = mc.player.getEntityPos();*/
+        //?} else {
+        Vec3d curPlayerPos = mc.player.getPos();
+        //?}
+        if (mc.player.hasVehicle() && prevFrameValid && currentFps > 0) {
+            vel = curPlayerPos.subtract(prevPlayerPos).multiply(currentFps / 20.0);
+        } else {
+            vel = mc.player.getVelocity();
+        }
+        prevPlayerPos = curPlayerPos;
         float ap  = VideoCameraItem.getSettings(recordingStack).aperture();
 
         // Use the rendering Camera for yaw/pitch: it incorporates tickDelta interpolation
