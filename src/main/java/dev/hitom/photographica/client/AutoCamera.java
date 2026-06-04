@@ -90,13 +90,25 @@ public final class AutoCamera {
 	// Auto Exposure
 	// -------------------------------------------------------------------------
 
+	/**
+	 * Scene-metered target EV deviation (relative to the reference exposure
+	 * F5.6 · 1/60 · ISO 400), derived from the world light level at the player.
+	 * This is the value the auto-exposure modes drive the actual settings toward,
+	 * and the value the viewfinder exposure meter measures against — so a correctly
+	 * exposed shot reads "centred" regardless of scene brightness.
+	 *
+	 *   Light 10 → 0 EV ("correct"); each light level adds/subtracts ~0.7 EV.
+	 */
+	public static double meteredTargetEv(MinecraftClient mc) {
+		if (mc.player == null || mc.world == null) return 0.0;
+		int light = mc.world.getLightLevel(mc.player.getBlockPos());
+		return -(light - 10) * 0.7;
+	}
+
 	private static CameraSettings applyAutoExposure(MinecraftClient mc, CameraSettings s) {
 		if (s.exposureMode() == CameraSettings.EXP_M) return s;
 
-		// Map world light level (0-15) to a target EV deviation.
-		// Light 10 → 0 EV (F5.6, 1/60, ISO400 is "correct"); each stop adds/subtracts ~0.7 EV.
-		int light = mc.world.getLightLevel(mc.player.getBlockPos());
-		double targetEV = -(light - 10) * 0.7;
+		double targetEV = meteredTargetEv(mc);
 
 		return switch (s.exposureMode()) {
 			case CameraSettings.EXP_AV -> {
