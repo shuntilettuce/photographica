@@ -431,7 +431,7 @@ public final class PhotoCapture {
 					Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 					return;
 				}
-				File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + ".png");
+				File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + "_" + fId.toString().replace("-", "") + ".png");
 				processed.writeToFile(outFile.toPath());
 				Photographica.LOGGER.info("Photo saved: {} ({}x{})",
 						outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
@@ -570,7 +570,7 @@ public final class PhotoCapture {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 				return;
 			}
-			File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + ".png");
+			File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + "_" + id.toString().replace("-", "") + ".png");
 			processed.writeToFile(outFile.toPath());
 			Photographica.LOGGER.info("Long-exposure photo saved: {} ({}x{}, {} frames accumulated)",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight(), n);

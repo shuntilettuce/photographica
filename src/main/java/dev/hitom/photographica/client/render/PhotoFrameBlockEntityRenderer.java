@@ -27,7 +27,7 @@ import java.util.UUID;
  */
 @Environment(EnvType.CLIENT)
 //? if >=1.21.11 {
-/*public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoFrameBlockEntity, net.minecraft.client.render.block.entity.state.BlockEntityRenderState> {*/
+/*public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoFrameBlockEntity, PhotoFrameBlockEntityRenderer.State> {*/
 //?} else {
 public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoFrameBlockEntity> {
 //?}
@@ -44,14 +44,46 @@ public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoF
     public PhotoFrameBlockEntityRenderer(BlockEntityRendererFactory.Context ctx) {}
 
     //? if >=1.21.11 {
-    /*@Override
-    public net.minecraft.client.render.block.entity.state.BlockEntityRenderState createRenderState() {
-        return new net.minecraft.client.render.block.entity.state.BlockEntityRenderState();
+    /*public static class State extends net.minecraft.client.render.block.entity.state.BlockEntityRenderState {
+        public UUID photoId;
+        public Direction facing;
     }
 
     @Override
-    public void render(net.minecraft.client.render.block.entity.state.BlockEntityRenderState state, MatrixStack matrices, net.minecraft.client.render.command.OrderedRenderCommandQueue queue, net.minecraft.client.render.state.CameraRenderState camera) {
-        // Photo frame rendering not yet implemented for 1.21.11
+    public State createRenderState() { return new State(); }
+
+    @Override
+    public void updateRenderState(PhotoFrameBlockEntity entity, State state, float tickDelta,
+            net.minecraft.util.math.Vec3d cameraPos,
+            net.minecraft.client.render.command.ModelCommandRenderer.CrumblingOverlayCommand crumblingOverlay) {
+        net.minecraft.client.render.block.entity.state.BlockEntityRenderState.updateBlockEntityRenderState(entity, state, crumblingOverlay);
+        PhotoData photo = entity.getPhotoData();
+        state.photoId = (photo != null) ? photo.id() : null;
+        state.facing = entity.getCachedState().get(PhotoFrameBlock.FACING);
+    }
+
+    @Override
+    public void render(State state, MatrixStack matrices,
+            net.minecraft.client.render.command.OrderedRenderCommandQueue queue,
+            net.minecraft.client.render.state.CameraRenderState camera) {
+        if (state.photoId == null) return;
+        Identifier texId = PhotoTextureCache.getOrLoad(state.photoId);
+        if (texId == null) return;
+
+        int light = state.lightmapCoordinates;
+        matrices.push();
+        matrices.translate(0.5, 0.5, 0.5);
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-state.facing.getPositiveHorizontalDegrees()));
+        matrices.translate(-0.5, -0.5, -0.5);
+
+        queue.submitCustom(matrices, net.minecraft.client.render.RenderLayers.entityCutoutNoCull(texId), (entry, vc) -> {
+            vc.vertex(entry, X0, Y0, Z).color(255, 255, 255, 255).texture(0f, 1f).overlay(net.minecraft.client.render.OverlayTexture.DEFAULT_UV).light(light).normal(entry, 0f, 0f, 1f);
+            vc.vertex(entry, X1, Y0, Z).color(255, 255, 255, 255).texture(1f, 1f).overlay(net.minecraft.client.render.OverlayTexture.DEFAULT_UV).light(light).normal(entry, 0f, 0f, 1f);
+            vc.vertex(entry, X1, Y1, Z).color(255, 255, 255, 255).texture(1f, 0f).overlay(net.minecraft.client.render.OverlayTexture.DEFAULT_UV).light(light).normal(entry, 0f, 0f, 1f);
+            vc.vertex(entry, X0, Y1, Z).color(255, 255, 255, 255).texture(0f, 0f).overlay(net.minecraft.client.render.OverlayTexture.DEFAULT_UV).light(light).normal(entry, 0f, 0f, 1f);
+        });
+
+        matrices.pop();
     }*/
     //?} else {
     @Override
