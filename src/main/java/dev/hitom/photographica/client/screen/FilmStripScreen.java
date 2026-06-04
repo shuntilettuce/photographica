@@ -16,6 +16,8 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
+import dev.hitom.photographica.client.render.PhotoTextureCache;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -182,8 +184,9 @@ public class FilmStripScreen extends Screen {
         loadedForIndex = index;
 
         MinecraftClient mc = MinecraftClient.getInstance();
-        File file = new File(mc.runDirectory, "photographica/photos/" + data.id() + ".png");
-        if (!file.isFile()) {
+        File photoDir = new File(mc.runDirectory, "photographica/photos");
+        File file = PhotoTextureCache.findPhotoFile(photoDir, data.id());
+        if (file == null) {
             thumbMissing = true;
             return;
         }
