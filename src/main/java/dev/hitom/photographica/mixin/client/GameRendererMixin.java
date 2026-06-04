@@ -128,6 +128,25 @@ public class GameRendererMixin {
 	}
 	//?}
 
+	//? if >=1.21.11 {
+	/*/^*
+	 * 1.21.11 removed the {@code renderHand} boolean field; the hand is now drawn by
+	 * {@code renderHand(float, boolean, Matrix4f)} called from inside renderWorld().
+	 * Cancel that call entirely while recording video or capturing (long exposure /
+	 * armor stand) so the hand never appears in the framebuffer that gets captured —
+	 * and, since this also covers the on-screen draw, the hand is hidden for the whole
+	 * recording (user confirmed full hide is acceptable).
+	 *^/
+	@Inject(method = "renderHand(FZLorg/joml/Matrix4f;)V", at = @At("HEAD"), cancellable = true)
+	private void photographica$suppressHandForCapture(float tickDelta, boolean bl,
+			org.joml.Matrix4f matrix4f, CallbackInfo ci) {
+		if (VideoRecorder.isRecording() || PhotoCapture.isAccumulating()
+				|| PhotoCapture.armorStandCapturePending) {
+			ci.cancel();
+		}
+	}*/
+	//?}
+
 	/**
 	 * Fired just before renderWorld() during long-exposure accumulation OR
 	 * when a video frame is about to be captured.
