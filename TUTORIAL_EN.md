@@ -266,7 +266,7 @@ After each shot, press the **Wind Film** key before you can shoot again. The win
 
 Right-click a developed negative to open the NEGATIVE screen and browse each frame as an inverted (negative) thumbnail.
 
-> **Light fogging** — Exposed or undeveloped film exposed to light will fog the entire roll, washing out all photos white. Keep film in your inventory or a container.
+> **Light fogging** — Loading or unloading film while standing in **light level 8 or above** fogs every exposed frame white. Always load/unload film in a **light level ≤ 7** location or inside a **portable darkroom**. Simply keeping film in your inventory is not enough if you are standing in a bright area.
 
 ---
 
@@ -352,7 +352,7 @@ All effects are **baked into the PNG at capture time** (independent of real-time
 | Long-exposure blend | SS > 1/30 | Multiple frames averaged. Light trails and ghosting |
 | Diffraction softening | f/16 or narrower | 3×3 box blur for gentle overall softness |
 | Reciprocity failure | Film & SS ≥ 1 s | Film loses sensitivity at long exposures |
-| Light fogging | Exposed film exposed to light | White wash over the entire roll |
+| Light fogging | Film loaded/unloaded at player position with light level ≥ 8 | All frames washed out white |
 
 ---
 
@@ -368,7 +368,7 @@ All effects are **baked into the PNG at capture time** (independent of real-time
 → Check `.minecraft/photographica/photos/`. In multiplayer, every player needs their own copy of the PNG.
 
 **Q: Developed film — all frames are white**  
-→ The roll was fogged (exposed to light before development). Store exposed film in your inventory or a chest.
+→ The roll was fogged. Fogging occurs when you load or unload film while standing at **light level 8 or above**. Always do film changes at **light level ≤ 7** or inside a **portable darkroom** — keeping film in your inventory while standing in daylight is not safe.
 
 **Q: Tripod perspective is stuck after shooting**  
 → Fixed in v0.2.0+. Update to the latest version.
