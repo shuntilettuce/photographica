@@ -87,6 +87,14 @@ public final class VideoRecorder {
      */
     private static final float FOCAL_PX = 600f;
 
+    // Motion-blur strength scalars. A real camera retains far less blur than a
+    // continuous (360°-shutter) exposure across the whole frame interval. We aim
+    // for "modern smartphone stabilisation" rather than gimbal-perfect: electronic
+    // stabilisation cancels most rotational shake, so rotation is damped harder
+    // than translation (which keeps a ~180°-shutter feel).
+    private static final float ROT_BLUR_SCALE   = 0.35f;
+    private static final float TRANS_BLUR_SCALE = 0.5f;
+
     /** Dwell time (frames) before AF servo starts tracking a new depth. */
     private static final int   FOCUS_DWELL_FRAMES = 20;    // ~0.83 s
     /** Fractional depth change that counts as "same object." */
@@ -741,22 +749,22 @@ public final class VideoRecorder {
 
         // Rotational component (pixels, uniform across all depths)
         // Minecraft pitch: +90 = looking straight down (objects move UP = negative py)
-        float rotSampleX =  meta.deltaYaw()   * w / fovH;
-        float rotSampleY = -meta.deltaPitch() * h / fovV;  // sign: look down → objects up
+        float rotSampleX =  meta.deltaYaw()   * w / fovH * ROT_BLUR_SCALE;
+        float rotSampleY = -meta.deltaPitch() * h / fovV * ROT_BLUR_SCALE;  // sign: look down → objects up
 
         // Translational strafing (depth-dependent; pre-compute scale at 1 m)
         float yawRad    = (float) Math.toRadians(meta.yaw());
         float strafeVel = ((float)(Math.cos(yawRad) * meta.velX()
                                  + Math.sin(yawRad) * meta.velZ()))
                         * (20.0f / currentFps);           // blocks per frame
-        float transScale = strafeVel * FOCAL_PX;          // pixels at 1 m depth
+        float transScale = strafeVel * FOCAL_PX * TRANS_BLUR_SCALE;  // pixels at 1 m depth
 
         // Forward/backward velocity component (camera-forward direction).
         // Produces radial (zoom-like) blur: objects near the edges of the screen
         // blur outward while near objects blur more than distant ones.
         float fwdVel = ((float)(-Math.sin(yawRad) * meta.velX()
                                + Math.cos(yawRad) * meta.velZ()))
-                     * (20.0f / currentFps);              // blocks per frame
+                     * (20.0f / currentFps) * TRANS_BLUR_SCALE;  // blocks per frame
         float cx = w * 0.5f, cy = h * 0.5f;
 
         // Early-exit: check total blur at focus distance (centre pixel + corner fwd)
@@ -767,7 +775,7 @@ public final class VideoRecorder {
                             * Math.abs(fwdVel) / focus;
         if (totalAtFocus < 0.5f && cornerFwdBlur < 0.5f) return pass2;
 
-        float maxBlurPx = w / 10.0f;   // hard cap ~128 px at 1280 wide
+        float maxBlurPx = w / 22.0f;   // hard cap ~58 px at 1280 wide
 
         NativeImage pass3 = new NativeImage(w, h, false);
         for (int py = 0; py < h; py++) {

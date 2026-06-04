@@ -48,6 +48,14 @@ public final class VideoRecorder {
     private static final float CoC_K    = 100.0f;
     private static final float FOCAL_PX = 600f;
 
+    // Motion-blur strength scalars. A real camera retains far less blur than a
+    // continuous (360°-shutter) exposure across the whole frame interval. We aim
+    // for "modern smartphone stabilisation" rather than gimbal-perfect: electronic
+    // stabilisation cancels most rotational shake, so rotation is damped harder
+    // than translation (which keeps a ~180°-shutter feel).
+    private static final float ROT_BLUR_SCALE   = 0.35f;
+    private static final float TRANS_BLUR_SCALE = 0.5f;
+
     /** Dwell time (frames) before AF servo starts tracking a new depth. */
     private static final int   FOCUS_DWELL_FRAMES = 20;    // ~0.83 s
     /** Fractional depth change that counts as "same object." */
@@ -524,18 +532,18 @@ public final class VideoRecorder {
         float fovH     = meta.fovDeg();
         float fovV     = fovH * 9f / 16f;
 
-        float rotSampleX =  meta.deltaYaw()   * w / fovH;
-        float rotSampleY = -meta.deltaPitch() * h / fovV;
+        float rotSampleX =  meta.deltaYaw()   * w / fovH * ROT_BLUR_SCALE;
+        float rotSampleY = -meta.deltaPitch() * h / fovV * ROT_BLUR_SCALE;
 
         float yawRad    = (float) Math.toRadians(meta.yaw());
         float strafeVel = ((float)(Math.cos(yawRad) * meta.velX()
                                  + Math.sin(yawRad) * meta.velZ()))
                         * (20.0f / currentFps);
-        float transScale = strafeVel * FOCAL_PX;
+        float transScale = strafeVel * FOCAL_PX * TRANS_BLUR_SCALE;
 
         float fwdVel = ((float)(-Math.sin(yawRad) * meta.velX()
                                + Math.cos(yawRad) * meta.velZ()))
-                     * (20.0f / currentFps);
+                     * (20.0f / currentFps) * TRANS_BLUR_SCALE;
         float cx = w * 0.5f, cy = h * 0.5f;
 
         float totalAtFocus = (float) Math.sqrt(
@@ -545,7 +553,7 @@ public final class VideoRecorder {
                             * Math.abs(fwdVel) / focus;
         if (totalAtFocus < 0.5f && cornerFwdBlur < 0.5f) return pass2;
 
-        float maxBlurPx = w / 10.0f;
+        float maxBlurPx = w / 22.0f;
 
         NativeImage pass3 = new NativeImage(w, h, false);
         for (int py = 0; py < h; py++) {
