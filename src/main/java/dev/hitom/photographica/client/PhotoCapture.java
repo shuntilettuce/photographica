@@ -617,6 +617,11 @@ public final class PhotoCapture {
 					if (cropped != null && cropped != frame) cropped.close();
 					frame.close();
 				}
+				// In 1.21.11 the screenshot is async — finalize from inside the callback
+				// so accumSamples is already incremented before we read it.
+				if (accumId != null && (System.currentTimeMillis() >= accumEndMs || accumSamples >= ACCUM_MAX_SAMPLES)) {
+					finalizeAccumulation(MinecraftClient.getInstance());
+				}
 			});*/
 			//?} else {
 			NativeImage frame = ScreenshotRecorder.takeScreenshot(fb);
@@ -654,9 +659,13 @@ public final class PhotoCapture {
 			accumNextSampleMs = now + accumSampleIntervalMs;
 		}
 
+		//? if <1.21.11 {
+		// For 1.21.11 the finalize is triggered from inside the async screenshot callback
+		// (above), so accumSamples is guaranteed to be up-to-date when we read it.
 		if (now >= accumEndMs || accumSamples >= ACCUM_MAX_SAMPLES) {
 			finalizeAccumulation(mc);
 		}
+		//?}
 	}
 
 	/** Averages all accumulated frames, applies photographic effects, and saves the photo. */
@@ -1012,9 +1021,11 @@ public final class PhotoCapture {
 		}
 		mc.setCameraEntity(stand);
 
-		// Long exposure: multi-frame accumulation from armor stand perspective
+		// Long exposure: multi-frame accumulation from armor stand perspective.
+		// Use strictly-greater-than so the default 1/30 shutter falls through to
+		// single-frame capture (same threshold as the handheld take() path).
 		double shutterSec = settings.shutterSeconds();
-		if (shutterSec >= 1.0 / 30.0) {
+		if (shutterSec > 1.0 / 30.0) {
 			long durationMs = Math.max((long)(shutterSec * 1000), 1L);
 			accumId = pendingId;
 			accumSettings = settings;
