@@ -64,7 +64,7 @@ public final class PhotoTextureCache {
         }
     }
 
-    private static @Nullable File findPhotoFile(File dir, UUID photoId) {
+    public static @Nullable File findPhotoFile(File dir, UUID photoId) {
         if (!dir.isDirectory()) return null;
         // New format: <datetime>_<uuid_no_dashes>.png
         String suffix = "_" + photoId.toString().replace("-", "") + ".png";

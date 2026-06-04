@@ -13,6 +13,8 @@ import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
+import dev.hitom.photographica.client.render.PhotoTextureCache;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -59,9 +61,10 @@ public class PhotoViewerScreen extends Screen {
 	private void loadImage() {
 		UUID id = data.id();
 		MinecraftClient mc = MinecraftClient.getInstance();
-		File file = new File(mc.runDirectory, "photographica/photos/" + id + ".png");
-		if (!file.isFile()) {
-			Photographica.LOGGER.warn("Photo PNG not found: {}", file);
+		File photoDir = new File(mc.runDirectory, "photographica/photos");
+		File file = PhotoTextureCache.findPhotoFile(photoDir, id);
+		if (file == null) {
+			Photographica.LOGGER.warn("Photo PNG not found for UUID: {}", id);
 			missing = true;
 			return;
 		}
