@@ -139,7 +139,6 @@ public final class ViewfinderHud {
 
 		// Exposure meter — horizontal scale centred in the frame, ±3 EV range
 		renderExposureMeter(ctx, s, fx, fx2, fy2);
-		// (meter measures deviation from the scene-metered target so auto modes read centred)
 
 		// Scroll hint (bottom-right, inside frame) — two lines
 		boolean isZoom = dev.hitom.photographica.component.LensKind.isZoom(s.lensType());
@@ -272,13 +271,8 @@ public final class ViewfinderHud {
 			ctx.fill(tx, baseY - th, tx + 1, baseY + 1, 0xC0FFFFFF);
 		}
 
-		// Pointer — deviation of the current exposure from the scene-metered target.
-		// In auto modes (Av/Tv/P) the camera drives this toward 0, so the needle
-		// centres for a correct exposure; in M it shows how far off the manual
-		// settings are. Clamped to ±3.5 EV so it never flies off the scale.
-		double targetEv = dev.hitom.photographica.client.AutoCamera.meteredTargetEv(
-				net.minecraft.client.MinecraftClient.getInstance());
-		double evDev   = s.evDeviation() - targetEv;
+		// Pointer — clamped to ±3.5 EV so it never flies off the scale
+		double evDev   = s.evDeviation();
 		float clamped  = (float) Math.max(-3.5, Math.min(3.5, evDev));
 		int ptrX       = meterCx + (int)(clamped * pixPerEv);
 		double absEv   = Math.abs(evDev);
