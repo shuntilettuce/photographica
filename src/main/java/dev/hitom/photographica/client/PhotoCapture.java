@@ -461,7 +461,7 @@ public final class PhotoCapture {
 			try {
 				cropped = cropTo3to2(raw);
 				downsampled = boxDownsample(cropped, 1280);
-				processed = applyPhotographicEffects(downsampled, fSettings, fLinearDepth, fFbW, fFbH, true);
+				processed = applyPhotographicEffects(downsampled, fSettings, fLinearDepth, fFbW, fFbH, fCaptureStandId < 0);
 				File dir = new File(mc.runDirectory, "photographica/photos");
 				if (!dir.exists() && !dir.mkdirs()) {
 					Photographica.LOGGER.error("Could not create photo dir: {}", dir);
@@ -510,7 +510,7 @@ public final class PhotoCapture {
 		try {
 			cropped = cropTo3to2(raw);
 			downsampled = boxDownsample(cropped, 1280);
-			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH, true);
+			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH, captureStandId < 0);
 			File dir = new File(mc.runDirectory, "photographica/photos");
 			if (!dir.exists() && !dir.mkdirs()) {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
@@ -997,7 +997,7 @@ public final class PhotoCapture {
 		}
 
 		lastCaptureMs = now;
-		motionBlurEnabled = true; // armor stand = always stable
+		motionBlurEnabled = true;
 
 		pendingSettings = settings;
 		pendingId = UUID.randomUUID();
