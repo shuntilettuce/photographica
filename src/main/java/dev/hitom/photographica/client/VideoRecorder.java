@@ -87,6 +87,14 @@ public final class VideoRecorder {
      */
     private static final float FOCAL_PX = 600f;
 
+    // Motion-blur strength scalars. A real camera retains far less blur than a
+    // continuous (360°-shutter) exposure across the whole frame interval. We aim
+    // for "modern smartphone stabilisation" rather than gimbal-perfect: electronic
+    // stabilisation cancels most rotational shake, so rotation is damped harder
+    // than translation (which keeps a ~180°-shutter feel).
+    private static final float ROT_BLUR_SCALE   = 0.35f;
+    private static final float TRANS_BLUR_SCALE = 0.5f;
+
     /** Dwell time (frames) before AF servo starts tracking a new depth. */
     private static final int   FOCUS_DWELL_FRAMES = 20;    // ~0.83 s
     /** Fractional depth change that counts as "same object." */
@@ -138,6 +146,8 @@ public final class VideoRecorder {
     /** EMA-smoothed angular deltas — damp single-frame mouse spikes. */
     private static float   smoothedDeltaYaw  = 0f;
     private static float   smoothedDeltaPitch = 0f;
+    /** Previous-frame world position — derives true velocity while riding. */
+    private static Vec3d   prevPlayerPos     = Vec3d.ZERO;
 
     // ── Depth-buffer read ──────────────────────────────────────────────────────
     /** Pending depth grid from onWorldRenderEnd(), consumed by captureFrameIfRecording(). */
@@ -257,6 +267,7 @@ public final class VideoRecorder {
         prevFramePitch    = 0f;
         smoothedDeltaYaw  = 0f;
         smoothedDeltaPitch = 0f;
+        prevPlayerPos     = Vec3d.ZERO;
         frameCount    = 0;
         recordStartMs = System.currentTimeMillis();
         nextFrameMs   = recordStartMs;
@@ -423,7 +434,21 @@ public final class VideoRecorder {
         }
         // ─────────────────────────────────────────────────────────────────────
 
-        Vec3d vel = mc.player.getVelocity();
+        // When riding (horse, minecart, boat...) the player's own velocity is ~0
+        // because the vehicle carries the motion. Derive the real camera velocity
+        // from the frame-to-frame position delta instead so motion blur tracks it.
+        Vec3d vel;
+        //? if >=1.21.11 {
+        /*Vec3d curPlayerPos = mc.player.getEntityPos();*/
+        //?} else {
+        Vec3d curPlayerPos = mc.player.getPos();
+        //?}
+        if (mc.player.hasVehicle() && prevFrameValid && currentFps > 0) {
+            vel = curPlayerPos.subtract(prevPlayerPos).multiply(currentFps / 20.0);
+        } else {
+            vel = mc.player.getVelocity();
+        }
+        prevPlayerPos = curPlayerPos;
         float ap  = VideoCameraItem.getSettings(recordingStack).aperture();
 
         // Use the rendering Camera for yaw/pitch: it incorporates tickDelta interpolation
@@ -467,13 +492,29 @@ public final class VideoRecorder {
                 pendingCropOffX, pendingCropOffY);
 
         //? if >=1.21.11 {
-        /*NativeImage[] rawRef = {null};
-        ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), img -> rawRef[0] = img);
-        NativeImage raw = rawRef[0];
-        if (raw == null) {
-            nextFrameMs = recordStartMs + (long)((frameCount + 1) * 1000.0 / currentFps);
-            return;
-        }*/
+        /*// takeScreenshot is GPU-async in 1.21.11: claim the frame slot synchronously so
+        // timing and meta ordering stay correct, then process pixels inside the callback.
+        int idx     = frameCount;
+        File outFile = new File(rawDir, String.format("frame_%04d.png", idx));
+        frameMetas.add(meta);
+        frameCount++;
+        nextFrameMs = recordStartMs + (long)(frameCount * 1000.0 / currentFps);
+        if (frameCount == currentFps * 60 && mc.player != null)
+            mc.player.sendMessage(Text.literal("⚠ 残り 1:00"), true);
+        ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), raw -> {
+            if (raw == null) return;
+            NativeImage cropped_ = cropTo16x9(raw);
+            NativeImage frame_   = boxDownsample(cropped_, 1280);
+            if (cropped_ != raw) cropped_.close();
+            raw.close();
+            ioExecutor.submit(() -> {
+                try { frame_.writeTo(outFile); }
+                catch (IOException e) {
+                    Photographica.LOGGER.warn("[VideoRecorder] Frame write failed: {}", outFile, e);
+                } finally { frame_.close(); }
+            });
+        });
+        return;*/
         //?} else {
         NativeImage raw;
         try {
@@ -485,6 +526,7 @@ public final class VideoRecorder {
         }
         //?}
 
+        //? if <1.21.11 {
         NativeImage cropped = cropTo16x9(raw);
         NativeImage frame   = boxDownsample(cropped, 1280);
         if (cropped != raw) cropped.close();
@@ -508,6 +550,7 @@ public final class VideoRecorder {
                 Photographica.LOGGER.warn("[VideoRecorder] Frame write failed: {}", outFile, e);
             } finally { frame.close(); }
         });
+        //?}
     }
 
     // ── Post-processing ────────────────────────────────────────────────────────
@@ -706,22 +749,22 @@ public final class VideoRecorder {
 
         // Rotational component (pixels, uniform across all depths)
         // Minecraft pitch: +90 = looking straight down (objects move UP = negative py)
-        float rotSampleX =  meta.deltaYaw()   * w / fovH;
-        float rotSampleY = -meta.deltaPitch() * h / fovV;  // sign: look down → objects up
+        float rotSampleX =  meta.deltaYaw()   * w / fovH * ROT_BLUR_SCALE;
+        float rotSampleY = -meta.deltaPitch() * h / fovV * ROT_BLUR_SCALE;  // sign: look down → objects up
 
         // Translational strafing (depth-dependent; pre-compute scale at 1 m)
         float yawRad    = (float) Math.toRadians(meta.yaw());
         float strafeVel = ((float)(Math.cos(yawRad) * meta.velX()
                                  + Math.sin(yawRad) * meta.velZ()))
                         * (20.0f / currentFps);           // blocks per frame
-        float transScale = strafeVel * FOCAL_PX;          // pixels at 1 m depth
+        float transScale = strafeVel * FOCAL_PX * TRANS_BLUR_SCALE;  // pixels at 1 m depth
 
         // Forward/backward velocity component (camera-forward direction).
         // Produces radial (zoom-like) blur: objects near the edges of the screen
         // blur outward while near objects blur more than distant ones.
         float fwdVel = ((float)(-Math.sin(yawRad) * meta.velX()
                                + Math.cos(yawRad) * meta.velZ()))
-                     * (20.0f / currentFps);              // blocks per frame
+                     * (20.0f / currentFps) * TRANS_BLUR_SCALE;  // blocks per frame
         float cx = w * 0.5f, cy = h * 0.5f;
 
         // Early-exit: check total blur at focus distance (centre pixel + corner fwd)
@@ -732,7 +775,7 @@ public final class VideoRecorder {
                             * Math.abs(fwdVel) / focus;
         if (totalAtFocus < 0.5f && cornerFwdBlur < 0.5f) return pass2;
 
-        float maxBlurPx = w / 10.0f;   // hard cap ~128 px at 1280 wide
+        float maxBlurPx = w / 22.0f;   // hard cap ~58 px at 1280 wide
 
         NativeImage pass3 = new NativeImage(w, h, false);
         for (int py = 0; py < h; py++) {

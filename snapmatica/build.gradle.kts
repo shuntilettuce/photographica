@@ -17,6 +17,13 @@ base {
     archivesName = extra["archives_base_name"] as String
 }
 
+loom {
+    mixin {
+        useLegacyMixinAp.set(true)
+        add(sourceSets.main.get(), "snapmatica.refmap.json")
+    }
+}
+
 repositories {
     mavenCentral()
 }

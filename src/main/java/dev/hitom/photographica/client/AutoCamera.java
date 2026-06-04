@@ -40,9 +40,11 @@ public final class AutoCamera {
 	private AutoCamera() {}
 
 	private static final List<Float> FOCUS_STOPS = List.of(
-			0.3f, 0.5f, 0.7f, 1.0f, 1.2f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f,
-			5.0f, 6.0f, 7.0f, 8.0f, 10.0f, 12.0f, 15.0f, 20.0f, 25.0f, 30.0f,
-			40.0f, 50.0f, 70.0f, 100.0f, 999.0f);
+			0.3f,  0.4f,  0.5f,  0.6f,  0.7f,  0.8f,  1.0f,  1.2f,  1.5f,  2.0f,
+			2.5f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  10.0f, 12.0f, 14.0f,
+			17.0f, 20.0f, 24.0f, 29.0f, 35.0f, 42.0f, 50.0f, 60.0f, 73.0f, 87.0f,
+			105.0f, 125.0f, 150.0f, 180.0f, 215.0f, 260.0f, 310.0f, 375.0f, 450.0f, 540.0f,
+			650.0f, 780.0f, 940.0f, 999.0f);
 	private static final List<Float> APERTURE_STOPS = List.of(
 			1.4f, 2.0f, 2.8f, 4.0f, 5.6f, 8.0f, 11.0f, 16.0f, 22.0f);
 	private static final double[] SHUTTER_SECONDS = {
@@ -91,10 +93,12 @@ public final class AutoCamera {
 	private static CameraSettings applyAutoExposure(MinecraftClient mc, CameraSettings s) {
 		if (s.exposureMode() == CameraSettings.EXP_M) return s;
 
-		// Map world light level (0-15) to a target EV deviation.
-		// Light 10 → 0 EV (F5.6, 1/60, ISO400 is "correct"); each stop adds/subtracts ~0.7 EV.
-		int light = mc.world.getLightLevel(mc.player.getBlockPos());
-		double targetEV = -(light - 10) * 0.7;
+		// Auto modes drive the exposure to the neutral reference (F5.6 · 1/60 · ISO 400),
+		// i.e. EV deviation 0 — the centre of the viewfinder light meter. The captured
+		// frame already reflects scene brightness through Minecraft's own lighting, so a
+		// neutral exposure (mult ≈ 1) is the correct WYSIWYG target; biasing it by world
+		// light level only pushed the meter off-centre and under/over-exposed the photo.
+		double targetEV = 0.0;
 
 		return switch (s.exposureMode()) {
 			case CameraSettings.EXP_AV -> {

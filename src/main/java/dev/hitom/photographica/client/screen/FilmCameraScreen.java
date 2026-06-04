@@ -69,13 +69,15 @@ public class FilmCameraScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = width / 2;
-		int top = height / 2 - 110;
+		int panelH = 300;
+		int py = Math.max(4, (height - panelH) / 2);
+		int top = py + 16;
 		int row = 0;
 
 		// Aperture — disabled when auto controls it (Tv or P)
 		boolean apAuto = settings.exposureMode() == CameraSettings.EXP_TV
 				|| settings.exposureMode() == CameraSettings.EXP_P;
-		addRow(cx, top + row++ * 22, "絞り",
+		addRow(cx, top + row++ * 20, "絞り",
 				() -> apAuto ? "AUTO" : "F" + formatFloat(settings.aperture()),
 				step -> {
 					int idx = clampStep(APERTURES.indexOf(settings.aperture()), step, APERTURES.size());
@@ -85,20 +87,20 @@ public class FilmCameraScreen extends Screen {
 		// Shutter — disabled when auto controls it (Av or P)
 		boolean ssAuto = settings.exposureMode() == CameraSettings.EXP_AV
 				|| settings.exposureMode() == CameraSettings.EXP_P;
-		addRow(cx, top + row++ * 22, "シャッター",
+		addRow(cx, top + row++ * 20, "シャッター",
 				() -> ssAuto ? "AUTO" : SHUTTERS[clampIdx(settings.shutterSpeedIdx(), SHUTTERS.length)],
 				step -> settings = withShutter(clampStep(settings.shutterSpeedIdx(), step, SHUTTERS.length)),
 				!ssAuto);
 
 		// ISO is film-locked → display only.
-		addRow(cx, top + row++ * 22, "ISO (フィルム)",
+		addRow(cx, top + row++ * 20, "ISO (フィルム)",
 				() -> "ISO " + settings.iso() + " §8(固定)",
 				step -> {}, false);
 
 		// Focus distance — disabled when AF or MOB
 		boolean focusAuto = settings.focusMode() != CameraSettings.FOCUS_MF;
 		String focusAutoLabel = settings.focusMode() == CameraSettings.FOCUS_MOB ? "MOB" : "AF";
-		addRow(cx, top + row++ * 22, "フォーカス",
+		addRow(cx, top + row++ * 20, "フォーカス",
 				() -> focusAuto ? focusAutoLabel : formatFocus(settings.focusDistance()),
 				step -> {
 					int curIdx = nearestIdxFloat(FOCUS_VALUES, settings.focusDistance());
@@ -107,7 +109,7 @@ public class FilmCameraScreen extends Screen {
 				}, !focusAuto);
 
 		boolean focalEditable = LensKind.isZoom(settings.lensType());
-		addRow(cx, top + row++ * 22, "焦点距離",
+		addRow(cx, top + row++ * 20, "焦点距離",
 				() -> LensKind.hasLens(settings.lensType()) ? settings.focalLengthMm() + "mm" : "—",
 				step -> {
 					if (!LensKind.isZoom(settings.lensType())) return;
@@ -118,7 +120,7 @@ public class FilmCameraScreen extends Screen {
 					settings = withFocalLength(stops.get(newIdx));
 				}, focalEditable);
 
-		addRow(cx, top + row++ * 22, "レンズ",
+		addRow(cx, top + row++ * 20, "レンズ",
 				() -> LensKind.displayName(settings.lensType()),
 				step -> {
 					List<Integer> available = availableLensKinds();
@@ -132,19 +134,19 @@ public class FilmCameraScreen extends Screen {
 				}, true);
 
 		// Exposure mode row (M / Av / Tv / P)
-		addRow(cx, top + row++ * 22, "露出モード",
+		addRow(cx, top + row++ * 20, "露出モード",
 				() -> EXP_MODE_LABELS[Math.max(0, Math.min(EXP_MODE_LABELS.length - 1, settings.exposureMode()))],
 				step -> settings = withExposureMode(clampStep(settings.exposureMode(), step, EXP_MODE_LABELS.length)),
 				true);
 
 		// Focus mode row (MF / AF / MOB)
-		addRow(cx, top + row++ * 22, "フォーカスモード",
+		addRow(cx, top + row++ * 20, "フォーカスモード",
 				() -> FOCUS_MODE_LABELS[Math.max(0, Math.min(FOCUS_MODE_LABELS.length - 1, settings.focusMode()))],
 				step -> settings = withFocusMode(clampStep(settings.focusMode(), step, FOCUS_MODE_LABELS.length)),
 				true);
 
 		// Self-timer
-		addRow(cx, top + row++ * 22, "タイマー",
+		addRow(cx, top + row++ * 20, "タイマー",
 				() -> {
 					int t = settings.timerSeconds();
 					return t == 0 ? "なし" : t + "秒";
@@ -160,7 +162,7 @@ public class FilmCameraScreen extends Screen {
 				}, true);
 
 		// Motion blur — enables long-exposure frame accumulation for tripod / slow shutter shots
-		addRow(cx, top + row++ * 22, "モーションブラー",
+		addRow(cx, top + row++ * 20, "モーションブラー",
 				() -> settings.motionBlur() ? "§aON" : "§cOFF",
 				step -> {
 					settings = settings.withMotionBlur(!settings.motionBlur());
@@ -169,7 +171,7 @@ public class FilmCameraScreen extends Screen {
 
 		FilmRollData film = FilmCameraItem.getFilm(stack);
 		boolean loaded = film.totalExposures() > 0;
-		int btnY = top + row * 22 + 14;
+		int btnY = py + 242;
 
 		if (armorStandEntityId >= 0) {
 			// Armor stand mode: "Shoot" | "Remove camera" | "Close"
@@ -255,11 +257,10 @@ public class FilmCameraScreen extends Screen {
 
 		// Draw dark panel background
 		int cx = width / 2;
-		int top = height / 2 - 110;
 		int panelW = 320;
-		int panelH = 302;
+		int panelH = 300;
 		int px = cx - panelW / 2;
-		int py = top - 16;
+		int py = Math.max(4, (height - panelH) / 2);
 		GuiHelper.drawPanel(ctx, px, py, panelW, panelH);
 
 		// Nameplate at top of panel
@@ -285,7 +286,7 @@ public class FilmCameraScreen extends Screen {
 					+ "  ·  " + wound;
 			statusColor = GuiHelper.CREAM;
 		}
-		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, py + 216, statusColor);
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, py + 222, statusColor);
 
 		super.render(ctx, mouseX, mouseY, delta);
 

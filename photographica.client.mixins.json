@@ -1,0 +1,15 @@
+{
+	"required": true,
+	"package": "dev.hitom.photographica.mixin.client",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"ClientPlayerInteractionManagerMixin",
+		"EntityRendererMixin",
+		"GameRendererMixin",
+		"MouseMixin",
+		"WorldRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

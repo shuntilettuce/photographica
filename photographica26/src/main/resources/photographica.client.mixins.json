@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "refmap": "photographica.refmap.json",
+  "package": "dev.hitom.photographica.mixin.client",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "ClientPlayerInteractionManagerMixin",
+    "EntityRendererMixin",
+    "GameRendererMixin",
+    "MouseMixin",
+    "PlayerEntityRendererMixin",
+    "WorldRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

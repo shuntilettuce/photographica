@@ -30,6 +30,8 @@ import net.minecraft.text.Text;
 import java.io.File;
 import java.io.IOException;
 import java.nio.FloatBuffer;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -433,13 +435,74 @@ public final class PhotoCapture {
 		}
 
 		//? if >=1.21.11 {
-		/*NativeImage[] rawRef = {null};
-		ScreenshotRecorder.takeScreenshot(fb, img -> rawRef[0] = img);
-		NativeImage raw = rawRef[0];
-		if (raw == null) return;*/
-		//?} else {
-		NativeImage raw = ScreenshotRecorder.takeScreenshot(fb);
+		/*final UUID fId = id;
+		final CameraSettings fSettings = settings;
+		final boolean fIsFilm = isFilm;
+		final int fCaptureStandId = captureStandId;
+		final float[] fLinearDepth = linearDepth;
+		final int fFbW = fbW;
+		final int fFbH = fbH;
+		// Restore camera synchronously — the framebuffer already contains the armor stand
+		// frame, so the GPU copy will succeed even after we hand control back to the player.
+		if (fCaptureStandId >= 0) {
+			if (mc.player != null) mc.setCameraEntity(mc.player);
+			if (savedArmorStandPerspective != null) {
+				mc.options.setPerspective(savedArmorStandPerspective);
+				savedArmorStandPerspective = null;
+			}
+			armorStandCapturePending = false;
+			armorStandFocalLength = 0;
+		}
+		ScreenshotRecorder.takeScreenshot(fb, raw -> {
+			if (raw == null) return;
+			NativeImage cropped = null;
+			NativeImage downsampled = null;
+			NativeImage processed = null;
+			try {
+				cropped = cropTo3to2(raw);
+				downsampled = boxDownsample(cropped, 1280);
+				processed = applyPhotographicEffects(downsampled, fSettings, fLinearDepth, fFbW, fFbH, fCaptureStandId < 0);
+				File dir = new File(mc.runDirectory, "photographica/photos");
+				if (!dir.exists() && !dir.mkdirs()) {
+					Photographica.LOGGER.error("Could not create photo dir: {}", dir);
+					return;
+				}
+				File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + "_" + fId.toString().replace("-", "") + ".png");
+				processed.writeTo(outFile);
+				Photographica.LOGGER.info("Photo saved: {} ({}x{})",
+						outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
+			} catch (IOException e) {
+				Photographica.LOGGER.error("Photo capture failed", e);
+			} finally {
+				if (processed != null) processed.close();
+				if (downsampled != null && downsampled != cropped && downsampled != raw) downsampled.close();
+				if (cropped != null && cropped != raw) cropped.close();
+				raw.close();
+			}
+			if (fCaptureStandId >= 0) {
+				if (fIsFilm) {
+					ClientPlayNetworking.send(new TakeFilmPhotoFromArmorStandPayload(fId, fSettings, fCaptureStandId));
+					if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て・フィルム)"), true);
+				} else {
+					ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(fId, fSettings, fCaptureStandId));
+					if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て)"), true);
+				}
+			} else if (fIsFilm) {
+				ClientPlayNetworking.send(new TakeFilmPhotoPayload(fId, fSettings));
+				if (mc.player != null) {
+					mc.player.sendMessage(Text.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), true);
+				}
+			} else {
+				ClientPlayNetworking.send(new CreatePhotoPayload(fId, fSettings));
+				if (mc.player != null) {
+					mc.player.sendMessage(Text.literal("📸 撮影"), true);
+				}
+			}
+		});
+		return;*/
 		//?}
+		//? if <1.21.11 {
+		NativeImage raw = ScreenshotRecorder.takeScreenshot(fb);
 
 		NativeImage cropped = null;
 		NativeImage downsampled = null;
@@ -447,13 +510,13 @@ public final class PhotoCapture {
 		try {
 			cropped = cropTo3to2(raw);
 			downsampled = boxDownsample(cropped, 1280);
-			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH, true);
+			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH, captureStandId < 0);
 			File dir = new File(mc.runDirectory, "photographica/photos");
 			if (!dir.exists() && !dir.mkdirs()) {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 				return;
 			}
-			File outFile = new File(dir, id + ".png");
+			File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + "_" + id.toString().replace("-", "") + ".png");
 			processed.writeTo(outFile);
 			Photographica.LOGGER.info("Photo saved: {} ({}x{})",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
@@ -493,6 +556,7 @@ public final class PhotoCapture {
 				mc.player.sendMessage(Text.literal("📸 撮影"), true);
 			}
 		}
+		//?}
 	}
 
 	/**
@@ -521,13 +585,46 @@ public final class PhotoCapture {
 		// Take a color sample if the interval has elapsed.
 		if (now >= accumNextSampleMs && accumSamples < ACCUM_MAX_SAMPLES) {
 			//? if >=1.21.11 {
-			/*NativeImage[] frameRef = {null};
-			ScreenshotRecorder.takeScreenshot(fb, img -> frameRef[0] = img);
-			NativeImage frame = frameRef[0];
-			if (frame == null) return;*/
+			/*ScreenshotRecorder.takeScreenshot(fb, frame -> {
+				if (frame == null) return;
+				NativeImage cropped = null;
+				NativeImage ds = null;
+				try {
+					cropped = cropTo3to2(frame);
+					ds = boxDownsample(cropped, 1280);
+					int w = ds.getWidth();
+					int h = ds.getHeight();
+					if (accumR == null) {
+						accumW = w; accumH = h;
+						accumR = new float[w * h];
+						accumG = new float[w * h];
+						accumB = new float[w * h];
+					}
+					if (w == accumW && h == accumH) {
+						for (int y = 0; y < h; y++) {
+							for (int x = 0; x < w; x++) {
+								int c = getPixelAbgr(ds, x, y);
+								int idx = y * w + x;
+								accumR[idx] += c & 0xFF;
+								accumG[idx] += (c >> 8) & 0xFF;
+								accumB[idx] += (c >> 16) & 0xFF;
+							}
+						}
+						accumSamples++;
+					}
+				} finally {
+					if (ds != null && ds != cropped && ds != frame) ds.close();
+					if (cropped != null && cropped != frame) cropped.close();
+					frame.close();
+				}
+				// In 1.21.11 the screenshot is async — finalize from inside the callback
+				// so accumSamples is already incremented before we read it.
+				if (accumId != null && (System.currentTimeMillis() >= accumEndMs || accumSamples >= ACCUM_MAX_SAMPLES)) {
+					finalizeAccumulation(MinecraftClient.getInstance());
+				}
+			});*/
 			//?} else {
 			NativeImage frame = ScreenshotRecorder.takeScreenshot(fb);
-			//?}
 			NativeImage cropped = null;
 			NativeImage ds = null;
 			try {
@@ -558,12 +655,17 @@ public final class PhotoCapture {
 				if (cropped != null && cropped != frame) cropped.close();
 				frame.close();
 			}
+			//?}
 			accumNextSampleMs = now + accumSampleIntervalMs;
 		}
 
+		//? if <1.21.11 {
+		// For 1.21.11 the finalize is triggered from inside the async screenshot callback
+		// (above), so accumSamples is guaranteed to be up-to-date when we read it.
 		if (now >= accumEndMs || accumSamples >= ACCUM_MAX_SAMPLES) {
 			finalizeAccumulation(mc);
 		}
+		//?}
 	}
 
 	/** Averages all accumulated frames, applies photographic effects, and saves the photo. */
@@ -584,6 +686,15 @@ public final class PhotoCapture {
 
 		if (n == 0 || r == null) {
 			Photographica.LOGGER.warn("Long exposure: no frames accumulated, discarding");
+			if (finalStandId >= 0) {
+				if (mc.player != null) mc.setCameraEntity(mc.player);
+				if (savedArmorStandPerspective != null) {
+					mc.options.setPerspective(savedArmorStandPerspective);
+					savedArmorStandPerspective = null;
+				}
+			}
+			armorStandCapturePending = false;
+			armorStandFocalLength = 0;
 			return;
 		}
 
@@ -599,6 +710,17 @@ public final class PhotoCapture {
 			}
 		}
 
+		// Restore camera before processing so no path can leave the player stuck.
+		if (finalStandId >= 0) {
+			if (mc.player != null) mc.setCameraEntity(mc.player);
+			if (savedArmorStandPerspective != null) {
+				mc.options.setPerspective(savedArmorStandPerspective);
+				savedArmorStandPerspective = null;
+			}
+			armorStandCapturePending = false;
+			armorStandFocalLength = 0;
+		}
+
 		NativeImage processed = null;
 		try {
 			// Skip synthetic motion blur — real blur is already baked into the accumulation.
@@ -608,7 +730,7 @@ public final class PhotoCapture {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 				return;
 			}
-			File outFile = new File(dir, id + ".png");
+			File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + "_" + id.toString().replace("-", "") + ".png");
 			processed.writeTo(outFile);
 			Photographica.LOGGER.info("Long-exposure photo saved: {} ({}x{}, {} frames accumulated)",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight(), n);
@@ -627,14 +749,6 @@ public final class PhotoCapture {
 				ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(id, settings, finalStandId));
 				if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て)"), true);
 			}
-			// Restore player camera and perspective after armor stand long exposure
-			if (mc.player != null) mc.setCameraEntity(mc.player);
-			if (savedArmorStandPerspective != null) {
-				mc.options.setPerspective(savedArmorStandPerspective);
-				savedArmorStandPerspective = null;
-			}
-			armorStandCapturePending = false;
-			armorStandFocalLength = 0;
 		} else if (isFilm) {
 			ClientPlayNetworking.send(new TakeFilmPhotoPayload(id, settings));
 			if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), true);
@@ -883,7 +997,7 @@ public final class PhotoCapture {
 		}
 
 		lastCaptureMs = now;
-		motionBlurEnabled = true; // armor stand = always stable
+		motionBlurEnabled = true;
 
 		pendingSettings = settings;
 		pendingId = UUID.randomUUID();
@@ -907,9 +1021,11 @@ public final class PhotoCapture {
 		}
 		mc.setCameraEntity(stand);
 
-		// Long exposure: multi-frame accumulation from armor stand perspective
+		// Long exposure: multi-frame accumulation from armor stand perspective.
+		// Use strictly-greater-than so the default 1/30 shutter falls through to
+		// single-frame capture (same threshold as the handheld take() path).
 		double shutterSec = settings.shutterSeconds();
-		if (shutterSec >= 1.0 / 30.0) {
+		if (shutterSec > 1.0 / 30.0) {
 			long durationMs = Math.max((long)(shutterSec * 1000), 1L);
 			accumId = pendingId;
 			accumSettings = settings;
@@ -1315,6 +1431,36 @@ public final class PhotoCapture {
 			hand = mc.player.getOffHandStack();
 			if (!isAnyCamera(hand)) return;
 		}
+		//? if >=1.21.11 {
+		/*// In 1.21.11 the scene depth lives in a GpuTexture, not the legacy FBO depth
+		// attachment, so glReadPixels(GL_DEPTH_COMPONENT) returns stale/wrong data.
+		// mc.crosshairTarget is capped at interaction reach (~4.5 blocks), so it MISSes
+		// for anything farther — leaving the focus plane and reticle frozen. Do our own
+		// long-range raycast (blocks + entities) so focus tracks distant subjects too.
+		final double maxDist = 256.0;
+		net.minecraft.util.math.Vec3d eye = mc.player.getCameraPosVec(1.0f);
+		net.minecraft.util.math.Vec3d look = mc.player.getRotationVec(1.0f);
+		net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
+		net.minecraft.util.hit.BlockHitResult blockHit = mc.world.raycast(
+				new net.minecraft.world.RaycastContext(eye, end,
+						net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
+						net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+		double bestDist = (blockHit != null
+				&& blockHit.getType() != net.minecraft.util.hit.HitResult.Type.MISS)
+				? eye.distanceTo(blockHit.getPos()) : maxDist;
+		net.minecraft.util.math.Box searchBox = mc.player.getBoundingBox()
+				.stretch(look.multiply(maxDist)).expand(1.0);
+		net.minecraft.util.hit.EntityHitResult entityHit =
+				net.minecraft.entity.projectile.ProjectileUtil.raycast(mc.player, eye, end,
+						searchBox, e -> !e.isSpectator() && e.isAlive(), bestDist * bestDist);
+		if (entityHit != null) {
+			double eDist = eye.distanceTo(entityHit.getPos());
+			if (eDist < bestDist) bestDist = eDist;
+		}
+		// Nothing within range (sky / far horizon) → treat as infinity so AF can
+		// reach the 999 stop, matching the old glReadPixels behaviour at the sky.
+		lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : 999.0f;*/
+		//?} else {
 		// Read from the currently bound framebuffer without switching — with Iris active,
 		// WorldRenderEvents.LAST fires while Iris's own FBO is still bound, so we must
 		// not call fb.beginWrite() or we would switch to mc.getFramebuffer() whose depth
@@ -1334,6 +1480,7 @@ public final class PhotoCapture {
 		final float near = 0.05f;
 		final float far  = 512.0f;
 		lastSceneDepthBlocks = 2.0f * near * far / (far + near - ndc * (far - near));
+		//?}
 	}
 
 	/**
@@ -1378,12 +1525,11 @@ public final class PhotoCapture {
 		}
 
 		// Per-pixel CoC (Circle of Confusion) in image pixels.
-		// Infinity focus (focusDist >= 999): coc = maxBlurPx * nearLimit / depth
-		//   where nearLimit = 10/aperture (f/2→5 m, f/4→2.5 m).
-		//   Objects closer than nearLimit are fully blurred; farther objects clear up as 1/depth.
+		// Infinity focus (focusDist >= 999): thin-lens formula CoC_mm = f² / (A*(d - f))
 		// Finite focus: standard near/far CoC formula.
 		boolean infinityFocus = (focusDist >= 999.0f);
-		float nearLimit = infinityFocus ? (10.0f / aperture) : 0.0f;
+		float focalM = settings.focalLengthMm() / 1000f;
+		float pxPerMm = (float) ih / 24.0f;  // 24mm sensor height maps to ih pixels
 		float[] cocMap = new float[iw * ih];
 		for (int iy = 0; iy < ih; iy++) {
 			for (int ix = 0; ix < iw; ix++) {
@@ -1392,7 +1538,9 @@ public final class PhotoCapture {
 				float depth = linearDepth[fy_gl * fbW + fx];
 				float coc;
 				if (infinityFocus) {
-					coc = Math.min(maxBlurPx, maxBlurPx * nearLimit / Math.max(depth, 0.05f));
+					float depthM = Math.max(depth, focalM * 1.001f);
+					float cocM = (focalM * focalM) / (aperture * (depthM - focalM));
+					coc = Math.min(maxBlurPx, cocM * 1000f * pxPerMm * 0.5f);
 				} else {
 					float r = depth / focusDist;
 					coc = (depth <= focusDist)

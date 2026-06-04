@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=south": { "model": "photographica:block/photo_stand" },
+    "facing=west":  { "model": "photographica:block/photo_stand", "y": 90 },
+    "facing=north": { "model": "photographica:block/photo_stand", "y": 180 },
+    "facing=east":  { "model": "photographica:block/photo_stand", "y": 270 }
+  }
+}

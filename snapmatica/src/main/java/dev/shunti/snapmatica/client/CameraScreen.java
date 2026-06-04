@@ -42,9 +42,10 @@ public class CameraScreen extends Screen {
     @Override
     protected void init() {
         int cx = width / 2;
-        int top = 60;
+        int rowHeight = 22;
+        int contentH = 6 * rowHeight + 16 + 20;
+        int top = Math.max(24, (height - contentH) / 2);
         int row = 0;
-        int rowHeight = 26;
         int btnWidth = 130;
 
         int exposureMode = SnapmaticaClient.exposureMode;
@@ -55,7 +56,7 @@ public class CameraScreen extends Screen {
                 () -> apAuto ? "AUTO" : "F" + fmt(SnapmaticaClient.aperture),
                 btnWidth,
                 step -> { int idx = findClosest(APERTURES, SnapmaticaClient.aperture);
-                    idx = clampStep(idx, step, APERTURES.size()); SnapmaticaClient.aperture = APERTURES.get(idx); },
+                    idx = clampStep(idx, step, APERTURES.size()); SnapmaticaClient.aperture = APERTURES.get(idx); SnapmaticaClient.updateAutoValues(); },
                 !apAuto);
 
         // Shutter
@@ -71,7 +72,7 @@ public class CameraScreen extends Screen {
                 () -> "ISO " + ISOS.get(clampIdx(findClosestInt(ISOS, SnapmaticaClient.iso), ISOS.size())),
                 btnWidth,
                 step -> { int idx = findClosestInt(ISOS, SnapmaticaClient.iso);
-                    idx = clampStep(idx, step, ISOS.size()); SnapmaticaClient.iso = ISOS.get(idx); },
+                    idx = clampStep(idx, step, ISOS.size()); SnapmaticaClient.iso = ISOS.get(idx); SnapmaticaClient.updateAutoValues(); },
                 true);
 
         // Focus
@@ -88,7 +89,7 @@ public class CameraScreen extends Screen {
         addRow2(cx, top + row++ * rowHeight, "Exp. Mode",
                 () -> EXP_MODE_LABELS[clampIdx(SnapmaticaClient.exposureMode, EXP_MODE_LABELS.length)],
                 btnWidth,
-                step -> { SnapmaticaClient.exposureMode = clampStep(SnapmaticaClient.exposureMode, step, EXP_MODE_LABELS.length); },
+                step -> { SnapmaticaClient.exposureMode = clampStep(SnapmaticaClient.exposureMode, step, EXP_MODE_LABELS.length); SnapmaticaClient.updateAutoValues(); },
                 true);
 
         // Focus mode

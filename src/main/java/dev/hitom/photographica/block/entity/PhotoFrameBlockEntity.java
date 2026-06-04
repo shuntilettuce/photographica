@@ -49,13 +49,15 @@ public class PhotoFrameBlockEntity extends BlockEntity {
     /*@Override
     protected void writeData(net.minecraft.storage.WriteView view) {
         super.writeData(view);
-        // TODO: serialize photoData for 1.21.11
+        if (photoData != null) {
+            view.put("Photo", PhotoData.CODEC, photoData);
+        }
     }
 
     @Override
     protected void readData(net.minecraft.storage.ReadView view) {
         super.readData(view);
-        // TODO: deserialize photoData for 1.21.11
+        photoData = view.read("Photo", PhotoData.CODEC).orElse(null);
     }*/
     //?} else {
     @Override

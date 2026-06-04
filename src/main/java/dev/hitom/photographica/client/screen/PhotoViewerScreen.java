@@ -13,6 +13,8 @@ import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
+import dev.hitom.photographica.client.render.PhotoTextureCache;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -59,9 +61,10 @@ public class PhotoViewerScreen extends Screen {
 	private void loadImage() {
 		UUID id = data.id();
 		MinecraftClient mc = MinecraftClient.getInstance();
-		File file = new File(mc.runDirectory, "photographica/photos/" + id + ".png");
-		if (!file.isFile()) {
-			Photographica.LOGGER.warn("Photo PNG not found: {}", file);
+		File photoDir = new File(mc.runDirectory, "photographica/photos");
+		File file = PhotoTextureCache.findPhotoFile(photoDir, id);
+		if (file == null) {
+			Photographica.LOGGER.warn("Photo PNG not found for UUID: {}", id);
 			missing = true;
 			return;
 		}
@@ -198,10 +201,10 @@ public class PhotoViewerScreen extends Screen {
 
 		//? if >=1.21.11 {
 		/*ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, image.id, dx, dy, 0f, 0f,
-				image.texW, image.texH, image.texW, image.texH, dw, dh);*/
+				dw, dh, image.texW, image.texH, image.texW, image.texH);*/
 		//?} else if >=1.21.4 {
 		/*ctx.drawTexture(net.minecraft.client.render.RenderLayer::getGuiTextured, image.id, dx, dy, 0f, 0f,
-				image.texW, image.texH, image.texW, image.texH, dw, dh);*/
+				dw, dh, image.texW, image.texH, image.texW, image.texH);*/
 		//?} else {
 		ctx.drawTexture(image.id, dx, dy, dw, dh, 0f, 0f,
 				image.texW, image.texH, image.texW, image.texH);

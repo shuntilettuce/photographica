@@ -12,15 +12,22 @@ public final class PhotoProcessor {
 
     /** Returns the exposure‑compensation multiplier (1.0 = neutral). */
     public static double exposureFactor() {
-        float aperture   = SnapmaticaClient.aperture;
-        int iso          = SnapmaticaClient.iso;
-        double shutter   = SnapmaticaClient.SHUTTER_SECONDS[SnapmaticaClient.shutterSpeedIdx];
+        int em = SnapmaticaClient.exposureMode;
+        // In auto modes use the computed auto values so photos land at centered exposure.
+        int shutterIdx = (em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx;
+        float aperture = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
+        int iso        = SnapmaticaClient.iso;
+        double shutter = SnapmaticaClient.SHUTTER_SECONDS[Math.max(0, Math.min(SnapmaticaClient.SHUTTER_SECONDS.length - 1, shutterIdx))];
 
-        // “Sunny 16” reference: f/16, ISO 100, 1/100 s → EV 15
-        double evActual   = Math.log((aperture * aperture) / shutter) / Math.log(2);
-        double evRef      = Math.log((16.0 * 16.0) / (1.0 / 100.0)) / Math.log(2);
-        double isoOffset  = Math.log(iso / 100.0) / Math.log(2);
-        double evDiff     = (evRef - evActual) + isoOffset;
+        // Neutral: f/5.6, 1/30 s, ISO 400 → factor = 1.0
+        final double neutralAperture = 5.6;
+        final double neutralShutter  = 1.0 / 30.0;
+        final int    neutralIso      = 400;
+
+        double evActual  = Math.log((aperture * aperture) / shutter) / Math.log(2);
+        double evNeutral = Math.log((neutralAperture * neutralAperture) / neutralShutter) / Math.log(2);
+        double isoOffset = Math.log(iso / (double) neutralIso) / Math.log(2);
+        double evDiff    = (evNeutral - evActual) + isoOffset;
 
         return Math.max(0.1, Math.min(10.0, Math.pow(2.0, evDiff)));
     }

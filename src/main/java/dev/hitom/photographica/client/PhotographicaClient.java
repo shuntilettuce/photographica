@@ -242,7 +242,26 @@ public class PhotographicaClient implements ClientModInitializer {
 		// Render all four camera item models on the player's chest when worn.
 		// Uses the humanoid body bone for correct rotation with body/head animations.
 		//? if >=1.21.11 {
-		/*// Camera armor rendering not yet implemented for 1.21.11*/
+		/*ArmorRenderer.register((matrices, queue, stack, state, slot, light, contextModel) -> {
+			if (slot != EquipmentSlot.CHEST) return;
+			MinecraftClient mc = MinecraftClient.getInstance();
+			if (mc.world == null || mc.player == null) return;
+			matrices.push();
+			// Align with the body's current rotation (1.21.11 renamed rotate→applyTransform)
+			contextModel.body.applyTransform(matrices);
+			matrices.translate(0.0, 0.12, -0.175);
+			matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(180f));
+			matrices.scale(0.35f, 0.35f, 0.35f);
+			// 1.21.11 renders items through an ItemRenderState submitted to the queue.
+			// The camera model is static, so any living entity is fine as the model
+			// context (it only supplies world/pos/seed, which don't affect this model).
+			net.minecraft.client.render.item.ItemRenderState itemState =
+					new net.minecraft.client.render.item.ItemRenderState();
+			mc.getItemModelManager().updateForLivingEntity(
+					itemState, stack, net.minecraft.item.ItemDisplayContext.FIXED, mc.player);
+			itemState.render(matrices, queue, light, OverlayTexture.DEFAULT_UV, 0);
+			matrices.pop();
+		}, ModItems.VIDEO_CAMERA, ModItems.CAMERA, ModItems.MIRRORLESS_CAMERA, ModItems.FILM_CAMERA);*/
 		//?} else if >=1.21.4 {
 		/*ArmorRenderer.register((matrices, vertexConsumers, stack, state, slot, light, contextModel) -> {
 			if (slot != EquipmentSlot.CHEST) return;

@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "refmap": "snapmatica.refmap.json",
+  "package": "dev.shunti.snapmatica.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "GameRendererMixin",
+    "MouseMixin",
+    "LevelRendererMixin",
+    "EntityRendererMixin",
+    "AvatarRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -17,6 +17,8 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
+import dev.hitom.photographica.client.render.PhotoTextureCache;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -139,10 +141,10 @@ public class SdCardBrowserScreen extends Screen {
             ctx.fill(tx - 1, ty - 1, tx + thumb.guiW() + 1, ty + thumb.guiH() + 1, 0xFF9B6F30);
             //? if >=1.21.11 {
             /*ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, thumb.id(), tx, ty, 0f, 0f,
-                    thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH(), thumb.guiW(), thumb.guiH());*/
+                    thumb.guiW(), thumb.guiH(), thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH());*/
             //?} else if >=1.21.4 {
             /*ctx.drawTexture(net.minecraft.client.render.RenderLayer::getGuiTextured, thumb.id(), tx, ty, 0f, 0f,
-                    thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH(), thumb.guiW(), thumb.guiH());*/
+                    thumb.guiW(), thumb.guiH(), thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH());*/
             //?} else {
             ctx.drawTexture(thumb.id(), tx, ty, thumb.guiW(), thumb.guiH(),
                     0f, 0f, thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH());
@@ -190,8 +192,9 @@ public class SdCardBrowserScreen extends Screen {
 
         // Delete PNG from disk
         MinecraftClient mc = MinecraftClient.getInstance();
-        File file = new File(mc.runDirectory, "photographica/photos/" + photoId + ".png");
-        file.delete();
+        File photoDir = new File(mc.runDirectory, "photographica/photos");
+        File file = PhotoTextureCache.findPhotoFile(photoDir, photoId);
+        if (file != null) file.delete();
 
         // Release cached thumbnail texture
         if (thumb != null && loadedForIndex == index) {
@@ -224,8 +227,9 @@ public class SdCardBrowserScreen extends Screen {
         loadedForIndex = index;
 
         MinecraftClient mc = MinecraftClient.getInstance();
-        File file = new File(mc.runDirectory, "photographica/photos/" + data.id() + ".png");
-        if (!file.isFile()) {
+        File photoDir = new File(mc.runDirectory, "photographica/photos");
+        File file = PhotoTextureCache.findPhotoFile(photoDir, data.id());
+        if (file == null) {
             thumbMissing = true;
             return;
         }

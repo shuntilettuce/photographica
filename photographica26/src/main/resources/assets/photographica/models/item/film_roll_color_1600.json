@@ -1,0 +1,6 @@
+{
+	"parent": "minecraft:item/generated",
+	"textures": {
+		"layer0": "photographica:item/film_roll_color_1600"
+	}
+}

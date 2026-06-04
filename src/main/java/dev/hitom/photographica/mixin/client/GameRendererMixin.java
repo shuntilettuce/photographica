@@ -40,11 +40,47 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
 
+	//? if <1.21.11 {
 	@Shadow private boolean renderHand;
+	//?}
 
 	/** True when the hand was hidden for an in-progress video frame capture. */
 	@Unique private boolean photographica$videoHandSuppressed = false;
 
+	//? if >=1.21.4 {
+	/*@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)F",
+			at = @At("RETURN"),
+			cancellable = true)
+	private void photographica$applyFocalLength(Camera camera, float tickDelta, boolean changingFov,
+	                                            CallbackInfoReturnable<Float> cir) {
+		if (PhotoCapture.armorStandCapturePending && PhotoCapture.armorStandFocalLength > 0) {
+			int f = PhotoCapture.armorStandFocalLength;
+			cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(12.0 / f)));
+			return;
+		}
+		PlayerEntity player = MinecraftClient.getInstance().player;
+		if (player == null) return;
+		ItemStack vs = player.getMainHandStack();
+		if (!(vs.getItem() instanceof VideoCameraItem)) vs = player.getOffHandStack();
+		if (vs.getItem() instanceof VideoCameraItem) {
+			cir.setReturnValue(VideoRecorder.videoFov);
+			return;
+		}
+		if (!player.isSneaking()) return;
+		ItemStack stack = player.getMainHandStack();
+		if (!isCamera(stack)) {
+			stack = player.getOffHandStack();
+			if (!isCamera(stack)) return;
+		}
+		CameraSettings settings = stack.getItem() instanceof FilmCameraItem
+				? FilmCameraItem.getSettings(stack)
+				: CameraItem.getSettings(stack);
+		if (!LensKind.hasLens(settings.lensType())) return;
+		int f = settings.focalLengthMm();
+		if (f <= 0) return;
+		cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(12.0 / f)));
+	}*/
+	//?} else {
 	@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D",
 			at = @At("RETURN"),
 			cancellable = true)
@@ -90,6 +126,26 @@ public class GameRendererMixin {
 		double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
 		cir.setReturnValue(vFovDegrees);
 	}
+	//?}
+
+	//? if >=1.21.11 {
+	/*/^*
+	 * 1.21.11 removed the {@code renderHand} boolean field; the hand is now drawn by
+	 * {@code renderHand(float, boolean, Matrix4f)} called from inside renderWorld().
+	 * Cancel that call entirely while recording video or capturing (long exposure /
+	 * armor stand) so the hand never appears in the framebuffer that gets captured —
+	 * and, since this also covers the on-screen draw, the hand is hidden for the whole
+	 * recording (user confirmed full hide is acceptable).
+	 *^/
+	@Inject(method = "renderHand(FZLorg/joml/Matrix4f;)V", at = @At("HEAD"), cancellable = true)
+	private void photographica$suppressHandForCapture(float tickDelta, boolean bl,
+			org.joml.Matrix4f matrix4f, CallbackInfo ci) {
+		if (VideoRecorder.isRecording() || PhotoCapture.isAccumulating()
+				|| PhotoCapture.armorStandCapturePending) {
+			ci.cancel();
+		}
+	}*/
+	//?}
 
 	/**
 	 * Fired just before renderWorld() during long-exposure accumulation OR
@@ -108,13 +164,17 @@ public class GameRendererMixin {
 					shift = At.Shift.BEFORE))
 	private void photographica$suppressHandBeforeAccumSample(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
 		// Suppress hand during long-exposure accumulation AND armor stand capture
+		//? if <1.21.11 {
 		if (PhotoCapture.isAccumulating() || PhotoCapture.armorStandCapturePending) {
 			this.renderHand = false;
 		}
+		//?}
 		// Suppress hand for the entire duration of recording so it never
 		// appears in any captured frame (user confirmed complete hide is fine).
 		if (VideoRecorder.isRecording()) {
+			//? if <1.21.11 {
 			this.renderHand = false;
+			//?}
 			photographica$videoHandSuppressed = true;
 		} else {
 			photographica$videoHandSuppressed = false;
@@ -141,9 +201,11 @@ public class GameRendererMixin {
 		PhotoCapture.captureIfPending();
 		VideoRecorder.captureFrameIfRecording();
 		// Restore renderHand for the vanilla renderHand() call that follows
+		//? if <1.21.11 {
 		if (wasAccumulating || wasArmorStand || photographica$videoHandSuppressed) {
 			this.renderHand = true;
 		}
+		//?}
 		photographica$videoHandSuppressed = false;
 	}
 
