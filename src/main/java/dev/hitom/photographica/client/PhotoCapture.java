@@ -442,6 +442,17 @@ public final class PhotoCapture {
 		final float[] fLinearDepth = linearDepth;
 		final int fFbW = fbW;
 		final int fFbH = fbH;
+		// Restore camera synchronously — the framebuffer already contains the armor stand
+		// frame, so the GPU copy will succeed even after we hand control back to the player.
+		if (fCaptureStandId >= 0) {
+			if (mc.player != null) mc.setCameraEntity(mc.player);
+			if (savedArmorStandPerspective != null) {
+				mc.options.setPerspective(savedArmorStandPerspective);
+				savedArmorStandPerspective = null;
+			}
+			armorStandCapturePending = false;
+			armorStandFocalLength = 0;
+		}
 		ScreenshotRecorder.takeScreenshot(fb, raw -> {
 			if (raw == null) return;
 			NativeImage cropped = null;
@@ -476,13 +487,6 @@ public final class PhotoCapture {
 					ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(fId, fSettings, fCaptureStandId));
 					if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て)"), true);
 				}
-				if (mc.player != null) mc.setCameraEntity(mc.player);
-				if (savedArmorStandPerspective != null) {
-					mc.options.setPerspective(savedArmorStandPerspective);
-					savedArmorStandPerspective = null;
-				}
-				armorStandCapturePending = false;
-				armorStandFocalLength = 0;
 			} else if (fIsFilm) {
 				ClientPlayNetworking.send(new TakeFilmPhotoPayload(fId, fSettings));
 				if (mc.player != null) {
@@ -673,6 +677,15 @@ public final class PhotoCapture {
 
 		if (n == 0 || r == null) {
 			Photographica.LOGGER.warn("Long exposure: no frames accumulated, discarding");
+			if (finalStandId >= 0) {
+				if (mc.player != null) mc.setCameraEntity(mc.player);
+				if (savedArmorStandPerspective != null) {
+					mc.options.setPerspective(savedArmorStandPerspective);
+					savedArmorStandPerspective = null;
+				}
+			}
+			armorStandCapturePending = false;
+			armorStandFocalLength = 0;
 			return;
 		}
 
@@ -686,6 +699,17 @@ public final class PhotoCapture {
 				int bv = clampCh(Math.round(b[idx] / n));
 				setPixelAbgr(averaged, px, py, (0xFF << 24) | (bv << 16) | (gv << 8) | rv);
 			}
+		}
+
+		// Restore camera before processing so no path can leave the player stuck.
+		if (finalStandId >= 0) {
+			if (mc.player != null) mc.setCameraEntity(mc.player);
+			if (savedArmorStandPerspective != null) {
+				mc.options.setPerspective(savedArmorStandPerspective);
+				savedArmorStandPerspective = null;
+			}
+			armorStandCapturePending = false;
+			armorStandFocalLength = 0;
 		}
 
 		NativeImage processed = null;
@@ -716,14 +740,6 @@ public final class PhotoCapture {
 				ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(id, settings, finalStandId));
 				if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て)"), true);
 			}
-			// Restore player camera and perspective after armor stand long exposure
-			if (mc.player != null) mc.setCameraEntity(mc.player);
-			if (savedArmorStandPerspective != null) {
-				mc.options.setPerspective(savedArmorStandPerspective);
-				savedArmorStandPerspective = null;
-			}
-			armorStandCapturePending = false;
-			armorStandFocalLength = 0;
 		} else if (isFilm) {
 			ClientPlayNetworking.send(new TakeFilmPhotoPayload(id, settings));
 			if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), true);
