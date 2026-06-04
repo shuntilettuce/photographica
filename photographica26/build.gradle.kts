@@ -6,7 +6,7 @@ plugins {
 val mcVersion     = "26.1.2"
 val loaderVersion = "0.19.2"
 val fabricVersion = "0.149.1+26.1.2"
-val modVersion    = "0.2.0"
+val modVersion    = "0.2.1"
 
 version = "$modVersion+$mcVersion"
 group   = "dev.hitom.photographica"
