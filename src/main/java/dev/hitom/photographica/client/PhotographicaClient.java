@@ -149,19 +149,9 @@ public class PhotographicaClient implements ClientModInitializer {
 			// While recording from a tripod, watch the armor stand. If it has been
 			// destroyed, stop recording gracefully.
 			int standId = VideoRecorder.getRecordingArmorStandEntityId();
-			if (standId >= 0 && client.world != null) {
-				net.minecraft.entity.Entity stand = client.world.getEntityById(standId);
-				if (stand == null) {
-					VideoRecorder.stopRecording();
-				}
-				//? if >=1.21.11 {
-				/*// Locked-camera tripod (1.21.11): keep the view pinned to the stand.
-				// Classic versions render the tripod off-screen and leave the player's
-				// own free-view camera untouched.
-				else {
-					client.setCameraEntity(stand);
-				}*/
-				//?}
+			if (standId >= 0 && client.world != null
+					&& client.world.getEntityById(standId) == null) {
+				VideoRecorder.stopRecording();
 			}
 			if (client.player == null) return;
 			if (settingsKey.wasPressed()) {

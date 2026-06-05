@@ -164,10 +164,8 @@ public class GameRendererMixin {
 		}
 		//?}
 		// Suppress hand for the entire duration of recording so it never
-		// appears in any captured frame (user confirmed complete hide is fine).
-		// Exception: free-view tripod recording films from the stand, not the
-		// player's hand — the player is just an actor in frame, so leave their
-		// own on-screen hand alone.
+		// appears in any captured frame.
+		// Exception: free-view tripod — the player is just an actor in frame.
 		if (VideoRecorder.isRecording() && !VideoRecorder.isTripodMode()) {
 			//? if <1.21.11 {
 			this.renderHand = false;
@@ -176,6 +174,15 @@ public class GameRendererMixin {
 		} else {
 			photographica$videoHandSuppressed = false;
 		}
+
+		//? if >=1.21.11 {
+		/*// Free-view tripod (1.21.11): render from the stand into the off-screen
+		// framebuffer BEFORE the player's main renderWorld() runs here. The player's
+		// pass follows immediately and writes to the main framebuffer as normal.
+		if (VideoRecorder.isRecording() && VideoRecorder.isTripodMode()) {
+			VideoRecorder.captureTripodFrame(tickCounter);
+		}*/
+		//?}
 	}
 
 	/**
