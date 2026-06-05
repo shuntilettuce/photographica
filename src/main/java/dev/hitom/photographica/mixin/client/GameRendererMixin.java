@@ -58,6 +58,12 @@ public class GameRendererMixin {
 			cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(12.0 / f)));
 			return;
 		}
+		// Off-screen tripod video pass: the camera is on the stand, not in hand,
+		// so honour the video zoom FOV explicitly.
+		if (VideoRecorder.isTripodRenderPass()) {
+			cir.setReturnValue(VideoRecorder.videoFov);
+			return;
+		}
 		PlayerEntity player = MinecraftClient.getInstance().player;
 		if (player == null) return;
 		ItemStack vs = player.getMainHandStack();
@@ -91,6 +97,13 @@ public class GameRendererMixin {
 			int f = PhotoCapture.armorStandFocalLength;
 			double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
 			cir.setReturnValue(vFovDegrees);
+			return;
+		}
+
+		// Off-screen tripod video pass: the camera is on the stand, not in hand,
+		// so honour the video zoom FOV explicitly.
+		if (VideoRecorder.isTripodRenderPass()) {
+			cir.setReturnValue((double) VideoRecorder.videoFov);
 			return;
 		}
 
@@ -152,7 +165,10 @@ public class GameRendererMixin {
 		//?}
 		// Suppress hand for the entire duration of recording so it never
 		// appears in any captured frame (user confirmed complete hide is fine).
-		if (VideoRecorder.isRecording()) {
+		// Exception: free-view tripod recording films from the stand, not the
+		// player's hand — the player is just an actor in frame, so leave their
+		// own on-screen hand alone.
+		if (VideoRecorder.isRecording() && !VideoRecorder.isTripodMode()) {
 			//? if <1.21.11 {
 			this.renderHand = false;
 			//?}
@@ -189,6 +205,26 @@ public class GameRendererMixin {
 		//?}
 		photographica$videoHandSuppressed = false;
 	}
+
+	//? if <1.21.11 {
+	/**
+	 * Free-view tripod video capture.  Runs at the very end of render(), after the
+	 * player's own first-person frame and HUD are fully drawn, so re-rendering the
+	 * world from the armor stand into an off-screen framebuffer never disturbs the
+	 * on-screen view.  Only fires while recording from a tripod.
+	 */
+	@Inject(method = "render(Lnet/minecraft/client/render/RenderTickCounter;Z)V", at = @At("TAIL"))
+	private void photographica$captureTripodVideo(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
+		if (VideoRecorder.isRecording() && VideoRecorder.isTripodMode()) {
+			// Hide the first-person hand so it never floats in the tripod shot
+			// (Iris composites it inside renderWorld()).
+			boolean prevRenderHand = this.renderHand;
+			this.renderHand = false;
+			VideoRecorder.captureTripodFrame(tickCounter);
+			this.renderHand = prevRenderHand;
+		}
+	}
+	//?}
 
 	private static boolean isCamera(ItemStack stack) {
 		return stack.getItem() instanceof CameraItem || stack.getItem() instanceof FilmCameraItem;

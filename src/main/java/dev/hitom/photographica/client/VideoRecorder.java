@@ -5,6 +5,7 @@ import dev.hitom.photographica.component.VideoSettings;
 import dev.hitom.photographica.item.VideoCameraItem;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
+import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.item.ItemStack;
@@ -116,6 +117,19 @@ public final class VideoRecorder {
     private static int recordingArmorStandEntityId = -1;
 
     /**
+     * True only while the off-screen tripod render pass is executing (classic
+     * &lt;1.21.11 path).  During this window the depth read in onWorldRenderEnd()
+     * targets the off-screen framebuffer instead of the player's main view, and
+     * WorldRendererMixin un-skips the player so the operator appears in frame.
+     */
+    private static volatile boolean tripodRenderPass = false;
+
+    //? if <1.21.11 {
+    /** Off-screen framebuffer the tripod view is rendered into (free-view mode). */
+    private static net.minecraft.client.gl.Framebuffer tripodFb = null;
+    //?}
+
+    /**
      * Whether smooth/cinematic camera was enabled before recording started.
      * Restored when recording stops so the user's preference is not permanently changed.
      */
@@ -176,6 +190,10 @@ public final class VideoRecorder {
     public static int     getPpProgress()                { return ppProgress; }
     public static String  getPpMessage()                 { return ppMessage; }
     public static int     getRecordingArmorStandEntityId() { return recordingArmorStandEntityId; }
+    /** True while recording from a tripod (camera held by an armor stand). */
+    public static boolean isTripodMode()      { return recording && recordingArmorStandEntityId >= 0; }
+    /** True only during the off-screen tripod render pass (player must be drawn). */
+    public static boolean isTripodRenderPass(){ return tripodRenderPass; }
     public static long    getDoneAtMs()      { return doneAtMs; }
     public static int     getFrameCount()    { return frameCount; }
     public static long    getRecordStartMs() { return recordStartMs; }
@@ -275,16 +293,19 @@ public final class VideoRecorder {
             return;
         }
 
-        // Switch to armor-stand perspective if recording from a tripod.
         recordingArmorStandEntityId = armorStandEntityId;
+        //? if >=1.21.11 {
+        /*// Locked-camera tripod (1.21.11): switch the view to the armor stand so the
+        // video is filmed from its perspective.  WorldRendererMixin keeps the player
+        // visible.  Classic versions use a free-view off-screen pass instead.
         if (armorStandEntityId >= 0 && mc.world != null) {
             net.minecraft.entity.Entity stand = mc.world.getEntityById(armorStandEntityId);
-            //? if >=1.21.11 {
-            /*if (stand != null) mc.setCameraEntity(stand);*/
-            //?} else {
-            if (stand != null) mc.cameraEntity = stand;
-            //?}
-        }
+            if (stand != null) mc.setCameraEntity(stand);
+        }*/
+        //?}
+        // Classic (<1.21.11): the player keeps free first-person view and movement;
+        // the tripod view is rendered off-screen each captured frame in
+        // captureTripodFrame(), so no camera switch happens here.
 
         // Enable cinematic (smooth) camera for the duration of the recording so
         // all captured frames benefit from Minecraft's built-in mouse smoothing.
@@ -300,13 +321,13 @@ public final class VideoRecorder {
     public static void stopRecording() {
         if (!recording) return;
         recording = false;
+        tripodRenderPass = false;
         MinecraftClient mc = MinecraftClient.getInstance();
-        // Restore player perspective if we were recording from an armor stand.
+        // Restore player perspective on the locked-camera tripod path (1.21.11).
+        // The classic free-view path never switched the camera, so nothing to undo.
         if (recordingArmorStandEntityId >= 0) {
             //? if >=1.21.11 {
             /*if (mc.player != null) mc.setCameraEntity(mc.player);*/
-            //?} else {
-            if (mc.player != null) mc.cameraEntity = mc.player;
             //?}
             recordingArmorStandEntityId = -1;
         }
@@ -345,6 +366,12 @@ public final class VideoRecorder {
      */
     public static void onWorldRenderEnd() {
         if (!recording) return;
+        //? if <1.21.11 {
+        // In free-view tripod mode the player's main render pass must NOT supply depth —
+        // only the off-screen tripod pass does (so the depth grid matches the recorded
+        // image).  Skip every WorldRenderEvents.LAST that isn't the tripod pass.
+        if (isTripodMode() && !tripodRenderPass) return;
+        //?}
         // If depth is already pending (not yet consumed by captureFrameIfRecording),
         // there is nothing to do — don't overwrite the pending grid.
         if (pendingDepthReady) return;
@@ -385,6 +412,11 @@ public final class VideoRecorder {
      */
     public static void captureFrameIfRecording() {
         if (!recording) return;
+        //? if <1.21.11 {
+        // Free-view tripod frames are captured off-screen in captureTripodFrame(),
+        // which is driven from a separate render() TAIL hook — skip the main-FBO path.
+        if (isTripodMode()) return;
+        //?}
         long now = System.currentTimeMillis();
         if (now < nextFrameMs) return;
         if (frameCount >= MAX_FRAMES) { stopRecording(); return; }
@@ -527,6 +559,146 @@ public final class VideoRecorder {
         });
         //?}
     }
+
+    //? if <1.21.11 {
+    /**
+     * Free-view tripod capture (classic &lt;1.21.11).  Called from a render() TAIL hook
+     * once the player's own first-person frame (and HUD) is fully drawn.  Renders the
+     * world a second time from the armor stand's perspective into an off-screen
+     * framebuffer, captures that, and restores everything — so the player keeps free
+     * first-person control while the tripod films the scene (with the player in shot).
+     *
+     * The camera is static, so no velocity / angular-velocity is measured: those
+     * fields are zero, which also skips the motion-blur post pass for tripod footage.
+     */
+    public static void captureTripodFrame(RenderTickCounter tickCounter) {
+        if (!recording || recordingArmorStandEntityId < 0) return;
+        long now = System.currentTimeMillis();
+        if (now < nextFrameMs) return;
+        if (frameCount >= MAX_FRAMES) { stopRecording(); return; }
+
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null || mc.world == null || mc.gameRenderer == null) return;
+
+        net.minecraft.entity.Entity stand = mc.world.getEntityById(recordingArmorStandEntityId);
+        if (stand == null) { stopRecording(); return; }
+
+        net.minecraft.client.gl.Framebuffer mainFb = mc.getFramebuffer();
+        int w = mainFb.textureWidth;
+        int h = mainFb.textureHeight;
+        if (w <= 0 || h <= 0) return;
+
+        // (Re)allocate the off-screen target to match the main framebuffer size.
+        if (tripodFb == null) {
+            //? if >=1.21.4 {
+            /*tripodFb = new net.minecraft.client.gl.SimpleFramebuffer(w, h, true);*/
+            //?} else {
+            tripodFb = new net.minecraft.client.gl.SimpleFramebuffer(w, h, true, MinecraftClient.IS_SYSTEM_MAC);
+            //?}
+        } else if (tripodFb.textureWidth != w || tripodFb.textureHeight != h) {
+            //? if >=1.21.4 {
+            /*tripodFb.resize(w, h);*/
+            //?} else {
+            tripodFb.resize(w, h, MinecraftClient.IS_SYSTEM_MAC);
+            //?}
+        }
+
+        net.minecraft.entity.Entity prevCam = mc.cameraEntity;
+        NativeImage raw = null;
+        try {
+            // Redirect world rendering to the off-screen target, filmed from the stand.
+            // Set the field directly (not setCameraEntity) to avoid the per-frame
+            // chunk-reload churn that onCameraEntitySet() would cause at 30 fps.
+            mc.cameraEntity = stand;
+            ((dev.hitom.photographica.mixin.client.MinecraftClientAccessor) mc)
+                    .photographica$setFramebuffer(tripodFb);
+
+            tripodFb.setClearColor(0f, 0f, 0f, 1f);
+            //? if >=1.21.4 {
+            /*tripodFb.clear();*/
+            //?} else {
+            tripodFb.clear(MinecraftClient.IS_SYSTEM_MAC);
+            //?}
+            tripodFb.beginWrite(true);
+
+            tripodRenderPass = true;
+            mc.gameRenderer.renderWorld(tickCounter);   // depth grabbed via onWorldRenderEnd()
+            tripodRenderPass = false;
+
+            raw = ScreenshotRecorder.takeScreenshot(tripodFb);
+        } catch (Exception e) {
+            Photographica.LOGGER.warn("[VideoRecorder] Tripod frame {} failed", frameCount, e);
+        } finally {
+            tripodRenderPass = false;
+            // Restore the player's main framebuffer and camera for the on-screen view.
+            ((dev.hitom.photographica.mixin.client.MinecraftClientAccessor) mc)
+                    .photographica$setFramebuffer(mainFb);
+            mc.cameraEntity = (prevCam != null ? prevCam : mc.player);
+            mainFb.beginWrite(true);
+        }
+        if (raw == null) {
+            nextFrameMs = recordStartMs + (long)((frameCount + 1) * 1000.0 / currentFps);
+            return;
+        }
+
+        // Consume the depth grid produced by the tripod pass.
+        float[] depthGrid;
+        if (pendingDepthReady && pendingDepthGrid != null) {
+            depthGrid = pendingDepthGrid;
+            pendingDepthGrid  = null;
+            pendingDepthReady = false;
+        } else {
+            depthGrid = flatDepthGrid(currentFocusDepth);
+        }
+
+        // Dwell-time autofocus (same servo as the hand-held path).
+        float centreDepth = Math.max(depthGrid[(DEP_H / 2) * DEP_W + DEP_W / 2], 0.3f);
+        if (Math.abs(centreDepth - focusCandidateDepth)
+                / Math.max(focusCandidateDepth, 0.1f) <= FOCUS_TOL) {
+            focusCandidateFrames++;
+            if (focusCandidateFrames >= FOCUS_DWELL_FRAMES)
+                currentFocusDepth = currentFocusDepth * 0.65f + focusCandidateDepth * 0.35f;
+        } else {
+            focusCandidateDepth  = centreDepth;
+            focusCandidateFrames = 0;
+        }
+
+        float ap = VideoCameraItem.getSettings(recordingStack).aperture();
+        // Static tripod: zero velocity and zero angular velocity → no motion blur.
+        FrameMeta meta = new FrameMeta(
+                frameCount,
+                0f, 0f, 0f,
+                stand.getYaw(), 0f,
+                0f, 0f, videoFov,
+                ap,
+                currentFocusDepth,
+                depthGrid,
+                pendingVpW, pendingVpH,
+                pendingCropOffX, pendingCropOffY);
+
+        NativeImage cropped = cropTo16x9(raw);
+        NativeImage frame   = boxDownsample(cropped, 1280);
+        if (cropped != raw) cropped.close();
+        raw.close();
+
+        int  idx     = frameCount;
+        File outFile = new File(rawDir, String.format("frame_%04d.png", idx));
+
+        frameMetas.add(meta);
+        frameCount++;
+        nextFrameMs = recordStartMs + (long)(frameCount * 1000.0 / currentFps);
+
+        if (frameCount == currentFps * 60 && mc.player != null)
+            mc.player.sendMessage(Text.literal("⚠ 残り 1:00"), true);
+
+        ioExecutor.submit(() -> {
+            try { frame.writeTo(outFile); }
+            catch (IOException e) {
+                Photographica.LOGGER.warn("[VideoRecorder] Frame write failed: {}", outFile, e);
+            } finally { frame.close(); }
+        });
+    }
+    //?}
 
     // ── Post-processing ────────────────────────────────────────────────────────
 

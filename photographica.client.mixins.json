@@ -6,6 +6,7 @@
 		"ClientPlayerInteractionManagerMixin",
 		"EntityRendererMixin",
 		"GameRendererMixin",
+		"MinecraftClientAccessor",
 		"MouseMixin",
 		"WorldRendererMixin"
 	],

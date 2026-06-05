@@ -90,7 +90,9 @@ public class WorldRendererMixin {
 			require = 0
 	)
 	private Entity photographica$allowPlayerRenderDuringArmorStandCapture(Camera camera) {
-		if (PhotoCapture.armorStandCapturePending) {
+		// Locked-camera tripod video (1.21.11): the view is the stand, so keep the
+		// player rendered whenever recording from a tripod.
+		if (PhotoCapture.armorStandCapturePending || VideoRecorder.isTripodMode()) {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			if (mc.player != null) return mc.player;
 		}
@@ -104,7 +106,10 @@ public class WorldRendererMixin {
 			require = 0
 	)
 	private Entity photographica$allowPlayerRenderDuringArmorStandCapture(Camera camera) {
-		if (PhotoCapture.armorStandCapturePending) {
+		// Render the player both for armor-stand photos and during the off-screen
+		// free-view tripod video pass (camera is the stand, so the operator would
+		// otherwise be skipped as the focused entity's "own body").
+		if (PhotoCapture.armorStandCapturePending || VideoRecorder.isTripodRenderPass()) {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			if (mc.player != null) return mc.player;
 		}
