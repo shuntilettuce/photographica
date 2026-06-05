@@ -1,394 +1,410 @@
-# Photographica チュートリアル
+# Photographica — チュートリアル / Tutorial
 
 リアルなカメラ操作を Minecraft に持ち込む Mod です。フィルムカメラ・デジタルカメラで撮影し、暗室で現像・引き伸ばしして写真を世界に飾ることができます。
 
----
-
-## 目次
-
-1. [導入要件](#1-導入要件)
-2. [初期設定 — キー割り当て](#2-初期設定--キー割り当て)
-3. [アイテム一覧](#3-アイテム一覧)
-4. [ファインダーの使い方 (共通)](#4-ファインダーの使い方-共通)
-5. [露出設定の詳細](#5-露出設定の詳細)
-6. [ミラーレスデジタルカメラ](#6-ミラーレスデジタルカメラ)
-7. [フィルム SLR カメラ](#7-フィルム-slr-カメラ)
-8. [三脚撮影 (防具立て)](#8-三脚撮影-防具立て)
-9. [ビデオカメラ](#9-ビデオカメラ)
-10. [写真の飾り方](#10-写真の飾り方)
-11. [撮影エフェクト詳細](#11-撮影エフェクト詳細)
-12. [Tips & FAQ](#12-tips--faq)
+A Minecraft mod that brings realistic camera simulation to the game. Shoot with film or digital cameras, develop negatives in a darkroom, print them in the enlarger, and display your photos in the world.
 
 ---
 
-## 1. 導入要件
+## 目次 / Contents
 
-| 項目 | 内容 |
-|------|------|
-| Minecraft バージョン | 1.21.1 / 1.21.4 / 1.21.11 / 26.1 |
-| Mod ローダー | Fabric Loader ≥ 0.16.0 |
-| 必須依存 | [Fabric API](https://modrinth.com/mod/fabric-api) |
-| インストール先 | クライアント・サーバー両方に入れてください |
-
-> **シェーダー対応** — Iris + Photon での動作確認済みです。シェーダー使用時もエフェクトが正しく合成されます。
-
----
-
-## 2. 初期設定 — キー割り当て
-
-**オプション → 操作設定 → Photographica** から以下のキーを割り当ててください。
-
-| 操作 | 用途 | 対象カメラ |
-|------|------|-----------|
-| カメラ設定を開く | 設定画面・SDカードブラウザを開く | 全カメラ（必須） |
-| フィルム巻き上げ | 1コマ撮影後に次のコマへ送る | フィルム SLR |
-| SDカード装填 | SDカードをカメラに入れる | デジタル |
-| SDカード取り出し | SDカードをカメラから外す | デジタル |
+1. [導入要件 / Requirements](#1-導入要件--requirements)
+2. [初期設定 / Keybindings](#2-初期設定--keybindings)
+3. [アイテム一覧 / Item Reference](#3-アイテム一覧--item-reference)
+4. [ファインダーの使い方 / Viewfinder Controls](#4-ファインダーの使い方--viewfinder-controls)
+5. [露出設定 / Exposure Settings](#5-露出設定--exposure-settings)
+6. [デジタルカメラ / Digital Cameras](#6-デジタルカメラ--digital-cameras)
+7. [フィルムカメラ / Film Camera](#7-フィルムカメラ--film-camera)
+8. [三脚撮影 / Tripod Shooting](#8-三脚撮影--tripod-shooting)
+9. [ビデオカメラ / Video Camera](#9-ビデオカメラ--video-camera)
+10. [写真の飾り方 / Displaying Photos](#10-写真の飾り方--displaying-photos)
+11. [撮影エフェクト / Photo Effects](#11-撮影エフェクト--photo-effects)
+12. [FAQ](#12-faq)
 
 ---
 
-## 3. アイテム一覧
+## 1. 導入要件 / Requirements
 
-### カメラ本体
+| | 日本語 | English |
+|---|---|---|
+| Minecraft | 1.21.1 / 1.21.4 / 1.21.11 / 26.1 | 1.21.1 / 1.21.4 / 1.21.11 / 26.1 |
+| Mod ローダー | Fabric Loader ≥ 0.16.0 | Fabric Loader ≥ 0.16.0 |
+| 必須依存 | [Fabric API](https://modrinth.com/mod/fabric-api) | [Fabric API](https://modrinth.com/mod/fabric-api) |
+| インストール | クライアント・サーバー両方 | Both client and server |
 
-| アイテム | 概要 |
-|----------|------|
-| **デジタルSLR** | デジタル撮影。SDカードに保存。光学ファインダー（EVFなし） |
-| **ミラーレスカメラ** | デジタル撮影。SDカードに保存。EVF（電子ファインダー）でリアルタイム露出・ボケプレビュー |
-| **フィルムカメラ** | フィルムを装填して撮影。暗室で現像が必要 |
-| **ビデオカメラ** | 動画撮影。mp4ファイルとして保存（FFmpeg 必要） |
-
-> **デジタルSLR vs ミラーレス** — 操作は同じ。ミラーレスのみ EVF（ファインダー内でリアルタイム露出・DoF プレビュー）が利用可能。
-
-### レンズ
-
-| レンズ | 焦点距離 | 特徴 |
-|--------|---------|------|
-| 単焦点 14mm | 14mm | 超広角。建築・風景に |
-| 単焦点 35mm | 35mm | 広角スナップ |
-| 単焦点 50mm | 50mm | 標準。最も自然な画角 |
-| 単焦点 85mm | 85mm | ポートレート向け。背景ボケが美しい |
-| マクロ 100mm | 100mm | 近距離撮影特化 |
-| ズーム 24-70mm | 24〜70mm | 汎用ズーム |
-| ズーム 70-200mm | 70〜200mm | 望遠ズーム。遠景・野生動物に |
-
-> **焦点距離と画角の目安**（35mm フルサイズ換算）  
-> 14mm ≈ 104° 広角 → 50mm ≈ 27° 標準 → 200mm ≈ 6.9° 望遠
-
-### フィルム
-
-| フィルム | ISO | コマ数 | 特徴 |
-|----------|-----|------|------|
-| カラーフィルム 400 | 400 | 36 | 汎用。暖かみのある発色 |
-| カラーフィルム 100 | 100 | 36 | 低感度・低ノイズ。澄んだ色調 |
-| カラーフィルム 1600 | 1600 | 36 | 高感度。粒状感が強いプッシュ現像風 |
-| モノクロフィルム 400 | 400 | 36 | 白黒。コントラスト強め |
-| カラーフィルム 400 (24枚) | 400 | 24 | コマ数少なめ版 |
-
-### その他アイテム・ブロック
-
-| 名称 | 用途 |
-|------|------|
-| **SDカード** | デジタルカメラのストレージ。デフォルト **64枚** まで保存可能 |
-| **現像液タンク** | 暗室で使用。フィルム32本分の現像が可能 |
-| **写真用紙** | 引き伸ばし機でプリントするときに必要 |
-| **写真** | 完成したプリント。写真立て・写真フレームに飾れる |
-| **露出済みフィルム** | 撮影済みで未現像のフィルム |
-| **現像済みネガ** | 現像後のネガ。引き伸ばし機でプリントへ |
-| **暗室** (ブロック) | フィルムを現像するブロック |
-| **引き伸ばし機** (ブロック) | ネガからプリントを作成するブロック |
-| **写真フレーム** (ブロック) | 壁に設置して写真を飾る |
-| **写真立て** (ブロック) | 床に置いて写真を飾る |
-| **プリンター** (ブロック) | SDカードから直接プリントを作成 |
+> **シェーダー対応** — Iris + Photon での動作確認済み。シェーダー使用時もエフェクトが正しく合成されます。  
+> **Shader support** — Tested with Iris + Photon. Effects are correctly composited in the captured PNG even with shaders active.
 
 ---
 
-## 4. ファインダーの使い方 (共通)
+## 2. 初期設定 / Keybindings
 
-カメラを持った状態で **Shift（スニーク）を押し続ける**とファインダーモードになります。
+**オプション → 操作設定 → Photographica** からキーを割り当ててください。  
+Go to **Options → Controls → Photographica** to assign the following keys.
+
+| 操作 / Action | 用途 / Notes |
+|---|---|
+| カメラ設定を開く / Open camera settings | 全カメラ必須 / Required for all cameras |
+| フィルム巻き上げ / Wind film | フィルムカメラのみ / Film camera only |
+| SDカード装填 / Load SD card | デジタルのみ / Digital cameras only |
+| SDカード取り出し / Unload SD card | デジタルのみ / Digital cameras only |
+
+---
+
+## 3. アイテム一覧 / Item Reference
+
+### カメラ / Cameras
+
+| アイテム / Item | 日本語 | English |
+|---|---|---|
+| **デジタルSLR** | デジタル撮影。SDカード保存。光学ファインダー（EVFなし） | Digital shooting, SD card storage. Optical viewfinder (no EVF) |
+| **ミラーレスカメラ** | デジタル撮影。SDカード保存。EVFでリアルタイム露出・ボケプレビュー | Digital shooting, SD card storage. EVF with live exposure and DoF preview |
+| **フィルムカメラ** | フィルムを装填して撮影。暗室で現像が必要 | Film rolls required. Development needed before viewing |
+| **ビデオカメラ** | 動画撮影（FFmpeg 必要） | Video recording (requires FFmpeg) |
+
+> **デジタルSLR vs ミラーレス** — 操作は同じ。EVF（リアルタイム露出・DoFプレビュー）はミラーレスのみ。  
+> **Digital SLR vs Mirrorless** — Identical controls. Only the Mirrorless shows a live EVF preview of exposure and depth-of-field.
+
+### レンズ / Lenses
+
+| レンズ / Lens | 焦点距離 / FL | 日本語 | English |
+|---|---|---|---|
+| 単焦点 14mm | 14mm | 超広角。建築・風景 | Ultra-wide. Architecture, landscapes |
+| 単焦点 35mm | 35mm | 広角スナップ | Wide-angle snapshots |
+| 単焦点 50mm | 50mm | 標準。自然な画角 | Standard. Most natural field of view |
+| 単焦点 85mm | 85mm | ポートレート。背景ボケ美しい | Portraits. Beautiful background blur |
+| マクロ 100mm | 100mm | 近距離撮影特化 | Close-up / detail shots |
+| ズーム 24-70mm | 24〜70mm | 汎用ズーム | General-purpose zoom |
+| ズーム 70-200mm | 70〜200mm | 望遠。遠景・野生動物 | Telephoto. Distant subjects, wildlife |
+
+> 14mm ≈ 104°広角 → 50mm ≈ 27°標準 → 200mm ≈ 6.9°望遠 (35mm フルサイズ換算 / 35mm full-frame equivalent)
+
+### フィルム / Film
+
+| フィルム / Film | ISO | コマ数 / Frames | 日本語 | English |
+|---|---|---|---|---|
+| カラー 400 | 400 | 36 | 汎用。暖かみのある発色 | All-purpose. Warm tones |
+| カラー 100 | 100 | 36 | 低感度・低ノイズ。澄んだ色調 | Fine grain, low noise. Clean colour |
+| カラー 1600 | 1600 | 36 | 高感度。粒状感が強い | High grain. Push-processed look |
+| モノクロ 400 | 400 | 36 | 白黒。コントラスト強め | Monochrome. High contrast |
+| カラー 400 (24枚) | 400 | 24 | コマ数少なめ版 | Shorter roll |
+
+### その他アイテム・ブロック / Other Items & Blocks
+
+| 名称 / Name | 日本語 | English |
+|---|---|---|
+| **SDカード** | デジタルカメラ用ストレージ。デフォルト **64枚** まで | Storage for digital cameras — **64 photos** default |
+| **現像液タンク** | 暗室で使用。32本分 | Darkroom chemistry. Develops 32 rolls |
+| **写真用紙** | 引き伸ばし機でプリントに必要 | Required for printing in the enlarger |
+| **写真** | 完成プリント。フレーム・立てに飾れる | Finished print — displayable in frames/stands |
+| **露出済みフィルム** | 撮影済み・未現像のフィルム | Shot but undeveloped film |
+| **現像済みネガ** | 現像後のネガ。引き伸ばし機でプリントへ | After darkroom — ready to print |
+| **暗室** (ブロック) | フィルムを現像する | Develops exposed film |
+| **引き伸ばし機** (ブロック) | ネガからプリント作成 | Prints negatives onto photo paper |
+| **写真フレーム** (ブロック) | 壁に設置して飾る | Wall-mounted photo display |
+| **写真立て** (ブロック) | 床に置いて飾る | Floor-standing photo display |
+| **プリンター** (ブロック) | SDカードから直接プリント | Prints directly from an SD card |
+
+---
+
+## 4. ファインダーの使い方 / Viewfinder Controls
+
+カメラを持った状態で **Shift（スニーク）を押し続ける**とファインダーモードになります。  
+**Hold Shift (sneak)** while holding a camera to enter viewfinder mode.
 
 ```
 ┌─────────────────────────────────┐
 │ 35mm          EVF MAIN          │
 │ Av | AF                         │
 │                                 │
-│          [  ＋  ]               │   ← フォーカスレティクル（緑=合焦）
-│                                 │
+│          [  ＋  ]               │   ← フォーカスレティクル / Focus reticle
 │                                 │
 │ F5.6 · 1/60 · ISO400 · 50mm     │
-│         ─┬─┬─┬─│─┬─┬─┬─        │   ← 露出計
+│         ─┬─┬─┬─│─┬─┬─┬─        │   ← 露出計 / Exposure meter
 │          -3  -1  0  +1  +3      │
 └─────────────────────────────────┘
 ```
 
-### スクロール操作
+### スクロール操作 / Scroll Controls
 
-| キー | 操作 |
-|------|------|
-| スクロール | ズーム *(ズームレンズのみ)* |
-| Ctrl + スクロール | 絞り（F値）を変更 |
-| Alt + スクロール | シャッタースピードを変更 |
-| Ctrl + Alt + スクロール | MF ピント距離を変更 |
+| キー / Key | 操作 / Action |
+|---|---|
+| スクロール / Scroll | ズーム *(ズームレンズのみ / zoom lenses only)* |
+| Ctrl + スクロール | 絞り（F値）/ Aperture |
+| Alt + スクロール | シャッタースピード / Shutter speed |
+| Ctrl + Alt + スクロール | MF ピント距離 / Manual focus distance |
 
-### 露出計の読み方
+### 露出計 / Exposure Meter
 
-ファインダー下部の横スケールが露出計です。
+- **中央（0）/ Centre** — 基準露出（F5.6·1/60·ISO400）でニュートラル / Neutral at reference exposure
+- **右（＋）/ Right** — 露出オーバー / Overexposed
+- **左（−）/ Left** — 露出アンダー / Underexposed
+- 🟢 **緑 / Green** — ±2 EV 以内（良好 / good）
+- 🔴 **赤 / Red** — ±2 EV 超（大幅ずれ / significant deviation）
 
-- **中央（0）** = 基準露出（F5.6・1/60・ISO400）に対してニュートラル
-- **右（＋側）** = 露出オーバー（明るすぎる）
-- **左（−側）** = 露出アンダー（暗すぎる）
-- **緑の針** = ±2 EV 以内（良好）
-- **赤の針** = ±2 EV 超（大幅ずれ）
+Av/Tv/P モードでは正しく収束すると中央付近になります。  
+In Av/Tv/P mode the needle centres when auto-exposure has converged.
 
-Av/Tv/P モードでは、オートが正しく収束した状態で針が中央付近になります。
+### フォーカスレティクル / Focus Reticle
 
-### フォーカスレティクル
-
-| 色 | 意味 |
-|----|------|
-| 緑 | 合焦（被写体が被写界深度内） |
-| 黄 | やや外れ |
-| 赤 | 大幅ピントずれ |
-| 白 | レンズ未装着 |
-
----
-
-## 5. 露出設定の詳細
-
-### 露出モード
-
-| モード | 説明 |
-|--------|------|
-| **M** (マニュアル) | 絞り・SSをすべて手動設定 |
-| **Av** (絞り優先) | 絞りを固定し、シャッタースピードをオートで合わせる |
-| **Tv** (シャッター優先) | SSを固定し、絞りをオートで合わせる |
-| **P** (プログラム) | 絞り・SS の両方をオートで決める。F5.6 基準 |
-
-### フォーカスモード
-
-| モード | 説明 |
-|--------|------|
-| **MF** (マニュアルフォーカス) | Ctrl+Alt+スクロールで手動でピント合わせ |
-| **AF** (オートフォーカス) | 画面中央の距離に自動でスナップ |
-| **MOB** (被写体追尾) | 前方5°コーン内の最近エンティティに自動フォーカス |
-
-### 絞り（F値）と被写界深度
-
-```
-F1.4  ←  背景ボケ強い（被写界深度が浅い）
-F2.0
-F2.8
-F4.0
-F5.6  ←  ボケと解像のバランス点
-F8.0
-F11
-F16   ←  回折ソフトネス発生（全体的に少し柔らかくなる）
-F22   ←  深い被写界深度（全体にピントが合う）
-```
-
-> **被写界深度ブラー** は F5.6 以下でのみ発生します（F8 以上だと実質ボケは出ない）
-
-### シャッタースピードとブレ
-
-| SS | 手持ち |
-|----|--------|
-| 1/250 以上 | 動体も止まる |
-| 1/60 | 基準。ほとんどの場面で手ブレしない |
-| 1/30 以下 | 手ブレシミュレーションが発生 |
-| 1s 以上 | 長時間露光（複数フレーム合成）。光跡が写る |
-
-> **三脚使用時**（防具立て撮影）は長時間露光でも手ブレは発生しません。
-
-### ISO感度とノイズ
-
-| ISO | 特徴 |
-|-----|------|
-| 100 | 低ノイズ。明るい場所向け |
-| 400 | 汎用 |
-| 1600 | 高ノイズ（粒状感）。暗所対応 |
+| 色 / Colour | 意味 / Meaning |
+|---|---|
+| 緑 / Green | 合焦 / In focus |
+| 黄 / Yellow | やや外れ / Slightly off |
+| 赤 / Red | 大幅ずれ / Out of focus |
+| 白 / White | レンズ未装着 / No lens attached |
 
 ---
 
-## 6. ミラーレスデジタルカメラ
+## 5. 露出設定 / Exposure Settings
 
-### 撮影手順
+### 露出モード / Exposure Modes
+
+| モード | 日本語 | English |
+|---|---|---|
+| **M** | 絞り・SS すべて手動 | Fully manual |
+| **Av** | 絞り固定、SS をオート | Lock aperture, auto shutter |
+| **Tv** | SS 固定、絞りをオート | Lock shutter, auto aperture |
+| **P** | 絞り・SS 両方オート（F5.6基準） | Full auto. Defaults to F5.6 |
+
+### フォーカスモード / Focus Modes
+
+| モード | 日本語 | English |
+|---|---|---|
+| **MF** | Ctrl+Alt+スクロールで手動 | Manual — Ctrl+Alt+Scroll |
+| **AF** | 画面中央の距離に自動スナップ | Snaps to scene depth at frame centre |
+| **MOB** | 前方5°コーン内の最近エンティティに追尾 | Tracks nearest entity in a 5° forward cone |
+
+### 絞りと被写界深度 / Aperture and Depth of Field
 
 ```
-1. カメラを持つ
-2. 設定キー → レンズを装着 → 露出設定
-3. SDカード装填キー でSDカードをセット
-4. Shift長押し → ファインダーモード
-5. 右クリック → 撮影
-6. .minecraft/photographica/photos/ に PNG で保存
+f/1.4  ←  背景ボケ強い / Strong bokeh (shallow DoF)
+f/5.6  ←  バランス点 / Balanced
+f/16   ←  回折ソフトネス / Diffraction softening begins
+f/22   ←  全体にピント / Deep DoF (everything sharp)
 ```
 
-### SDカードブラウザ
+> DoF ブラーは **F5.6 以下**でのみ発生。F8 以上では出ません。  
+> Depth-of-field blur only fires at **f/5.6 or wider**. No bokeh at f/8+.
 
-設定画面の **SDカード（n枚）** ボタンを押すとブラウザが開きます。
+### シャッタースピードとブレ / Shutter Speed and Motion Blur
 
-- サムネイル表示・全画面表示
-- 撮影メタデータ確認（F値、SS、ISO、焦点距離、座標）
-- 1枚ずつ削除（ディスクのファイルも同時削除）
+| SS | 日本語 | English |
+|---|---|---|
+| 1/250 以上 | 動体も止まる | Freezes motion |
+| 1/60 | 基準。手ブレしない | Reference. Safe handheld |
+| 1/30 以下 | 手ブレシミュレーション発生 | Hand-shake blur simulation |
+| 1s 以上 | 長時間露光。光跡が写る | Long-exposure blend. Light trails visible |
 
-### SDカードの運用
-
-SDカードは **1枚のカードにデフォルト64枚**まで保存できます。満杯になると撮影できなくなるので、こまめにプリントするか不要な写真を削除してください。別のカメラに入れ替えて写真を移すことも可能です。
+> 三脚（防具立て）撮影では長時間露光でも手ブレは発生しません。  
+> Tripod (armor stand) shots are always shake-free, even at slow shutters.
 
 ---
 
-## 7. フィルム SLR カメラ
+## 6. デジタルカメラ / Digital Cameras
 
-### 撮影〜プリントまでの流れ
+### 撮影手順 / Shooting Workflow
 
 ```
-フィルム装填 → 撮影 → 巻き上げ → ... → 36コマ撮り終える
-     ↓
-フィルム取り出し（露出済みフィルム）
-     ↓
-暗室ブロックに入れる + 現像液タンク
-     ↓
-現像済みネガ
-     ↓（右クリックでネガプレビュー可能）
-引き伸ばし機 + 写真用紙
-     ↓
-写真アイテム（飾れる）
+カメラを持つ / Hold camera
+  ↓
+設定キー → レンズ装着・露出設定 / Settings key → attach lens, set exposure
+  ↓
+SDカード装填 / Load SD card
+  ↓
+Shift長押し → ファインダーモード / Hold Shift → viewfinder
+  ↓
+右クリック → 撮影 / Right-click → shoot
+  ↓
+.minecraft/photographica/photos/ に PNG 保存 / PNG saved
 ```
 
-### フィルム装填
+### SDカードブラウザ / SD Card Browser
 
-設定画面を開き、**フィルム装填** ボタンでインベントリ内のフィルムを選択。フィルム種別はここで決まります。
+設定画面の **SDカード（n枚）** ボタンで開きます。  
+Press **SD Card (n)** in the settings screen.
 
-### 巻き上げ
+- サムネイル表示・全画面表示 / Thumbnail and full-screen view
+- 撮影メタデータ確認（F値・SS・ISO・焦点距離・座標）/ Metadata display
+- 1枚ずつ削除（ディスクのファイルも削除）/ Per-photo deletion (removes PNG from disk)
 
-シャッターを切った後は **フィルム巻き上げキー** を押さないと次のコマが撮れません。ファインダー右上のインジケーターで巻き上げ状態を確認できます。
+### SDカード容量 / SD Card Capacity
 
-### ネガのプレビュー
-
-現像済みネガを**右クリック**すると NEGATIVE 画面が開き、各コマを反転サムネイル（ネガ風）で確認できます。
-
-> **光被り（フォギング）** — フィルムの取り出し・装填操作を**明るさ8以上**の場所で行うと、撮影済みコマすべてが白く飛びます。フィルムの着脱は**明るさ7以下の暗所**か**ポータブル暗室**内で行いましょう。
+デフォルト **64枚** まで保存できます。満杯になると撮影できなくなります。  
+Holds up to **64 photos** by default. Shooting is blocked when full.  
+こまめにプリントするか不要な写真を削除してください。  
+Print or delete photos regularly to free space.
 
 ---
 
-## 8. 三脚撮影 (防具立て)
+## 7. フィルムカメラ / Film Camera
 
-**防具立て（アーマースタンド）にカメラを持たせ**、右クリックすることで三脚撮影ができます。
-
-### 手順
+### 撮影〜プリントまでの流れ / Complete Workflow
 
 ```
-1. 防具立てを設置
-2. カメラ（＋レンズ）を防具立てに持たせる
-3. 防具立てを右クリック → カメラ設定画面が開く
-4. 露出・フォーカス設定を行い、シャッターボタンを押す
-5. 防具立ての視点から撮影される
+フィルム装填 / Load film
+  ↓
+撮影 → 巻き上げ → … × 36コマ / Shoot → Wind → repeat × 36
+  ↓
+フィルム取り出し（露出済みフィルム）/ Unload (Exposed Film item)
+  ↓
+暗室 + 現像液タンク / Darkroom block + Developer Tank
+  ↓
+現像済みネガ / Developed Negative  ← 右クリックでプレビュー / right-click to preview
+  ↓
+引き伸ばし機 + 写真用紙 / Enlarger + Photo Paper
+  ↓
+写真アイテム（飾れる）/ Photo item (displayable)
 ```
 
-### 三脚撮影の特徴
+### フィルム装填 / Loading Film
 
-- **カメラ目線で撮影** — プレイヤーではなく防具立ての位置・向きで撮れる
-- **手ブレなし** — シャッタースピードが遅くても手ブレシミュレーションは発生しない
-- **長時間露光対応** — 夕焼けや夜景のスローシャッター撮影が可能
-- **オートフォーカス** — 防具立ての向きから自動でピントを合わせる
+設定画面の **フィルム装填** ボタンでインベントリ内のフィルムを選択します。  
+Open the settings screen and click **Load Film** to select a roll from your inventory.
+
+### 巻き上げ / Winding
+
+シャッターを切った後は **フィルム巻き上げキー** を押さないと次のコマが撮れません。  
+After each shot, press the **Wind Film** key before you can shoot again.
+
+### ネガのプレビュー / Negative Preview
+
+現像済みネガを右クリックすると NEGATIVE 画面で各コマを確認できます。  
+Right-click a developed negative to browse frames as inverted thumbnails.
+
+### ⚠ 光被り / Light Fogging
+
+フィルムの**取り出し・装填操作**を**明るさ8以上**の場所で行うと、撮影済みコマすべてが白く飛びます。  
+Loading or unloading film while standing in **light level 8 or above** fogs every exposed frame white.
+
+フィルムの着脱は必ず **明るさ7以下の暗所** か **ポータブル暗室** 内で行ってください。インベントリや箱の中に入れるだけでは不十分です。  
+Always load/unload film at **light level ≤ 7** or inside a **portable darkroom**. Storing film in your inventory or a chest while standing in daylight is **not safe**.
 
 ---
 
-## 9. ビデオカメラ
+## 8. 三脚撮影 / Tripod Shooting
 
-### 必要なもの
+**防具立て（アーマースタンド）にカメラを持たせ**、右クリックすることで三脚撮影ができます。  
+Place a camera in an **armor stand's hand** and right-click it to shoot from its perspective.
 
-- **FFmpeg** がシステムにインストールされていること（動画エンコードに使用）
-
-### 撮影手順
+### 手順 / Steps
 
 ```
-1. ビデオカメラを持つ
-2. 右クリック → 録画開始
-3. 再度右クリック → 録画停止
-4. .minecraft/photographica/videos/ に mp4 で保存
+1. 防具立てを設置・向きを決める / Place armor stand, aim it at your subject
+2. カメラ（＋レンズ）を防具立てに持たせる / Give camera + lens to the armor stand
+3. 防具立てを右クリック → 設定画面 / Right-click armor stand → settings open
+4. 露出・フォーカス設定 → シャッター / Set exposure & focus → press shutter
+5. 防具立ての視点から撮影される / Photo taken from the stand's exact position
 ```
 
-### 操作
+### 特徴 / Features
 
-| キー | 操作 |
-|------|------|
-| スクロール | ズームイン・アウト |
-| 右クリック | 録画開始 / 停止 |
-
-> 録画中は画面右上に赤い録画インジケーターが表示されます。
-
----
-
-## 10. 写真の飾り方
-
-### 写真フレーム（壁掛け）
-
-壁ブロックに向かって設置。写真アイテムを右クリックで入れると画像が表示されます。
-
-### 写真立て（床置き）
-
-床ブロックに向かって設置。写真アイテムを右クリックで入れると画像が表示されます。
-
-### 写真の出し入れ
-
-右クリックで写真を設置 / スニーク＋右クリックで取り出し。
-
-> **写真は PNG ファイルと紐付いています。** ファイルを削除すると額縁の表示も消えます。マルチプレイでは各プレイヤーの `photographica/photos/` フォルダにファイルが必要です。
+| | 日本語 | English |
+|---|---|---|
+| 視点 | プレイヤーではなく防具立ての位置・向き | Stand's exact position and orientation |
+| 手ブレ | なし（どんな SS でも） | None — stable at any shutter speed |
+| 長時間露光 | 夜景・光跡撮影に最適 | Ideal for night scenes and light trails |
+| AF | 防具立ての向きから自動でピント合わせ | Auto-focuses from the stand's eye position |
 
 ---
 
-## 11. 撮影エフェクト詳細
+## 9. ビデオカメラ / Video Camera
 
-撮影時に以下のエフェクトが **PNG に焼き込まれます**（リアルタイム表示とは独立）。
+**FFmpeg** がシステム PATH にインストールされている必要があります。  
+**FFmpeg** must be installed and available on your system PATH.
 
-| エフェクト | 条件 | 内容 |
-|-----------|------|------|
-| 露出スケーリング | 常時 | F値・SS・ISO から明るさを計算。ハイライトロールオフ付き |
-| ビネット | 常時 | 絞りに応じて周辺減光。F1.4 で最大 |
-| ISO ノイズ | 常時 | 輝度ノイズ + 高ISO時のカラーノイズ |
-| フィルムグレイン | フィルム時 | フィルム種別ごとの粒状感 |
-| フィルムトーン | フィルム時 | カラー：暖色シフト / カラー100：クールで彩度高め / モノクロ：高コントラスト |
-| 被写界深度ブラー | F5.6 以下 & レンズあり | 深度バッファを使った境界ブリード無しボケ |
-| 手ブレブラー | SS ≥ 1/30 & 手持ち | カメラシェイクシミュレーション。三脚撮影では無効 |
-| 長時間露光合成 | SS > 1/30 | 複数フレームを加算平均。光跡・ゴースト表現 |
-| 回折ソフトネス | F16 以上 | 3×3 ボックスブラーで全体を柔らかく |
-| 相反則不軌 | フィルム & SS ≥ 1s | フィルムの長時間露光での感度低下を再現 |
-| 光被り | フィルム着脱時にプレイヤーの立ち位置の明るさが8以上 | 全コマが白く飛ぶ |
+### 操作 / Controls
 
----
+| キー / Key | 操作 / Action |
+|---|---|
+| 右クリック / Right-click | 録画開始・停止 / Start / stop recording |
+| スクロール / Scroll | ズーム / Zoom |
 
-## 12. Tips & FAQ
+録画中は画面右上に赤い録画インジケーターが表示されます。  
+A red recording indicator appears in the top-right corner while recording.
 
-**Q: 写真が黒すぎる / 白すぎる**  
-→ 露出計を見てください。Av/Tv/P モードであれば、ファインダーを開いたまま少し待つとオートが収束します。M モードの場合は Ctrl/Alt スクロールで調整。
-
-**Q: 被写界深度ブラーが出ない**  
-→ 絞りが F5.6 より大きい（F8 以上）と DoF ブラーは発生しません。F5.6 以下に設定してください。
-
-**Q: 撮った写真が「ファイルが見つかりません」と表示される**  
-→ `.minecraft/photographica/photos/` フォルダを確認してください。マルチプレイでは各自のフォルダに PNG が必要です。
-
-**Q: フィルムを現像したのに写真が全部白い**  
-→ フィルムの取り出し・装填を明るさ8以上の場所で行うと光被りが発生します。**明るさ7以下の暗所**か**ポータブル暗室**内で着脱してください（インベントリや箱の中に入れるだけでは不十分です）。
-
-**Q: 三脚撮影で視点が戻らない**  
-→ 最新バージョンでは修正済みです。古いバージョンをお使いの場合はアップデートしてください。
-
-**Q: ネガプレビューが「NO FILE」と表示される**  
-→ 撮影済みの PNG ファイルが `photographica/photos/` に存在するか確認してください。現像直後は 2 秒ほど待つと自動で読み込まれます。
-
-**Q: 動画撮影で「FFmpeg が見つかりません」と出る**  
-→ FFmpeg を [https://ffmpeg.org/](https://ffmpeg.org/) からダウンロードし、システムの PATH に追加してください。
+保存先 / Saved to: `.minecraft/photographica/videos/`
 
 ---
 
-## ファイル保存場所
+## 10. 写真の飾り方 / Displaying Photos
+
+### 写真フレーム（壁掛け）/ Photo Frame (wall)
+
+壁ブロックに向かって設置。写真アイテムを右クリックで入れると画像が表示されます。  
+Place against a wall, then right-click with a Photo item to display it.
+
+### 写真立て（床置き）/ Photo Stand (floor)
+
+床に向かって設置。右クリックで写真を入れます。  
+Place on the floor, right-click with a Photo item.
+
+### 出し入れ / Inserting and Removing
+
+右クリック → 写真を設置 / スニーク + 右クリック → 取り出し  
+Right-click to insert · Sneak + right-click to remove
+
+> 写真は PNG ファイルと紐付いています。ファイルを削除すると額縁の表示も消えます。マルチプレイでは各プレイヤーの `photographica/photos/` フォルダに PNG が必要です。  
+> Photos are linked to PNG files. Deleting the file blanks the frame. In multiplayer each player needs the PNG in their own `photographica/photos/` folder.
+
+---
+
+## 11. 撮影エフェクト / Photo Effects
+
+以下のエフェクトは**撮影時に PNG に焼き込まれます**（リアルタイム表示とは独立）。  
+All effects are **baked into the PNG at capture time**, independent of real-time rendering.
+
+| エフェクト / Effect | 条件 / Condition | 内容 / Description |
+|---|---|---|
+| 露出スケーリング / Exposure | 常時 / Always | F値・SS・ISO から明るさ計算。ハイライトロールオフ付き / Brightness from f/SS/ISO. Highlight roll-off |
+| ビネット / Vignetting | 常時 / Always | 絞りに応じて周辺減光。F1.4 で最大 / Corner darkening. Strongest at f/1.4 |
+| ISO ノイズ / ISO Noise | 常時 / Always | 輝度ノイズ + 高ISO時カラーノイズ / Luminance + chroma noise at high ISO |
+| フィルムグレイン / Film Grain | フィルム時 / Film only | フィルム種別ごとの粒状感 / Per-stock grain texture |
+| フィルムトーン / Film Tone | フィルム時 / Film only | カラー暖色・カラー100クール・モノクロ高コントラスト / Warm/cool/high-contrast per stock |
+| 被写界深度ブラー / DoF Blur | F5.6 以下 & レンズあり | 深度バッファ使用。境界ブリードなし / Depth-buffer bokeh, no colour bleed |
+| 手ブレブラー / Shake Blur | SS ≥ 1/30 & 手持ち / handheld | カメラシェイク。三脚撮影では無効 / Camera shake. Disabled for tripod shots |
+| 長時間露光合成 / Long Exposure | SS > 1/30 | 複数フレーム加算平均。光跡 / Multi-frame blend. Light trails |
+| 回折ソフトネス / Diffraction | F16 以上 / f/16+ | 全体に軽いボックスブラー / Gentle box blur across the frame |
+| 相反則不軌 / Reciprocity Failure | フィルム & SS ≥ 1s | 長時間露光での感度低下 / Film sensitivity loss at long exposures |
+| 光被り / Light Fogging | 明るさ≥8 の場所でフィルム着脱 / Film loaded/unloaded at light ≥ 8 | 全コマ白く飛ぶ / All frames washed out |
+
+---
+
+## 12. FAQ
+
+**Q: 写真が黒すぎる / 白すぎる — Photo too dark or bright**  
+→ 露出計を確認。Av/Tv/P ならファインダーを開いたまま少し待つとオート収束します。M モードは Ctrl/Alt スクロールで調整。  
+→ Check the exposure meter. In Av/Tv/P, open the viewfinder and wait a moment for auto-exposure to converge. In M, use Ctrl/Alt+Scroll.
+
+**Q: 被写界深度ブラーが出ない — No depth-of-field blur**  
+→ DoF ブラーは F5.6 以下でのみ発生します。F8 以上には出ません。  
+→ DoF blur only fires at f/5.6 or wider. No bokeh at f/8+.
+
+**Q: 「ファイルが見つかりません」と表示される — "Photo file not found"**  
+→ `.minecraft/photographica/photos/` を確認。マルチプレイでは各自のフォルダに PNG が必要です。  
+→ Check `.minecraft/photographica/photos/`. In multiplayer each player needs their own copy of the PNG.
+
+**Q: 現像したのに写真が全部白い — Developed film all white**  
+→ フィルムの取り出し・装填を**明るさ8以上**の場所で行うと光被りが発生します。**明るさ7以下の暗所**か**ポータブル暗室**内で着脱してください。  
+→ Fogging occurs when loading/unloading film at **light level ≥ 8**. Always do film changes at **light level ≤ 7** or inside a **portable darkroom**.
+
+**Q: ネガプレビューが「NO FILE」 — Negative shows "NO FILE"**  
+→ `photographica/photos/` に PNG があるか確認。現像直後は 2 秒ほど待つと自動で再読み込みされます。  
+→ Check the PNG exists in `photographica/photos/`. After developing, wait ~2 seconds — the cache retries automatically.
+
+**Q: 動画撮影で「FFmpeg が見つかりません」 — "FFmpeg not found"**  
+→ [https://ffmpeg.org/](https://ffmpeg.org/) からダウンロードしてシステムの PATH に追加してください。  
+→ Download from [https://ffmpeg.org/](https://ffmpeg.org/) and add it to your system PATH.
+
+---
+
+## ファイル保存場所 / File Locations
 
 ```
 .minecraft/
 └── photographica/
-    ├── photos/          ← 写真 PNG（yyyy-MM-dd_HH-mm-ss_<uuid>.png）
-    └── videos/          ← 動画 mp4
+    ├── photos/     ← 写真 PNG / Photo PNGs  (yyyy-MM-dd_HH-mm-ss_<uuid>.png)
+    └── videos/     ← 動画 mp4 / Video MP4s
 ```
 
 ---
