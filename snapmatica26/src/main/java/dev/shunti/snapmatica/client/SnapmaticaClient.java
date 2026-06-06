@@ -113,9 +113,10 @@ public class SnapmaticaClient implements ClientModInitializer {
     }
 
     private static int nearestShutterIdx(double ss) {
+        ss = Math.max(1e-6, ss);
         int best = 0; double bestDiff = Double.MAX_VALUE;
         for (int i = 0; i < SHUTTER_SECONDS.length; i++) {
-            double d = Math.abs(SHUTTER_SECONDS[i] - ss);
+            double d = Math.abs(Math.log(SHUTTER_SECONDS[i]) - Math.log(ss));
             if (d < bestDiff) { bestDiff = d; best = i; }
         }
         return best;

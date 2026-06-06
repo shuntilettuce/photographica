@@ -8,6 +8,14 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
+/**
+ * Client-side auto-focus tick handler. Runs while the sneak viewfinder is active.
+ *
+ * Focus modes:
+ *   MF  – manual; focusDistance left untouched (scroll-wheel control only)
+ *   AF  – snap focusDistance to the centre scene depth (PhotoCapture.lastSceneDepthBlocks)
+ *   MOB – snap focusDistance to the nearest living entity in a 5° forward cone
+ */
 @Environment(EnvType.CLIENT)
 public final class AutoFocus {
     private AutoFocus() {}
@@ -46,6 +54,8 @@ public final class AutoFocus {
 
     private static float snapFocus(float depth) {
         depth = Math.max(0.01f, depth);
+        // Snap in log space so focus can reach distant stops (up to 999 = infinity)
+        // without the linear gap between 100 and 999 swallowing everything.
         float logDepth = (float) Math.log(depth);
         float best = FOCUS_STOPS.get(0);
         float bestDiff = Float.MAX_VALUE;
