@@ -80,9 +80,11 @@ public final class AutoCamera {
 	private static CameraSettings applyAutoExposure(Minecraft mc, CameraSettings s) {
 		if (s.exposureMode() == CameraSettings.EXP_M) return s;
 
-		// Map world light level (0-15) to a target EV deviation.
-		int light = mc.level.getLightEmission(mc.player.blockPosition());
-		double targetEV = -(light - 10) * 0.7;
+		// Target EV 0 = neutral reference (F5.6 · 1/60 · ISO 400).
+		// The Minecraft renderer already reflects scene brightness through its own
+		// lighting model, so a neutral target produces WYSIWYG exposure without
+		// the under/over-exposure artifacts that world-light-level biasing introduces.
+		double targetEV = 0.0;
 
 		return switch (s.exposureMode()) {
 			case CameraSettings.EXP_AV -> {

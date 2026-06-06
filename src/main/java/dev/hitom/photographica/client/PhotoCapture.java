@@ -430,7 +430,7 @@ public final class PhotoCapture {
 		int fbW = preRead != null ? pendingDepthFbW : fb.textureWidth;
 		int fbH = preRead != null ? pendingDepthFbH : fb.textureHeight;
 		if (LensKind.hasLens(settings.lensType())
-				&& settings.aperture() <= 5.6f) {
+				&& settings.aperture() < 8.0f) {
 			linearDepth = preRead != null ? preRead : readLinearDepth(fb, fbW, fbH);
 		}
 
@@ -1080,6 +1080,32 @@ public final class PhotoCapture {
 	public static boolean isTimerActive() { return timerFireMs > 0; }
 	public static long timerRemainingMs() { return Math.max(0, timerFireMs - System.currentTimeMillis()); }
 
+	/**
+	 * Returns the vertical FOV (degrees) for a queued capture, or ≤0 if none.
+	 * Used by GameRendererMixin to keep the lens FOV even if the player releases Shift
+	 * between pressing the shutter and the actual capture frame.
+	 */
+	public static double getPendingCaptureFovDeg() {
+		CameraSettings s = pendingSettings;
+		if (s == null || !LensKind.hasLens(s.lensType())) return -1;
+		int f = s.focalLengthMm();
+		if (f <= 0) return -1;
+		return Math.toDegrees(2.0 * Math.atan(12.0 / f));
+	}
+
+	/** Clears any stuck armor-stand FOV override state. Safe to call at any time. */
+	public static void clearArmorStandState() {
+		if (!armorStandCapturePending) return;
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player != null) mc.setCameraEntity(mc.player);
+		if (savedArmorStandPerspective != null) {
+			mc.options.setPerspective(savedArmorStandPerspective);
+			savedArmorStandPerspective = null;
+		}
+		armorStandCapturePending = false;
+		armorStandFocalLength = 0;
+	}
+
 	// -------------------------------------------------------------------------
 	// Photographic image effects
 	// -------------------------------------------------------------------------
@@ -1089,7 +1115,7 @@ public final class PhotoCapture {
 	 *   1. Exposure scaling + highlight rolloff
 	 *   2. Lens vignetting
 	 *   3. ISO grain / chroma noise
-	 *   4. Depth-of-field blur  (when linearDepth != null and aperture ≤ f/5.6)
+	 *   4. Depth-of-field blur  (when linearDepth != null and aperture < f/8)
 	 *   5. Motion blur          (shutters ≤ 1/30 s)
 	 *   6. Diffraction softening (f/16+)
 	 *
@@ -1197,7 +1223,7 @@ public final class PhotoCapture {
 
 		// Pass 2: Depth-of-field blur
 		NativeImage pass2;
-		if (linearDepth != null && n <= 5.6) {
+		if (linearDepth != null && n < 8.0) {
 			pass2 = applyDepthOfField(pass1, settings, linearDepth, w, h, fbW, fbH);
 			pass1.close();
 		} else {
@@ -1436,30 +1462,31 @@ public final class PhotoCapture {
 		// attachment, so glReadPixels(GL_DEPTH_COMPONENT) returns stale/wrong data.
 		// mc.crosshairTarget is capped at interaction reach (~4.5 blocks), so it MISSes
 		// for anything farther — leaving the focus plane and reticle frozen. Do our own
-		// long-range raycast (blocks + entities) so focus tracks distant subjects too.
-		final double maxDist = 256.0;
+		// long-range block raycast + short-range entity scan so focus tracks distant
+		// subjects and can reach infinity (snapFocus threshold ≥316 m maps to 999 m stop).
+		final double maxBlockDist  = 1000.0;
+		final double maxEntityDist = 50.0;
 		net.minecraft.util.math.Vec3d eye = mc.player.getCameraPosVec(1.0f);
 		net.minecraft.util.math.Vec3d look = mc.player.getRotationVec(1.0f);
-		net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
+		net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxBlockDist));
 		net.minecraft.util.hit.BlockHitResult blockHit = mc.world.raycast(
 				new net.minecraft.world.RaycastContext(eye, end,
 						net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
 						net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
 		double bestDist = (blockHit != null
 				&& blockHit.getType() != net.minecraft.util.hit.HitResult.Type.MISS)
-				? eye.distanceTo(blockHit.getPos()) : maxDist;
-		net.minecraft.util.math.Box searchBox = mc.player.getBoundingBox()
-				.stretch(look.multiply(maxDist)).expand(1.0);
+				? eye.distanceTo(blockHit.getPos()) : maxBlockDist;
+		net.minecraft.util.math.Vec3d entityEnd = eye.add(look.multiply(maxEntityDist));
+		net.minecraft.util.math.Box entityBox = mc.player.getBoundingBox()
+				.stretch(look.multiply(maxEntityDist)).expand(1.0);
 		net.minecraft.util.hit.EntityHitResult entityHit =
-				net.minecraft.entity.projectile.ProjectileUtil.raycast(mc.player, eye, end,
-						searchBox, e -> !e.isSpectator() && e.isAlive(), bestDist * bestDist);
+				net.minecraft.entity.projectile.ProjectileUtil.raycast(mc.player, eye, entityEnd,
+						entityBox, e -> !e.isSpectator() && e.isAlive(), maxEntityDist * maxEntityDist);
 		if (entityHit != null) {
 			double eDist = eye.distanceTo(entityHit.getPos());
 			if (eDist < bestDist) bestDist = eDist;
 		}
-		// Nothing within range (sky / far horizon) → treat as infinity so AF can
-		// reach the 999 stop, matching the old glReadPixels behaviour at the sky.
-		lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : 999.0f;*/
+		lastSceneDepthBlocks = (float) Math.min(bestDist, 999.0);*/
 		//?} else {
 		// Read from the currently bound framebuffer without switching — with Iris active,
 		// WorldRenderEvents.LAST fires while Iris's own FBO is still bound, so we must
@@ -1506,7 +1533,7 @@ public final class PhotoCapture {
 
 		// maxBlurPx scales with aperture only — wider aperture = shallower DoF.
 		// At f/8+ this is already < 2px so everything appears sharp naturally.
-		float maxBlurPx = 80.0f / (aperture * aperture);
+		float maxBlurPx = Math.min(32.0f, 80.0f / (aperture * aperture));
 		int   maxR      = Math.max(1, (int) Math.ceil(maxBlurPx));
 
 		// Reconstruct the crop window that cropTo3to2 used, so image pixels map to the
@@ -1561,13 +1588,13 @@ public final class PhotoCapture {
 					continue;
 				}
 				int r = Math.min(maxR, (int) Math.ceil(coc));
+				float sigma = Math.max(coc * 0.5f, 1.0f);
 				float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
 				for (int dx = -r; dx <= r; dx++) {
 					int sx = Math.max(0, Math.min(iw - 1, ix + dx));
-					// Weight: neighbour contributes proportionally to how blurry it is
-					// relative to us. Sharper neighbours (CoC < ours) are down-weighted.
-					float w = Math.min(1.0f, cocMap[iy * iw + sx] / coc);
-					if (w < 0.01f) continue;
+					float gauss = (float) Math.exp(-(float)(dx * dx) / (2.0f * sigma * sigma));
+					float w = gauss * Math.min(1.0f, cocMap[iy * iw + sx] / coc);
+					if (w < 0.001f) continue;
 					int c = getPixelAbgr(src, sx, iy);
 					aa += ((c >>> 24) & 0xFF) * w;
 					ba += ((c >>> 16) & 0xFF) * w;
@@ -1593,11 +1620,13 @@ public final class PhotoCapture {
 					continue;
 				}
 				int r = Math.min(maxR, (int) Math.ceil(coc));
+				float sigma = Math.max(coc * 0.5f, 1.0f);
 				float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
 				for (int dy = -r; dy <= r; dy++) {
 					int sy = Math.max(0, Math.min(ih - 1, iy + dy));
-					float w = Math.min(1.0f, cocMap[sy * iw + ix] / coc);
-					if (w < 0.01f) continue;
+					float gauss = (float) Math.exp(-(float)(dy * dy) / (2.0f * sigma * sigma));
+					float w = gauss * Math.min(1.0f, cocMap[sy * iw + ix] / coc);
+					if (w < 0.001f) continue;
 					int c = hBuf[sy * iw + ix];
 					aa += ((c >>> 24) & 0xFF) * w;
 					ba += ((c >>> 16) & 0xFF) * w;

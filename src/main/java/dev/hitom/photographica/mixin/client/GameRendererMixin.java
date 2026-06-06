@@ -66,7 +66,21 @@ public class GameRendererMixin {
 			cir.setReturnValue(VideoRecorder.videoFov);
 			return;
 		}
-		if (!player.isSneaking()) return;
+		// Safety valve: clear stuck armor-stand state if no camera is held and no capture is queued.
+		ItemStack main = player.getMainHandStack();
+		ItemStack off  = player.getOffHandStack();
+		boolean holdingCamera = isCamera(main) || isCamera(off)
+				|| main.getItem() instanceof VideoCameraItem
+				|| off.getItem() instanceof VideoCameraItem;
+		if (!holdingCamera && PhotoCapture.getPendingCaptureFovDeg() <= 0) {
+			PhotoCapture.clearArmorStandState();
+			return;
+		}
+		if (!player.isSneaking()) {
+			double pendingFov = PhotoCapture.getPendingCaptureFovDeg();
+			if (pendingFov > 0) { cir.setReturnValue((float) pendingFov); return; }
+			return;
+		}
 		ItemStack stack = player.getMainHandStack();
 		if (!isCamera(stack)) {
 			stack = player.getOffHandStack();
@@ -106,8 +120,26 @@ public class GameRendererMixin {
 			return;
 		}
 
-		// FOV change (focal length) only applies while the viewfinder is active
-		if (!player.isSneaking()) return;
+		// Safety valve: clear stuck armor-stand state if no camera is held and no capture is queued.
+		ItemStack main = player.getMainHandStack();
+		ItemStack off  = player.getOffHandStack();
+		boolean holdingCamera = isCamera(main) || isCamera(off)
+				|| main.getItem() instanceof VideoCameraItem
+				|| off.getItem() instanceof VideoCameraItem;
+		if (!holdingCamera && PhotoCapture.getPendingCaptureFovDeg() <= 0) {
+			PhotoCapture.clearArmorStandState();
+			return;
+		}
+
+		// FOV change (focal length) only applies while the viewfinder is active.
+		// If a capture is queued and the player released Shift between pressing the
+		// shutter and the actual render frame, keep the lens FOV so the photo matches
+		// what the viewfinder was showing.
+		if (!player.isSneaking()) {
+			double pendingFov = PhotoCapture.getPendingCaptureFovDeg();
+			if (pendingFov > 0) { cir.setReturnValue(pendingFov); return; }
+			return;
+		}
 
 		ItemStack stack = player.getMainHandStack();
 		if (!isCamera(stack)) {
