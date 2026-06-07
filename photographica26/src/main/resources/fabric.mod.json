@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "photographica",
+	"version": "${version}",
+	"name": "Photographica",
+	"description": "A photography mod with realistic camera simulation.",
+	"authors": ["hitom"],
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"dev.hitom.photographica.Photographica"
+		],
+		"client": [
+			"dev.hitom.photographica.client.PhotographicaClient"
+		]
+	},
+	"mixins": [
+		"photographica.mixins.json",
+		{
+			"config": "photographica.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=${loader_version}",
+		"fabric-api": "*",
+		"minecraft": "~${minecraft_version}",
+		"java": ">=21"
+	}
+}
