@@ -1,1 +1,1 @@
-{"parent":"photographica:block/enlarger"}
+{"parent":"minecraft:item/generated","textures":{"layer0":"photographica:item/enlarger"}}
