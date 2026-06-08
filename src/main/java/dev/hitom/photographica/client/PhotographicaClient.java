@@ -120,9 +120,15 @@ public class PhotographicaClient implements ClientModInitializer {
 			}
 			if (client.player == null) return;
 			if (settingsKey.wasPressed()) {
-				ItemStack stack = client.player.getMainHandStack();
-				if (!openCameraScreen(stack)) {
-					openCameraScreen(client.player.getOffHandStack());
+				int recStandId = VideoRecorder.getRecordingArmorStandEntityId();
+				if (recStandId >= 0) {
+					// Armor-stand recording active: open stop screen even without camera in hand
+					client.setScreen(new VideoCameraScreen(VideoRecorder.getRecordingStack(), recStandId));
+				} else {
+					ItemStack stack = client.player.getMainHandStack();
+					if (!openCameraScreen(stack)) {
+						openCameraScreen(client.player.getOffHandStack());
+					}
 				}
 			}
 			if (windKey.wasPressed()) {

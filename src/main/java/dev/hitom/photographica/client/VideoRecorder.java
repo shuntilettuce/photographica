@@ -176,6 +176,7 @@ public final class VideoRecorder {
     public static int     getPpProgress()                { return ppProgress; }
     public static String  getPpMessage()                 { return ppMessage; }
     public static int     getRecordingArmorStandEntityId() { return recordingArmorStandEntityId; }
+    public static ItemStack getRecordingStack()            { return recordingStack; }
     public static long    getDoneAtMs()      { return doneAtMs; }
     public static int     getFrameCount()    { return frameCount; }
     public static long    getRecordStartMs() { return recordStartMs; }
