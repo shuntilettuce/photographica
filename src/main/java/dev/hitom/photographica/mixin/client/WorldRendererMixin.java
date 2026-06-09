@@ -64,7 +64,8 @@ public class WorldRendererMixin {
 					target = "Lnet/minecraft/client/render/Camera;getFocusedEntity()Lnet/minecraft/entity/Entity;")
 	)
 	private Entity photographica$allowPlayerRenderDuringArmorStandCapture(Camera camera) {
-		if (PhotoCapture.armorStandCapturePending) {
+		if (PhotoCapture.armorStandCapturePending
+				|| VideoRecorder.getRecordingArmorStandEntityId() >= 0) {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			if (mc.player != null) return mc.player;
 		}

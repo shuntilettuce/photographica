@@ -5,6 +5,7 @@
 	"client": [
 		"ClientPlayerInteractionManagerMixin",
 		"GameRendererMixin",
+		"MinecraftClientMixin",
 		"MouseMixin",
 		"WorldRendererMixin"
 	],
