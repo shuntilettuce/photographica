@@ -13,7 +13,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.state.GameRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
@@ -39,26 +38,6 @@ public class GameRendererMixin {
 
     /** True when the hand was hidden for an in-progress video frame capture. */
     @Unique private boolean photographica$videoHandSuppressed = false;
-
-    /**
-     * Re-assert the armor stand as camera entity before the camera state is extracted
-     * each frame. Without this, the game thread's setCameraEntity() may be overridden
-     * by vanilla code that runs between ticks, causing a split position/rotation view.
-     */
-    @Inject(
-            method = "extractCamera(Lnet/minecraft/client/DeltaTracker;FF)V",
-            at = @At("HEAD"),
-            require = 0
-    )
-    private void photographica$setCameraEntityBeforeExtract(DeltaTracker dt, float baseFov,
-                                                            float partialTick, CallbackInfo ci) {
-        int standId = VideoRecorder.getRecordingArmorStandEntityId();
-        if (standId < 0) return;
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null) return;
-        Entity stand = mc.level.getEntity(standId);
-        if (stand != null) mc.setCameraEntity(stand);
-    }
 
     @Inject(
             method = "extractCamera(Lnet/minecraft/client/DeltaTracker;FF)V",
