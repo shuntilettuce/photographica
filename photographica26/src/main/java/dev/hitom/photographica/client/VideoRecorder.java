@@ -194,12 +194,7 @@ public final class VideoRecorder {
             return;
         }
 
-        // Switch to armor-stand perspective if recording from a tripod.
         recordingArmorStandEntityId = armorStandEntityId;
-        if (armorStandEntityId >= 0 && mc.level != null) {
-            net.minecraft.world.entity.Entity stand = mc.level.getEntity(armorStandEntityId);
-            if (stand != null) mc.setCameraEntity(stand);
-        }
 
         // Enable cinematic (smooth) camera for the duration of the recording.
         prevSmoothCamera = mc.options.smoothCamera;
@@ -213,12 +208,8 @@ public final class VideoRecorder {
     public static void stopRecording() {
         if (!recording) return;
         recording = false;
+        recordingArmorStandEntityId = -1;
         Minecraft mc = Minecraft.getInstance();
-        // Restore player perspective if we were recording from an armor stand.
-        if (recordingArmorStandEntityId >= 0) {
-            if (mc.player != null) mc.setCameraEntity(mc.player);
-            recordingArmorStandEntityId = -1;
-        }
         // Restore the smooth-camera setting the player had before recording.
         mc.options.smoothCamera = prevSmoothCamera;
         if (mc.player != null)

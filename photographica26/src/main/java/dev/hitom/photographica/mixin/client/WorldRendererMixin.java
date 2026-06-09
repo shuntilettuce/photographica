@@ -1,7 +1,6 @@
 package dev.hitom.photographica.mixin.client;
 
 import dev.hitom.photographica.client.PhotoCapture;
-import dev.hitom.photographica.client.VideoRecorder;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -48,8 +47,7 @@ public class WorldRendererMixin {
                     target = "Lnet/minecraft/client/Camera;entity()Lnet/minecraft/world/entity/Entity;")
     )
     private Entity photographica$allowPlayerRenderDuringArmorStandCapture(Camera camera) {
-        if (PhotoCapture.armorStandCapturePending
-                || VideoRecorder.getRecordingArmorStandEntityId() >= 0) {
+        if (PhotoCapture.armorStandCapturePending) {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null) return mc.player;
         }
