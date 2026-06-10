@@ -49,7 +49,7 @@ public class WorldRendererMixin {
     )
     private Entity photographica$allowPlayerRenderDuringArmorStandCapture(Camera camera) {
         if (PhotoCapture.armorStandCapturePending
-                || VideoRecorder.isTripodRenderInProgress()) {
+                || VideoRecorder.isTripodRecording()) {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null) return mc.player;
         }

@@ -50,9 +50,9 @@ public class GameRendererMixin {
 			cancellable = true)
 	private void photographica$applyFocalLength(Camera camera, float tickDelta, boolean changingFov,
 	                                            CallbackInfoReturnable<Double> cir) {
-		// Off-screen tripod render pass: fixed camcorder-native FOV regardless of
-		// whatever the player is holding or looking through.
-		if (VideoRecorder.isTripodRenderInProgress()) {
+		// Tripod recording: fixed camcorder-native FOV regardless of what the
+		// player is holding or looking through.
+		if (VideoRecorder.isTripodRecording()) {
 			cir.setReturnValue((double) VideoRecorder.TRIPOD_FOV);
 			return;
 		}
@@ -150,41 +150,27 @@ public class GameRendererMixin {
 				}
 			}
 		}
-		// Suppress hand for the entire duration of HANDHELD recording so it never
-		// appears in any captured frame.  Tripod recording leaves the player's
-		// on-screen view (including the hand) untouched — the captured frames come
-		// from the dedicated tripod render pass below, which hides the hand itself.
-		if (VideoRecorder.isRecording() && VideoRecorder.getRecordingArmorStandEntityId() < 0) {
+		// Suppress hand for the entire duration of recording so it never appears in
+		// any captured frame.  For tripod recording the camera is locked to the stand,
+		// so the first-person hand is irrelevant and hidden too.
+		if (VideoRecorder.isRecording()) {
 			this.renderHand = false;
 			photographica$videoHandSuppressed = true;
 		} else {
 			photographica$videoHandSuppressed = false;
 		}
 
-		// Tripod recording: when this render frame is due to be captured, first
-		// render one extra frame from the armor stand's camera and capture it,
-		// then fall through to the normal render which draws the player's own
-		// (unchanged) view on screen.
-		if (VideoRecorder.getRecordingArmorStandEntityId() >= 0 && VideoRecorder.willCaptureThisFrame()) {
+		// Tripod recording: re-assert the armor stand as camera entity every frame so
+		// the single world render is always filmed from its perspective.  Game ticks
+		// and network handlers that run between frames could otherwise reset
+		// mc.cameraEntity back to the player.
+		if (VideoRecorder.getRecordingArmorStandEntityId() >= 0) {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			net.minecraft.entity.Entity stand = mc.world != null
 					? mc.world.getEntityById(VideoRecorder.getRecordingArmorStandEntityId())
 					: null;
-			if (stand != null && mc.player != null) {
-				net.minecraft.entity.Entity prevCamera = mc.getCameraEntity();
-				boolean prevRenderHand = this.renderHand;
-				this.renderHand = false;
+			if (stand != null && mc.getCameraEntity() != stand) {
 				mc.setCameraEntity(stand);
-				VideoRecorder.beginTripodRender();
-				try {
-					((GameRenderer) (Object) this).renderWorld(tickCounter);
-					VideoRecorder.grabTripodFrame();
-					VideoRecorder.captureFrameIfRecording();
-				} finally {
-					VideoRecorder.endTripodRender();
-					mc.setCameraEntity(prevCamera != null ? prevCamera : mc.player);
-					this.renderHand = prevRenderHand;
-				}
 			}
 		}
 	}
