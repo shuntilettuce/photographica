@@ -210,9 +210,13 @@ public final class VideoRecorder {
 
         recordingArmorStandEntityId = armorStandEntityId;
 
-        // Enable cinematic (smooth) camera for the duration of the recording.
+        // Enable cinematic (smooth) camera for HANDHELD recording only.  Tripod
+        // recording keeps the player's own free view on screen, so forcing smooth
+        // camera there would only hinder the player — leave it untouched.
         prevSmoothCamera = mc.options.smoothCamera;
-        mc.options.smoothCamera = true;
+        if (armorStandEntityId < 0) {
+            mc.options.smoothCamera = true;
+        }
 
         recording = true;
         if (mc.player != null)

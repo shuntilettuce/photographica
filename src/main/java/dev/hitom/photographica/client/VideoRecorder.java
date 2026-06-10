@@ -292,11 +292,14 @@ public final class VideoRecorder {
 
         recordingArmorStandEntityId = armorStandEntityId;
 
-        // Enable cinematic (smooth) camera for the duration of the recording so
-        // all captured frames benefit from Minecraft's built-in mouse smoothing.
-        // The previous setting is saved and restored when recording stops.
+        // Enable cinematic (smooth) camera for HANDHELD recording so all captured
+        // frames benefit from Minecraft's built-in mouse smoothing.  Tripod
+        // recording keeps the player's own free view on screen, so forcing smooth
+        // camera there would only hinder the player — leave it untouched.
         prevSmoothCamera = mc.options.smoothCameraEnabled;
-        mc.options.smoothCameraEnabled = true;
+        if (armorStandEntityId < 0) {
+            mc.options.smoothCameraEnabled = true;
+        }
 
         recording = true;
         if (mc.player != null)
