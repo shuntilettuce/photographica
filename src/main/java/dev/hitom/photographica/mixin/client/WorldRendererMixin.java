@@ -90,7 +90,8 @@ public class WorldRendererMixin {
 			require = 0
 	)
 	private Entity photographica$allowPlayerRenderDuringArmorStandCapture(Camera camera) {
-		if (PhotoCapture.armorStandCapturePending) {
+		if (PhotoCapture.armorStandCapturePending
+				|| VideoRecorder.isTripodRecording()) {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			if (mc.player != null) return mc.player;
 		}
@@ -104,7 +105,8 @@ public class WorldRendererMixin {
 			require = 0
 	)
 	private Entity photographica$allowPlayerRenderDuringArmorStandCapture(Camera camera) {
-		if (PhotoCapture.armorStandCapturePending) {
+		if (PhotoCapture.armorStandCapturePending
+				|| VideoRecorder.isTripodRecording()) {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			if (mc.player != null) return mc.player;
 		}

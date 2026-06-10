@@ -117,25 +117,19 @@ public final class VideoRecorder {
 
     /**
      * Entity ID of the armor stand whose camera is being recorded from, or -1
-     * when recording from the player's own camera.  The player's on-screen view
-     * is never changed: captured frames are rendered in a dedicated off-screen
-     * pass from the stand's perspective (see GameRendererMixin).
+     * when recording from the player's own camera.  While ≥ 0 the client camera
+     * entity is locked to the armor stand for the whole recording, so the single
+     * vanilla world render (shaders included) is filmed from the stand's view.
      */
     private static int recordingArmorStandEntityId = -1;
-
-    /**
-     * True only while GameRendererMixin is rendering the extra tripod-view frame.
-     * Depth reads and frame captures during tripod recording are restricted to
-     * this window so they never sample the player's on-screen view.
-     */
-    private static boolean tripodRenderInProgress = false;
 
     /** Fixed vertical FOV (degrees) used for tripod-mounted camcorder frames. */
     public static final float TRIPOD_FOV = 70.0f;
 
-    public static boolean isTripodRenderInProgress() { return tripodRenderInProgress; }
-    public static void beginTripodRender() { tripodRenderInProgress = true; }
-    public static void endTripodRender()   { tripodRenderInProgress = false; }
+    /** True while recording from an armor stand (camera is locked to the stand). */
+    public static boolean isTripodRecording() {
+        return recording && recordingArmorStandEntityId >= 0;
+    }
 
     /**
      * Whether smooth/cinematic camera was enabled before recording started.
@@ -173,16 +167,6 @@ public final class VideoRecorder {
     /** Viewport and crop dimensions stored by onWorldRenderEnd() for the next frame. */
     private static int pendingVpW = 0, pendingVpH = 0;
     private static int pendingCropOffX = 0, pendingCropOffY = 0;
-
-    // ── Synchronous colour read (tripod recording) ─────────────────────────────
-    /**
-     * For tripod recording the colour buffer is read synchronously via glReadPixels
-     * during the off-screen tripod render pass — the async takeScreenshot path would
-     * read the player's view that gets drawn into the same framebuffer afterwards.
-     */
-    private static java.nio.ByteBuffer colorReadBuf    = null;
-    private static int                 colorReadBufCap = 0;
-    private static NativeImage         pendingColorImage = null;
 
     // ── DoF temp arrays (reused across frames in the background thread) ────────
     private static int[] dofTempR, dofTempG, dofTempB, dofTempA;
@@ -313,10 +297,16 @@ public final class VideoRecorder {
 
         recordingArmorStandEntityId = armorStandEntityId;
 
+        // Tripod recording: lock the client camera to the armor stand so the single
+        // vanilla world render (and any shader compositing) is filmed from its view.
+        if (armorStandEntityId >= 0 && mc.world != null) {
+            net.minecraft.entity.Entity stand = mc.world.getEntityById(armorStandEntityId);
+            if (stand != null) mc.setCameraEntity(stand);
+        }
+
         // Enable cinematic (smooth) camera for HANDHELD recording so all captured
         // frames benefit from Minecraft's built-in mouse smoothing.  Tripod
-        // recording keeps the player's own free view on screen, so forcing smooth
-        // camera there would only hinder the player — leave it untouched.
+        // recording films a stationary stand, so smooth camera is irrelevant there.
         prevSmoothCamera = mc.options.smoothCameraEnabled;
         if (armorStandEntityId < 0) {
             mc.options.smoothCameraEnabled = true;
@@ -330,8 +320,11 @@ public final class VideoRecorder {
     public static void stopRecording() {
         if (!recording) return;
         recording = false;
+        boolean wasTripod = recordingArmorStandEntityId >= 0;
         recordingArmorStandEntityId = -1;
         MinecraftClient mc = MinecraftClient.getInstance();
+        // Tripod recording locked the camera to the stand — restore the player's view.
+        if (wasTripod) mc.setCameraEntity(mc.player);
         // Restore the smooth-camera setting the player had before recording.
         mc.options.smoothCameraEnabled = prevSmoothCamera;
         if (mc.player != null)
@@ -367,9 +360,6 @@ public final class VideoRecorder {
      */
     public static void onWorldRenderEnd() {
         if (!recording) return;
-        // Tripod recording: only read depth during the dedicated tripod render
-        // pass — the player's on-screen render must never feed the depth grid.
-        if (recordingArmorStandEntityId >= 0 && !tripodRenderInProgress) return;
         // If depth is already pending (not yet consumed by captureFrameIfRecording),
         // there is nothing to do — don't overwrite the pending grid.
         if (pendingDepthReady) return;
@@ -402,66 +392,17 @@ public final class VideoRecorder {
         pendingVpH     = vpH;
         pendingCropOffX = (vpW - cropW) / 2;
         pendingCropOffY = (vpH - cropH) / 2;
-
-    }
-
-    /**
-     * Called from GameRendererMixin immediately after the tripod renderWorld() returns.
-     * Binds mc.getFramebuffer() (which now holds the stand's fully-composited view,
-     * including Iris output) and reads pixels synchronously before the player-view
-     * render overwrites the same framebuffer.
-     */
-    public static void grabTripodFrame() {
-        if (!tripodRenderInProgress) return;
-        // After renderWorld() vanilla and Iris both leave the main framebuffer bound.
-        // Read dimensions from the current viewport to avoid version-specific Framebuffer API.
-        int[] vp = new int[4];
-        GL11.glGetIntegerv(GL11.GL_VIEWPORT, vp);
-        int vpW = vp[2], vpH = vp[3];
-        if (vpW <= 0 || vpH <= 0) return;
-        NativeImage img = grabColorSync(vpW, vpH);
-        if (pendingColorImage != null) pendingColorImage.close();
-        pendingColorImage = img;
-    }
-
-    /**
-     * Reads the currently-bound framebuffer's colour into a NativeImage via a
-     * synchronous glReadPixels (RGBA8).  GL's origin is bottom-left, so rows are
-     * flipped to NativeImage's top-left convention.
-     */
-    private static NativeImage grabColorSync(int vpW, int vpH) {
-        int needed = vpW * vpH * 4;
-        if (colorReadBuf == null || colorReadBufCap < needed) {
-            colorReadBuf    = BufferUtils.createByteBuffer(needed);
-            colorReadBufCap = needed;
-        }
-        colorReadBuf.clear();
-        GL11.glReadPixels(0, 0, vpW, vpH,
-                GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, colorReadBuf);
-        NativeImage img = new NativeImage(vpW, vpH, false);
-        for (int y = 0; y < vpH; y++) {
-            int srcRow = (vpH - 1 - y) * vpW * 4;   // flip Y
-            for (int x = 0; x < vpW; x++) {
-                int o = srcRow + x * 4;
-                int r = colorReadBuf.get(o)     & 0xFF;
-                int g = colorReadBuf.get(o + 1) & 0xFF;
-                int b = colorReadBuf.get(o + 2) & 0xFF;
-                int a = colorReadBuf.get(o + 3) & 0xFF;
-                img.setColor(x, y, (a << 24) | (b << 16) | (g << 8) | r);
-            }
-        }
-        return img;
     }
 
     /**
      * Called from GameRendererMixin after renderWorld().
      * Takes a screenshot, advances the dwell-time autofocus, and queues the frame for I/O.
+     *
+     * For tripod recording the client camera is locked to the armor stand, so the
+     * normal screenshot path already captures the stand's (shader-composited) view.
      */
     public static void captureFrameIfRecording() {
         if (!recording) return;
-        // Tripod recording: frames are captured only inside the tripod render
-        // pass (GameRendererMixin); the on-screen player view is never recorded.
-        if (recordingArmorStandEntityId >= 0 && !tripodRenderInProgress) return;
         long now = System.currentTimeMillis();
         if (now < nextFrameMs) return;
         if (frameCount >= MAX_FRAMES) { stopRecording(); return; }
@@ -560,29 +501,6 @@ public final class VideoRecorder {
                 depthGrid,
                 pendingVpW, pendingVpH,
                 pendingCropOffX, pendingCropOffY);
-
-        // Tripod recording: use the synchronously-grabbed colour image (same timing
-        // as the depth read) so the saved frame is the stand's view, not the player's.
-        if (tripodRenderInProgress && pendingColorImage != null) {
-            NativeImage rawT = pendingColorImage;
-            pendingColorImage = null;
-            NativeImage croppedT = cropTo16x9(rawT);
-            NativeImage frameT   = boxDownsample(croppedT, 1280);
-            if (croppedT != rawT) croppedT.close();
-            rawT.close();
-            int idxT = frameCount;
-            File outFileT = new File(rawDir, String.format("frame_%04d.png", idxT));
-            frameMetas.add(meta);
-            frameCount++;
-            nextFrameMs = recordStartMs + (long)(frameCount * 1000.0 / currentFps);
-            ioExecutor.submit(() -> {
-                try { frameT.writeTo(outFileT); }
-                catch (IOException e) {
-                    Photographica.LOGGER.warn("[VideoRecorder] Frame write failed: {}", outFileT, e);
-                } finally { frameT.close(); }
-            });
-            return;
-        }
 
         //? if >=1.21.11 {
         /*// takeScreenshot is GPU-async in 1.21.11: claim the frame slot synchronously so
