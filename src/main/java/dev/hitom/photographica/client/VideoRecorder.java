@@ -109,11 +109,25 @@ public final class VideoRecorder {
 
     /**
      * Entity ID of the armor stand whose camera is being recorded from, or -1
-     * when recording from the player's own camera.  When set, the client camera
-     * entity is switched to the armor stand so the video is rendered from its
-     * perspective.  Restored to the player when recording stops.
+     * when recording from the player's own camera.  The player's on-screen view
+     * is never changed: captured frames are rendered in a dedicated off-screen
+     * pass from the stand's perspective (see GameRendererMixin).
      */
     private static int recordingArmorStandEntityId = -1;
+
+    /**
+     * True only while GameRendererMixin is rendering the extra tripod-view frame.
+     * Depth reads and frame captures during tripod recording are restricted to
+     * this window so they never sample the player's on-screen view.
+     */
+    private static boolean tripodRenderInProgress = false;
+
+    /** Fixed vertical FOV (degrees) used for tripod-mounted camcorder frames. */
+    public static final float TRIPOD_FOV = 70.0f;
+
+    public static boolean isTripodRenderInProgress() { return tripodRenderInProgress; }
+    public static void beginTripodRender() { tripodRenderInProgress = true; }
+    public static void endTripodRender()   { tripodRenderInProgress = false; }
 
     /**
      * Whether smooth/cinematic camera was enabled before recording started.
@@ -329,6 +343,9 @@ public final class VideoRecorder {
      */
     public static void onWorldRenderEnd() {
         if (!recording) return;
+        // Tripod recording: only read depth during the dedicated tripod render
+        // pass — the player's on-screen render must never feed the depth grid.
+        if (recordingArmorStandEntityId >= 0 && !tripodRenderInProgress) return;
         // If depth is already pending (not yet consumed by captureFrameIfRecording),
         // there is nothing to do — don't overwrite the pending grid.
         if (pendingDepthReady) return;
@@ -369,6 +386,9 @@ public final class VideoRecorder {
      */
     public static void captureFrameIfRecording() {
         if (!recording) return;
+        // Tripod recording: frames are captured only inside the tripod render
+        // pass (GameRendererMixin); the on-screen player view is never recorded.
+        if (recordingArmorStandEntityId >= 0 && !tripodRenderInProgress) return;
         long now = System.currentTimeMillis();
         if (now < nextFrameMs) return;
         if (frameCount >= MAX_FRAMES) { stopRecording(); return; }
@@ -407,8 +427,10 @@ public final class VideoRecorder {
         }
         // ─────────────────────────────────────────────────────────────────────
 
-        Vec3d vel = mc.player.getVelocity();
+        // Tripod is stationary — the player's own movement must not add motion blur.
+        Vec3d vel = recordingArmorStandEntityId >= 0 ? Vec3d.ZERO : mc.player.getVelocity();
         float ap  = VideoCameraItem.getSettings(recordingStack).aperture();
+        float fovDeg = recordingArmorStandEntityId >= 0 ? TRIPOD_FOV : videoFov;
 
         // Use the rendering Camera for yaw/pitch: it incorporates tickDelta interpolation
         // and benefits from smooth-camera mode, avoiding per-tick quantisation spikes.
@@ -443,7 +465,7 @@ public final class VideoRecorder {
                 frameCount,
                 (float) vel.x, (float) vel.y, (float) vel.z,
                 yaw, pitch,
-                deltaYaw, deltaPitch, videoFov,
+                deltaYaw, deltaPitch, fovDeg,
                 ap,
                 currentFocusDepth,
                 depthGrid,

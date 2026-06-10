@@ -79,6 +79,20 @@ public final class VideoRecorder {
     private static int recordingArmorStandEntityId = -1;
     private static boolean prevSmoothCamera = false;
 
+    /**
+     * True only while GameRendererMixin is rendering the extra tripod-view frame.
+     * Depth reads and frame captures during tripod recording are restricted to
+     * this window so they never sample the player's on-screen view.
+     */
+    private static boolean tripodRenderInProgress = false;
+
+    /** Fixed vertical FOV (degrees) used for tripod-mounted camcorder frames. */
+    public static final float TRIPOD_FOV = 70.0f;
+
+    public static boolean isTripodRenderInProgress() { return tripodRenderInProgress; }
+    public static void beginTripodRender() { tripodRenderInProgress = true; }
+    public static void endTripodRender()   { tripodRenderInProgress = false; }
+
     // ── Autofocus state ────────────────────────────────────────────────────────
     private static float focusCandidateDepth  = 5.0f;
     private static int   focusCandidateFrames = 0;
@@ -234,6 +248,9 @@ public final class VideoRecorder {
 
     public static void onWorldRenderEnd() {
         if (!recording) return;
+        // Tripod recording: only read depth during the dedicated tripod render
+        // pass — the player's on-screen render must never feed the depth grid.
+        if (recordingArmorStandEntityId >= 0 && !tripodRenderInProgress) return;
         if (pendingDepthReady) return;
 
         GL11.glGetError();
@@ -267,6 +284,9 @@ public final class VideoRecorder {
 
     public static void captureFrameIfRecording() {
         if (!recording) return;
+        // Tripod recording: frames are captured only inside the tripod render
+        // pass (GameRendererMixin); the on-screen player view is never recorded.
+        if (recordingArmorStandEntityId >= 0 && !tripodRenderInProgress) return;
         long now = System.currentTimeMillis();
         if (now < nextFrameMs) return;
         if (frameCount >= MAX_FRAMES) { stopRecording(); return; }
@@ -304,13 +324,17 @@ public final class VideoRecorder {
         // because the vehicle carries the motion. Derive the real camera velocity
         // from the frame-to-frame position delta instead so motion blur tracks it.
         Vec3 vel;
-        if (mc.player.isPassenger() && prevFrameValid && currentFps > 0) {
+        if (recordingArmorStandEntityId >= 0) {
+            // Tripod is stationary — the player's movement must not add motion blur.
+            vel = Vec3.ZERO;
+        } else if (mc.player.isPassenger() && prevFrameValid && currentFps > 0) {
             vel = mc.player.position().subtract(prevPlayerPos).scale(currentFps / 20.0);
         } else {
             vel = mc.player.getDeltaMovement();
         }
         prevPlayerPos = mc.player.position();
         float ap  = VideoCameraItem.getSettings(recordingStack).aperture();
+        float fovDeg = recordingArmorStandEntityId >= 0 ? TRIPOD_FOV : videoFov;
 
         Camera camera = mc.gameRenderer != null ? mc.gameRenderer.getMainCamera() : null;
         float yaw   = (camera != null && camera.isInitialized()) ? camera.yRot()   : mc.player.getYRot();
@@ -338,7 +362,7 @@ public final class VideoRecorder {
                 frameCount,
                 (float) vel.x, (float) vel.y, (float) vel.z,
                 yaw, pitch,
-                deltaYaw, deltaPitch, videoFov,
+                deltaYaw, deltaPitch, fovDeg,
                 ap,
                 currentFocusDepth,
                 depthGrid,

@@ -66,6 +66,10 @@ public class GameRendererMixin {
     /** Returns the desired vertical FOV in degrees, or ≤0 to leave vanilla unchanged. */
     @Unique
     private double photographica$computeCustomVFov() {
+        // Off-screen tripod render pass: fixed camcorder-native FOV.
+        if (VideoRecorder.isTripodRenderInProgress()) {
+            return VideoRecorder.TRIPOD_FOV;
+        }
         // Armor stand capture mode: use the armor stand camera's focal length
         if (PhotoCapture.armorStandCapturePending && PhotoCapture.armorStandFocalLength > 0) {
             int f = PhotoCapture.armorStandFocalLength;
@@ -129,7 +133,35 @@ public class GameRendererMixin {
                     target = "Lnet/minecraft/client/renderer/GameRenderer;renderLevel(Lnet/minecraft/client/DeltaTracker;)V",
                     shift = At.Shift.BEFORE))
     private void photographica$suppressHandBeforeAccumSample(DeltaTracker deltaTracker, boolean tick, CallbackInfo ci) {
-        photographica$videoHandSuppressed = VideoRecorder.isRecording();
+        photographica$videoHandSuppressed = VideoRecorder.isRecording()
+                && VideoRecorder.getRecordingArmorStandEntityId() < 0;
+
+        // Tripod recording: when this render frame is due to be captured, re-extract
+        // the render state with the armor stand as camera entity, render one extra
+        // frame from its perspective and capture it, then re-extract with the player
+        // camera so the normal render below draws the player's own (unchanged) view.
+        if (VideoRecorder.getRecordingArmorStandEntityId() >= 0 && VideoRecorder.willCaptureThisFrame()) {
+            Minecraft mc = Minecraft.getInstance();
+            net.minecraft.world.entity.Entity stand = mc.level != null
+                    ? mc.level.getEntity(VideoRecorder.getRecordingArmorStandEntityId())
+                    : null;
+            if (stand != null && mc.player != null) {
+                net.minecraft.world.entity.Entity prevCamera = mc.getCameraEntity();
+                GameRenderer self = (GameRenderer) (Object) this;
+                mc.setCameraEntity(stand);
+                VideoRecorder.beginTripodRender();
+                try {
+                    self.extract(deltaTracker, tick);
+                    self.renderLevel(deltaTracker);
+                    VideoRecorder.captureFrameIfRecording();
+                } finally {
+                    VideoRecorder.endTripodRender();
+                    mc.setCameraEntity(prevCamera != null ? prevCamera : mc.player);
+                    // Re-extract so the on-screen render uses the player's camera again.
+                    self.extract(deltaTracker, tick);
+                }
+            }
+        }
     }
 
     /**

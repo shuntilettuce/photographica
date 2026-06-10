@@ -150,9 +150,6 @@ public class VideoCameraScreen extends Screen {
     @Override
     public void close() {
         flushSettings();
-        if (armorStandEntityId >= 0 && VideoRecorder.isRecording()) {
-            VideoRecorder.stopRecording();
-        }
         super.close();
     }
 
