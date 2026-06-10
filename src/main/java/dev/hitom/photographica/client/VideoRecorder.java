@@ -164,6 +164,16 @@ public final class VideoRecorder {
     private static int pendingVpW = 0, pendingVpH = 0;
     private static int pendingCropOffX = 0, pendingCropOffY = 0;
 
+    // ── Synchronous colour read (tripod recording) ─────────────────────────────
+    /**
+     * For tripod recording the colour buffer is read synchronously via glReadPixels
+     * during the off-screen tripod render pass — the async takeScreenshot path would
+     * read the player's view that gets drawn into the same framebuffer afterwards.
+     */
+    private static java.nio.ByteBuffer colorReadBuf    = null;
+    private static int                 colorReadBufCap = 0;
+    private static NativeImage         pendingColorImage = null;
+
     // ── DoF temp arrays (reused across frames in the background thread) ────────
     private static int[] dofTempR, dofTempG, dofTempB, dofTempA;
     private static int   dofTempCap = 0;
@@ -381,6 +391,43 @@ public final class VideoRecorder {
         pendingVpH     = vpH;
         pendingCropOffX = (vpW - cropW) / 2;
         pendingCropOffY = (vpH - cropH) / 2;
+
+        // Tripod recording: grab the colour buffer synchronously now, while the
+        // world framebuffer (holding the stand's view) is still bound.  The async
+        // screenshot path would otherwise capture the player's view rendered after.
+        if (tripodRenderInProgress) {
+            if (pendingColorImage != null) pendingColorImage.close();
+            pendingColorImage = grabColorSync(vpW, vpH);
+        }
+    }
+
+    /**
+     * Reads the currently-bound framebuffer's colour into a NativeImage via a
+     * synchronous glReadPixels (RGBA8).  GL's origin is bottom-left, so rows are
+     * flipped to NativeImage's top-left convention.
+     */
+    private static NativeImage grabColorSync(int vpW, int vpH) {
+        int needed = vpW * vpH * 4;
+        if (colorReadBuf == null || colorReadBufCap < needed) {
+            colorReadBuf    = BufferUtils.createByteBuffer(needed);
+            colorReadBufCap = needed;
+        }
+        colorReadBuf.clear();
+        GL11.glReadPixels(0, 0, vpW, vpH,
+                GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, colorReadBuf);
+        NativeImage img = new NativeImage(vpW, vpH, false);
+        for (int y = 0; y < vpH; y++) {
+            int srcRow = (vpH - 1 - y) * vpW * 4;   // flip Y
+            for (int x = 0; x < vpW; x++) {
+                int o = srcRow + x * 4;
+                int r = colorReadBuf.get(o)     & 0xFF;
+                int g = colorReadBuf.get(o + 1) & 0xFF;
+                int b = colorReadBuf.get(o + 2) & 0xFF;
+                int a = colorReadBuf.get(o + 3) & 0xFF;
+                img.setColor(x, y, (a << 24) | (b << 16) | (g << 8) | r);
+            }
+        }
+        return img;
     }
 
     /**
@@ -474,6 +521,29 @@ public final class VideoRecorder {
                 depthGrid,
                 pendingVpW, pendingVpH,
                 pendingCropOffX, pendingCropOffY);
+
+        // Tripod recording: use the synchronously-grabbed colour image (same timing
+        // as the depth read) so the saved frame is the stand's view, not the player's.
+        if (tripodRenderInProgress && pendingColorImage != null) {
+            NativeImage rawT = pendingColorImage;
+            pendingColorImage = null;
+            NativeImage croppedT = cropTo16x9(rawT);
+            NativeImage frameT   = boxDownsample(croppedT, 1280);
+            if (croppedT != rawT) croppedT.close();
+            rawT.close();
+            int idxT = frameCount;
+            File outFileT = new File(rawDir, String.format("frame_%04d.png", idxT));
+            frameMetas.add(meta);
+            frameCount++;
+            nextFrameMs = recordStartMs + (long)(frameCount * 1000.0 / currentFps);
+            ioExecutor.submit(() -> {
+                try { frameT.writeTo(outFileT); }
+                catch (IOException e) {
+                    Photographica.LOGGER.warn("[VideoRecorder] Frame write failed: {}", outFileT, e);
+                } finally { frameT.close(); }
+            });
+            return;
+        }
 
         NativeImage raw;
         try {
