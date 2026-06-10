@@ -295,13 +295,25 @@ public final class VideoRecorder {
         pendingCropOffX = (vpW - cropW) / 2;
         pendingCropOffY = (vpH - cropH) / 2;
 
-        // Tripod recording: grab the colour buffer synchronously now, while the
-        // world framebuffer (holding the stand's view) is still bound.  The async
-        // screenshot path would otherwise capture the player's view rendered after.
-        if (tripodRenderInProgress) {
-            if (pendingColorImage != null) pendingColorImage.close();
-            pendingColorImage = grabColorSync(vpW, vpH);
-        }
+    }
+
+    /**
+     * Called from GameRendererMixin immediately after the tripod renderLevel() returns.
+     * Binds mc.getMainRenderTarget() (which holds the stand's composited view, including
+     * Iris output) and reads pixels synchronously before the player view overwrites it.
+     */
+    public static void grabTripodFrame() {
+        if (!tripodRenderInProgress) return;
+        // After renderLevel() vanilla and Iris both leave the main render target bound.
+        // Read dimensions from the current viewport rather than querying RenderTarget,
+        // which avoids version-specific API differences.
+        int[] vp = new int[4];
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, vp);
+        int vpW = vp[2], vpH = vp[3];
+        if (vpW <= 0 || vpH <= 0) return;
+        NativeImage img = grabColorSync(vpW, vpH);
+        if (pendingColorImage != null) pendingColorImage.close();
+        pendingColorImage = img;
     }
 
     /**

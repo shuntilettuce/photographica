@@ -178,6 +178,7 @@ public class GameRendererMixin {
 				VideoRecorder.beginTripodRender();
 				try {
 					((GameRenderer) (Object) this).renderWorld(tickCounter);
+					VideoRecorder.grabTripodFrame();
 					VideoRecorder.captureFrameIfRecording();
 				} finally {
 					VideoRecorder.endTripodRender();

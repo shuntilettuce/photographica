@@ -153,6 +153,7 @@ public class GameRendererMixin {
                 try {
                     self.extract(deltaTracker, tick);
                     self.renderLevel(deltaTracker);
+                    VideoRecorder.grabTripodFrame();
                     VideoRecorder.captureFrameIfRecording();
                 } finally {
                     VideoRecorder.endTripodRender();

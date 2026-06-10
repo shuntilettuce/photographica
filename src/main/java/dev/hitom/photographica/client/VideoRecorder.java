@@ -392,12 +392,22 @@ public final class VideoRecorder {
         pendingCropOffX = (vpW - cropW) / 2;
         pendingCropOffY = (vpH - cropH) / 2;
 
-        // Tripod recording: grab the colour buffer synchronously now, while the
-        // world framebuffer (holding the stand's view) is still bound.  The async
-        // screenshot path would otherwise capture the player's view rendered after.
-        if (tripodRenderInProgress) {
+    }
+
+    /**
+     * Called from GameRendererMixin immediately after the tripod renderWorld() returns.
+     * At this point mc.getFramebuffer() holds the stand's composited view — including
+     * any Iris shader output — before the normal player-view render overwrites it.
+     */
+    public static void grabTripodFrame() {
+        if (!tripodRenderInProgress) return;
+        MinecraftClient mc = MinecraftClient.getInstance();
+        try {
+            NativeImage img = ScreenshotRecorder.takeScreenshot(mc.getFramebuffer());
             if (pendingColorImage != null) pendingColorImage.close();
-            pendingColorImage = grabColorSync(vpW, vpH);
+            pendingColorImage = img;
+        } catch (Exception e) {
+            Photographica.LOGGER.warn("[VideoRecorder] Tripod color grab failed", e);
         }
     }
 
