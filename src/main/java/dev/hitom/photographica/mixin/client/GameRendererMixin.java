@@ -53,6 +53,11 @@ public class GameRendererMixin {
 			cancellable = true)
 	private void photographica$applyFocalLength(Camera camera, float tickDelta, boolean changingFov,
 	                                            CallbackInfoReturnable<Float> cir) {
+		// Off-screen tripod render pass: fixed camcorder-native FOV.
+		if (VideoRecorder.isTripodRenderInProgress()) {
+			cir.setReturnValue(VideoRecorder.TRIPOD_FOV);
+			return;
+		}
 		if (PhotoCapture.armorStandCapturePending && PhotoCapture.armorStandFocalLength > 0) {
 			int f = PhotoCapture.armorStandFocalLength;
 			cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(12.0 / f)));
@@ -100,6 +105,11 @@ public class GameRendererMixin {
 			cancellable = true)
 	private void photographica$applyFocalLength(Camera camera, float tickDelta, boolean changingFov,
 	                                            CallbackInfoReturnable<Double> cir) {
+		// Off-screen tripod render pass: fixed camcorder-native FOV.
+		if (VideoRecorder.isTripodRenderInProgress()) {
+			cir.setReturnValue((double) VideoRecorder.TRIPOD_FOV);
+			return;
+		}
 		// Armor stand capture mode: use the armor stand camera's focal length
 		if (PhotoCapture.armorStandCapturePending && PhotoCapture.armorStandFocalLength > 0) {
 			int f = PhotoCapture.armorStandFocalLength;
@@ -172,7 +182,12 @@ public class GameRendererMixin {
 	@Inject(method = "renderHand(FZLorg/joml/Matrix4f;)V", at = @At("HEAD"), cancellable = true)
 	private void photographica$suppressHandForCapture(float tickDelta, boolean bl,
 			org.joml.Matrix4f matrix4f, CallbackInfo ci) {
-		if (VideoRecorder.isRecording() || PhotoCapture.isAccumulating()
+		// Handheld recording hides the hand entirely; tripod recording keeps the
+		// player's on-screen hand and only hides it inside the tripod render pass.
+		boolean handheldRecording = VideoRecorder.isRecording()
+				&& VideoRecorder.getRecordingArmorStandEntityId() < 0;
+		if (handheldRecording || VideoRecorder.isTripodRenderInProgress()
+				|| PhotoCapture.isAccumulating()
 				|| PhotoCapture.armorStandCapturePending) {
 			ci.cancel();
 		}
@@ -201,15 +216,48 @@ public class GameRendererMixin {
 			this.renderHand = false;
 		}
 		//?}
-		// Suppress hand for the entire duration of recording so it never
-		// appears in any captured frame (user confirmed complete hide is fine).
-		if (VideoRecorder.isRecording()) {
+		// Suppress hand for the entire duration of HANDHELD recording so it never
+		// appears in any captured frame.  Tripod recording leaves the player's
+		// on-screen view (including the hand) untouched — the captured frames come
+		// from the dedicated tripod render pass below, which hides the hand itself.
+		if (VideoRecorder.isRecording() && VideoRecorder.getRecordingArmorStandEntityId() < 0) {
 			//? if <1.21.11 {
 			this.renderHand = false;
 			//?}
 			photographica$videoHandSuppressed = true;
 		} else {
 			photographica$videoHandSuppressed = false;
+		}
+
+		// Tripod recording: when this render frame is due to be captured, first
+		// render one extra frame from the armor stand's camera and capture it,
+		// then fall through to the normal render which draws the player's own
+		// (unchanged) view on screen.
+		if (VideoRecorder.getRecordingArmorStandEntityId() >= 0 && VideoRecorder.willCaptureThisFrame()) {
+			MinecraftClient mc = MinecraftClient.getInstance();
+			net.minecraft.entity.Entity stand = mc.world != null
+					? mc.world.getEntityById(VideoRecorder.getRecordingArmorStandEntityId())
+					: null;
+			if (stand != null && mc.player != null) {
+				net.minecraft.entity.Entity prevCamera = mc.getCameraEntity();
+				//? if <1.21.11 {
+				boolean prevRenderHand = this.renderHand;
+				this.renderHand = false;
+				//?}
+				mc.setCameraEntity(stand);
+				VideoRecorder.beginTripodRender();
+				try {
+					((GameRenderer) (Object) this).renderWorld(tickCounter);
+					VideoRecorder.grabTripodFrame();
+					VideoRecorder.captureFrameIfRecording();
+				} finally {
+					VideoRecorder.endTripodRender();
+					mc.setCameraEntity(prevCamera != null ? prevCamera : mc.player);
+					//? if <1.21.11 {
+					this.renderHand = prevRenderHand;
+					//?}
+				}
+			}
 		}
 	}
 
