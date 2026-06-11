@@ -5,11 +5,17 @@ import dev.hitom.photographica.client.VideoRecorder;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
+import net.minecraft.client.render.Frustum;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.WorldRenderer;
+//? if >=1.21.11 {
+/*import net.minecraft.client.render.entity.EntityRenderManager;*/
+//?} else {
+import net.minecraft.client.render.entity.EntityRenderDispatcher;
+//?}
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.BlockPos;
@@ -111,6 +117,40 @@ public class WorldRendererMixin {
 			if (mc.player != null) return mc.player;
 		}
 		return camera.getFocusedEntity();
+	}
+	//?}
+
+	/** During tripod recording, prevent the camera armor stand from being rendered
+	 *  so the view from inside its model is unobstructed. */
+	//? if >=1.21.11 {
+	/*@Redirect(
+			method = "fillEntityRenderStates(Lnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/Frustum;Lnet/minecraft/client/render/RenderTickCounter;Lnet/minecraft/client/render/state/WorldRenderState;)V",
+			at = @At(value = "INVOKE",
+					target = "Lnet/minecraft/client/render/entity/EntityRenderManager;shouldRender(Lnet/minecraft/entity/Entity;Lnet/minecraft/client/render/Frustum;DDD)Z"),
+			require = 0
+	)
+	private boolean photographica$hideTripodStandFromRender(net.minecraft.client.render.entity.EntityRenderManager manager,
+			Entity entity, Frustum frustum, double x, double y, double z) {
+		if (VideoRecorder.isTripodRecording()
+				&& entity.getId() == VideoRecorder.getRecordingArmorStandEntityId()) {
+			return false;
+		}
+		return manager.shouldRender(entity, frustum, x, y, z);
+	}*/
+	//?} else {
+	@Redirect(
+			method = "render(Lnet/minecraft/client/render/RenderTickCounter;ZLnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/GameRenderer;Lnet/minecraft/client/render/LightmapTextureManager;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
+			at = @At(value = "INVOKE",
+					target = "Lnet/minecraft/client/render/entity/EntityRenderDispatcher;shouldRender(Lnet/minecraft/entity/Entity;Lnet/minecraft/client/render/Frustum;DDD)Z"),
+			require = 0
+	)
+	private boolean photographica$hideTripodStandFromRender(EntityRenderDispatcher dispatcher, Entity entity,
+			Frustum frustum, double x, double y, double z) {
+		if (VideoRecorder.isTripodRecording()
+				&& entity.getId() == VideoRecorder.getRecordingArmorStandEntityId()) {
+			return false;
+		}
+		return dispatcher.shouldRender(entity, frustum, x, y, z);
 	}
 	//?}
 }
