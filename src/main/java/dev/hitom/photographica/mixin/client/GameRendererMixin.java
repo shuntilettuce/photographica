@@ -50,24 +50,51 @@ public class GameRendererMixin {
 	@Unique private boolean photographica$videoHandSuppressed = false;
 
 	/**
-	 * While tripod-recording, redirect the world-render camera focus to the armor
-	 * stand so the footage is filmed from its perspective.  This only affects the
-	 * getCameraEntity() calls INSIDE renderWorld() (the ones that feed Camera.update),
-	 * NOT mc.cameraEntity itself and NOT updateCrosshairTarget() — that runs in its
-	 * own method, so the player's crosshair, interaction, movement and look all keep
-	 * working normally.  The player can walk around inside the tripod's shot.
+	 * While tripod-recording, point ONLY the render camera at the armor stand by
+	 * substituting the focus-entity argument of Camera.update().  mc.cameraEntity is
+	 * never touched, so movement, look, sneak, crosshair and interaction all keep
+	 * using the player; PhotographicaClient's per-tick safety net guarantees the
+	 * camera entity can never get stuck on the stand.  thirdPerson is forced false so
+	 * the shot is a clean first-person-from-the-stand view.
+	 *
+	 * 1.21.11 moved the Camera.update() call out of renderWorld() into updateCamera()
+	 * and takes World instead of BlockView, so the redirect is version-split.
 	 */
+	//? if >=1.21.11 {
+	/*@Redirect(method = "updateCamera(Lnet/minecraft/client/render/RenderTickCounter;)V",
+			at = @At(value = "INVOKE",
+					target = "Lnet/minecraft/client/render/Camera;update(Lnet/minecraft/world/World;Lnet/minecraft/entity/Entity;ZZF)V"))
+	private void photographica$focusCameraOnTripod(Camera camera, net.minecraft.world.World area,
+			Entity focused, boolean thirdPerson, boolean inverseView, float tickDelta) {
+		int standId = VideoRecorder.getRecordingArmorStandEntityId();
+		if (standId >= 0) {
+			MinecraftClient mc = MinecraftClient.getInstance();
+			Entity stand = mc.world != null ? mc.world.getEntityById(standId) : null;
+			if (stand != null) {
+				camera.update(area, stand, false, inverseView, tickDelta);
+				return;
+			}
+		}
+		camera.update(area, focused, thirdPerson, inverseView, tickDelta);
+	}*/
+	//?} else {
 	@Redirect(method = "renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
 			at = @At(value = "INVOKE",
-					target = "Lnet/minecraft/client/MinecraftClient;getCameraEntity()Lnet/minecraft/entity/Entity;"))
-	private Entity photographica$focusRenderOnTripod(MinecraftClient mc) {
+					target = "Lnet/minecraft/client/render/Camera;update(Lnet/minecraft/world/BlockView;Lnet/minecraft/entity/Entity;ZZF)V"))
+	private void photographica$focusCameraOnTripod(Camera camera, net.minecraft.world.BlockView area,
+			Entity focused, boolean thirdPerson, boolean inverseView, float tickDelta) {
 		int standId = VideoRecorder.getRecordingArmorStandEntityId();
-		if (standId >= 0 && mc.world != null) {
-			Entity stand = mc.world.getEntityById(standId);
-			if (stand != null) return stand;
+		if (standId >= 0) {
+			MinecraftClient mc = MinecraftClient.getInstance();
+			Entity stand = mc.world != null ? mc.world.getEntityById(standId) : null;
+			if (stand != null) {
+				camera.update(area, stand, false, inverseView, tickDelta);
+				return;
+			}
 		}
-		return mc.getCameraEntity();
+		camera.update(area, focused, thirdPerson, inverseView, tickDelta);
 	}
+	//?}
 
 	//? if >=1.21.4 {
 	/*@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)F",
