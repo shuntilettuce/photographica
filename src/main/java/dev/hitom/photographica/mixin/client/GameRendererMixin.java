@@ -16,8 +16,10 @@ import net.minecraft.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
+import net.minecraft.entity.Entity;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -46,11 +48,25 @@ public class GameRendererMixin {
 	@Unique private boolean photographica$videoHandSuppressed = false;
 
 	/**
-	 * Stand entity ID that we overrode cameraEntity to during this render frame,
-	 * or -1 if no override is active.  Cleared in the AFTER inject so cameraEntity
-	 * is restored to the player before the next game tick processes input/raycasts.
+	 * While tripod-recording, redirect the world-render camera focus to the armor
+	 * stand so the footage is filmed from its perspective.  This only affects the
+	 * getCameraEntity() calls INSIDE renderWorld() (the ones that feed Camera.update),
+	 * NOT mc.cameraEntity itself and NOT updateCrosshairTarget() — that runs in its
+	 * own method, so the player's crosshair, interaction, movement and look all keep
+	 * working normally.  The player can walk around inside the tripod's shot and can
+	 * right-click the camera (or press the stop key) to stop recording.
 	 */
-	@Unique private int photographica$overriddenTripodStandId = -1;
+	@Redirect(method = "renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
+			at = @At(value = "INVOKE",
+					target = "Lnet/minecraft/client/MinecraftClient;getCameraEntity()Lnet/minecraft/entity/Entity;"))
+	private Entity photographica$focusRenderOnTripod(MinecraftClient mc) {
+		int standId = VideoRecorder.getRecordingArmorStandEntityId();
+		if (standId >= 0 && mc.world != null) {
+			Entity stand = mc.world.getEntityById(standId);
+			if (stand != null) return stand;
+		}
+		return mc.getCameraEntity();
+	}
 
 	@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D",
 			at = @At("RETURN"),
@@ -158,29 +174,14 @@ public class GameRendererMixin {
 			}
 		}
 		// Suppress hand for the entire duration of recording so it never appears in
-		// any captured frame.  For tripod recording the camera is locked to the stand,
-		// so the first-person hand is irrelevant and hidden too.
+		// any captured frame.  The world render is focused on the tripod stand (see
+		// photographica$focusRenderOnTripod), so the first-person hand would be wrong
+		// anyway during tripod recording.
 		if (VideoRecorder.isRecording()) {
 			this.renderHand = false;
 			photographica$videoHandSuppressed = true;
 		} else {
 			photographica$videoHandSuppressed = false;
-		}
-
-		// Tripod recording: set camera entity to the stand for THIS render frame only.
-		// Restored to player in photographica$captureAfterComposite so that the game
-		// tick (input, hit-detection, interaction) runs with the player as cameraEntity.
-		// This fixes: movement keys dead, can't right-click camera to stop recording.
-		photographica$overriddenTripodStandId = -1;
-		if (VideoRecorder.getRecordingArmorStandEntityId() >= 0) {
-			MinecraftClient mc = MinecraftClient.getInstance();
-			net.minecraft.entity.Entity stand = mc.world != null
-					? mc.world.getEntityById(VideoRecorder.getRecordingArmorStandEntityId())
-					: null;
-			if (stand != null) {
-				mc.setCameraEntity(stand);
-				photographica$overriddenTripodStandId = VideoRecorder.getRecordingArmorStandEntityId();
-			}
 		}
 	}
 
@@ -206,17 +207,6 @@ public class GameRendererMixin {
 		// Restore renderHand for the vanilla renderHand() call that follows
 		if (wasAccumulating || wasArmorStand || photographica$videoHandSuppressed) {
 			this.renderHand = true;
-		}
-		photographica$videoHandSuppressed = false;
-
-		// Restore player as cameraEntity after renderWorld() so the game tick that
-		// follows processes input and hit-detection from the player's perspective,
-		// not the tripod stand's.  Without this restore, right-clicking to stop
-		// recording (and all other interaction) would raycast from the stand's view.
-		if (photographica$overriddenTripodStandId >= 0) {
-			MinecraftClient mc = MinecraftClient.getInstance();
-			if (mc.player != null) mc.setCameraEntity(mc.player);
-			photographica$overriddenTripodStandId = -1;
 		}
 	}
 

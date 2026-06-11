@@ -104,6 +104,15 @@ public class PhotographicaClient implements ClientModInitializer {
 				GLFW.GLFW_KEY_UNKNOWN,
 				"category.photographica"
 		));
+		// Stop-recording key (default G).  Always stops an in-progress recording —
+		// works for handheld and for tripod recording where the view is locked to
+		// the stand, so the player is never trapped without a way to stop.
+		KeyBinding stopRecordingKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.stop_recording",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_G,
+				"category.photographica"
+		));
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			AutoCamera.tick(client);
@@ -115,6 +124,11 @@ public class PhotographicaClient implements ClientModInitializer {
 				VideoRecorder.stopRecording();
 			}
 			if (client.player == null) return;
+			while (stopRecordingKey.wasPressed()) {
+				if (VideoRecorder.isRecording()) {
+					VideoRecorder.stopRecording();
+				}
+			}
 			if (settingsKey.wasPressed()) {
 				int recStandId = VideoRecorder.getRecordingArmorStandEntityId();
 				if (recStandId >= 0) {

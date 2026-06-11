@@ -77,7 +77,6 @@ public final class VideoRecorder {
     private static ItemStack       recordingStack;
 
     private static int recordingArmorStandEntityId = -1;
-    private static boolean prevSmoothCamera = false;
 
     /** Fixed vertical FOV (degrees) used for tripod-mounted camcorder frames. */
     public static final float TRIPOD_FOV = 70.0f;
@@ -204,13 +203,6 @@ public final class VideoRecorder {
 
         recordingArmorStandEntityId = armorStandEntityId;
 
-        // Enable cinematic (smooth) camera for HANDHELD recording only.  Tripod
-        // recording films a stationary stand, so smooth camera is irrelevant there.
-        prevSmoothCamera = mc.options.smoothCamera;
-        if (armorStandEntityId < 0) {
-            mc.options.smoothCamera = true;
-        }
-
         recording = true;
         if (mc.player != null)
             mc.gui.setOverlayMessage(Component.literal("● REC 開始"), false);
@@ -219,13 +211,8 @@ public final class VideoRecorder {
     public static void stopRecording() {
         if (!recording) return;
         recording = false;
-        boolean wasTripod = recordingArmorStandEntityId >= 0;
         recordingArmorStandEntityId = -1;
         Minecraft mc = Minecraft.getInstance();
-        // Tripod recording locked the camera to the stand — restore the player's view.
-        if (wasTripod) mc.setCameraEntity(mc.player);
-        // Restore the smooth-camera setting the player had before recording.
-        mc.options.smoothCamera = prevSmoothCamera;
         if (mc.player != null)
             mc.gui.setOverlayMessage(Component.literal("■ 録画停止 — 後処理中..."), false);
 

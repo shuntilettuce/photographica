@@ -105,6 +105,13 @@ public class PhotographicaClient implements ClientModInitializer {
 				GLFW.GLFW_KEY_UNKNOWN,
 				photographicaCategory
 		));
+		// Stop-recording key (default G).  Always stops an in-progress recording.
+		KeyMapping stopRecordingKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+				"key.photographica.stop_recording",
+				InputConstants.Type.KEYSYM,
+				GLFW.GLFW_KEY_G,
+				photographicaCategory
+		));
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			AutoCamera.tick(client);
@@ -116,6 +123,11 @@ public class PhotographicaClient implements ClientModInitializer {
 				VideoRecorder.stopRecording();
 			}
 			if (client.player == null) return;
+			while (stopRecordingKey.consumeClick()) {
+				if (VideoRecorder.isRecording()) {
+					VideoRecorder.stopRecording();
+				}
+			}
 			if (settingsKey.consumeClick()) {
 				int recStandId = VideoRecorder.getRecordingArmorStandEntityId();
 				if (recStandId >= 0) {
