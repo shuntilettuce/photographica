@@ -39,6 +39,13 @@ public class GameRendererMixin {
     /** True when the hand was hidden for an in-progress video frame capture. */
     @Unique private boolean photographica$videoHandSuppressed = false;
 
+    /**
+     * Stand entity ID overridden for the current render frame, or -1.
+     * Restored to player in captureAfterComposite so input/interaction raycasts
+     * use the player's perspective during game ticks.
+     */
+    @Unique private int photographica$overriddenTripodStandId = -1;
+
     @Inject(
             method = "extractCamera(Lnet/minecraft/client/DeltaTracker;FF)V",
             at = @At("RETURN"),
@@ -135,17 +142,18 @@ public class GameRendererMixin {
     private void photographica$suppressHandBeforeAccumSample(DeltaTracker deltaTracker, boolean tick, CallbackInfo ci) {
         photographica$videoHandSuppressed = VideoRecorder.isRecording();
 
-        // Tripod recording: re-assert the armor stand as camera entity every frame so
-        // the single world render is always filmed from its perspective.  Game ticks
-        // and network handlers that run between frames could otherwise reset
-        // mc.cameraEntity back to the player.
+        // Tripod recording: set camera entity to the stand for THIS render frame only.
+        // Restored to player in photographica$captureAfterComposite so that game ticks
+        // (input, hit-detection, interaction) run with the player as cameraEntity.
+        photographica$overriddenTripodStandId = -1;
         if (VideoRecorder.getRecordingArmorStandEntityId() >= 0) {
             Minecraft mc = Minecraft.getInstance();
             net.minecraft.world.entity.Entity stand = mc.level != null
                     ? mc.level.getEntity(VideoRecorder.getRecordingArmorStandEntityId())
                     : null;
-            if (stand != null && mc.getCameraEntity() != stand) {
+            if (stand != null) {
                 mc.setCameraEntity(stand);
+                photographica$overriddenTripodStandId = VideoRecorder.getRecordingArmorStandEntityId();
             }
         }
     }
@@ -169,6 +177,14 @@ public class GameRendererMixin {
         // renderLevel() has returned → command encoder has flushed → mainFb has current content.
         PhotoCapture.applyEvfBlur();
         photographica$videoHandSuppressed = false;
+
+        // Restore player as cameraEntity after renderLevel() so game ticks process
+        // input and hit-detection from the player's perspective (not the stand's).
+        if (photographica$overriddenTripodStandId >= 0) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null) mc.setCameraEntity(mc.player);
+            photographica$overriddenTripodStandId = -1;
+        }
     }
 
     private static boolean isCamera(ItemStack stack) {

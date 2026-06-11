@@ -45,6 +45,13 @@ public class GameRendererMixin {
 	/** True when the hand was hidden for an in-progress video frame capture. */
 	@Unique private boolean photographica$videoHandSuppressed = false;
 
+	/**
+	 * Stand entity ID that we overrode cameraEntity to during this render frame,
+	 * or -1 if no override is active.  Cleared in the AFTER inject so cameraEntity
+	 * is restored to the player before the next game tick processes input/raycasts.
+	 */
+	@Unique private int photographica$overriddenTripodStandId = -1;
+
 	@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D",
 			at = @At("RETURN"),
 			cancellable = true)
@@ -160,17 +167,19 @@ public class GameRendererMixin {
 			photographica$videoHandSuppressed = false;
 		}
 
-		// Tripod recording: re-assert the armor stand as camera entity every frame so
-		// the single world render is always filmed from its perspective.  Game ticks
-		// and network handlers that run between frames could otherwise reset
-		// mc.cameraEntity back to the player.
+		// Tripod recording: set camera entity to the stand for THIS render frame only.
+		// Restored to player in photographica$captureAfterComposite so that the game
+		// tick (input, hit-detection, interaction) runs with the player as cameraEntity.
+		// This fixes: movement keys dead, can't right-click camera to stop recording.
+		photographica$overriddenTripodStandId = -1;
 		if (VideoRecorder.getRecordingArmorStandEntityId() >= 0) {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			net.minecraft.entity.Entity stand = mc.world != null
 					? mc.world.getEntityById(VideoRecorder.getRecordingArmorStandEntityId())
 					: null;
-			if (stand != null && mc.getCameraEntity() != stand) {
+			if (stand != null) {
 				mc.setCameraEntity(stand);
+				photographica$overriddenTripodStandId = VideoRecorder.getRecordingArmorStandEntityId();
 			}
 		}
 	}
@@ -199,6 +208,16 @@ public class GameRendererMixin {
 			this.renderHand = true;
 		}
 		photographica$videoHandSuppressed = false;
+
+		// Restore player as cameraEntity after renderWorld() so the game tick that
+		// follows processes input and hit-detection from the player's perspective,
+		// not the tripod stand's.  Without this restore, right-clicking to stop
+		// recording (and all other interaction) would raycast from the stand's view.
+		if (photographica$overriddenTripodStandId >= 0) {
+			MinecraftClient mc = MinecraftClient.getInstance();
+			if (mc.player != null) mc.setCameraEntity(mc.player);
+			photographica$overriddenTripodStandId = -1;
+		}
 	}
 
 	private static boolean isCamera(ItemStack stack) {
