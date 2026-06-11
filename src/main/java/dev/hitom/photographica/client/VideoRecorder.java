@@ -297,13 +297,6 @@ public final class VideoRecorder {
 
         recordingArmorStandEntityId = armorStandEntityId;
 
-        // Tripod recording: lock the client camera to the armor stand so the single
-        // vanilla world render (and any shader compositing) is filmed from its view.
-        if (armorStandEntityId >= 0 && mc.world != null) {
-            net.minecraft.entity.Entity stand = mc.world.getEntityById(armorStandEntityId);
-            if (stand != null) mc.setCameraEntity(stand);
-        }
-
         // Enable cinematic (smooth) camera for HANDHELD recording so all captured
         // frames benefit from Minecraft's built-in mouse smoothing.  Tripod
         // recording films a stationary stand, so smooth camera is irrelevant there.

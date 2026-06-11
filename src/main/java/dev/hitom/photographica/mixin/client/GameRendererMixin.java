@@ -47,6 +47,13 @@ public class GameRendererMixin {
 	/** True when the hand was hidden for an in-progress video frame capture. */
 	@Unique private boolean photographica$videoHandSuppressed = false;
 
+	/**
+	 * Stand entity ID overridden for the current render frame, or -1.
+	 * Restored to player in captureAfterComposite so input/interaction raycasts
+	 * use the player's perspective during game ticks.
+	 */
+	@Unique private int photographica$overriddenTripodStandId = -1;
+
 	//? if >=1.21.4 {
 	/*@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)F",
 			at = @At("RETURN"),
@@ -228,17 +235,18 @@ public class GameRendererMixin {
 			photographica$videoHandSuppressed = false;
 		}
 
-		// Tripod recording: re-assert the armor stand as camera entity every frame so
-		// the single world render is always filmed from its perspective.  Game ticks
-		// and network handlers that run between frames could otherwise reset
-		// mc.cameraEntity back to the player.
+		// Tripod recording: set camera entity to the stand for THIS render frame only.
+		// Restored to player in photographica$captureAfterComposite so that game ticks
+		// (input, hit-detection, interaction) run with the player as cameraEntity.
+		photographica$overriddenTripodStandId = -1;
 		if (VideoRecorder.getRecordingArmorStandEntityId() >= 0) {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			net.minecraft.entity.Entity stand = mc.world != null
 					? mc.world.getEntityById(VideoRecorder.getRecordingArmorStandEntityId())
 					: null;
-			if (stand != null && mc.getCameraEntity() != stand) {
+			if (stand != null) {
 				mc.setCameraEntity(stand);
+				photographica$overriddenTripodStandId = VideoRecorder.getRecordingArmorStandEntityId();
 			}
 		}
 	}
@@ -269,6 +277,14 @@ public class GameRendererMixin {
 		}
 		//?}
 		photographica$videoHandSuppressed = false;
+
+		// Restore player as cameraEntity after renderWorld() so game ticks process
+		// input and hit-detection from the player's perspective (not the stand's).
+		if (photographica$overriddenTripodStandId >= 0) {
+			MinecraftClient mc = MinecraftClient.getInstance();
+			if (mc.player != null) mc.setCameraEntity(mc.player);
+			photographica$overriddenTripodStandId = -1;
+		}
 	}
 
 	private static boolean isCamera(ItemStack stack) {
