@@ -115,6 +115,15 @@ public class PhotographicaClient implements ClientModInitializer {
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			AutoCamera.tick(client);
+			// Tripod recording films from the stand via a render-only camera swap, but
+			// the camera ENTITY must stay the player every tick or movement, look, sneak
+			// and interaction input all die.  Assert it here as a safety net — a cheap
+			// no-op when already correct — so the camera can never get stuck on the stand.
+			if (VideoRecorder.getRecordingArmorStandEntityId() >= 0
+					&& client.player != null
+					&& client.getCameraEntity() != client.player) {
+				client.setCameraEntity(client.player);
+			}
 			// If the armor stand a tripod-recording is attached to is destroyed,
 			// stop recording gracefully.
 			int standId = VideoRecorder.getRecordingArmorStandEntityId();

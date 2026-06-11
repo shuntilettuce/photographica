@@ -47,9 +47,11 @@ public class GameRendererMixin {
      * footage is filmed from its perspective.  We wrap only Camera.update() — which
      * runs in GameRenderer.update() BEFORE pick() and renderLevel() — temporarily
      * pointing the camera at the stand to compute its position, then immediately
-     * restoring the player.  Because getCameraEntity() == Camera.entity() in 26.x, the
-     * restore means pick() (crosshair/interaction) and all input still use the player:
-     * the player can walk around inside the shot and right-click the camera to stop.
+     * restoring the player in a finally block so a thrown exception can never leave
+     * the camera stuck on the stand.  Because getCameraEntity() == Camera.entity() in
+     * 26.x, the restore means pick() (crosshair/interaction) and all input still use
+     * the player — and PhotographicaClient's per-tick safety net re-asserts the player
+     * as a second line of defence so movement/look/sneak can never freeze.
      */
     @Redirect(method = "update(Lnet/minecraft/client/DeltaTracker;Z)V",
             at = @At(value = "INVOKE",
@@ -57,17 +59,18 @@ public class GameRendererMixin {
     private void photographica$focusCameraOnTripod(Camera camera, DeltaTracker dt) {
         int standId = VideoRecorder.getRecordingArmorStandEntityId();
         Minecraft mc = Minecraft.getInstance();
-        if (standId >= 0 && mc.level != null) {
-            Entity stand = mc.level.getEntity(standId);
-            if (stand != null) {
-                Entity prev = camera.entity();
-                camera.setEntity(stand);
+        Entity stand = (standId >= 0 && mc.level != null) ? mc.level.getEntity(standId) : null;
+        if (stand != null) {
+            Entity prev = camera.entity();
+            camera.setEntity(stand);
+            try {
                 camera.update(dt);
+            } finally {
                 camera.setEntity(prev != null ? prev : mc.player);
-                return;
             }
+        } else {
+            camera.update(dt);
         }
-        camera.update(dt);
     }
 
     @Inject(
