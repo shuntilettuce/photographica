@@ -112,6 +112,12 @@ public class PhotographicaClient implements ClientModInitializer {
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				photographicaCategory
+		));
+		KeyBinding stopRecordingKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.stop_recording",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_G,
+				photographicaCategory
 		));*/
 		//?} else {
 		// Settings key (unbound by default).
@@ -142,30 +148,39 @@ public class PhotographicaClient implements ClientModInitializer {
 				GLFW.GLFW_KEY_UNKNOWN,
 				"category.photographica"
 		));
+		// Stop-recording key (default G).  Always stops an in-progress recording.
+		KeyBinding stopRecordingKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.stop_recording",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_G,
+				"category.photographica"
+		));
 		//?}
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			AutoCamera.tick(client);
-			// While recording from an armor stand, keep the camera entity pointing at
-			// the stand. If the stand has been destroyed, stop recording gracefully.
+			// If the armor stand a tripod-recording is attached to is destroyed,
+			// stop recording gracefully.
 			int standId = VideoRecorder.getRecordingArmorStandEntityId();
-			if (standId >= 0 && client.world != null) {
-				net.minecraft.entity.Entity stand = client.world.getEntityById(standId);
-				if (stand != null) {
-					//? if >=1.21.11 {
-					/*client.setCameraEntity(stand);*/
-					//?} else {
-					client.cameraEntity = stand;
-					//?}
-				} else {
+			if (standId >= 0 && client.world != null
+					&& client.world.getEntityById(standId) == null) {
+				VideoRecorder.stopRecording();
+			}
+			if (client.player == null) return;
+			while (stopRecordingKey.wasPressed()) {
+				if (VideoRecorder.isRecording()) {
 					VideoRecorder.stopRecording();
 				}
 			}
-			if (client.player == null) return;
 			if (settingsKey.wasPressed()) {
-				ItemStack stack = client.player.getMainHandStack();
-				if (!openCameraScreen(stack)) {
-					openCameraScreen(client.player.getOffHandStack());
+				int recStandId = VideoRecorder.getRecordingArmorStandEntityId();
+				if (recStandId >= 0) {
+					client.setScreen(new VideoCameraScreen(VideoRecorder.getRecordingStack(), recStandId));
+				} else {
+					ItemStack stack = client.player.getMainHandStack();
+					if (!openCameraScreen(stack)) {
+						openCameraScreen(client.player.getOffHandStack());
+					}
 				}
 			}
 			if (windKey.wasPressed()) {

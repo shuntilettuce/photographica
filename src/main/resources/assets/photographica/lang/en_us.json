@@ -27,6 +27,7 @@
 	"key.photographica.wind_film": "Wind Film",
 	"key.photographica.load_sd_card": "Load SD Card",
 	"key.photographica.unload_sd_card": "Unload SD Card",
+	"key.photographica.stop_recording": "Stop Recording",
 	"category.photographica": "Photographica",
 	"block.photographica.darkroom": "Portable Darkroom",
 	"block.photographica.printer": "Printer",

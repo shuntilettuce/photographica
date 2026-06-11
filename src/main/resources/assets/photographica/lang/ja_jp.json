@@ -27,6 +27,7 @@
 	"key.photographica.wind_film": "フィルムを巻き上げ",
 	"key.photographica.load_sd_card": "SDカードを装填",
 	"key.photographica.unload_sd_card": "SDカードを取り出し",
+	"key.photographica.stop_recording": "録画を停止",
 	"category.photographica": "Photographica",
 	"block.photographica.darkroom": "ポータブル暗室",
 	"block.photographica.printer": "プリンター",

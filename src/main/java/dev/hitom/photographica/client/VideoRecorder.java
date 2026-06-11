@@ -117,25 +117,21 @@ public final class VideoRecorder {
 
     /**
      * Entity ID of the armor stand whose camera is being recorded from, or -1
-     * when recording from the player's own camera.  While ≥ 0 the client camera
-     * entity is locked to the armor stand for the whole recording, so the single
-     * vanilla world render (shaders included) is filmed from the stand's view.
+     * when recording from the player's own camera.  While ≥ 0 the world render is
+     * focused on the armor stand (via GameRendererMixin's getCameraEntity redirect)
+     * so the footage is the tripod's view, but mc.cameraEntity stays the player so
+     * movement, look and interaction all keep working — the player can walk around
+     * inside the shot.
      */
     private static int recordingArmorStandEntityId = -1;
 
     /** Fixed vertical FOV (degrees) used for tripod-mounted camcorder frames. */
     public static final float TRIPOD_FOV = 70.0f;
 
-    /** True while recording from an armor stand (camera is locked to the stand). */
+    /** True while recording from an armor stand (render is focused on the stand). */
     public static boolean isTripodRecording() {
         return recording && recordingArmorStandEntityId >= 0;
     }
-
-    /**
-     * Whether smooth/cinematic camera was enabled before recording started.
-     * Restored when recording stops so the user's preference is not permanently changed.
-     */
-    private static boolean prevSmoothCamera = false;
 
     // ── Autofocus state ────────────────────────────────────────────────────────
     /** Depth the centre pixel has been showing for focusCandidateFrames frames. */
@@ -297,14 +293,6 @@ public final class VideoRecorder {
 
         recordingArmorStandEntityId = armorStandEntityId;
 
-        // Enable cinematic (smooth) camera for HANDHELD recording so all captured
-        // frames benefit from Minecraft's built-in mouse smoothing.  Tripod
-        // recording films a stationary stand, so smooth camera is irrelevant there.
-        prevSmoothCamera = mc.options.smoothCameraEnabled;
-        if (armorStandEntityId < 0) {
-            mc.options.smoothCameraEnabled = true;
-        }
-
         recording = true;
         if (mc.player != null)
             mc.player.sendMessage(Text.literal("● REC 開始"), true);
@@ -313,13 +301,8 @@ public final class VideoRecorder {
     public static void stopRecording() {
         if (!recording) return;
         recording = false;
-        boolean wasTripod = recordingArmorStandEntityId >= 0;
         recordingArmorStandEntityId = -1;
         MinecraftClient mc = MinecraftClient.getInstance();
-        // Tripod recording locked the camera to the stand — restore the player's view.
-        if (wasTripod) mc.setCameraEntity(mc.player);
-        // Restore the smooth-camera setting the player had before recording.
-        mc.options.smoothCameraEnabled = prevSmoothCamera;
         if (mc.player != null)
             mc.player.sendMessage(Text.literal("■ 録画停止 — 後処理中..."), true);
 

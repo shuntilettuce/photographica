@@ -1,5 +1,6 @@
 package dev.hitom.photographica.mixin.client;
 
+import dev.hitom.photographica.client.VideoRecorder;
 import dev.hitom.photographica.client.screen.CameraScreen;
 import dev.hitom.photographica.client.screen.FilmCameraScreen;
 import dev.hitom.photographica.item.CameraItem;
@@ -72,6 +73,16 @@ public class ClientPlayerInteractionManagerMixin {
         if (!(entity instanceof ArmorStandEntity stand)) return false;
         if (player.isSneaking()) return false;
         if (!player.getMainHandStack().isEmpty()) return false;
+
+        // If this stand is the one currently being recorded, right-click stops
+        // recording directly (no screen) so the player has an easy way out while
+        // the view is locked to the tripod.
+        if (VideoRecorder.isRecording()
+                && VideoRecorder.getRecordingArmorStandEntityId() == stand.getId()) {
+            VideoRecorder.stopRecording();
+            cir.setReturnValue(ActionResult.SUCCESS);
+            return true;
+        }
 
         // Find a camera on the stand (main hand, off hand, or chest slot)
         ItemStack camera = null;
