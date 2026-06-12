@@ -93,7 +93,7 @@ public final class EvfBlurRenderer {
     public static void renderBlur(int fx, int fy, int fx2, int fy2,
                                   float focusDist, float aperture) {
         if (depthTex == -1) return;
-        float maxBlurPx = Math.min(80.0f / (aperture * aperture), 32.0f);
+        float maxBlurPx = Math.min(50.0f / (aperture * aperture), 20.0f);
         if (maxBlurPx < 0.5f) return;
 
         Minecraft mc = Minecraft.getInstance();
