@@ -15,7 +15,7 @@ public final class PhotoProcessor {
         double shutter = SnapmaticaClient.SHUTTER_SECONDS[Math.max(0, Math.min(SnapmaticaClient.SHUTTER_SECONDS.length - 1, shutterIdx))];
 
         final double neutralAperture = 5.6;
-        final double neutralShutter  = 1.0 / 30.0;
+        final double neutralShutter  = 1.0 / 60.0;
         final int    neutralIso      = 400;
 
         double evActual  = Math.log((aperture * aperture) / shutter) / Math.log(2);

@@ -194,7 +194,7 @@ public final class ViewfinderOverlay {
         int si = (em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx;
         float ap = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
         double ss = SnapmaticaClient.SHUTTER_SECONDS[clampIdx(si, SHUTTERS.length)];
-        return Math.log(ss * 30.0 * Math.pow(5.6 / ap, 2)
+        return Math.log(ss * 60.0 * Math.pow(5.6 / ap, 2)
                 * (SnapmaticaClient.iso / 400.0)) / Math.log(2.0);
     }
 

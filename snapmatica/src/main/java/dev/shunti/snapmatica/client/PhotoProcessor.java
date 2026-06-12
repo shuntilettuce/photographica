@@ -21,9 +21,9 @@ public final class PhotoProcessor {
         int iso        = SnapmaticaClient.iso;
         double shutter = SnapmaticaClient.SHUTTER_SECONDS[Math.max(0, Math.min(SnapmaticaClient.SHUTTER_SECONDS.length - 1, shutterIdx))];
 
-        // Neutral: f/5.6, 1/30 s, ISO 400 → factor = 1.0
+        // Neutral: f/5.6, 1/60 s, ISO 400 → factor = 1.0
         final double neutralAperture = 5.6;
-        final double neutralShutter  = 1.0 / 30.0;
+        final double neutralShutter  = 1.0 / 60.0;
         final int    neutralIso      = 400;
 
         double evActual  = Math.log((aperture * aperture) / shutter) / Math.log(2);
