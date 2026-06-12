@@ -158,6 +158,9 @@ public final class PhotoCapture {
             EvfBlurRenderer.currentDepthFar = Math.max(
                     mc.options.renderDistance().get() * 64f, 256f);
             EvfBlurRenderer.captureDepth(vpW, vpH);
+            // GPU depth is more accurate than raycast for long-distance / complex geometry
+            float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
+            if (gpuDepth > 0.0f) lastSceneDepthBlocks = gpuDepth;
             if (capturePending) {
                 float[] depth = EvfBlurRenderer.readLinearDepthCpu(vpW, vpH);
                 if (depth != null) {

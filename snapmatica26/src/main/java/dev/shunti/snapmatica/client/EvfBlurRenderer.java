@@ -33,9 +33,10 @@ public final class EvfBlurRenderer {
     private static int vao      = -1;
     private static int vbo      = -1;
 
-    private static int depthTex  = -1;
-    private static int depthTexW = 0;
-    private static int depthTexH = 0;
+    private static int depthTex     = -1;
+    private static int depthTexW    = 0;
+    private static int depthTexH    = 0;
+    private static int centerReadFbo = -1;
 
     private static int writeBackFbo = -1;
 
@@ -317,6 +318,32 @@ public final class EvfBlurRenderer {
 
         auxW = w;
         auxH = h;
+    }
+
+    /**
+     * Read center-pixel linear depth in blocks from the captured depth texture.
+     * Returns 999.0f for sky/far-plane, -1.0f if unavailable.
+     * Call after captureDepth().
+     */
+    public static float readCenterLinearDepthBlocks() {
+        if (depthTex == -1 || depthTexW <= 0 || depthTexH <= 0) return -1.0f;
+        if (centerReadFbo == -1) centerReadFbo = GL30.glGenFramebuffers();
+
+        int prevReadFbo = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, centerReadFbo);
+        GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
+                GL11.GL_TEXTURE_2D, depthTex, 0);
+
+        FloatBuffer buf = BufferUtils.createFloatBuffer(1);
+        GL11.glReadPixels(depthTexW / 2, depthTexH / 2, 1, 1,
+                GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
+        float rawD = buf.get(0);
+
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevReadFbo);
+
+        if (rawD >= 0.9999f) return 999.0f;
+        if (rawD < 0.001f) return -1.0f;
+        return NEAR * currentDepthFar / (currentDepthFar - rawD * (currentDepthFar - NEAR));
     }
 
     private static String readResource(String path) throws Exception {
