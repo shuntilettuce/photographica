@@ -63,7 +63,8 @@ public class GameRendererMixin {
     //?}
 
     /**
-     * Suppress hand rendering before renderWorld() when a photo capture is pending.
+     * Suppress hand rendering before renderWorld() when a photo capture is pending
+     * or when the viewfinder is active (sneaking with viewfinder mode enabled).
      */
     @Inject(method = "render(Lnet/minecraft/client/render/RenderTickCounter;Z)V",
             at = @At(value = "INVOKE",
@@ -71,7 +72,10 @@ public class GameRendererMixin {
                     shift = At.Shift.BEFORE))
     private void snapmatica$suppressHandBeforeCapture(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
         //? if <1.21.11 {
-        if (PhotoCapture.isCapturePending()) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        boolean viewfinderActive = SnapmaticaClient.viewfinderSneakEnabled
+                && mc.player != null && mc.player.isSneaking();
+        if (PhotoCapture.isCapturePending() || viewfinderActive) {
             this.renderHand = false;
         }
         //?}
@@ -89,7 +93,10 @@ public class GameRendererMixin {
         boolean wasCapturePending = PhotoCapture.isCapturePending();
         PhotoCapture.captureIfPending();
         //? if <1.21.11 {
-        if (wasCapturePending) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        boolean viewfinderActive = SnapmaticaClient.viewfinderSneakEnabled
+                && mc.player != null && mc.player.isSneaking();
+        if (wasCapturePending || viewfinderActive) {
             this.renderHand = true;
         }
         //?}
