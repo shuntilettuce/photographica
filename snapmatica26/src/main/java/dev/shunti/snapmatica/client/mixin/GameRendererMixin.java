@@ -8,7 +8,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -16,8 +15,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
-
-    @Shadow private boolean renderHand;
 
     @Inject(method = "getFov(Lnet/minecraft/client/Camera;FZ)F",
             at = @At("RETURN"),
@@ -36,28 +33,8 @@ public class GameRendererMixin {
     @Inject(method = "render(Lnet/minecraft/client/DeltaTracker;Z)V",
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/client/renderer/GameRenderer;renderLevel(Lnet/minecraft/client/DeltaTracker;)V",
-                    shift = At.Shift.BEFORE))
-    private void snapmatica$suppressHandBeforeLevel(DeltaTracker deltaTracker, boolean tick, CallbackInfo ci) {
-        Minecraft mc = Minecraft.getInstance();
-        boolean viewfinderActive = SnapmaticaClient.viewfinderSneakEnabled
-                && mc.player != null && mc.player.isShiftKeyDown();
-        if (PhotoCapture.isCapturePending() || viewfinderActive) {
-            this.renderHand = false;
-        }
-    }
-
-    @Inject(method = "render(Lnet/minecraft/client/DeltaTracker;Z)V",
-            at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/client/renderer/GameRenderer;renderLevel(Lnet/minecraft/client/DeltaTracker;)V",
                     shift = At.Shift.AFTER))
-    private void snapmatica$captureAfterComposite(DeltaTracker deltaTracker, boolean tick, CallbackInfo ci) {
-        boolean wasCapturePending = PhotoCapture.isCapturePending();
+    private void snapmatica$captureAfterLevel(DeltaTracker deltaTracker, boolean tick, CallbackInfo ci) {
         PhotoCapture.captureIfPending();
-        Minecraft mc = Minecraft.getInstance();
-        boolean viewfinderActive = SnapmaticaClient.viewfinderSneakEnabled
-                && mc.player != null && mc.player.isShiftKeyDown();
-        if (wasCapturePending || viewfinderActive) {
-            this.renderHand = true;
-        }
     }
 }
