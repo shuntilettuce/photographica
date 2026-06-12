@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "snapmatica",
+  "version": "${version}",
+  "name": "Snapmatica",
+  "description": "A client-only photography mod with realistic camera effects (DoF, grain, vignette).",
+  "authors": ["shunti"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.shunti.snapmatica.client.SnapmaticaClient"
+    ]
+  },
+  "mixins": [
+    "snapmatica.client.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=21"
+  }
+}

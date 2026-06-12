@@ -97,7 +97,7 @@ public class SnapmaticaClient implements ClientModInitializer {
 
         if (ssAuto) {
             float ap = apAuto ? 5.6f : aperture;
-            double targetSS = ap * ap * 400.0 / (30.0 * 31.36 * iso);
+            double targetSS = ap * ap * 400.0 / (60.0 * 31.36 * iso);
             autoShutterIdx = nearestShutterIdx(targetSS);
         } else {
             autoShutterIdx = shutterSpeedIdx;
@@ -105,7 +105,7 @@ public class SnapmaticaClient implements ClientModInitializer {
 
         if (apAuto) {
             double ss = SHUTTER_SECONDS[Math.max(0, Math.min(SHUTTER_SECONDS.length - 1, shutterSpeedIdx))];
-            double targetAp = 5.6 * Math.sqrt(ss * 30.0 * iso / 400.0);
+            double targetAp = 5.6 * Math.sqrt(ss * 60.0 * iso / 400.0);
             autoAperture = nearestAperture((float) Math.max(1.4, Math.min(22.0, targetAp)));
         } else {
             autoAperture = aperture;
