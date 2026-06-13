@@ -135,7 +135,11 @@ public final class ViewfinderHud {
 				SHUTTERS[clampIdx(s.shutterSpeedIdx(), SHUTTERS.length)],
 				s.iso(),
 				focalPart);
-		ctx.drawTextWithShadow(tr, Text.literal(exposure), fx + 6, fy2 - tr.fontHeight - 14, COLOR_TEXT);
+		ctx.drawTextWithShadow(tr, exposure, fx + 6, fy2 - tr.fontHeight - 14, COLOR_TEXT);
+		if (LensKind.hasLens(s.lensType()) && s.focusDistance() < 999.0f) {
+			ctx.drawTextWithShadow(tr, fmtFocusDist(s.focusDistance()),
+					cx + 13, cy - tr.fontHeight / 2, reticleColor);
+		}
 
 		// Exposure meter — horizontal scale centred in the frame, ±3 EV range
 		renderExposureMeter(ctx, s, fx, fx2, fy2);
@@ -419,5 +423,11 @@ public final class ViewfinderHud {
 	private static String formatFloat(float v) {
 		if (v == (int) v) return String.valueOf((int) v);
 		return String.format("%.1f", v);
+	}
+
+	private static String fmtFocusDist(float v) {
+		if (v >= 999.0f) return "∞";
+		if (v < 1.0f) return String.format("%.1fm", v);
+		return v == (int) v ? ((int) v + "m") : String.format("%.1fm", v);
 	}
 }

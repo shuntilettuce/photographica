@@ -68,8 +68,8 @@ public class CameraScreen extends Screen {
                 !ssAuto);
 
         // ISO
-        addRow2(cx, top + row++ * rowHeight, "SV",
-                () -> "SV " + ISOS.get(clampIdx(findClosestInt(ISOS, SnapmaticaClient.iso), ISOS.size())),
+        addRow2(cx, top + row++ * rowHeight, "ISO",
+                () -> "ISO " + ISOS.get(clampIdx(findClosestInt(ISOS, SnapmaticaClient.iso), ISOS.size())),
                 btnWidth,
                 step -> { int idx = findClosestInt(ISOS, SnapmaticaClient.iso);
                     idx = clampStep(idx, step, ISOS.size()); SnapmaticaClient.iso = ISOS.get(idx); SnapmaticaClient.updateAutoValues(); },
@@ -108,23 +108,24 @@ public class CameraScreen extends Screen {
     private void addRow2(int cx, int y, String label, java.util.function.Supplier<String> value,
                          int btnWidth, java.util.function.IntConsumer step, boolean editable) {
         int gap = 4;
-        int halfTotal = 20 + gap + btnWidth + gap + 20;
+        int totalRowWidth = 20 + gap + btnWidth + gap + 20;
+        int rowLeft = cx - totalRowWidth / 2;
 
         ButtonWidget left = ButtonWidget.builder(Text.literal("◀"),
                         b -> { step.accept(-1); clearAndInit(); })
-                .dimensions(cx - halfTotal, y, 20, 20).build();
+                .dimensions(rowLeft, y, 20, 20).build();
         left.active = editable;
         addDrawableChild(left);
 
         ButtonWidget centre = ButtonWidget.builder(
                         Text.literal(label + ": " + value.get()), b -> {})
-                .dimensions(cx - halfTotal + 20 + gap, y, btnWidth, 20).build();
+                .dimensions(rowLeft + 20 + gap, y, btnWidth, 20).build();
         centre.active = false;
         addDrawableChild(centre);
 
         ButtonWidget right = ButtonWidget.builder(Text.literal("▶"),
                         b -> { step.accept(1); clearAndInit(); })
-                .dimensions(cx + halfTotal - 20, y, 20, 20).build();
+                .dimensions(rowLeft + totalRowWidth - 20, y, 20, 20).build();
         right.active = editable;
         addDrawableChild(right);
     }

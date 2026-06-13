@@ -61,8 +61,8 @@ public class CameraScreen extends Screen {
                 step -> SnapmaticaClient.shutterSpeedIdx = clampStep(SnapmaticaClient.shutterSpeedIdx, step, SHUTTERS.length),
                 !ssAuto);
 
-        addRow2(cx, top + row++ * rowHeight, "SV",
-                () -> "SV " + ISOS.get(clampIdx(findClosestInt(ISOS, SnapmaticaClient.iso), ISOS.size())),
+        addRow2(cx, top + row++ * rowHeight, "ISO",
+                () -> "ISO " + ISOS.get(clampIdx(findClosestInt(ISOS, SnapmaticaClient.iso), ISOS.size())),
                 btnWidth,
                 step -> { int idx = findClosestInt(ISOS, SnapmaticaClient.iso);
                     idx = clampStep(idx, step, ISOS.size()); SnapmaticaClient.iso = ISOS.get(idx); SnapmaticaClient.updateAutoValues(); },
@@ -96,23 +96,24 @@ public class CameraScreen extends Screen {
     private void addRow2(int cx, int y, String label, java.util.function.Supplier<String> value,
                          int btnWidth, java.util.function.IntConsumer step, boolean editable) {
         int gap = 4;
-        int halfTotal = 20 + gap + btnWidth + gap + 20;
+        int totalRowWidth = 20 + gap + btnWidth + gap + 20;
+        int rowLeft = cx - totalRowWidth / 2;
 
         Button left = Button.builder(Component.literal("◀"),
                         b -> { step.accept(-1); rebuildWidgets(); })
-                .bounds(cx - halfTotal, y, 20, 20).build();
+                .bounds(rowLeft, y, 20, 20).build();
         left.active = editable;
         addRenderableWidget(left);
 
         Button centre = Button.builder(
                         Component.literal(label + ": " + value.get()), b -> {})
-                .bounds(cx - halfTotal + 20 + gap, y, btnWidth, 20).build();
+                .bounds(rowLeft + 20 + gap, y, btnWidth, 20).build();
         centre.active = false;
         addRenderableWidget(centre);
 
         Button right = Button.builder(Component.literal("▶"),
                         b -> { step.accept(1); rebuildWidgets(); })
-                .bounds(cx + halfTotal - 20, y, 20, 20).build();
+                .bounds(rowLeft + totalRowWidth - 20, y, 20, 20).build();
         right.active = editable;
         addRenderableWidget(right);
     }

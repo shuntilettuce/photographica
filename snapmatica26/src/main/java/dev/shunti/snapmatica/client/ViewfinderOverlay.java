@@ -77,9 +77,13 @@ public final class ViewfinderOverlay {
         int em = SnapmaticaClient.exposureMode;
         int si = clampIdx((em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx, SHUTTERS.length);
         float dispAp = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
-        ctx.text(font, String.format("F%s  %s  SV%d  %s",
+        ctx.text(font, String.format("F%s  %s  ISO%d  %s",
                 fmt(dispAp), SHUTTERS[si], SnapmaticaClient.iso, fp),
                 fx+6, fy2-font.lineHeight-14, 0xFFE8DCC4, true);
+        if (SnapmaticaClient.lensType != 0 && SnapmaticaClient.focusDistance < 999.0f) {
+            ctx.text(font, fmtFocusDist(SnapmaticaClient.focusDistance),
+                    cx + 13, cy - font.lineHeight / 2, rc, true);
+        }
 
         renderExposureMeter(ctx, fx, fx2, fy2);
 
@@ -207,5 +211,11 @@ public final class ViewfinderOverlay {
     private static int clampIdx(int idx, int len) { return Math.max(0, Math.min(len-1, idx)); }
     private static String fmt(float v) {
         return v == (int)v ? String.valueOf((int)v) : String.format("%.1f", v);
+    }
+
+    private static String fmtFocusDist(float v) {
+        if (v >= 999.0f) return "∞";
+        if (v < 1.0f) return String.format("%.1fm", v);
+        return v == (int)v ? ((int)v + "m") : String.format("%.1fm", v);
     }
 }
