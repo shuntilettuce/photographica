@@ -29,7 +29,8 @@ public final class AutoFocus {
             2.5f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  10.0f, 12.0f, 14.0f,
             17.0f, 20.0f, 24.0f, 29.0f, 35.0f, 42.0f, 50.0f, 60.0f, 73.0f, 87.0f,
             105.0f, 125.0f, 150.0f, 180.0f, 215.0f, 260.0f, 310.0f, 375.0f, 450.0f, 540.0f,
-            650.0f, 780.0f, 940.0f, 999.0f);
+            650.0f, 780.0f, 940.0f, 1100.0f, 1300.0f, 1600.0f, 2000.0f, 2500.0f,
+            3000.0f, 4000.0f, 5000.0f, 6500.0f, 8000.0f, 999.0f);
 
     // cos(5°) — entities must be within this cone of the look direction
     private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
