@@ -50,6 +50,14 @@ public final class AutoCamera {
 	// cos(5°) — entities must be within this cone of the look direction
 	private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
 
+	// Focus-pull (rack) easing. AF does not snap instantly: focusDistance is eased
+	// toward the target stop in log space, so the lens "pulls" focus like a real
+	// motor. Per client tick (20 Hz): move a fraction of the remaining log-distance,
+	// capped so a big focus change racks over a visible ~0.6–1.0 s instead of jumping.
+	private static final float PULL_RATE     = 0.30f;  // fraction of remaining log-distance / tick
+	private static final float PULL_MAX_STEP = 0.22f;  // max log units / tick (caps rack speed)
+	private static final float PULL_SNAP_EPS = 0.01f;  // lock onto target below this log-distance
+
 	public static void tick(MinecraftClient mc) {
 		if (mc.player == null || mc.world == null) return;
 		if (!mc.player.isSneaking()) return;
@@ -139,8 +147,28 @@ public final class AutoCamera {
 		}
 
 		float snapped = snapFocus(targetDepth);
-		if (Math.abs(snapped - updated.focusDistance()) < 0.001f) return updated;
-		return updated.withFocusDistance(snapped);
+		// Ease the *current* live focus distance toward the snapped stop in log
+		// space (focus-pull). This runs every client tick, so the lens racks
+		// smoothly over several ticks instead of jumping in one frame.
+		float pulled = pullFocus(original.focusDistance(), snapped);
+		// Only short-circuit once we've effectively reached the eased target this
+		// tick — comparing against `pulled` (not `snapped`) keeps the easing
+		// progressing while the rack is still in motion.
+		if (Math.abs(pulled - updated.focusDistance()) < 0.001f) return updated;
+		return updated.withFocusDistance(pulled);
+	}
+
+	/** Eases the current focus distance one tick toward the target stop in log space. */
+	private static float pullFocus(float current, float target) {
+		current = Math.max(0.01f, current);
+		float logCur = (float) Math.log(current);
+		float logTar = (float) Math.log(target);
+		float diff   = logTar - logCur;
+		if (Math.abs(diff) <= PULL_SNAP_EPS) return target;  // lock (keeps exact 999 = ∞)
+		float step = diff * PULL_RATE;
+		if (step >  PULL_MAX_STEP) step =  PULL_MAX_STEP;
+		if (step < -PULL_MAX_STEP) step = -PULL_MAX_STEP;
+		return (float) Math.exp(logCur + step);
 	}
 
 	// -------------------------------------------------------------------------

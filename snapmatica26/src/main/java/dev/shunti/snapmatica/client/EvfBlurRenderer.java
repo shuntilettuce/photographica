@@ -48,6 +48,9 @@ public final class EvfBlurRenderer {
     private static int locMaxBlurPx  = -1;
     private static int locNear       = -1;
     private static int locFar        = -1;
+    private static int locFocalLen   = -1;
+    private static int locAperture   = -1;
+    private static int locPxPerMm    = -1;
 
     private static final float NEAR = 0.05f;
     public static float currentDepthFar = 512.0f;
@@ -92,9 +95,9 @@ public final class EvfBlurRenderer {
     }
 
     public static void renderBlur(int fx, int fy, int fx2, int fy2,
-                                  float focusDist, float aperture) {
+                                  float focusDist, float aperture, float focalLenMm) {
         if (depthTex == -1) return;
-        float maxBlurPx = Math.min(50.0f / (aperture * aperture), 20.0f);
+        float maxBlurPx = Math.min(50.0f / aperture, 24.0f);
         if (maxBlurPx < 0.5f) return;
 
         Minecraft mc = Minecraft.getInstance();
@@ -149,6 +152,9 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locMaxBlurPx, maxBlurPx);
         GL20.glUniform1f(locNear, NEAR);
         GL20.glUniform1f(locFar, currentDepthFar);
+        GL20.glUniform1f(locFocalLen, focalLenMm);
+        GL20.glUniform1f(locAperture, aperture);
+        GL20.glUniform1f(locPxPerMm, fbH / 24.0f);  // 24mm sensor height maps to fbH px
 
         // Pass 1: horizontal blur, main → aux
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, auxFbo);
@@ -254,6 +260,9 @@ public final class EvfBlurRenderer {
             locMaxBlurPx = GL20.glGetUniformLocation(program, "MaxBlurPx");
             locNear      = GL20.glGetUniformLocation(program, "Near");
             locFar       = GL20.glGetUniformLocation(program, "Far");
+            locFocalLen  = GL20.glGetUniformLocation(program, "FocalLenMm");
+            locAperture  = GL20.glGetUniformLocation(program, "Aperture");
+            locPxPerMm   = GL20.glGetUniformLocation(program, "PxPerMm");
 
             float[] verts = {
                 -1f, -1f,  0f, 0f,
@@ -341,7 +350,7 @@ public final class EvfBlurRenderer {
 
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevReadFbo);
 
-        if (rawD >= 0.9999f) return 999.0f;
+        if (rawD >= 0.999999f) return 999.0f;
         if (rawD < 0.001f) return -1.0f;
         return NEAR * currentDepthFar / (currentDepthFar - rawD * (currentDepthFar - NEAR));
     }

@@ -8,6 +8,9 @@ uniform float FocusDist;         // focus distance in blocks
 uniform float MaxBlurPx;         // max blur radius in framebuffer pixels
 uniform float Near;              // near clip plane in blocks
 uniform float Far;               // far clip plane in blocks
+uniform float FocalLenMm;        // lens focal length in mm
+uniform float Aperture;          // f-number (N)
+uniform float PxPerMm;           // framebuffer pixels per mm of sensor height
 
 in vec2 texCoord;
 out vec4 fragColor;
@@ -17,18 +20,30 @@ float linearDepth(float d) {
     return 2.0 * Near * Far / (Far + Near - ndc * (Far - Near));
 }
 
+// Physically-based thin-lens circle of confusion, projected onto the sensor and
+// converted to framebuffer pixels. Unlike a normalized model, this keeps deep
+// depth-of-field for wide/normal lenses (distant terrain stays sharp) and only
+// produces strong bokeh for long lenses / wide apertures / close focus.
+//   coc_mm = f^2 / (N * (S1 - f)) * |S2 - S1| / S2
+float computeCoc(float depthM) {
+    depthM = max(depthM, 0.05);
+    float fmm = FocalLenMm;
+    float cocMM;
+    if (FocusDist >= 999.0) {
+        cocMM = (fmm * fmm) / (Aperture * depthM * 200.0);
+    } else {
+        float s1mm = FocusDist * 200.0;
+        float denom = Aperture * max(s1mm - fmm, 1.0);
+        cocMM = (fmm * fmm) * abs(depthM - FocusDist) / (depthM * denom);
+    }
+    return clamp(cocMM * PxPerMm, 0.0, MaxBlurPx);
+}
+
 void main() {
     float rawD = texture(DepthSampler, texCoord).r;
     float depth = linearDepth(rawD);
 
-    float r = depth / FocusDist;
-    float coc;
-    if (depth <= FocusDist) {
-        coc = (1.0 - r) * MaxBlurPx;
-    } else {
-        coc = ((r - 1.0) / r) * MaxBlurPx;
-    }
-    coc = clamp(coc, 0.0, MaxBlurPx);
+    float coc = computeCoc(depth);
 
     int rad = int(ceil(coc));
     rad = min(rad, 32);

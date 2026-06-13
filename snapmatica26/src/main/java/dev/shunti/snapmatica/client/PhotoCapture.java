@@ -155,12 +155,20 @@ public final class PhotoCapture {
         int vpW = viewport[2];
         int vpH = viewport[3];
         if (vpW > 0 && vpH > 0) {
-            EvfBlurRenderer.currentDepthFar = Math.max(
-                    mc.options.renderDistance().get() * 64f, 256f);
+            int rd = mc.options.renderDistance().get();
+            EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
             EvfBlurRenderer.captureDepth(vpW, vpH);
-            // GPU depth is more accurate than raycast for long-distance / complex geometry
-            float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
-            if (gpuDepth > 0.0f) lastSceneDepthBlocks = gpuDepth;
+            // The world raycast above is the PRIMARY focus distance. The GPU depth
+            // reconstruction saturates at currentDepthFar (≈ rd*64), so only consult it
+            // when the raycast missed (sky / beyond loaded range), and reject saturated
+            // readings near the far plane.
+            if (lastSceneDepthBlocks >= 999f) {
+                float farPlane = EvfBlurRenderer.currentDepthFar;
+                float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
+                if (gpuDepth > 0.0f && gpuDepth < farPlane * 0.95f) {
+                    lastSceneDepthBlocks = gpuDepth;
+                }
+            }
             if (capturePending) {
                 float[] depth = EvfBlurRenderer.readLinearDepthCpu(vpW, vpH);
                 if (depth != null) {
@@ -253,24 +261,23 @@ public final class PhotoCapture {
         }
 
         boolean infinityFocus = (focusDist >= 999.0f);
-        float focalM = SnapmaticaClient.focalLengthMm / 1000f;
+        float fmm = SnapmaticaClient.focalLengthMm;
         float pxPerMm = (float) ih / 24.0f;  // 24mm sensor height maps to ih pixels
         float[] cocMap = new float[iw * ih];
         for (int iy = 0; iy < ih; iy++) {
             for (int ix = 0; ix < iw; ix++) {
                 int fx    = Math.max(0, Math.min(fbW - 1, cropOffX + ix * croppedW / iw));
                 int fy_gl = Math.max(0, Math.min(fbH - 1, fbH - 1 - (cropOffY + iy * croppedH / ih)));
-                float depth = linearDepth[fy_gl * fbW + fx];
-                float coc;
+                float depthM = Math.max(linearDepth[fy_gl * fbW + fx], 0.05f);
+                float cocMM;
                 if (infinityFocus) {
-                    float depthM = Math.max(depth, focalM * 1.001f);
-                    float cocM = (focalM * focalM) / (aperture * (depthM - focalM));
-                    coc = Math.min(maxBlurPx, cocM * 1000f * pxPerMm * 0.5f);
+                    cocMM = (fmm * fmm) / (aperture * depthM * 200f);
                 } else {
-                    float r = depth / focusDist;
-                    coc = (depth <= focusDist) ? (1.0f - r) * maxBlurPx : ((r - 1.0f) / r) * maxBlurPx;
+                    float s1mm = focusDist * 200f;
+                    cocMM = (fmm * fmm) * Math.abs(depthM - focusDist)
+                            / (depthM * aperture * Math.max(s1mm - fmm, 1.0f));
                 }
-                cocMap[iy * iw + ix] = Math.min(coc, maxBlurPx);
+                cocMap[iy * iw + ix] = Math.min(cocMM * pxPerMm, maxBlurPx);
             }
         }
 

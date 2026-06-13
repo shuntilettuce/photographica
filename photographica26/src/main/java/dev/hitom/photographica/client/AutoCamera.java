@@ -44,6 +44,13 @@ public final class AutoCamera {
 	// cos(5°) — entities must be within this cone of the look direction
 	private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
 
+	// Focus-pull (rack) easing. AF does not snap instantly: focusDistance is eased
+	// toward the target stop in log space each tick, so the lens "pulls" focus like
+	// a real motor instead of jumping.
+	private static final float PULL_RATE     = 0.30f;  // fraction of remaining log-distance / tick
+	private static final float PULL_MAX_STEP = 0.22f;  // max log units / tick (caps rack speed)
+	private static final float PULL_SNAP_EPS = 0.01f;  // lock onto target below this log-distance
+
 	public static void tick(Minecraft mc) {
 		if (mc.player == null || mc.level == null) return;
 		if (!mc.player.isShiftKeyDown()) return;
@@ -137,8 +144,24 @@ public final class AutoCamera {
 		}
 
 		float snapped = snapFocus(targetDepth);
-		if (Math.abs(snapped - updated.focusDistance()) < 0.001f) return updated;
-		return updated.withFocusDistance(snapped);
+		float current = updated.focusDistance();
+		float eased = pullFocus(current, snapped);
+		// Locked onto the target stop (or already there): nothing left to rack.
+		if (Math.abs(eased - current) < 0.001f) return updated;
+		return updated.withFocusDistance(eased);
+	}
+
+	/** Eases the current focus distance one tick toward the target stop in log space. */
+	private static float pullFocus(float current, float target) {
+		current = Math.max(0.01f, current);
+		float logCur = (float) Math.log(current);
+		float logTar = (float) Math.log(target);
+		float diff   = logTar - logCur;
+		if (Math.abs(diff) <= PULL_SNAP_EPS) return target;
+		float step = diff * PULL_RATE;
+		if (step >  PULL_MAX_STEP) step =  PULL_MAX_STEP;
+		if (step < -PULL_MAX_STEP) step = -PULL_MAX_STEP;
+		return (float) Math.exp(logCur + step);
 	}
 
 	// -------------------------------------------------------------------------

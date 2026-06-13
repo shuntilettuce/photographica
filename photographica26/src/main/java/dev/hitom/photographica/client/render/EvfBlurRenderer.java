@@ -67,6 +67,7 @@ public final class EvfBlurRenderer {
     private static boolean blurScheduled      = false;
     private static float   scheduledFocusDist = 0f;
     private static float   scheduledAperture  = 0f;
+    private static float   scheduledFocalLen  = 0f;
     private static int     scheduledFx = 0, scheduledFy = 0, scheduledFx2 = 0, scheduledFy2 = 0;
 
     // Uniform locations
@@ -78,6 +79,9 @@ public final class EvfBlurRenderer {
     private static int locMaxBlurPx  = -1;
     private static int locNear       = -1;
     private static int locFar        = -1;
+    private static int locFocalLen   = -1;
+    private static int locAperture   = -1;
+    private static int locPxPerMm    = -1;
 
     private static final float NEAR = 0.05f;
     // FAR is computed dynamically from render settings — see currentDepthFar
@@ -159,11 +163,12 @@ public final class EvfBlurRenderer {
      * Only stores parameters — no raw GL here (not safe inside extract phase).
      */
     public static void scheduleBlur(int fx, int fy, int fx2, int fy2,
-                                    float focusDist, float aperture) {
+                                    float focusDist, float aperture, float focalLenMm) {
         scheduledFx = fx; scheduledFy = fy;
         scheduledFx2 = fx2; scheduledFy2 = fy2;
         scheduledFocusDist = focusDist;
         scheduledAperture  = aperture;
+        scheduledFocalLen  = focalLenMm;
         blurScheduled = true;
     }
 
@@ -179,7 +184,7 @@ public final class EvfBlurRenderer {
         }
         blurScheduled = false;
         renderBlur(scheduledFx, scheduledFy, scheduledFx2, scheduledFy2,
-                scheduledFocusDist, scheduledAperture);
+                scheduledFocusDist, scheduledAperture, scheduledFocalLen);
     }
 
     /**
@@ -247,12 +252,12 @@ public final class EvfBlurRenderer {
     // -------------------------------------------------------------------------
 
     private static void renderBlur(int fx, int fy, int fx2, int fy2,
-                                   float focusDist, float aperture) {
+                                   float focusDist, float aperture, float focalLenMm) {
         if (depthTex == -1) {
             Photographica.LOGGER.warn("[Photographica] renderBlur: depthTex not captured yet");
             return;
         }
-        float maxBlurPx = Math.min(80.0f / (aperture * aperture), 32.0f);
+        float maxBlurPx = Math.min(50.0f / aperture, 24.0f);
         if (maxBlurPx < 0.5f) {
             Photographica.LOGGER.warn("[Photographica] renderBlur: maxBlurPx too small ({})", maxBlurPx);
             return;
@@ -342,6 +347,9 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locMaxBlurPx, maxBlurPx);
         GL20.glUniform1f(locNear, NEAR);
         GL20.glUniform1f(locFar,  depthFar);
+        GL20.glUniform1f(locFocalLen, focalLenMm);
+        GL20.glUniform1f(locAperture, aperture);
+        GL20.glUniform1f(locPxPerMm, fbH / 24.0f);  // 24mm sensor height maps to fbH px
 
         // ---- Pass 1: Horizontal blur, mainTex → auxTex ----
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, auxFbo);
@@ -415,6 +423,9 @@ public final class EvfBlurRenderer {
             locMaxBlurPx = GL20.glGetUniformLocation(program, "MaxBlurPx");
             locNear      = GL20.glGetUniformLocation(program, "Near");
             locFar       = GL20.glGetUniformLocation(program, "Far");
+            locFocalLen  = GL20.glGetUniformLocation(program, "FocalLenMm");
+            locAperture  = GL20.glGetUniformLocation(program, "Aperture");
+            locPxPerMm   = GL20.glGetUniformLocation(program, "PxPerMm");
 
             // Full-screen quad (TRIANGLE_STRIP): BL, BR, TL, TR
             float[] verts = {

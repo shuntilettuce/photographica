@@ -95,7 +95,7 @@ public final class ViewfinderHud {
 			} else {
 				evfFocusDist = s.focusDistance();
 			}
-			EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2, evfFocusDist, s.aperture());
+			EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2, evfFocusDist, s.aperture(), s.focalLengthMm());
 		}
 
 		// Bezels (dim outside frame)

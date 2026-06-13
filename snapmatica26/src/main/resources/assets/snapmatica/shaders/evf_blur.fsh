@@ -4,10 +4,13 @@ uniform sampler2D InSampler;
 uniform sampler2D DepthSampler;  // non-linear depth [0,1] from scene framebuffer
 uniform vec2 BlurDir;            // (1,0) for H pass, (0,1) for V pass
 uniform vec2 PixelSize;          // (1/fbW, 1/fbH)
-uniform float FocusDist;         // focus distance in blocks
-uniform float MaxBlurPx;         // max blur radius in framebuffer pixels
+uniform float FocusDist;         // focus distance in blocks (metres)
+uniform float MaxBlurPx;         // max blur radius in framebuffer pixels (perf clamp)
 uniform float Near;              // near clip plane in blocks
 uniform float Far;               // far clip plane in blocks
+uniform float FocalLenMm;        // lens focal length in mm
+uniform float Aperture;          // f-number (N)
+uniform float PxPerMm;           // framebuffer pixels per mm of sensor height
 
 in vec2 texCoord;
 out vec4 fragColor;
@@ -17,15 +20,24 @@ float linearDepth(float d) {
     return 2.0 * Near * Far / (Far + Near - ndc * (Far - Near));
 }
 
-float computeCoc(float depth) {
-    float r = depth / FocusDist;
-    float coc;
-    if (depth <= FocusDist) {
-        coc = (1.0 - r) * MaxBlurPx;
+// Physically-based thin-lens circle of confusion, projected onto the sensor and
+// converted to framebuffer pixels. Unlike a normalized model, this keeps deep
+// depth-of-field for wide/normal lenses (distant terrain stays sharp) and only
+// produces strong bokeh for long lenses / wide apertures / close focus.
+//   coc_mm = f^2 / (N * (S1 - f)) * |S2 - S1| / S2
+float computeCoc(float depthM) {
+    depthM = max(depthM, 0.05);
+    float fmm = FocalLenMm;
+    float cocMM;
+    if (FocusDist >= 999.0) {
+        // focus at infinity: coc_mm = f^2 / (N * S2_mm)
+        cocMM = (fmm * fmm) / (Aperture * depthM * 200.0);
     } else {
-        coc = ((r - 1.0) / r) * MaxBlurPx;
+        float s1mm = FocusDist * 200.0;
+        float denom = Aperture * max(s1mm - fmm, 1.0);
+        cocMM = (fmm * fmm) * abs(depthM - FocusDist) / (depthM * denom);
     }
-    return clamp(coc, 0.0, MaxBlurPx);
+    return clamp(cocMM * PxPerMm, 0.0, MaxBlurPx);
 }
 
 void main() {

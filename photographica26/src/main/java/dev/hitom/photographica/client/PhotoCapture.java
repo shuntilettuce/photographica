@@ -1243,27 +1243,25 @@ public final class PhotoCapture {
 		}
 
 		boolean infinityFocus = (focusDist >= 999.0f);
-		// Thin-lens CoC for infinity focus: CoC_mm = f² / (A*(d - f)), d in meters, f in meters
-		float focalM = settings.focalLengthMm() / 1000f;
+		// Physically-based thin-lens CoC (200.0 distance scale), projected onto the
+		// sensor and converted to pixels. focalLengthMm() is the lens focal length in mm.
+		float fmm = settings.focalLengthMm();
 		float pxPerMm = (float) ih / 24.0f;  // 24mm sensor height maps to ih pixels
 		float[] cocMap = new float[iw * ih];
 		for (int iy = 0; iy < ih; iy++) {
 			for (int ix = 0; ix < iw; ix++) {
 				int fx    = Math.max(0, Math.min(fbW - 1, cropOffX + ix * croppedW / iw));
 				int fy_gl = Math.max(0, Math.min(fbH - 1, fbH - 1 - (cropOffY + iy * croppedH / ih)));
-				float depth = linearDepth[fy_gl * fbW + fx];
-				float coc;
+				float depthM = Math.max(linearDepth[fy_gl * fbW + fx], 0.05f);
+				float cocMM;
 				if (infinityFocus) {
-					float depthM = Math.max(depth, focalM * 1.001f);
-					float cocM = (focalM * focalM) / (aperture * (depthM - focalM));
-					coc = Math.min(maxBlurPx, cocM * 1000f * pxPerMm * 0.5f);
+					cocMM = (fmm * fmm) / (aperture * depthM * 200f);
 				} else {
-					float r = depth / focusDist;
-					coc = (depth <= focusDist)
-							? (1.0f - r) * maxBlurPx
-							: ((r - 1.0f) / r) * maxBlurPx;
+					float s1mm = focusDist * 200f;
+					cocMM = (fmm * fmm) * Math.abs(depthM - focusDist)
+							/ (depthM * aperture * Math.max(s1mm - fmm, 1.0f));
 				}
-				cocMap[iy * iw + ix] = Math.min(coc, maxBlurPx);
+				cocMap[iy * iw + ix] = Math.min(cocMM * pxPerMm, maxBlurPx);
 			}
 		}
 

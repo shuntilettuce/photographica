@@ -85,7 +85,7 @@ public final class ViewfinderHud {
 		// Per-pixel CoC is computed in the shader using the captured depth texture.
 		if (isMirrorless && LensKind.hasLens(s.lensType())
 				&& s.aperture() < 8.0f && s.focusDistance() < 999.0f) {
-			EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture());
+			EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture(), s.focalLengthMm());
 		}
 
 		// Bezels (dim outside frame)

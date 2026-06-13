@@ -1282,29 +1282,28 @@ public final class PhotoCapture {
 			cropOffY = (fbH - croppedH) / 2;
 		}
 
-		// Per-pixel CoC (Circle of Confusion) in image pixels.
-		// Infinity focus (focusDist >= 999): coc = maxBlurPx * nearLimit / depth
-		//   where nearLimit = 10/aperture (f/2→5 m, f/4→2.5 m).
-		//   Objects closer than nearLimit are fully blurred; farther objects clear up as 1/depth.
-		// Finite focus: standard near/far CoC formula.
+		// Per-pixel CoC (Circle of Confusion) in image pixels, from a physical
+		// thin-lens model (focal length, aperture, focus distance). Distances are
+		// in blocks (≈ metres); the *200 factor scales blocks→mm subject distance.
+		//   coc_mm = f^2 / (N * (S1 - f)) * |S2 - S1| / S2
 		boolean infinityFocus = (focusDist >= 999.0f);
-		float nearLimit = infinityFocus ? (10.0f / aperture) : 0.0f;
+		float fmm = settings.focalLengthMm();
+		float pxPerMm = (float) ih / 24.0f;   // 24mm sensor height maps to image height px
 		float[] cocMap = new float[iw * ih];
 		for (int iy = 0; iy < ih; iy++) {
 			for (int ix = 0; ix < iw; ix++) {
 				int fx    = Math.max(0, Math.min(fbW - 1, cropOffX + ix * croppedW / iw));
 				int fy_gl = Math.max(0, Math.min(fbH - 1, fbH - 1 - (cropOffY + iy * croppedH / ih)));
-				float depth = linearDepth[fy_gl * fbW + fx];
-				float coc;
+				float depthM = Math.max(linearDepth[fy_gl * fbW + fx], 0.05f);
+				float cocMM;
 				if (infinityFocus) {
-					coc = Math.min(maxBlurPx, maxBlurPx * nearLimit / Math.max(depth, 0.05f));
+					cocMM = (fmm * fmm) / (aperture * depthM * 200f);
 				} else {
-					float r = depth / focusDist;
-					coc = (depth <= focusDist)
-							? (1.0f - r) * maxBlurPx
-							: ((r - 1.0f) / r) * maxBlurPx;
+					float s1mm = focusDist * 200f;
+					cocMM = (fmm * fmm) * Math.abs(depthM - focusDist)
+							/ (depthM * aperture * Math.max(s1mm - fmm, 1.0f));
 				}
-				cocMap[iy * iw + ix] = Math.min(coc, maxBlurPx);
+				cocMap[iy * iw + ix] = Math.min(cocMM * pxPerMm, maxBlurPx);
 			}
 		}
 

@@ -55,6 +55,9 @@ public final class EvfBlurRenderer {
     private static int locMaxBlurPx  = -1;
     private static int locNear       = -1;
     private static int locFar        = -1;
+    private static int locFocalLen   = -1;
+    private static int locAperture   = -1;
+    private static int locPxPerMm    = -1;
 
     private static final float NEAR = 0.05f;
     private static final float FAR  = 512.0f;
@@ -110,10 +113,9 @@ public final class EvfBlurRenderer {
      * fx/fy/fx2/fy2 are in scaled GUI coordinates.
      */
     public static void renderBlur(int fx, int fy, int fx2, int fy2,
-                                  float focusDist, float aperture) {
+                                  float focusDist, float aperture, float focalLenMm) {
         if (depthTex == -1) return; // depth not captured yet
-        float distScale = Math.min(1.0f, 3.0f / focusDist);
-        float maxBlurPx = Math.min(80.0f / (aperture * aperture) * distScale, 32.0f);
+        float maxBlurPx = Math.min(50.0f / aperture, 24.0f);
         if (maxBlurPx < 0.5f) return;
 
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -165,6 +167,9 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locMaxBlurPx, maxBlurPx);
         GL20.glUniform1f(locNear, NEAR);
         GL20.glUniform1f(locFar,  FAR);
+        GL20.glUniform1f(locFocalLen, focalLenMm);
+        GL20.glUniform1f(locAperture, aperture);
+        GL20.glUniform1f(locPxPerMm, fbH / 24.0f);  // 24mm sensor height maps to fbH px
 
         // ---- Pass 1: Horizontal blur, main → aux ----
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, auxFbo);
@@ -246,6 +251,9 @@ public final class EvfBlurRenderer {
             locMaxBlurPx = GL20.glGetUniformLocation(program, "MaxBlurPx");
             locNear      = GL20.glGetUniformLocation(program, "Near");
             locFar       = GL20.glGetUniformLocation(program, "Far");
+            locFocalLen  = GL20.glGetUniformLocation(program, "FocalLenMm");
+            locAperture  = GL20.glGetUniformLocation(program, "Aperture");
+            locPxPerMm   = GL20.glGetUniformLocation(program, "PxPerMm");
 
             // Full-screen quad (TRIANGLE_STRIP): bottom-left, bottom-right, top-left, top-right
             float[] verts = {
