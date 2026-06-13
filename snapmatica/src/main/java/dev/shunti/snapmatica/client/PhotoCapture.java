@@ -197,10 +197,15 @@ public final class PhotoCapture {
             EvfBlurRenderer.captureDepth(vpW, vpH);
             float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
             if (gpuDepth > 0.0f) lastSceneDepthBlocks = gpuDepth;
-            // DH fallback: if still 999 (sky / beyond MC range), query DH LOD terrain
-            if (lastSceneDepthBlocks >= 999f) {
+            // DH fallback: trigger when the GPU depth reads sky (999) OR saturates near the
+            // assumed far plane. The linear reconstruction clamps at currentDepthFar (≈ rd*64,
+            // e.g. ~940 for high render distances), so DH terrain reads ~940 and never hits the
+            // 999 sentinel. Anything at/beyond ~90% of the far plane is unreliable -> ask DH.
+            // DH may report km-scale distances, so accept any positive hit.
+            float farPlane = EvfBlurRenderer.currentDepthFar;
+            if (lastSceneDepthBlocks >= 999f || lastSceneDepthBlocks >= farPlane * 0.9f) {
                 float dhDist = DhIntegration.queryLookDistance(mc);
-                if (dhDist < 999f) lastSceneDepthBlocks = dhDist;
+                if (dhDist > 0f) lastSceneDepthBlocks = dhDist;
             }
             if (capturePending) {
                 float[] depth = EvfBlurRenderer.readLinearDepthCpu(vpW, vpH);

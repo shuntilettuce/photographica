@@ -13,7 +13,8 @@ import net.minecraft.util.math.Vec3d;
 
 /**
  * Optional Distant Horizons integration for AF depth detection.
- * Returns 999f immediately when DH is not installed.
+ * Returns -1f when DH is not installed or no LOD terrain is hit along the look ray.
+ * A successful hit returns the real distance in blocks, which may be km-scale (> 999).
  */
 public final class DhIntegration {
     private DhIntegration() {}
@@ -25,22 +26,22 @@ public final class DhIntegration {
         return FabricLoader.getInstance().isModLoaded("distanthorizons");
     }
 
-    /** Returns distance in blocks to the first DH terrain along the look ray, or 999f if none. */
+    /** Returns distance in blocks to the first DH terrain along the look ray, or -1f if none. */
     public static float queryLookDistance(MinecraftClient mc) {
-        if (!DH_PRESENT || mc.player == null) return 999f;
+        if (!DH_PRESENT || mc.player == null) return -1f;
         try {
             return queryInternal(mc);
         } catch (NoClassDefFoundError | Exception ignored) {
-            return 999f;
+            return -1f;
         }
     }
 
     private static float queryInternal(MinecraftClient mc) {
         IDhApiWorldProxy worldProxy = DhApi.Delayed.worldProxy;
-        if (worldProxy == null || !worldProxy.worldLoaded()) return 999f;
+        if (worldProxy == null || !worldProxy.worldLoaded()) return -1f;
 
         IDhApiTerrainDataRepo terrainRepo = DhApi.Delayed.terrainRepo;
-        if (terrainRepo == null) return 999f;
+        if (terrainRepo == null) return -1f;
 
         // Create and reuse a soft cache to satisfy the DH API requirement
         if (dhCache == null) {
@@ -50,10 +51,10 @@ public final class DhIntegration {
         IDhApiLevelWrapper level = worldProxy.getSinglePlayerLevel();
         if (level == null) {
             Iterable<IDhApiLevelWrapper> levels = worldProxy.getAllLoadedLevelWrappers();
-            if (levels == null) return 999f;
+            if (levels == null) return -1f;
             for (IDhApiLevelWrapper l : levels) { level = l; break; }
         }
-        if (level == null) return 999f;
+        if (level == null) return -1f;
 
         Vec3d eye  = mc.player.getCameraPosVec(1.0f);
         Vec3d look = mc.player.getRotationVec(1.0f);
@@ -65,14 +66,14 @@ public final class DhIntegration {
                 100_000,
                 dhCache);
 
-        if (result == null || !result.success || result.payload == null) return 999f;
+        if (result == null || !result.success || result.payload == null) return -1f;
         DhApiRaycastResult hit = result.payload;
-        if (hit.pos == null) return 999f;
+        if (hit.pos == null) return -1f;
 
         double dx = hit.pos.x - eye.x;
         double dy = hit.pos.y - eye.y;
         double dz = hit.pos.z - eye.z;
         float dist = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-        return dist > 0f ? dist : 999f;
+        return dist > 0f ? dist : -1f;
     }
 }
