@@ -300,6 +300,7 @@ public final class ViewfinderHud {
 		if (focus >= 999.0f) return COLOR_FRAME;       // infinity focus
 
 		float sceneDepth = dev.hitom.photographica.client.PhotoCapture.lastSceneDepthBlocks;
+		if (sceneDepth >= 999.0f) return 0xFFE04040; // sky / beyond range — always out of focus
 		float tolerance = focus * s.aperture() * 0.08f;
 		float diff = Math.abs(sceneDepth - focus);
 		if (diff <= tolerance)           return 0xFF7CE67C; // green: in focus

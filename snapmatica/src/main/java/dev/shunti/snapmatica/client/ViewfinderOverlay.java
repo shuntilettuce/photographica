@@ -209,6 +209,8 @@ public final class ViewfinderOverlay {
             return 0xFFFFFFFF;
         if (SnapmaticaClient.focusDistance >= 999f)
             return 0xFFFFFFFF;
+        if (PhotoCapture.lastSceneDepthBlocks >= 999f)
+            return 0xFFE04040;
 
         float tol = SnapmaticaClient.focusDistance * SnapmaticaClient.aperture * 0.08f;
         float diff = Math.abs(PhotoCapture.lastSceneDepthBlocks - SnapmaticaClient.focusDistance);

@@ -180,6 +180,8 @@ public final class ViewfinderOverlay {
             return 0xFFFFFFFF;
         if (SnapmaticaClient.focusDistance >= 999f)
             return 0xFFFFFFFF;
+        if (PhotoCapture.lastSceneDepthBlocks >= 999f)
+            return 0xFFE04040;  // sky / beyond range — always out of focus
         float tol  = SnapmaticaClient.focusDistance * SnapmaticaClient.aperture * 0.08f;
         float diff = Math.abs(PhotoCapture.lastSceneDepthBlocks - SnapmaticaClient.focusDistance);
         if (diff <= tol)       return 0xFF7CE67C;

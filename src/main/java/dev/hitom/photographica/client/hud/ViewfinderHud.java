@@ -308,6 +308,7 @@ public final class ViewfinderHud {
 		if (focus >= 999.0f) return COLOR_FRAME;       // infinity focus
 
 		float sceneDepth = dev.hitom.photographica.client.PhotoCapture.lastSceneDepthBlocks;
+		if (sceneDepth >= 999.0f) return 0xFFE04040; // sky / beyond range — always out of focus
 		// DoF tolerance: wider aperture → tighter zone (real cameras behave this way)
 		float tolerance = focus * s.aperture() * 0.08f;
 		float diff = Math.abs(sceneDepth - focus);
