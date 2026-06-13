@@ -183,10 +183,10 @@ public final class PhotoCapture {
             double eDist = eye.distanceTo(entityHit.getPos());
             if (eDist < bestDist) bestDist = eDist;
         }
-        // Nothing within range (sky / far horizon) → treat as infinity so AF can
-        // reach the 999 stop, matching the old glReadPixels behaviour at the sky.
+        // Raycast gives a fallback depth (works within loaded chunks).
         lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : 999.0f;
-        // Still capture depth texture for the EVF blur shader.
+        // Capture depth texture for EVF blur shader, then override with GPU center
+        // pixel which is more accurate than the raycast for distant / complex terrain.
         int[] viewport = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
         int vpW = viewport[2];
@@ -195,6 +195,8 @@ public final class PhotoCapture {
             int rd = mc.options.getViewDistance().getValue();
             EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
             EvfBlurRenderer.captureDepth(vpW, vpH);
+            float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
+            if (gpuDepth > 0.0f) lastSceneDepthBlocks = gpuDepth;
             if (capturePending) {
                 float[] depth = EvfBlurRenderer.readLinearDepthCpu(vpW, vpH);
                 if (depth != null) {

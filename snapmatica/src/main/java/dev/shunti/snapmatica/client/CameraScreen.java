@@ -68,8 +68,8 @@ public class CameraScreen extends Screen {
                 !ssAuto);
 
         // ISO
-        addRow2(cx, top + row++ * rowHeight, "ISO",
-                () -> "ISO " + ISOS.get(clampIdx(findClosestInt(ISOS, SnapmaticaClient.iso), ISOS.size())),
+        addRow2(cx, top + row++ * rowHeight, "SV",
+                () -> "SV " + ISOS.get(clampIdx(findClosestInt(ISOS, SnapmaticaClient.iso), ISOS.size())),
                 btnWidth,
                 step -> { int idx = findClosestInt(ISOS, SnapmaticaClient.iso);
                     idx = clampStep(idx, step, ISOS.size()); SnapmaticaClient.iso = ISOS.get(idx); SnapmaticaClient.updateAutoValues(); },

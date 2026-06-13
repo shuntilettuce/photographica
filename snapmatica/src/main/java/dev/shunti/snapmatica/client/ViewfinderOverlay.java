@@ -86,7 +86,7 @@ public final class ViewfinderOverlay {
         int em = SnapmaticaClient.exposureMode;
         int si = clampIdx((em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx, SHUTTERS.length);
         float dispAp = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
-        ctx.drawTextWithShadow(tr,Text.literal(String.format("F%s  %s  ISO%d  %s",
+        ctx.drawTextWithShadow(tr,Text.literal(String.format("F%s  %s  SV%d  %s",
                 fmt(dispAp),SHUTTERS[si],SnapmaticaClient.iso,fp)),
                 fx+6,fy2-tr.fontHeight-14,0xFFE8DCC4);
 
