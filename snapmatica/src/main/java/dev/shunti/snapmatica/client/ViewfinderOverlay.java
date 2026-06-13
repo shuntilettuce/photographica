@@ -90,8 +90,8 @@ public final class ViewfinderOverlay {
                 fmt(dispAp),SHUTTERS[si],SnapmaticaClient.iso,fp),
                 fx+6,fy2-tr.fontHeight-14,0xFFE8DCC4);
         if (SnapmaticaClient.lensType != 0 && SnapmaticaClient.focusDistance < 999.0f) {
-            ctx.drawTextWithShadow(tr, fmtFocusDist(SnapmaticaClient.focusDistance),
-                    cx + 13, cy - tr.fontHeight / 2, rc);
+            String fd = fmtFocusDist(SnapmaticaClient.focusDistance);
+            ctx.drawTextWithShadow(tr, fd, fx2 - tr.getWidth(fd) - 6, fy + 4, rc);
         }
 
         // Exposure meter

@@ -137,8 +137,8 @@ public final class ViewfinderHud {
 				focalPart);
 		ctx.drawTextWithShadow(tr, exposure, fx + 6, fy2 - tr.fontHeight - 14, COLOR_TEXT);
 		if (LensKind.hasLens(s.lensType()) && s.focusDistance() < 999.0f) {
-			ctx.drawTextWithShadow(tr, fmtFocusDist(s.focusDistance()),
-					cx + 13, cy - tr.fontHeight / 2, reticleColor);
+			String fd = fmtFocusDist(s.focusDistance());
+			ctx.drawTextWithShadow(tr, fd, fx2 - tr.getWidth(fd) - 6, fy + 4 + tr.fontHeight * 2 + 4, reticleColor);
 		}
 
 		// Exposure meter — horizontal scale centred in the frame, ±3 EV range
