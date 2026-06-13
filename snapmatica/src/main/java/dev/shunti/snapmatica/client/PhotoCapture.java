@@ -188,7 +188,7 @@ public final class PhotoCapture {
         // focus distance and is NOT overridden by the GPU depth reconstruction: that
         // reconstruction saturates at currentDepthFar (≈ rd*64) and was the root cause of
         // the "AF stuck at ~940m" bug.
-        lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : 999.0f;
+        lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : SnapmaticaClient.FOCUS_INFINITY;
         // Capture the depth texture (the EVF blur shader needs it every frame).
         int[] viewport = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
@@ -201,13 +201,13 @@ public final class PhotoCapture {
             // Only when the raycast missed (sky, or terrain beyond the loaded range) do we
             // fall back: first the GPU centre depth (rejecting saturated readings near the
             // far plane), then DH LOD terrain which may report km-scale distances.
-            if (lastSceneDepthBlocks >= 999f) {
+            if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY) {
                 float farPlane = EvfBlurRenderer.currentDepthFar;
                 float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
                 if (gpuDepth > 0.0f && gpuDepth < farPlane * 0.95f) {
                     lastSceneDepthBlocks = gpuDepth;
                 }
-                if (lastSceneDepthBlocks >= 999f) {
+                if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY) {
                     float dhDist = DhIntegration.queryLookDistance(mc);
                     if (dhDist > 0f) lastSceneDepthBlocks = dhDist;
                 }
@@ -364,7 +364,7 @@ public final class PhotoCapture {
         //   coc_mm = f^2 / (N * (S1 - f)) * |S2 - S1| / S2
         // This keeps deep depth-of-field for wide/normal lenses so distant terrain stays
         // sharp, instead of saturating to max blur a short distance past the focus plane.
-        boolean infinityFocus = (focusDist >= 999.0f);
+        boolean infinityFocus = (focusDist >= SnapmaticaClient.FOCUS_INFINITY);
         float fmm = SnapmaticaClient.focalLengthMm;
         float pxPerMm = (float) ih / 24.0f;  // 24mm sensor height maps to ih pixels
         float[] cocMap = new float[iw * ih];

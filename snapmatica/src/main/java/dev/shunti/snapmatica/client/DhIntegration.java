@@ -14,7 +14,8 @@ import net.minecraft.util.math.Vec3d;
 /**
  * Optional Distant Horizons integration for AF depth detection.
  * Returns -1f when DH is not installed or no LOD terrain is hit along the look ray.
- * A successful hit returns the real distance in blocks, which may be km-scale (> 999).
+ * A successful hit returns the real distance in blocks, which may be km-scale; AF now
+ * focuses on it finitely rather than collapsing it to the infinity sentinel.
  */
 public final class DhIntegration {
     private DhIntegration() {}

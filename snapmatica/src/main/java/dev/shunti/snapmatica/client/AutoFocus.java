@@ -22,10 +22,6 @@ public final class AutoFocus {
     private static final int FOCUS_AF  = 1;
     private static final int FOCUS_MOB = 2;
 
-    // 999 = infinity-focus sentinel (the blur shader switches to its ∞ branch at >=999),
-    // so finite focus is clamped just below it.
-    private static final float FOCUS_INFINITY = 999.0f;
-
     // cos(5°) — entities must be within this cone of the look direction
     private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
 
@@ -36,6 +32,7 @@ public final class AutoFocus {
     private static final float PULL_RATE     = 0.30f;  // fraction of remaining log-distance / tick
     private static final float PULL_MAX_STEP = 0.22f;  // max log units / tick (caps rack speed)
     private static final float PULL_SNAP_EPS = 0.01f;  // lock onto target below this log-distance
+    private static final float FAR_ANCHOR    = 1000.0f; // refocus from ∞ starts here (raycast range)
 
     public static void tick(MinecraftClient mc) {
         if (mc.player == null || mc.world == null) return;
@@ -58,11 +55,16 @@ public final class AutoFocus {
 
     /** Eases the current focus distance one tick toward the target stop in log space. */
     private static float pullFocus(float current, float target) {
+        // Pointing at sky/no-hit snaps to infinity (no subject to watch racking onto).
+        if (target >= SnapmaticaClient.FOCUS_INFINITY) return SnapmaticaClient.FOCUS_INFINITY;
+        // Refocusing back from infinity starts the rack at the far anchor instead of the
+        // 100 km sentinel, so it's a quick pull and the readout doesn't flash huge numbers.
+        if (current >= SnapmaticaClient.FOCUS_INFINITY) current = FAR_ANCHOR;
         current = Math.max(0.01f, current);
         float logCur = (float) Math.log(current);
         float logTar = (float) Math.log(target);
         float diff   = logTar - logCur;
-        if (Math.abs(diff) <= PULL_SNAP_EPS) return target;  // lock (keeps exact 999 = ∞)
+        if (Math.abs(diff) <= PULL_SNAP_EPS) return target;  // lock onto the stop
         float step = diff * PULL_RATE;
         if (step >  PULL_MAX_STEP) step =  PULL_MAX_STEP;
         if (step < -PULL_MAX_STEP) step = -PULL_MAX_STEP;
@@ -71,18 +73,19 @@ public final class AutoFocus {
 
     /**
      * Snaps a measured scene depth to an AF focus distance.
-     *   • depth &gt;= 999      → infinity (raycast miss / sky / beyond detection range)
+     *   • depth &gt;= sentinel → infinity (raycast miss / sky / no subject)
      *   • depth &lt;= 5 m      → nearest 0.1 m (macro / close-up precision)
-     *   • otherwise          → nearest 1 m
+     *   • otherwise          → nearest 1 m, finite (super-telephoto on a 2000 m subject
+     *                          focuses at 2000 m, not collapsed to infinity)
      * The 1 m resolution at range matters for super-telephoto, whose depth of field is
      * so shallow that a 10–30 m focus error (the old coarse stops) left distant subjects
      * permanently soft.
      */
     private static float snapFocus(float depth) {
-        if (depth >= FOCUS_INFINITY) return FOCUS_INFINITY;
+        if (depth >= SnapmaticaClient.FOCUS_INFINITY) return SnapmaticaClient.FOCUS_INFINITY;
         depth = Math.max(0.1f, depth);
         if (depth <= 5.0f) return Math.round(depth * 10f) / 10f;   // 0.1 m steps
-        return Math.min(FOCUS_INFINITY - 1f, Math.round(depth));   // 1 m steps, kept finite
+        return Math.round(depth);                                  // 1 m steps, finite
     }
 
     private static Float nearestMobInCone(MinecraftClient mc) {

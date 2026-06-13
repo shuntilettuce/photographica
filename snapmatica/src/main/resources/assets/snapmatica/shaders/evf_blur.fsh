@@ -29,8 +29,8 @@ float computeCoc(float depthM) {
     depthM = max(depthM, 0.05);
     float fmm = FocalLenMm;
     float cocMM;
-    if (FocusDist >= 999.0) {
-        // focus at infinity: coc_mm = f^2 / (N * S2_mm)
+    if (FocusDist >= 99999.0) {
+        // focus at infinity (sentinel): coc_mm = f^2 / (N * S2_mm)
         cocMM = (fmm * fmm) / (Aperture * depthM * 200.0);
     } else {
         float s1mm = FocusDist * 200.0;

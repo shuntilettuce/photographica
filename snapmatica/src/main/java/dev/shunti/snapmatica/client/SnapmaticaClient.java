@@ -35,6 +35,13 @@ public class SnapmaticaClient implements ClientModInitializer {
     public static int shutterSpeedIdx = 10;      // index into SHUTTER_SECONDS[] (1/30)
     public static int iso = 400;
     public static float focusDistance = 5.0f;
+    /**
+     * Focus-distance sentinel meaning "optical infinity" (no finite subject). Set far
+     * above any real Minecraft raycast (≤1000) or Distant Horizons (km-scale) distance so
+     * it never collides with a measurement — a genuine 2000 m subject focuses finitely at
+     * 2000 m, and only sky / no-hit collapses to infinity.
+     */
+    public static final float FOCUS_INFINITY = 100000.0f;
     public static int focalLengthMm = 50;
     public static int lensType = 1;               // LensKind.PRIME_50MM
     public static int exposureMode = 0;           // M (manual)

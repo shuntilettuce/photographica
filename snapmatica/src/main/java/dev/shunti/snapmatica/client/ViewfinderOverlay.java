@@ -47,7 +47,7 @@ public final class ViewfinderOverlay {
         // so it only affects the scene inside the viewfinder frame.
         boolean hasLensForBlur = SnapmaticaClient.lensType != 0;
         if (hasLensForBlur && SnapmaticaClient.aperture < 8.0f
-                && SnapmaticaClient.focusDistance < 999.0f) {
+                && SnapmaticaClient.focusDistance < SnapmaticaClient.FOCUS_INFINITY) {
             EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2,
                     SnapmaticaClient.focusDistance, SnapmaticaClient.aperture,
                     SnapmaticaClient.focalLengthMm);
@@ -90,7 +90,7 @@ public final class ViewfinderOverlay {
         ctx.drawTextWithShadow(tr, String.format("F%s  %s  ISO%d  %s",
                 fmt(dispAp),SHUTTERS[si],SnapmaticaClient.iso,fp),
                 fx+6,fy2-tr.fontHeight-14,0xFFE8DCC4);
-        if (SnapmaticaClient.lensType != 0 && SnapmaticaClient.focusDistance < 999.0f) {
+        if (SnapmaticaClient.lensType != 0 && SnapmaticaClient.focusDistance < SnapmaticaClient.FOCUS_INFINITY) {
             String fd = fmtFocusDist(SnapmaticaClient.focusDistance);
             ctx.drawTextWithShadow(tr, fd, fx2 - tr.getWidth(fd) - 6, fy + 4, rc);
         }
@@ -209,9 +209,9 @@ public final class ViewfinderOverlay {
     private static int focusReticleColor() {
         if (SnapmaticaClient.lensType == 0 || SnapmaticaClient.aperture >= 8f)
             return 0xFFFFFFFF;
-        if (SnapmaticaClient.focusDistance >= 999f)
+        if (SnapmaticaClient.focusDistance >= SnapmaticaClient.FOCUS_INFINITY)
             return 0xFFFFFFFF;
-        if (PhotoCapture.lastSceneDepthBlocks >= 999f)
+        if (PhotoCapture.lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY)
             return 0xFFE04040;
 
         float tol = SnapmaticaClient.focusDistance * SnapmaticaClient.aperture * 0.08f;
@@ -253,7 +253,7 @@ public final class ViewfinderOverlay {
     }
 
     private static String fmtFocusDist(float v) {
-        if (v >= 999.0f) return "∞";
+        if (v >= SnapmaticaClient.FOCUS_INFINITY) return "∞";
         if (v < 1.0f) return String.format("%.1fm", v);
         return v == (int)v ? ((int)v + "m") : String.format("%.1fm", v);
     }
