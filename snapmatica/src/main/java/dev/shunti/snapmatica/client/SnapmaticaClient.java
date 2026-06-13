@@ -105,14 +105,14 @@ public class SnapmaticaClient implements ClientModInitializer {
         /*viewfinderSneakKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.viewfinder_sneak",
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN,
+                GLFW.GLFW_KEY_COMMA,
                 SNAPMATICA_CATEGORY
         ));*/
         //?} else {
         viewfinderSneakKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.viewfinder_sneak",
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN,       // unbound by default — assign your own key
+                GLFW.GLFW_KEY_COMMA,         // default: comma
                 "category.snapmatica"
         ));
         //?}
