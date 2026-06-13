@@ -66,14 +66,14 @@ public class SnapmaticaClient implements ClientModInitializer {
         /*shootKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.shoot",
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_P,
+                GLFW.GLFW_KEY_ENTER,
                 SNAPMATICA_CATEGORY
         ));*/
         //?} else {
         shootKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.shoot",
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_P,             // default: P
+                GLFW.GLFW_KEY_ENTER,         // default: Enter
                 "category.snapmatica"
         ));
         //?}
