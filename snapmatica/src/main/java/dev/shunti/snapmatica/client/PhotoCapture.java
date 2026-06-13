@@ -156,6 +156,11 @@ public final class PhotoCapture {
     public static void onWorldRenderEnd() {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || !mc.player.isSneaking()) return;
+        // When the viewfinder is disabled, sneaking is just normal sneaking — skip the
+        // depth capture and GL work entirely. Otherwise the per-frame depth-buffer copy /
+        // FBO reads run without their renderBlur cleanup partner, leaving GL state dirty
+        // and blacking out the hand and Distant Horizons passes.
+        if (!SnapmaticaClient.viewfinderSneakEnabled && !capturePending) return;
 
         //? if >=1.21.11 {
         /*// In 1.21.11 glReadPixels(GL_DEPTH_COMPONENT) no longer reads the scene depth
