@@ -38,7 +38,9 @@ public class GameRendererMixin {
         if (SnapmaticaClient.lensType == 0) return;
         int f = SnapmaticaClient.focalLengthMm;
         if (f <= 0) return;
-        cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(12.0 / f)));
+        // Vertical sensor half-height: 12mm (24mm tall) landscape, 18mm (36mm tall) portrait
+        double halfSensorMm = SnapmaticaClient.portraitOrientation ? 18.0 : 12.0;
+        cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(halfSensorMm / f)));
     }*/
     //?} else {
     @Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D",
@@ -56,8 +58,12 @@ public class GameRendererMixin {
         int f = SnapmaticaClient.focalLengthMm;
         if (f <= 0) return;
 
-        // Vertical FOV = 2 * atan(12 / focalLengthMm)
-        double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
+        // Vertical FOV from the full-frame sensor: the long (36mm) side is vertical in
+        // portrait, the short (24mm) side in landscape, so the focal-length number stays
+        // physically accurate in both orientations.
+        //   landscape: 2 * atan(12 / f)   portrait: 2 * atan(18 / f)
+        double halfSensorMm = SnapmaticaClient.portraitOrientation ? 18.0 : 12.0;
+        double vFovDegrees = Math.toDegrees(2.0 * Math.atan(halfSensorMm / f));
         cir.setReturnValue(vFovDegrees);
     }
     //?}
