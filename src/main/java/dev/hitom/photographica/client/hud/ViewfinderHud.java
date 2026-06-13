@@ -27,6 +27,9 @@ import net.minecraft.text.Text;
 public final class ViewfinderHud {
 	private ViewfinderHud() {}
 
+	/** Client-side portrait/landscape toggle. Not server-synced (purely cosmetic crop). */
+	public static boolean portraitOrientation = false;
+
 	private static final String[] SHUTTERS = {
 			"30\"", "15\"", "8\"", "4\"", "2\"", "1\"",
 			"1/2", "1/4", "1/8", "1/15", "1/30", "1/60",
@@ -66,8 +69,8 @@ public final class ViewfinderHud {
 		int sw = ctx.getScaledWindowWidth();
 		int sh = ctx.getScaledWindowHeight();
 
-		// Compute centered 3:2 frame
-		float aspect = 3f / 2f;
+		// Compute centered 3:2 (landscape) or 2:3 (portrait) frame
+		float aspect = portraitOrientation ? 2f/3f : 3f/2f;
 		int frameH = (int) (sh * 0.86f);
 		int frameW = (int) (frameH * aspect);
 		if (frameW > sw * 0.94f) {
@@ -84,7 +87,7 @@ public final class ViewfinderHud {
 		// EVF real-time DoF blur (mirrorless only, before any overlays).
 		// Per-pixel CoC is computed in the shader using the captured depth texture.
 		if (isMirrorless && LensKind.hasLens(s.lensType())
-				&& s.aperture() < 8.0f && s.focusDistance() < 999.0f) {
+				&& s.aperture() < 8.0f && s.focusDistance() < CameraSettings.FOCUS_INFINITY) {
 			EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture(), s.focalLengthMm());
 		}
 
@@ -136,7 +139,7 @@ public final class ViewfinderHud {
 				s.iso(),
 				focalPart);
 		ctx.drawTextWithShadow(tr, exposure, fx + 6, fy2 - tr.fontHeight - 14, COLOR_TEXT);
-		if (LensKind.hasLens(s.lensType()) && s.focusDistance() < 999.0f) {
+		if (LensKind.hasLens(s.lensType()) && s.focusDistance() < CameraSettings.FOCUS_INFINITY) {
 			String fd = fmtFocusDist(s.focusDistance());
 			ctx.drawTextWithShadow(tr, fd, fx2 - tr.getWidth(fd) - 6, fy + 4 + tr.fontHeight * 2 + 4, reticleColor);
 		}
@@ -171,7 +174,7 @@ public final class ViewfinderHud {
 		String[] focusLabels = {"MF", "AF", "MOB"};
 		String expLabel   = expLabels[Math.max(0, Math.min(expLabels.length - 1, s.exposureMode()))];
 		String focusLabel = focusLabels[Math.max(0, Math.min(focusLabels.length - 1, s.focusMode()))];
-		String modeStr = expLabel + " | " + focusLabel;
+		String modeStr = expLabel + " | " + focusLabel + " | " + (portraitOrientation ? "3:2 V" : "3:2 H");
 		int modeLabelY = fy + 4 + tr.fontHeight * 2 + 4;
 		ctx.drawTextWithShadow(tr, Text.literal(modeStr), fx + 6, modeLabelY, 0xFFCCCCFF);
 
@@ -305,10 +308,10 @@ public final class ViewfinderHud {
 		if (!dev.hitom.photographica.component.LensKind.hasLens(s.lensType())) return COLOR_FRAME;
 		if (s.aperture() >= 8.0f) return COLOR_FRAME; // deep DoF, colour unnecessary
 		float focus = s.focusDistance();
-		if (focus >= 999.0f) return COLOR_FRAME;       // infinity focus
+		if (focus >= CameraSettings.FOCUS_INFINITY) return COLOR_FRAME;       // infinity focus
 
 		float sceneDepth = dev.hitom.photographica.client.PhotoCapture.lastSceneDepthBlocks;
-		if (sceneDepth >= 999.0f) return 0xFFE04040; // sky / beyond range — always out of focus
+		if (sceneDepth >= CameraSettings.FOCUS_INFINITY) return 0xFFE04040; // sky / beyond range — always out of focus
 		// DoF tolerance: wider aperture → tighter zone (real cameras behave this way)
 		float tolerance = focus * s.aperture() * 0.08f;
 		float diff = Math.abs(sceneDepth - focus);
@@ -427,7 +430,7 @@ public final class ViewfinderHud {
 	}
 
 	private static String fmtFocusDist(float v) {
-		if (v >= 999.0f) return "∞";
+		if (v >= CameraSettings.FOCUS_INFINITY) return "∞";
 		if (v < 1.0f) return String.format("%.1fm", v);
 		return v == (int) v ? ((int) v + "m") : String.format("%.1fm", v);
 	}

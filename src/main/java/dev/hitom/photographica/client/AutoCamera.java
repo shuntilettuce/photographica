@@ -38,7 +38,7 @@ public final class AutoCamera {
 	private static final List<Float> FOCUS_STOPS = List.of(
 			0.3f, 0.5f, 0.7f, 1.0f, 1.2f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f,
 			5.0f, 6.0f, 7.0f, 8.0f, 10.0f, 12.0f, 15.0f, 20.0f, 25.0f, 30.0f,
-			40.0f, 50.0f, 70.0f, 100.0f, 999.0f);
+			40.0f, 50.0f, 70.0f, 100.0f, CameraSettings.FOCUS_INFINITY);
 	private static final List<Float> APERTURE_STOPS = List.of(
 			1.4f, 2.0f, 2.8f, 4.0f, 5.6f, 8.0f, 11.0f, 16.0f, 22.0f);
 	private static final double[] SHUTTER_SECONDS = {
@@ -160,11 +160,13 @@ public final class AutoCamera {
 
 	/** Eases the current focus distance one tick toward the target stop in log space. */
 	private static float pullFocus(float current, float target) {
+		if (target >= CameraSettings.FOCUS_INFINITY) return CameraSettings.FOCUS_INFINITY;
+		if (current >= CameraSettings.FOCUS_INFINITY) current = 1000.0f;  // refocus anchor
 		current = Math.max(0.01f, current);
 		float logCur = (float) Math.log(current);
 		float logTar = (float) Math.log(target);
 		float diff   = logTar - logCur;
-		if (Math.abs(diff) <= PULL_SNAP_EPS) return target;  // lock (keeps exact 999 = ∞)
+		if (Math.abs(diff) <= PULL_SNAP_EPS) return target;
 		float step = diff * PULL_RATE;
 		if (step >  PULL_MAX_STEP) step =  PULL_MAX_STEP;
 		if (step < -PULL_MAX_STEP) step = -PULL_MAX_STEP;
@@ -176,19 +178,10 @@ public final class AutoCamera {
 	// -------------------------------------------------------------------------
 
 	private static float snapFocus(float depth) {
-		depth = Math.max(0.01f, depth);
-		// Use log-space distance: focus stops are log-distributed, and the gap
-		// between 100 and 999 (infinity) is huge in linear space but reasonable
-		// in log space. Without this, AF could never reach infinity inside
-		// Minecraft's render distance (≤ 512 blocks).
-		float logDepth = (float) Math.log(depth);
-		float best = FOCUS_STOPS.get(0);
-		float bestDiff = Float.MAX_VALUE;
-		for (float stop : FOCUS_STOPS) {
-			float d = Math.abs(logDepth - (float) Math.log(stop));
-			if (d < bestDiff) { bestDiff = d; best = stop; }
-		}
-		return best;
+		if (depth >= CameraSettings.FOCUS_INFINITY) return CameraSettings.FOCUS_INFINITY;
+		depth = Math.max(0.1f, depth);
+		if (depth <= 5.0f) return Math.round(depth * 10f) / 10f;   // 0.1 m steps for macro
+		return Math.round(depth);                                    // 1 m steps at range
 	}
 
 	private static int nearestApertureIdx(float ap) {

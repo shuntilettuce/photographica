@@ -34,8 +34,8 @@ public final class EvfBlurRenderer {
     private static int vbo      = -1;
 
     private static int depthTex     = -1;
-    private static int depthTexW    = 0;
-    private static int depthTexH    = 0;
+    static int depthTexW    = 0;
+    static int depthTexH    = 0;
     private static int centerReadFbo = -1;
 
     private static int writeBackFbo = -1;
@@ -204,8 +204,9 @@ public final class EvfBlurRenderer {
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
     }
 
-    public static float[] readLinearDepthCpu(int fbW, int fbH) {
-        if (depthTex == -1 || depthTexW != fbW || depthTexH != fbH) return null;
+    public static float[] readLinearDepthCpu() {
+        if (depthTex == -1 || depthTexW <= 0 || depthTexH <= 0) return null;
+        int fbW = depthTexW, fbH = depthTexH;
         java.nio.FloatBuffer buf = BufferUtils.createFloatBuffer(fbW * fbH);
         int prevTex = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
@@ -331,7 +332,7 @@ public final class EvfBlurRenderer {
 
     /**
      * Read center-pixel linear depth in blocks from the captured depth texture.
-     * Returns 999.0f for sky/far-plane, -1.0f if unavailable.
+     * Returns FOCUS_INFINITY for sky/far-plane, -1.0f if unavailable.
      * Call after captureDepth().
      */
     public static float readCenterLinearDepthBlocks() {
@@ -350,7 +351,7 @@ public final class EvfBlurRenderer {
 
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevReadFbo);
 
-        if (rawD >= 0.999999f) return 999.0f;
+        if (rawD >= 0.999999f) return SnapmaticaClient.FOCUS_INFINITY;
         if (rawD < 0.001f) return -1.0f;
         return NEAR * currentDepthFar / (currentDepthFar - rawD * (currentDepthFar - NEAR));
     }

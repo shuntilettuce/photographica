@@ -113,6 +113,13 @@ public class PhotographicaClient implements ClientModInitializer {
 				GLFW.GLFW_KEY_G,
 				"category.photographica"
 		));
+		// Portrait / landscape orientation toggle (default V).
+		KeyBinding orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.orientation",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_V,
+				"category.photographica"
+		));
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			AutoCamera.tick(client);
@@ -167,6 +174,10 @@ public class PhotographicaClient implements ClientModInitializer {
 			}
 			if (unloadSdCardKey.wasPressed()) {
 				ClientPlayNetworking.send(new UnloadSdCardPayload());
+			}
+			while (orientationKey.wasPressed()) {
+				dev.hitom.photographica.client.hud.ViewfinderHud.portraitOrientation =
+						!dev.hitom.photographica.client.hud.ViewfinderHud.portraitOrientation;
 			}
 		});
 

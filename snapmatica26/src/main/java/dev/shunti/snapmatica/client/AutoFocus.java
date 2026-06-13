@@ -6,8 +6,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.List;
-
 /**
  * Client-side auto-focus tick handler. Runs while the sneak viewfinder is active.
  *
@@ -24,12 +22,7 @@ public final class AutoFocus {
     private static final int FOCUS_AF  = 1;
     private static final int FOCUS_MOB = 2;
 
-    private static final List<Float> FOCUS_STOPS = List.of(
-            0.3f,  0.4f,  0.5f,  0.6f,  0.7f,  0.8f,  1.0f,  1.2f,  1.5f,  2.0f,
-            2.5f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  10.0f, 12.0f, 14.0f,
-            17.0f, 20.0f, 24.0f, 29.0f, 35.0f, 42.0f, 50.0f, 60.0f, 73.0f, 87.0f,
-            105.0f, 125.0f, 150.0f, 180.0f, 215.0f, 260.0f, 310.0f, 375.0f, 450.0f, 540.0f,
-            650.0f, 780.0f, 940.0f, 999.0f);
+    private static final float FAR_ANCHOR = 1000.0f;
 
     private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
 
@@ -60,11 +53,13 @@ public final class AutoFocus {
 
     /** Eases the current focus distance one tick toward the target stop in log space. */
     private static float pullFocus(float current, float target) {
+        if (target >= SnapmaticaClient.FOCUS_INFINITY) return SnapmaticaClient.FOCUS_INFINITY;
+        if (current >= SnapmaticaClient.FOCUS_INFINITY) current = FAR_ANCHOR;
         current = Math.max(0.01f, current);
         float logCur = (float) Math.log(current);
         float logTar = (float) Math.log(target);
         float diff   = logTar - logCur;
-        if (Math.abs(diff) <= PULL_SNAP_EPS) return target;  // lock (keeps exact 999 = ∞)
+        if (Math.abs(diff) <= PULL_SNAP_EPS) return target;
         float step = diff * PULL_RATE;
         if (step >  PULL_MAX_STEP) step =  PULL_MAX_STEP;
         if (step < -PULL_MAX_STEP) step = -PULL_MAX_STEP;
@@ -72,17 +67,10 @@ public final class AutoFocus {
     }
 
     private static float snapFocus(float depth) {
-        depth = Math.max(0.01f, depth);
-        // Snap in log space so focus can reach distant stops (up to 999 = infinity)
-        // without the linear gap between 100 and 999 swallowing everything.
-        float logDepth = (float) Math.log(depth);
-        float best = FOCUS_STOPS.get(0);
-        float bestDiff = Float.MAX_VALUE;
-        for (float stop : FOCUS_STOPS) {
-            float d = Math.abs(logDepth - (float) Math.log(stop));
-            if (d < bestDiff) { bestDiff = d; best = stop; }
-        }
-        return best;
+        if (depth >= SnapmaticaClient.FOCUS_INFINITY) return SnapmaticaClient.FOCUS_INFINITY;
+        depth = Math.max(0.1f, depth);
+        if (depth <= 5.0f) return Math.round(depth * 10f) / 10f;
+        return Math.round(depth);
     }
 
     private static Float nearestMobInCone(Minecraft mc) {

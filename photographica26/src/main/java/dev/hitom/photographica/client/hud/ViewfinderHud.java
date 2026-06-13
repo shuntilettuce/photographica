@@ -26,6 +26,8 @@ import net.minecraft.network.chat.Component;
 public final class ViewfinderHud {
 	private ViewfinderHud() {}
 
+	public static boolean portraitOrientation = false;
+
 	private static final String[] SHUTTERS = {
 			"30\"", "15\"", "8\"", "4\"", "2\"", "1\"",
 			"1/2", "1/4", "1/8", "1/15", "1/30", "1/60",
@@ -65,8 +67,8 @@ public final class ViewfinderHud {
 		int sw = ctx.guiWidth();
 		int sh = ctx.guiHeight();
 
-		// Compute centered 3:2 frame
-		float aspect = 3f / 2f;
+		// Compute centered 3:2 (or 2:3 portrait) frame
+		float aspect = portraitOrientation ? 2f/3f : 3f/2f;
 		int frameH = (int) (sh * 0.86f);
 		int frameW = (int) (frameH * aspect);
 		if (frameW > sw * 0.94f) {
@@ -146,7 +148,7 @@ public final class ViewfinderHud {
 				s.iso(),
 				focalPart);
 		ctx.text(tr, exposure, fx + 6, fy2 - tr.lineHeight - 14, COLOR_TEXT, true);
-		if (LensKind.hasLens(s.lensType()) && s.focusDistance() < 999.0f) {
+		if (LensKind.hasLens(s.lensType()) && s.focusDistance() < CameraSettings.FOCUS_INFINITY) {
 			String fd = fmtFocusDist(s.focusDistance());
 			ctx.text(tr, fd, fx2 - tr.width(fd) - 6, fy + 4 + tr.lineHeight * 2 + 4, reticleColor, true);
 		}
@@ -179,7 +181,7 @@ public final class ViewfinderHud {
 		String[] focusLabels = {"MF", "AF", "MOB"};
 		String expLabel   = expLabels[Math.max(0, Math.min(expLabels.length - 1, s.exposureMode()))];
 		String focusLabel = focusLabels[Math.max(0, Math.min(focusLabels.length - 1, s.focusMode()))];
-		String modeStr = expLabel + " | " + focusLabel;
+		String modeStr = expLabel + " | " + focusLabel + " | " + (portraitOrientation ? "3:2 V" : "3:2 H");
 		int modeLabelY = fy + 4 + tr.lineHeight * 2 + 4;
 		ctx.text(tr, modeStr, fx + 6, modeLabelY, 0xFFCCCCFF, true);
 
@@ -297,10 +299,10 @@ public final class ViewfinderHud {
 		if (!dev.hitom.photographica.component.LensKind.hasLens(s.lensType())) return COLOR_FRAME;
 		if (s.aperture() >= 8.0f) return COLOR_FRAME; // deep DoF, colour unnecessary
 		float focus = s.focusDistance();
-		if (focus >= 999.0f) return COLOR_FRAME;       // infinity focus
+		if (focus >= CameraSettings.FOCUS_INFINITY) return COLOR_FRAME;       // infinity focus
 
 		float sceneDepth = dev.hitom.photographica.client.PhotoCapture.lastSceneDepthBlocks;
-		if (sceneDepth >= 999.0f) return 0xFFE04040; // sky / beyond range — always out of focus
+		if (sceneDepth >= CameraSettings.FOCUS_INFINITY) return 0xFFE04040; // sky / beyond range — always out of focus
 		float tolerance = focus * s.aperture() * 0.08f;
 		float diff = Math.abs(sceneDepth - focus);
 		if (diff <= tolerance)           return 0xFF7CE67C; // green: in focus
@@ -407,7 +409,7 @@ public final class ViewfinderHud {
 	}
 
 	private static String fmtFocusDist(float v) {
-		if (v >= 999.0f) return "∞";
+		if (v >= CameraSettings.FOCUS_INFINITY) return "∞";
 		if (v < 1.0f) return String.format("%.1fm", v);
 		return v == (int) v ? ((int) v + "m") : String.format("%.1fm", v);
 	}

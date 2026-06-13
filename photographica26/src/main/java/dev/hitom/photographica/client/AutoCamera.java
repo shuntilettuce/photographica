@@ -32,7 +32,7 @@ public final class AutoCamera {
 			2.5f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  10.0f, 12.0f, 14.0f,
 			17.0f, 20.0f, 24.0f, 29.0f, 35.0f, 42.0f, 50.0f, 60.0f, 73.0f, 87.0f,
 			105.0f, 125.0f, 150.0f, 180.0f, 215.0f, 260.0f, 310.0f, 375.0f, 450.0f, 540.0f,
-			650.0f, 780.0f, 940.0f, 999.0f);
+			650.0f, 780.0f, 940.0f, CameraSettings.FOCUS_INFINITY);
 	private static final List<Float> APERTURE_STOPS = List.of(
 			1.4f, 2.0f, 2.8f, 4.0f, 5.6f, 8.0f, 11.0f, 16.0f, 22.0f);
 	private static final double[] SHUTTER_SECONDS = {
@@ -153,6 +153,8 @@ public final class AutoCamera {
 
 	/** Eases the current focus distance one tick toward the target stop in log space. */
 	private static float pullFocus(float current, float target) {
+		if (target >= CameraSettings.FOCUS_INFINITY) return CameraSettings.FOCUS_INFINITY;
+		if (current >= CameraSettings.FOCUS_INFINITY) current = 1000.0f;
 		current = Math.max(0.01f, current);
 		float logCur = (float) Math.log(current);
 		float logTar = (float) Math.log(target);
@@ -169,15 +171,10 @@ public final class AutoCamera {
 	// -------------------------------------------------------------------------
 
 	public static float snapFocus(float depth) {
-		depth = Math.max(0.01f, depth);
-		float logDepth = (float) Math.log(depth);
-		float best = FOCUS_STOPS.get(0);
-		float bestDiff = Float.MAX_VALUE;
-		for (float stop : FOCUS_STOPS) {
-			float d = Math.abs(logDepth - (float) Math.log(stop));
-			if (d < bestDiff) { bestDiff = d; best = stop; }
-		}
-		return best;
+		if (depth >= CameraSettings.FOCUS_INFINITY) return CameraSettings.FOCUS_INFINITY;
+		depth = Math.max(0.1f, depth);
+		if (depth <= 5.0f) return Math.round(depth * 10f) / 10f;
+		return Math.round(depth);
 	}
 
 	private static int nearestApertureIdx(float ap) {

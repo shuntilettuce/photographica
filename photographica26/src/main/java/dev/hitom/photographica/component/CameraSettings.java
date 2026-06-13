@@ -34,6 +34,8 @@ public record CameraSettings(
 	public static final int FOCUS_AF  = 1;
 	public static final int FOCUS_MOB = 2;
 
+	public static final float FOCUS_INFINITY = 999.0f;
+
 	public static final CameraSettings DEFAULT = new CameraSettings(
 			5.6f, 10, 400, 5.0f, 50, LensKind.NONE, 0, 0, EXP_M, FOCUS_MF, false, 0, false
 	);

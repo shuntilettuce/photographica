@@ -1229,20 +1229,21 @@ public final class PhotoCapture {
 		float maxBlurPx = Math.min(32.0f, 80.0f / (aperture * aperture));
 		int   maxR      = Math.max(1, (int) Math.ceil(maxBlurPx));
 
+		float targetAspect = (float) iw / ih;
 		int croppedW, croppedH, cropOffX, cropOffY;
-		if ((float) fbW / fbH > 1.5f) {
+		if ((float) fbW / fbH > targetAspect) {
 			croppedH = fbH;
-			croppedW = Math.round(fbH * 1.5f);
+			croppedW = Math.round(fbH * targetAspect);
 			cropOffX = (fbW - croppedW) / 2;
 			cropOffY = 0;
 		} else {
 			croppedW = fbW;
-			croppedH = Math.round(fbW / 1.5f);
+			croppedH = Math.round(fbW / targetAspect);
 			cropOffX = 0;
 			cropOffY = (fbH - croppedH) / 2;
 		}
 
-		boolean infinityFocus = (focusDist >= 999.0f);
+		boolean infinityFocus = (focusDist >= CameraSettings.FOCUS_INFINITY);
 		// Physically-based thin-lens CoC (200.0 distance scale), projected onto the
 		// sensor and converted to pixels. focalLengthMm() is the lens focal length in mm.
 		float fmm = settings.focalLengthMm();
@@ -1371,11 +1372,11 @@ public final class PhotoCapture {
 		return dst;
 	}
 
-	/** Crops a NativeImage to 3:2 (centered). Returns a new image; caller must close both. */
+	/** Crops a NativeImage to 3:2 or 2:3 portrait (centered). Returns a new image; caller must close both. */
 	private static NativeImage cropTo3to2(NativeImage src) {
 		int w = src.getWidth();
 		int h = src.getHeight();
-		float aspect = 3f / 2f;
+		float aspect = dev.hitom.photographica.client.hud.ViewfinderHud.portraitOrientation ? 2f / 3f : 3f / 2f;
 		int targetW, targetH;
 		if ((float) w / h > aspect) {
 			targetH = h;

@@ -27,7 +27,8 @@ public class GameRendererMixin {
         if (SnapmaticaClient.lensType == 0) return;
         int f = SnapmaticaClient.focalLengthMm;
         if (f <= 0) return;
-        cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(12.0 / f)));
+        double halfSensorMm = SnapmaticaClient.portraitOrientation ? 18.0 : 12.0;
+        cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(halfSensorMm / f)));
     }
 
     @Inject(method = "render(Lnet/minecraft/client/DeltaTracker;Z)V",

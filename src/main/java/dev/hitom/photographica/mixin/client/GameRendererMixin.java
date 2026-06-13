@@ -134,7 +134,8 @@ public class GameRendererMixin {
 		int f = settings.focalLengthMm();
 		if (f <= 0) return;
 
-		double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
+		double halfSensorMm = dev.hitom.photographica.client.hud.ViewfinderHud.portraitOrientation ? 18.0 : 12.0;
+		double vFovDegrees = Math.toDegrees(2.0 * Math.atan(halfSensorMm / f));
 		cir.setReturnValue(vFovDegrees);
 	}
 

@@ -19,11 +19,23 @@ public class SnapmaticaClient implements ClientModInitializer {
     private static KeyMapping shootKey;
     private static KeyMapping settingsKey;
     private static KeyMapping viewfinderSneakKey;
+    private static KeyMapping orientationKey;
 
     public static float   aperture        = 5.6f;
     public static int     shutterSpeedIdx = 10;
     public static int     iso             = 400;
     public static float   focusDistance   = 5.0f;
+
+    /**
+     * Focus-distance sentinel meaning "optical infinity". 100 km — far above any
+     * Minecraft raycast (<=1000 m) or Distant Horizons distance so real subjects
+     * always focus finitely, never collapsing to infinity prematurely.
+     */
+    public static final float FOCUS_INFINITY = 100000.0f;
+
+    /** When true, the viewfinder and saved photo use a 2:3 portrait frame. */
+    public static boolean portraitOrientation = false;
+
     public static int     focalLengthMm   = 50;
     public static int     lensType        = 1;
     public static int     exposureMode    = 0;
@@ -46,7 +58,7 @@ public class SnapmaticaClient implements ClientModInitializer {
         shootKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.snapmatica.shoot",
                 InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_P,
+                GLFW.GLFW_KEY_ENTER,
                 new KeyMapping.Category(Identifier.fromNamespaceAndPath("snapmatica", "category"))
         ));
 
@@ -60,7 +72,14 @@ public class SnapmaticaClient implements ClientModInitializer {
         viewfinderSneakKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.snapmatica.viewfinder_sneak",
                 InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN,
+                GLFW.GLFW_KEY_COMMA,
+                new KeyMapping.Category(Identifier.fromNamespaceAndPath("snapmatica", "category"))
+        ));
+
+        orientationKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.snapmatica.orientation",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_V,
                 new KeyMapping.Category(Identifier.fromNamespaceAndPath("snapmatica", "category"))
         ));
 
@@ -69,6 +88,9 @@ public class SnapmaticaClient implements ClientModInitializer {
 
             while (viewfinderSneakKey.consumeClick()) {
                 viewfinderSneakEnabled = !viewfinderSneakEnabled;
+            }
+            while (orientationKey.consumeClick()) {
+                portraitOrientation = !portraitOrientation;
             }
             if (shootKey.consumeClick()) {
                 PhotoCapture.take();

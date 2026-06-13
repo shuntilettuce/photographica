@@ -34,6 +34,9 @@ public record CameraSettings(
 		int timerSeconds,
 		boolean motionBlur
 ) {
+	/** Infinity-focus sentinel stored in focusDistance. */
+	public static final float FOCUS_INFINITY = 999.0f;
+
 	// Exposure mode constants
 	public static final int EXP_M  = 0;
 	public static final int EXP_AV = 1;

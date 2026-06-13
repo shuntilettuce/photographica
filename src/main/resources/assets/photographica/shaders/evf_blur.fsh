@@ -29,7 +29,7 @@ float computeCoc(float depthM) {
     depthM = max(depthM, 0.05);
     float fmm = FocalLenMm;
     float cocMM;
-    if (FocusDist >= 999.0) {
+    if (FocusDist >= 99999.0) {
         cocMM = (fmm * fmm) / (Aperture * depthM * 200.0);
     } else {
         float s1mm = FocusDist * 200.0;

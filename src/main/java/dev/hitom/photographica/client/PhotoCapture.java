@@ -1269,15 +1269,16 @@ public final class PhotoCapture {
 
 		// Reconstruct the crop window that cropTo3to2 used, so image pixels map to the
 		// correct framebuffer pixels when sampling the depth buffer.
+		float targetA = (float) iw / ih;
 		int croppedW, croppedH, cropOffX, cropOffY;
-		if ((float) fbW / fbH > 1.5f) {        // wider than 3:2 → sides cropped
+		if ((float) fbW / fbH > targetA) {      // wider than target aspect → sides cropped
 			croppedH = fbH;
-			croppedW = Math.round(fbH * 1.5f);
+			croppedW = Math.round(fbH * targetA);
 			cropOffX = (fbW - croppedW) / 2;
 			cropOffY = 0;
-		} else {                                // taller than 3:2 → top/bottom cropped
+		} else {                                // taller than target aspect → top/bottom cropped
 			croppedW = fbW;
-			croppedH = Math.round(fbW / 1.5f);
+			croppedH = Math.round(fbW / targetA);
 			cropOffX = 0;
 			cropOffY = (fbH - croppedH) / 2;
 		}
@@ -1286,7 +1287,7 @@ public final class PhotoCapture {
 		// thin-lens model (focal length, aperture, focus distance). Distances are
 		// in blocks (≈ metres); the *200 factor scales blocks→mm subject distance.
 		//   coc_mm = f^2 / (N * (S1 - f)) * |S2 - S1| / S2
-		boolean infinityFocus = (focusDist >= 999.0f);
+		boolean infinityFocus = (focusDist >= CameraSettings.FOCUS_INFINITY);
 		float fmm = settings.focalLengthMm();
 		float pxPerMm = (float) ih / 24.0f;   // 24mm sensor height maps to image height px
 		float[] cocMap = new float[iw * ih];
@@ -1411,11 +1412,12 @@ public final class PhotoCapture {
 		return dst;
 	}
 
-	/** Crops a NativeImage to 3:2 (centered). Returns a new image; caller must close both. */
+	/** Crops a NativeImage to 3:2 or 2:3 (centered), based on portrait orientation toggle. Returns a new image; caller must close both. */
 	private static NativeImage cropTo3to2(NativeImage src) {
 		int w = src.getWidth();
 		int h = src.getHeight();
-		float aspect = 3f / 2f;
+		float targetAspect = dev.hitom.photographica.client.hud.ViewfinderHud.portraitOrientation ? 2f / 3f : 3f / 2f;
+		float aspect = targetAspect;
 		int targetW, targetH;
 		if ((float) w / h > aspect) {
 			targetH = h;

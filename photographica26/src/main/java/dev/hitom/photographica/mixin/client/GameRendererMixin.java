@@ -2,6 +2,7 @@ package dev.hitom.photographica.mixin.client;
 
 import dev.hitom.photographica.client.PhotoCapture;
 import dev.hitom.photographica.client.VideoRecorder;
+import dev.hitom.photographica.client.hud.ViewfinderHud;
 import dev.hitom.photographica.client.render.EvfBlurRenderer;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.LensKind;
@@ -156,7 +157,8 @@ public class GameRendererMixin {
         int f = settings.focalLengthMm();
         if (f <= 0) return -1;
 
-        return Math.toDegrees(2.0 * Math.atan(12.0 / f));
+        double halfSensorMm = ViewfinderHud.portraitOrientation ? 18.0 : 12.0;
+        return Math.toDegrees(2.0 * Math.atan(halfSensorMm / f));
     }
 
     /**

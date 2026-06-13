@@ -112,6 +112,12 @@ public class PhotographicaClient implements ClientModInitializer {
 				GLFW.GLFW_KEY_G,
 				photographicaCategory
 		));
+		KeyMapping orientationKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+				"key.photographica.orientation",
+				InputConstants.Type.KEYSYM,
+				GLFW.GLFW_KEY_V,
+				photographicaCategory
+		));
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			AutoCamera.tick(client);
@@ -165,6 +171,9 @@ public class PhotographicaClient implements ClientModInitializer {
 			}
 			if (unloadSdCardKey.consumeClick()) {
 				ClientPlayNetworking.send(new UnloadSdCardPayload());
+			}
+			while (orientationKey.wasPressed()) {
+				ViewfinderHud.portraitOrientation = !ViewfinderHud.portraitOrientation;
 			}
 		});
 

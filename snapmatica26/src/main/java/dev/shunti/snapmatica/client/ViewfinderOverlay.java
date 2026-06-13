@@ -37,14 +37,14 @@ public final class ViewfinderOverlay {
         if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isShiftKeyDown()) return;
         if (mc.screen != null) return;
 
-        float aspect = 3f/2f;
+        float aspect = SnapmaticaClient.portraitOrientation ? 2f/3f : 3f/2f;
         int fh = (int)(sh*0.86f), fw = (int)(fh*aspect);
         if (fw > sw*0.94f) { fw = (int)(sw*0.94f); fh = (int)(fw/aspect); }
         int fx = (sw-fw)/2, fy = (sh-fh)/2, fx2 = fx+fw, fy2 = fy+fh;
 
         boolean hasLensForBlur = SnapmaticaClient.lensType != 0;
         if (hasLensForBlur && SnapmaticaClient.aperture < 8.0f
-                && SnapmaticaClient.focusDistance < 999.0f) {
+                && SnapmaticaClient.focusDistance < SnapmaticaClient.FOCUS_INFINITY) {
             EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2,
                     SnapmaticaClient.focusDistance, SnapmaticaClient.aperture,
                     SnapmaticaClient.focalLengthMm);
@@ -81,7 +81,7 @@ public final class ViewfinderOverlay {
         ctx.text(font, String.format("F%s  %s  ISO%d  %s",
                 fmt(dispAp), SHUTTERS[si], SnapmaticaClient.iso, fp),
                 fx+6, fy2-font.lineHeight-14, 0xFFE8DCC4, true);
-        if (SnapmaticaClient.lensType != 0 && SnapmaticaClient.focusDistance < 999.0f) {
+        if (SnapmaticaClient.lensType != 0 && SnapmaticaClient.focusDistance < SnapmaticaClient.FOCUS_INFINITY) {
             String fd = fmtFocusDist(SnapmaticaClient.focusDistance);
             ctx.text(font, fd, fx2 - font.width(fd) - 6, fy + 4, rc, true);
         }
@@ -102,7 +102,8 @@ public final class ViewfinderOverlay {
         String[] fl2 = {"MF","AF","MOB"};
         ctx.text(font,
                 el[clampIdx(SnapmaticaClient.exposureMode,4)]
-                + " | " + fl2[clampIdx(SnapmaticaClient.focusMode,3)],
+                + " | " + fl2[clampIdx(SnapmaticaClient.focusMode,3)]
+                +" | "+(SnapmaticaClient.portraitOrientation ? "3:2 V" : "3:2 H"),
                 fx+6, fy+4+font.lineHeight*2+4, 0xFFCCCCFF, true);
     }
 
@@ -179,9 +180,9 @@ public final class ViewfinderOverlay {
     private static int focusReticleColor() {
         if (SnapmaticaClient.lensType == 0 || SnapmaticaClient.aperture >= 8f)
             return 0xFFFFFFFF;
-        if (SnapmaticaClient.focusDistance >= 999f)
+        if (SnapmaticaClient.focusDistance >= SnapmaticaClient.FOCUS_INFINITY)
             return 0xFFFFFFFF;
-        if (PhotoCapture.lastSceneDepthBlocks >= 999f)
+        if (PhotoCapture.lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY)
             return 0xFFE04040;  // sky / beyond range — always out of focus
         float tol  = SnapmaticaClient.focusDistance * SnapmaticaClient.aperture * 0.08f;
         float diff = Math.abs(PhotoCapture.lastSceneDepthBlocks - SnapmaticaClient.focusDistance);
@@ -217,7 +218,7 @@ public final class ViewfinderOverlay {
     }
 
     private static String fmtFocusDist(float v) {
-        if (v >= 999.0f) return "∞";
+        if (v >= SnapmaticaClient.FOCUS_INFINITY) return "∞";
         if (v < 1.0f) return String.format("%.1fm", v);
         return v == (int)v ? ((int)v + "m") : String.format("%.1fm", v);
     }
