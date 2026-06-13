@@ -197,6 +197,11 @@ public final class PhotoCapture {
             EvfBlurRenderer.captureDepth(vpW, vpH);
             float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
             if (gpuDepth > 0.0f) lastSceneDepthBlocks = gpuDepth;
+            // DH fallback: if still 999 (sky / beyond MC range), query DH LOD terrain
+            if (lastSceneDepthBlocks >= 999f) {
+                float dhDist = DhIntegration.queryLookDistance(mc);
+                if (dhDist < 999f) lastSceneDepthBlocks = dhDist;
+            }
             if (capturePending) {
                 float[] depth = EvfBlurRenderer.readLinearDepthCpu(vpW, vpH);
                 if (depth != null) {
