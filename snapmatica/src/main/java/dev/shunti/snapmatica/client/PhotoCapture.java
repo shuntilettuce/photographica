@@ -213,11 +213,14 @@ public final class PhotoCapture {
                 }
             }
             if (capturePending) {
-                float[] depth = EvfBlurRenderer.readLinearDepthCpu(vpW, vpH);
+                // Use the depth texture's own dimensions, not the GL viewport: shader mods
+                // (Iris, etc.) can make those differ, causing readLinearDepthCpu to bail out
+                // and the saved photo to have no DoF even though the EVF preview looked fine.
+                float[] depth = EvfBlurRenderer.readLinearDepthCpu();
                 if (depth != null) {
                     pendingLinearDepth = depth;
-                    pendingDepthFbW    = vpW;
-                    pendingDepthFbH    = vpH;
+                    pendingDepthFbW    = EvfBlurRenderer.depthTexW;
+                    pendingDepthFbH    = EvfBlurRenderer.depthTexH;
                 }
             }
         }*/
@@ -235,11 +238,11 @@ public final class PhotoCapture {
         EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
         EvfBlurRenderer.captureDepth(vpW, vpH);
         if (capturePending) {
-            float[] depth = EvfBlurRenderer.readLinearDepthCpu(vpW, vpH);
+            float[] depth = EvfBlurRenderer.readLinearDepthCpu();
             if (depth != null) {
                 pendingLinearDepth = depth;
-                pendingDepthFbW    = vpW;
-                pendingDepthFbH    = vpH;
+                pendingDepthFbW    = EvfBlurRenderer.depthTexW;
+                pendingDepthFbH    = EvfBlurRenderer.depthTexH;
             }
         }
 

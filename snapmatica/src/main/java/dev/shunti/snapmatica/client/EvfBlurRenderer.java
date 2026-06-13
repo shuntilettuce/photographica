@@ -41,8 +41,8 @@ public final class EvfBlurRenderer {
     private static int vbo      = -1;
 
     private static int depthTex  = -1;
-    private static int depthTexW = 0;
-    private static int depthTexH = 0;
+    static int depthTexW = 0;
+    static int depthTexH = 0;
 
     //? if >=1.21.11 {
     /*private static int writeBackFbo   = -1;
@@ -298,8 +298,14 @@ public final class EvfBlurRenderer {
     }*/
     //?}
 
-    public static float[] readLinearDepthCpu(int fbW, int fbH) {
-        if (depthTex == -1 || depthTexW != fbW || depthTexH != fbH) return null;
+    /**
+     * Reads the captured depth texture back to the CPU as linearised depth in blocks.
+     * Uses the texture's own dimensions so shader mods (Iris, etc.) that cause the GL
+     * viewport to differ from the framebuffer texture size don't suppress the readback.
+     */
+    public static float[] readLinearDepthCpu() {
+        if (depthTex == -1 || depthTexW <= 0 || depthTexH <= 0) return null;
+        int fbW = depthTexW, fbH = depthTexH;
         java.nio.FloatBuffer buf = BufferUtils.createFloatBuffer(fbW * fbH);
         int prevTex = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
