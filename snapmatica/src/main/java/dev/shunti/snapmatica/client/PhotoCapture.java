@@ -183,10 +183,13 @@ public final class PhotoCapture {
             double eDist = eye.distanceTo(entityHit.getPos());
             if (eDist < bestDist) bestDist = eDist;
         }
-        // Raycast gives a fallback depth (works within loaded chunks).
+        // The world raycast above is geometrically accurate for any loaded block out to
+        // maxDist (1000), which covers every vanilla render distance. It is the PRIMARY
+        // focus distance and is NOT overridden by the GPU depth reconstruction: that
+        // reconstruction saturates at currentDepthFar (≈ rd*64) and was the root cause of
+        // the "AF stuck at ~940m" bug.
         lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : 999.0f;
-        // Capture depth texture for EVF blur shader, then override with GPU center
-        // pixel which is more accurate than the raycast for distant / complex terrain.
+        // Capture the depth texture (the EVF blur shader needs it every frame).
         int[] viewport = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
         int vpW = viewport[2];
@@ -195,17 +198,19 @@ public final class PhotoCapture {
             int rd = mc.options.getViewDistance().getValue();
             EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
             EvfBlurRenderer.captureDepth(vpW, vpH);
-            float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
-            if (gpuDepth > 0.0f) lastSceneDepthBlocks = gpuDepth;
-            // DH fallback: trigger when the GPU depth reads sky (999) OR saturates near the
-            // assumed far plane. The linear reconstruction clamps at currentDepthFar (≈ rd*64,
-            // e.g. ~940 for high render distances), so DH terrain reads ~940 and never hits the
-            // 999 sentinel. Anything at/beyond ~90% of the far plane is unreliable -> ask DH.
-            // DH may report km-scale distances, so accept any positive hit.
-            float farPlane = EvfBlurRenderer.currentDepthFar;
-            if (lastSceneDepthBlocks >= 999f || lastSceneDepthBlocks >= farPlane * 0.9f) {
-                float dhDist = DhIntegration.queryLookDistance(mc);
-                if (dhDist > 0f) lastSceneDepthBlocks = dhDist;
+            // Only when the raycast missed (sky, or terrain beyond the loaded range) do we
+            // fall back: first the GPU centre depth (rejecting saturated readings near the
+            // far plane), then DH LOD terrain which may report km-scale distances.
+            if (lastSceneDepthBlocks >= 999f) {
+                float farPlane = EvfBlurRenderer.currentDepthFar;
+                float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
+                if (gpuDepth > 0.0f && gpuDepth < farPlane * 0.95f) {
+                    lastSceneDepthBlocks = gpuDepth;
+                }
+                if (lastSceneDepthBlocks >= 999f) {
+                    float dhDist = DhIntegration.queryLookDistance(mc);
+                    if (dhDist > 0f) lastSceneDepthBlocks = dhDist;
+                }
             }
             if (capturePending) {
                 float[] depth = EvfBlurRenderer.readLinearDepthCpu(vpW, vpH);
@@ -349,25 +354,28 @@ public final class PhotoCapture {
             cropOffX = 0; cropOffY = (fbH - croppedH) / 2;
         }
 
+        // Physical thin-lens circle of confusion (same model as the EVF shader):
+        //   coc_mm = f^2 / (N * (S1 - f)) * |S2 - S1| / S2
+        // This keeps deep depth-of-field for wide/normal lenses so distant terrain stays
+        // sharp, instead of saturating to max blur a short distance past the focus plane.
         boolean infinityFocus = (focusDist >= 999.0f);
-        float focalM = SnapmaticaClient.focalLengthMm / 1000f;
+        float fmm = SnapmaticaClient.focalLengthMm;
         float pxPerMm = (float) ih / 24.0f;  // 24mm sensor height maps to ih pixels
         float[] cocMap = new float[iw * ih];
         for (int iy = 0; iy < ih; iy++) {
             for (int ix = 0; ix < iw; ix++) {
                 int fx    = Math.max(0, Math.min(fbW - 1, cropOffX + ix * croppedW / iw));
                 int fy_gl = Math.max(0, Math.min(fbH - 1, fbH - 1 - (cropOffY + iy * croppedH / ih)));
-                float depth = linearDepth[fy_gl * fbW + fx];
-                float coc;
+                float depthM = Math.max(linearDepth[fy_gl * fbW + fx], 0.05f);
+                float cocMM;
                 if (infinityFocus) {
-                    float depthM = Math.max(depth, focalM * 1.001f);
-                    float cocM = (focalM * focalM) / (aperture * (depthM - focalM));
-                    coc = Math.min(maxBlurPx, cocM * 1000f * pxPerMm * 0.5f);
+                    cocMM = (fmm * fmm) / (aperture * depthM * 1000f);
                 } else {
-                    float r = depth / focusDist;
-                    coc = (depth <= focusDist) ? (1.0f - r) * maxBlurPx : ((r - 1.0f) / r) * maxBlurPx;
+                    float s1mm = focusDist * 1000f;
+                    cocMM = (fmm * fmm) * Math.abs(depthM - focusDist)
+                            / (depthM * aperture * Math.max(s1mm - fmm, 1.0f));
                 }
-                cocMap[iy * iw + ix] = Math.min(coc, maxBlurPx);
+                cocMap[iy * iw + ix] = Math.min(cocMM * pxPerMm, maxBlurPx);
             }
         }
 

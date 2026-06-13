@@ -57,6 +57,9 @@ public final class EvfBlurRenderer {
     private static int locMaxBlurPx  = -1;
     private static int locNear       = -1;
     private static int locFar        = -1;
+    private static int locFocalLen   = -1;
+    private static int locAperture   = -1;
+    private static int locPxPerMm    = -1;
 
     private static final float NEAR = 0.05f;
     public static float currentDepthFar = 512.0f;
@@ -141,13 +144,14 @@ public final class EvfBlurRenderer {
 
     /**
      * Applies depth-aware two-pass Gaussian blur to the viewfinder area.
-     * maxBlurPx is aperture-only — distScale removed so near objects blur
-     * correctly even when focused far away.
+     * The per-pixel circle of confusion is computed in the shader from a
+     * physical thin-lens model (focal length, aperture, focus distance), so
+     * maxBlurPx here is only a performance ceiling on the kernel radius.
      */
     public static void renderBlur(int fx, int fy, int fx2, int fy2,
-                                  float focusDist, float aperture) {
+                                  float focusDist, float aperture, float focalLenMm) {
         if (depthTex == -1) return;
-        float maxBlurPx = Math.min(50.0f / (aperture * aperture), 20.0f);
+        float maxBlurPx = Math.min(50.0f / aperture, 24.0f);
         if (maxBlurPx < 0.5f) return;
 
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -213,6 +217,9 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locMaxBlurPx, maxBlurPx);
         GL20.glUniform1f(locNear, NEAR);
         GL20.glUniform1f(locFar, currentDepthFar);
+        GL20.glUniform1f(locFocalLen, focalLenMm);
+        GL20.glUniform1f(locAperture, aperture);
+        GL20.glUniform1f(locPxPerMm, fbH / 24.0f);  // 24mm sensor height maps to fbH px
 
         // Pass 1: Horizontal blur, main → aux
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, auxFbo);
@@ -347,6 +354,9 @@ public final class EvfBlurRenderer {
             locMaxBlurPx = GL20.glGetUniformLocation(program, "MaxBlurPx");
             locNear      = GL20.glGetUniformLocation(program, "Near");
             locFar       = GL20.glGetUniformLocation(program, "Far");
+            locFocalLen  = GL20.glGetUniformLocation(program, "FocalLenMm");
+            locAperture  = GL20.glGetUniformLocation(program, "Aperture");
+            locPxPerMm   = GL20.glGetUniformLocation(program, "PxPerMm");
 
             float[] verts = {
                 -1f, -1f,  0f, 0f,

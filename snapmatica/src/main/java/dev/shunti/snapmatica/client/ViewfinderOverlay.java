@@ -49,7 +49,8 @@ public final class ViewfinderOverlay {
         if (hasLensForBlur && SnapmaticaClient.aperture < 8.0f
                 && SnapmaticaClient.focusDistance < 999.0f) {
             EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2,
-                    SnapmaticaClient.focusDistance, SnapmaticaClient.aperture);
+                    SnapmaticaClient.focusDistance, SnapmaticaClient.aperture,
+                    SnapmaticaClient.focalLengthMm);
         }
 
         // Bezels
