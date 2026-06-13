@@ -33,3 +33,7 @@ server.log
 
 # Stray class files from build
 net/
+
+# Build artifacts dropped in repo root
+*.jar
+META-INF/
