@@ -285,7 +285,7 @@ public final class EvfBlurRenderer {
                 GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
         float rawD = buf.get(0);
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevReadFbo);
-        if (rawD >= 0.9999f) return 999.0f;
+        if (rawD >= 0.999999f) return 999.0f;  // sky / beyond far plane (was 0.9999, too aggressive)
         if (rawD < 0.001f) return -1.0f;
         return NEAR * currentDepthFar / (currentDepthFar - rawD * (currentDepthFar - NEAR));
     }*/
