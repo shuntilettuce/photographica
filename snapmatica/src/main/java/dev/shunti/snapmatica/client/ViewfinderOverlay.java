@@ -38,7 +38,7 @@ public final class ViewfinderOverlay {
         if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isSneaking()) return;
         if (mc.currentScreen != null) return;
 
-        float aspect = 3f/2f;
+        float aspect = SnapmaticaClient.portraitOrientation ? 2f/3f : 3f/2f;
         int fh = (int)(sh*0.86f), fw = (int)(fh*aspect);
         if (fw > sw*0.94f) { fw = (int)(sw*0.94f); fh = (int)(fw/aspect); }
         int fx = (sw-fw)/2, fy = (sh-fh)/2, fx2 = fx+fw, fy2 = fy+fh;
@@ -116,7 +116,8 @@ public final class ViewfinderOverlay {
         String[] fl2={"MF","AF","MOB"};
         ctx.drawTextWithShadow(tr,Text.literal(
                 el[clampIdx(SnapmaticaClient.exposureMode,4)]
-                +" | "+fl2[clampIdx(SnapmaticaClient.focusMode,3)]),
+                +" | "+fl2[clampIdx(SnapmaticaClient.focusMode,3)]
+                +" | "+(SnapmaticaClient.portraitOrientation?"3:2 V":"3:2 H")),
                 fx+6,fy+4+tr.fontHeight*2+4,0xFFCCCCFF);
 
     }

@@ -24,12 +24,18 @@ public final class AutoFocus {
     private static final int FOCUS_AF  = 1;
     private static final int FOCUS_MOB = 2;
 
+    // AF-only stops. Dense 0.1 m increments out to 5 m give precise macro / close-up
+    // focusing (where small distance errors visibly defocus the subject), then coarser
+    // photographic stops out to 999 (= infinity focus, subjects beyond ~940 m).
     private static final List<Float> FOCUS_STOPS = List.of(
-            0.3f,  0.4f,  0.5f,  0.6f,  0.7f,  0.8f,  1.0f,  1.2f,  1.5f,  2.0f,
-            2.5f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  10.0f, 12.0f, 14.0f,
-            17.0f, 20.0f, 24.0f, 29.0f, 35.0f, 42.0f, 50.0f, 60.0f, 73.0f, 87.0f,
-            105.0f, 125.0f, 150.0f, 180.0f, 215.0f, 260.0f, 310.0f, 375.0f, 450.0f, 540.0f,
-            650.0f, 780.0f, 940.0f, 999.0f);  // 999 = infinity focus (subjects beyond ~940m)
+            0.1f,  0.2f,  0.3f,  0.4f,  0.5f,  0.6f,  0.7f,  0.8f,  0.9f,  1.0f,
+            1.1f,  1.2f,  1.3f,  1.4f,  1.5f,  1.6f,  1.7f,  1.8f,  1.9f,  2.0f,
+            2.1f,  2.2f,  2.3f,  2.4f,  2.5f,  2.6f,  2.7f,  2.8f,  2.9f,  3.0f,
+            3.1f,  3.2f,  3.3f,  3.4f,  3.5f,  3.6f,  3.7f,  3.8f,  3.9f,  4.0f,
+            4.1f,  4.2f,  4.3f,  4.4f,  4.5f,  4.6f,  4.7f,  4.8f,  4.9f,  5.0f,
+            6.0f,  7.0f,  8.0f,  10.0f, 12.0f, 14.0f, 17.0f, 20.0f, 24.0f, 29.0f,
+            35.0f, 42.0f, 50.0f, 60.0f, 73.0f, 87.0f, 105.0f, 125.0f, 150.0f, 180.0f,
+            215.0f, 260.0f, 310.0f, 375.0f, 450.0f, 540.0f, 650.0f, 780.0f, 940.0f, 999.0f);
 
     // cos(5°) — entities must be within this cone of the look direction
     private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));

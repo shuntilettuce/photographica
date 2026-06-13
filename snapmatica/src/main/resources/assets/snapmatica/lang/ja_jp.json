@@ -2,6 +2,7 @@
   "key.snapmatica.shoot": "撮影 / シャッター",
   "key.snapmatica.settings": "カメラ設定を開く",
   "key.snapmatica.viewfinder_sneak": "ビューファインダー切り替え（スニーク）",
+  "key.snapmatica.orientation": "縦／横 切り替え",
   "category.snapmatica": "Snapmatica",
   "key.category.snapmatica.snapmatica": "Snapmatica"
 }

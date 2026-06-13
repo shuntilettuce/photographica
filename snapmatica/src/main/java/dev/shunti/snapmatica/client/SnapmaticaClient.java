@@ -29,6 +29,7 @@ public class SnapmaticaClient implements ClientModInitializer {
     private static KeyBinding shootKey;
     private static KeyBinding settingsKey;
     private static KeyBinding viewfinderSneakKey;  // toggle sneak-to-viewfinder mode
+    private static KeyBinding orientationKey;       // toggle portrait/landscape framing
     // ── Camera state (client-side only, no server sync needed) ───────────────────
     public static float aperture = 5.6f;
     public static int shutterSpeedIdx = 10;      // index into SHUTTER_SECONDS[] (1/30)
@@ -47,6 +48,9 @@ public class SnapmaticaClient implements ClientModInitializer {
 
     /** When true, sneaking shows the viewfinder overlay (default: enabled). */
     public static boolean viewfinderSneakEnabled = true;
+
+    /** When true, the viewfinder and saved photo use a 2:3 portrait frame instead of 3:2. */
+    public static boolean portraitOrientation = false;
 
     // Shutter speed table (same as Photographica's CameraSettings)
     public static final double[] SHUTTER_SECONDS = {
@@ -106,6 +110,22 @@ public class SnapmaticaClient implements ClientModInitializer {
         ));
         //?}
 
+        //? if >=1.21.11 {
+        /*orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.snapmatica.orientation",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_V,
+                SNAPMATICA_CATEGORY
+        ));*/
+        //?} else {
+        orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.snapmatica.orientation",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_V,            // default: V — toggle portrait/landscape
+                "category.snapmatica"
+        ));
+        //?}
+
         // ── Tick handler ─────────────────────────────────────────────────────────
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
@@ -113,6 +133,11 @@ public class SnapmaticaClient implements ClientModInitializer {
             // Toggle the sneak-to-viewfinder mode
             while (viewfinderSneakKey.wasPressed()) {
                 viewfinderSneakEnabled = !viewfinderSneakEnabled;
+            }
+
+            // Toggle portrait / landscape framing
+            while (orientationKey.wasPressed()) {
+                portraitOrientation = !portraitOrientation;
             }
 
             // Shoot key

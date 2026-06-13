@@ -103,10 +103,10 @@ public final class PhotoCapture {
     }
 
     private static void processScreenshot(MinecraftClient mc, NativeImage raw, float[] linearDepth, int fbW, int fbH) {
-        // ── Crop to 3:2 aspect ratio ────────────────────────────────────────────
+        // ── Crop to 3:2 (landscape) or 2:3 (portrait) aspect ratio ──────────────
         int w = raw.getWidth();
         int h = raw.getHeight();
-        float targetAspect = 3f / 2f;
+        float targetAspect = SnapmaticaClient.portraitOrientation ? 2f / 3f : 3f / 2f;
         int cropW, cropH;
         if ((float) w / h > targetAspect) {
             cropH = h;
@@ -345,12 +345,15 @@ public final class PhotoCapture {
         float maxBlurPx = Math.min(32.0f, 80.0f / (aperture * aperture));
         int   maxR      = Math.max(1, (int) Math.ceil(maxBlurPx));
 
+        // Match the depth-buffer crop to the output image aspect (iw/ih), so the same
+        // mapping works for both 3:2 landscape and 2:3 portrait framing.
+        float targetA = (float) iw / ih;
         int croppedW, croppedH, cropOffX, cropOffY;
-        if ((float) fbW / fbH > 1.5f) {
-            croppedH = fbH; croppedW = Math.round(fbH * 1.5f);
+        if ((float) fbW / fbH > targetA) {
+            croppedH = fbH; croppedW = Math.round(fbH * targetA);
             cropOffX = (fbW - croppedW) / 2; cropOffY = 0;
         } else {
-            croppedW = fbW; croppedH = Math.round(fbW / 1.5f);
+            croppedW = fbW; croppedH = Math.round(fbW / targetA);
             cropOffX = 0; cropOffY = (fbH - croppedH) / 2;
         }
 
