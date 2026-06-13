@@ -369,9 +369,9 @@ public final class PhotoCapture {
                 float depthM = Math.max(linearDepth[fy_gl * fbW + fx], 0.05f);
                 float cocMM;
                 if (infinityFocus) {
-                    cocMM = (fmm * fmm) / (aperture * depthM * 1000f);
+                    cocMM = (fmm * fmm) / (aperture * depthM * 100f);
                 } else {
-                    float s1mm = focusDist * 1000f;
+                    float s1mm = focusDist * 100f;
                     cocMM = (fmm * fmm) * Math.abs(depthM - focusDist)
                             / (depthM * aperture * Math.max(s1mm - fmm, 1.0f));
                 }
