@@ -69,6 +69,9 @@ public class SnapmaticaClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        // ── Load persisted settings (sneak-viewfinder toggle, etc.) ─────────────
+        SnapmaticaConfig.load();
+
         // ── Register key bindings ───────────────────────────────────────────────
         //? if >=1.21.11 {
         /*shootKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
@@ -154,9 +157,10 @@ public class SnapmaticaClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
 
-            // Toggle the sneak-to-viewfinder mode
+            // Toggle the sneak-to-viewfinder mode (persisted across sessions)
             while (viewfinderSneakKey.wasPressed()) {
                 viewfinderSneakEnabled = !viewfinderSneakEnabled;
+                SnapmaticaConfig.save();
             }
 
             // Toggle portrait / landscape framing
