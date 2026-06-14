@@ -14,6 +14,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Client-side video recording engine for Snapmatica.
@@ -59,6 +61,11 @@ public final class VideoRecorder {
     private static File            rawDir;
     private static List<FrameMeta> frameMetas;
 
+    // Count of frames whose PNG write has completed (success or failure).
+    // Incremented by the ioExecutor thread; read by the post-processing thread
+    // to display write-phase progress (0–10%).
+    private static final AtomicInteger writtenFrames = new AtomicInteger(0);
+
     private static final ExecutorService ioExecutor =
             Executors.newSingleThreadExecutor(r -> {
                 Thread t = new Thread(r, "snapmatica-video-io");
@@ -98,6 +105,7 @@ public final class VideoRecorder {
         currentFps        = FPS;
         frameCount        = 0;
         virtualFrameCount = 0;
+        writtenFrames.set(0);
         recordStartMs = System.currentTimeMillis();
         nextFrameMs   = recordStartMs;
         frameMetas    = new ArrayList<>(MAX_FRAMES);
@@ -216,6 +224,8 @@ public final class VideoRecorder {
             } catch (Exception e) {
                 raw.close();
                 System.err.println("[VideoRecorder] Frame process failed: " + outFile);
+            } finally {
+                writtenFrames.incrementAndGet();
             }
         });
         //?}
@@ -230,7 +240,7 @@ public final class VideoRecorder {
     private static void applyPreviewBlur(MinecraftClient mc) {
         if (SnapmaticaClient.lensType == 0) return;
         if (SnapmaticaClient.aperture >= 8.0f) return;
-        if (SnapmaticaClient.focusDistance >= SnapmaticaClient.FOCUS_INFINITY) return;
+        // FOCUS_INFINITY is valid: the shader computes foreground blur (coc = f²/(N·depth)).
         int sw = mc.getWindow().getScaledWidth();
         int sh = mc.getWindow().getScaledHeight();
         // Full-frame region → the pass-2 scissor in renderBlur covers the entire frame.
@@ -242,9 +252,6 @@ public final class VideoRecorder {
     // ── Post-processing (encode only) ─────────────────────────────────────────────
 
     private static void doPostProcess(List<FrameMeta> metas, File rawDirIn, File vidDir) {
-        // Wait for the I/O thread to finish writing all frame PNGs before encoding.
-        try { ioExecutor.submit(() -> {}).get(); } catch (Exception ignored) {}
-
         int total = metas.size();
         if (total == 0) {
             postProcessing = false;
@@ -252,6 +259,18 @@ public final class VideoRecorder {
             doneAtMs       = System.currentTimeMillis();
             return;
         }
+
+        // Wait for the I/O thread to finish writing all frame PNGs,
+        // updating the progress bar (0–10%) while we wait.
+        ppMessage = "フレーム書き込み中...";
+        Future<?> sentinel = ioExecutor.submit(() -> {});
+        while (!sentinel.isDone()) {
+            ppProgress = writtenFrames.get() * 10 / total;
+            try { Thread.sleep(200); } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt(); break;
+            }
+        }
+        try { sentinel.get(); } catch (Exception ignored) {}
 
         ppMessage  = "MP4 エンコード中...";
         ppProgress = 10;

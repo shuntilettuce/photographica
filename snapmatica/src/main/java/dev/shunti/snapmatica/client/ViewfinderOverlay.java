@@ -46,8 +46,9 @@ public final class ViewfinderOverlay {
         // EVF real-time DoF blur (GPU shader, depth-aware) — rendered before bezels
         // so it only affects the scene inside the viewfinder frame.
         boolean hasLensForBlur = SnapmaticaClient.lensType != 0;
-        if (hasLensForBlur && SnapmaticaClient.aperture < 8.0f
-                && SnapmaticaClient.focusDistance < SnapmaticaClient.FOCUS_INFINITY) {
+        if (hasLensForBlur && SnapmaticaClient.aperture < 8.0f) {
+            // FOCUS_INFINITY is a valid input: the shader computes foreground blur at
+            // infinity focus (coc = f²/(N·depth)), so no early-out needed here.
             EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2,
                     SnapmaticaClient.focusDistance, SnapmaticaClient.aperture,
                     SnapmaticaClient.focalLengthMm);
