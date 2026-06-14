@@ -54,17 +54,18 @@ public final class VideoRecorder {
     // ── Depth of field — compact/phone camera: deep focus, gentle bokeh ─────────
     // Small sensors keep a wide band around the focus plane perfectly sharp and
     // only softly separate strongly defocused regions. Nothing like cinema glass.
-    private static final float DOF_DEADZONE = 0.45f;  // relative defocus kept fully sharp
-    private static final float DOF_GAIN     = 3.0f;   // bokeh px per unit relative defocus
-    private static final float DOF_MAX_PX   = 6.0f;   // hard ceiling on bokeh radius
+    private static final float DOF_DEADZONE = 0.70f;  // relative defocus kept fully sharp
+    private static final float DOF_GAIN     = 1.5f;   // bokeh px per unit relative defocus
+    private static final float DOF_MAX_PX   = 3.0f;   // hard ceiling on bokeh radius
+    private static final int   DOF_SMOOTH_R = 15;     // CoC map smoothing radius (px)
 
     // ── Motion blur — stabilised (EIS): short, only on genuinely fast motion ────
     private static final float MB_STAB      = 0.40f;  // fraction of apparent motion that survives
     private static final float MB_THRESHOLD = 1.5f;   // ignore sub-threshold motion (px)
     private static final float MB_MAX_DIV   = 50.0f;  // maxBlurPx = frameWidth / MB_MAX_DIV
 
-    private static final int   FOCUS_DWELL_FRAMES = 20;
-    private static final float FOCUS_TOL          = 0.25f;
+    // Per-frame blend α for continuous focus tracking (τ ≈ 80 frames ≈ 3 s at 24 fps).
+    private static final float FOCUS_ALPHA = 0.012f;
 
     // ── Smooth camera state ──────────────────────────────────────────────────────
     private static boolean prevSmoothCamera = false;
@@ -84,9 +85,7 @@ public final class VideoRecorder {
     private static List<FrameMeta> frameMetas;
 
     // ── Autofocus state ──────────────────────────────────────────────────────────
-    private static float focusCandidateDepth  = 5.0f;
-    private static int   focusCandidateFrames = 0;
-    private static float currentFocusDepth    = 5.0f;
+    private static float currentFocusDepth = 5.0f;
 
     // ── Angular velocity tracking ────────────────────────────────────────────────
     private static float   prevFrameYaw       = 0f;
@@ -164,9 +163,7 @@ public final class VideoRecorder {
         nextFrameMs   = recordStartMs;
         frameMetas    = new ArrayList<>(MAX_FRAMES);
 
-        currentFocusDepth    = 5.0f;
-        focusCandidateDepth  = 5.0f;
-        focusCandidateFrames = 0;
+        currentFocusDepth = 5.0f;
 
         rawDir = new File(mc.runDirectory, "snapmatica/video_temp/" + sessionId + "/raw");
         if (!rawDir.mkdirs()) {
@@ -283,17 +280,11 @@ public final class VideoRecorder {
             depthGrid = flatDepthGrid(currentFocusDepth);
         }
 
-        // ── Dwell-time autofocus ─────────────────────────────────────────────────
+        // ── Continuous gentle autofocus — slow EMA toward centre-frame depth ────
+        // α=0.012 → τ≈80 frames ≈ 3 s at 24 fps. No dwell threshold or sudden jump,
+        // so focus creeps gradually to wherever the player is looking.
         float centreDepth = Math.max(depthGrid[(DEP_H / 2) * DEP_W + DEP_W / 2], 0.3f);
-        if (Math.abs(centreDepth - focusCandidateDepth)
-                / Math.max(focusCandidateDepth, 0.1f) <= FOCUS_TOL) {
-            focusCandidateFrames++;
-            if (focusCandidateFrames >= FOCUS_DWELL_FRAMES)
-                currentFocusDepth = currentFocusDepth * 0.65f + focusCandidateDepth * 0.35f;
-        } else {
-            focusCandidateDepth  = centreDepth;
-            focusCandidateFrames = 0;
-        }
+        currentFocusDepth = currentFocusDepth * (1f - FOCUS_ALPHA) + centreDepth * FOCUS_ALPHA;
 
         Vec3d vel = mc.player.getVelocity();
         float ap  = SnapmaticaClient.aperture;
@@ -526,8 +517,12 @@ public final class VideoRecorder {
             }
         }
 
+        // Smooth the CoC map so DoF transitions across depth edges are gradual
+        // rather than stepping along the 32×18 grid cell boundaries.
+        float[] smoothedCoc = boxBlurMap(cocMap, w, h, DOF_SMOOTH_R);
+
         // Single gentle pass — a low-radius box blur is all a small sensor needs.
-        NativeImage pass2 = separableVariableBlur(pass1, cocMap, w, h);
+        NativeImage pass2 = separableVariableBlur(pass1, smoothedCoc, w, h);
         pass1.close();
 
         // ── Pass 3: motion blur ───────────────────────────────────────────────────
@@ -635,6 +630,34 @@ public final class VideoRecorder {
 
         float mult = 140.0f / p50;
         return Math.max(0.7f, Math.min(4.0f, mult));
+    }
+
+    // ── CoC map smoothing (prefix-sum box blur) ───────────────────────────────────
+    // Blends CoC values across depth discontinuities so DoF transitions look
+    // gradual rather than stepping along the coarse 32×18 depth grid.
+
+    private static float[] boxBlurMap(float[] src, int w, int h, int r) {
+        float[] tmp = new float[src.length];
+        float[] dst = new float[src.length];
+        // Horizontal pass
+        for (int y = 0; y < h; y++) {
+            float[] pref = new float[w + 1];
+            for (int x = 0; x < w; x++) pref[x + 1] = pref[x] + src[y * w + x];
+            for (int x = 0; x < w; x++) {
+                int x0 = Math.max(0, x - r), x1 = Math.min(w - 1, x + r);
+                tmp[y * w + x] = (pref[x1 + 1] - pref[x0]) / (x1 - x0 + 1);
+            }
+        }
+        // Vertical pass
+        for (int x = 0; x < w; x++) {
+            float[] pref = new float[h + 1];
+            for (int y = 0; y < h; y++) pref[y + 1] = pref[y] + tmp[y * w + x];
+            for (int y = 0; y < h; y++) {
+                int y0 = Math.max(0, y - r), y1 = Math.min(h - 1, y + r);
+                dst[y * w + x] = (pref[y1 + 1] - pref[y0]) / (y1 - y0 + 1);
+            }
+        }
+        return dst;
     }
 
     // ── Separable variable-radius box blur ────────────────────────────────────────
