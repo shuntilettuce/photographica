@@ -102,6 +102,11 @@ public final class VideoRecorder {
     private static int pendingVpW = 0, pendingVpH = 0;
     private static int pendingCropOffX = 0, pendingCropOffY = 0;
 
+    // Read depth every DEPTH_EVERY_N frames to amortise the synchronous glReadPixels stall.
+    private static final int DEPTH_EVERY_N    = 4;
+    private static       int depthSkipCounter = 0;
+    private static float[]   cachedDepthGrid  = null;
+
     // ── DoF temp arrays ──────────────────────────────────────────────────────────
     private static int[] dofTempR, dofTempG, dofTempB, dofTempA;
     private static int   dofTempCap = 0;
@@ -164,6 +169,8 @@ public final class VideoRecorder {
         frameMetas    = new ArrayList<>(MAX_FRAMES);
 
         currentFocusDepth = 5.0f;
+        depthSkipCounter  = 0;
+        cachedDepthGrid   = null;
 
         rawDir = new File(mc.runDirectory, "snapmatica/video_temp/" + sessionId + "/raw");
         if (!rawDir.mkdirs()) {
@@ -213,6 +220,18 @@ public final class VideoRecorder {
         if (!recording) return;
         if (pendingDepthReady) return;
 
+        // Skip the expensive glReadPixels most frames: reuse the cached grid instead.
+        if (depthSkipCounter > 0) {
+            depthSkipCounter--;
+            if (cachedDepthGrid != null) {
+                pendingDepthGrid  = cachedDepthGrid;
+                pendingDepthReady = true;
+                // pendingVpW/H and crop offsets remain from the last real read
+            }
+            return;
+        }
+        depthSkipCounter = DEPTH_EVERY_N - 1;
+
         //? if >=1.21.11 {
         /*// In 1.21.11, depth lives in EvfBlurRenderer's texture (captured via glCopyImageSubData).
         // glReadPixels(GL_DEPTH_COMPONENT) reads the legacy FBO which has no scene depth.
@@ -222,6 +241,7 @@ public final class VideoRecorder {
             int th = EvfBlurRenderer.depthTexH;
             if (tw > 0 && th > 0) {
                 pendingDepthGrid  = downsampleLinearDepth(linDepth, tw, th, DEP_W, DEP_H);
+                cachedDepthGrid   = pendingDepthGrid;
                 pendingDepthReady = true;
                 pendingVpW    = tw;
                 pendingVpH    = th;
@@ -245,6 +265,7 @@ public final class VideoRecorder {
         GL11.glReadPixels(0, 0, vpW, vpH,
                 GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, depthReadBuf);
         pendingDepthGrid  = downsampleDepth(depthReadBuf, vpW, vpH, DEP_W, DEP_H);
+        cachedDepthGrid   = pendingDepthGrid;
         pendingDepthReady = true;
         float a16 = 16f / 9f;
         int cW, cH;
@@ -338,6 +359,7 @@ public final class VideoRecorder {
 
         //? if >=1.21.11 {
         /*ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), raw -> {
+            // crop+downsample happen in the callback (already off render thread in 1.21.11)
             NativeImage cropped = cropTo16x9(raw);
             NativeImage frame   = boxDownsample(cropped, 1280);
             if (cropped != raw) cropped.close();
@@ -350,6 +372,8 @@ public final class VideoRecorder {
             });
         });*/
         //?} else {
+        // takeScreenshot does the glReadPixels stall on the render thread — unavoidable.
+        // Offload crop+downsample+write to the I/O thread so the render thread is freed ASAP.
         NativeImage raw;
         try {
             raw = ScreenshotRecorder.takeScreenshot(mc.getFramebuffer());
@@ -357,15 +381,20 @@ public final class VideoRecorder {
             System.err.println("[VideoRecorder] Screenshot failed frame " + idx);
             return;
         }
-        NativeImage cropped = cropTo16x9(raw);
-        NativeImage frame   = boxDownsample(cropped, 1280);
-        if (cropped != raw) cropped.close();
-        raw.close();
         ioExecutor.submit(() -> {
-            try { frame.writeTo(outFile); }
-            catch (IOException e) {
-                System.err.println("[VideoRecorder] Frame write failed: " + outFile);
-            } finally { frame.close(); }
+            try {
+                NativeImage cropped = cropTo16x9(raw);
+                NativeImage frame   = boxDownsample(cropped, 1280);
+                if (cropped != raw) cropped.close();
+                raw.close();
+                try { frame.writeTo(outFile); }
+                catch (IOException e) {
+                    System.err.println("[VideoRecorder] Frame write failed: " + outFile);
+                } finally { frame.close(); }
+            } catch (Exception e) {
+                raw.close();
+                System.err.println("[VideoRecorder] Frame process failed: " + outFile);
+            }
         });
         //?}
     }
@@ -373,6 +402,9 @@ public final class VideoRecorder {
     // ── Post-processing ───────────────────────────────────────────────────────────
 
     private static void doPostProcess(List<FrameMeta> metas, File rawDirIn, File vidDir) {
+        // Wait for the I/O thread to finish writing all raw frame PNGs before we read them.
+        try { ioExecutor.submit(() -> {}).get(); } catch (Exception ignored) {}
+
         int total = metas.size();
         if (total == 0) {
             postProcessing = false;
