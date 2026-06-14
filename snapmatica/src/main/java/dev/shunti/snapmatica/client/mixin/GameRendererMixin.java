@@ -35,8 +35,13 @@ public class GameRendererMixin {
                                              CallbackInfoReturnable<Float> cir) {
         PlayerEntity player = MinecraftClient.getInstance().player;
         if (player == null) return;
-        if (!SnapmaticaClient.viewfinderSneakEnabled || !player.isSneaking()) return;
-        if (SnapmaticaClient.lensType == 0) return;
+        // Focal-length zoom applies while recording (any pose) OR through the viewfinder.
+        if (VideoRecorder.isRecording()) {
+            // recording: zoom always active
+        } else {
+            if (!SnapmaticaClient.viewfinderSneakEnabled || !player.isSneaking()) return;
+            if (SnapmaticaClient.lensType == 0) return;
+        }
         int f = SnapmaticaClient.focalLengthMm;
         if (f <= 0) return;
         // Vertical sensor half-height: 12mm (24mm tall) landscape, 18mm (36mm tall) portrait
@@ -52,9 +57,13 @@ public class GameRendererMixin {
         PlayerEntity player = MinecraftClient.getInstance().player;
         if (player == null) return;
 
-        // Only apply FOV override while viewfinder is active (sneaking + mode enabled)
-        if (!SnapmaticaClient.viewfinderSneakEnabled || !player.isSneaking()) return;
-        if (SnapmaticaClient.lensType == 0) return; // no lens
+        // Focal-length zoom applies while recording (any pose) OR through the viewfinder.
+        if (VideoRecorder.isRecording()) {
+            // recording: zoom always active
+        } else {
+            if (!SnapmaticaClient.viewfinderSneakEnabled || !player.isSneaking()) return;
+            if (SnapmaticaClient.lensType == 0) return; // no lens
+        }
 
         int f = SnapmaticaClient.focalLengthMm;
         if (f <= 0) return;
@@ -82,11 +91,24 @@ public class GameRendererMixin {
         MinecraftClient mc = MinecraftClient.getInstance();
         boolean viewfinderActive = SnapmaticaClient.viewfinderSneakEnabled
                 && mc.player != null && mc.player.isSneaking();
-        if (PhotoCapture.isCapturePending() || viewfinderActive) {
+        if (PhotoCapture.isCapturePending() || viewfinderActive || VideoRecorder.isRecording()) {
             this.renderHand = false;
         }
         //?}
     }
+
+    //? if >=1.21.11 {
+    /*// In 1.21.11 the hand is drawn by renderHand() inside renderWorld(), so the
+    // post-composite screenshot includes it. Cancel that call while recording so the
+    // held item never appears in the footage (and the live view stays clean too).
+    @Inject(method = "renderHand(FZLorg/joml/Matrix4f;)V", at = @At("HEAD"), cancellable = true)
+    private void snapmatica$suppressHandWhileRecording(float tickDelta, boolean blockOutline,
+                                                       org.joml.Matrix4f matrix, CallbackInfo ci) {
+        if (VideoRecorder.isRecording()) {
+            ci.cancel();
+        }
+    }*/
+    //?}
 
     /**
      * Capture the screenshot after renderWorld() returns (after Iris shader composite if present).
@@ -104,7 +126,7 @@ public class GameRendererMixin {
         MinecraftClient mc = MinecraftClient.getInstance();
         boolean viewfinderActive = SnapmaticaClient.viewfinderSneakEnabled
                 && mc.player != null && mc.player.isSneaking();
-        if (wasCapturePending || viewfinderActive) {
+        if (wasCapturePending || viewfinderActive || VideoRecorder.isRecording()) {
             this.renderHand = true;
         }
         //?}

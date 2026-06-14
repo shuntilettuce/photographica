@@ -20,6 +20,8 @@ public class VideoRecorderScreen extends Screen {
 
     private static final List<Float>   APERTURES = List.of(1.4f, 2.0f, 2.8f, 4.0f, 5.6f, 8.0f, 11.0f, 16.0f, 22.0f);
     private static final List<Integer> FPS_LIST  = List.of(24, 30);
+    // Zoom stops (focal length, mm): wide → tele. Larger = more zoomed in.
+    private static final List<Integer> FOCAL_LIST = List.of(14, 18, 24, 35, 50, 85, 135, 200);
 
     // Row layout constants
     private static final int ARROW_W = 20;
@@ -38,7 +40,7 @@ public class VideoRecorderScreen extends Screen {
         int cx     = width  / 2;
         int cy     = height / 2;
         int rowX   = cx - ROW_W / 2;
-        int top    = cy - 40;
+        int top    = cy - 46;
         int row    = 0;
 
         // Aperture (F-value)
@@ -47,6 +49,14 @@ public class VideoRecorderScreen extends Screen {
                 step -> {
                     int idx = nearestIdx(APERTURES, SnapmaticaClient.aperture) + step;
                     SnapmaticaClient.aperture = APERTURES.get(clamp(idx, APERTURES.size()));
+                }, true);
+
+        // Zoom (focal length / angle of view)
+        addSettingRow(rowX, top + row++ * ROW_H, "画角",
+                () -> SnapmaticaClient.focalLengthMm + "mm",
+                step -> {
+                    int idx = nearestIntIdx(FOCAL_LIST, SnapmaticaClient.focalLengthMm) + step;
+                    SnapmaticaClient.focalLengthMm = FOCAL_LIST.get(clamp(idx, FOCAL_LIST.size()));
                 }, true);
 
         // FPS — locked once recording
@@ -120,6 +130,15 @@ public class VideoRecorderScreen extends Screen {
         int best = 0; float bestDiff = Float.MAX_VALUE;
         for (int i = 0; i < list.size(); i++) {
             float d = Math.abs(list.get(i) - v);
+            if (d < bestDiff) { bestDiff = d; best = i; }
+        }
+        return best;
+    }
+
+    private static int nearestIntIdx(List<Integer> list, int v) {
+        int best = 0; int bestDiff = Integer.MAX_VALUE;
+        for (int i = 0; i < list.size(); i++) {
+            int d = Math.abs(list.get(i) - v);
             if (d < bestDiff) { bestDiff = d; best = i; }
         }
         return best;
