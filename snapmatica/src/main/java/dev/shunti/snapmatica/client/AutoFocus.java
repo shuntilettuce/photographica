@@ -59,10 +59,15 @@ public final class AutoFocus {
 
     /** Eases the current focus distance one tick toward the target stop in log space. */
     private static float pullFocus(float current, float target) {
-        // Pointing at sky/no-hit snaps to infinity (no subject to watch racking onto).
-        if (target >= SnapmaticaClient.FOCUS_INFINITY) return SnapmaticaClient.FOCUS_INFINITY;
-        // Refocusing back from infinity starts the rack at the far anchor instead of the
-        // 100 km sentinel, so it's a quick pull and the readout doesn't flash huge numbers.
+        // When AF has no subject (ray missed / sky), ease toward FAR_ANCHOR rather than
+        // snapping to FOCUS_INFINITY. FOCUS_INFINITY as a raw sensor reading means "nothing
+        // to focus on" — not "set infinity focus" (that's an explicit MF scroll action).
+        // Snapping instantly to ∞ would activate the infinity foreground-blur mode every
+        // time the centre pixel sweeps across sky, causing visible flicker and a permanent
+        // light bokeh that can't be cleared. Easing to FAR_ANCHOR instead keeps focus
+        // smooth; ∞ readout and foreground blur remain available in MF mode.
+        if (target >= SnapmaticaClient.FOCUS_INFINITY) target = FAR_ANCHOR;
+        // Refocusing back from ∞ (manually set via MF) starts the rack at FAR_ANCHOR.
         if (current >= SnapmaticaClient.FOCUS_INFINITY) current = FAR_ANCHOR;
         current = Math.max(0.01f, current);
         float logCur = (float) Math.log(current);
