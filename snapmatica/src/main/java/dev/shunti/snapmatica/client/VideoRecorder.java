@@ -49,8 +49,19 @@ public final class VideoRecorder {
     private static final float NEAR  = 0.05f;
     private static final float FAR   = 512.0f;
 
-    private static final float CoC_K    = 55.0f;
     private static final float FOCAL_PX = 600f;
+
+    // ── Depth of field — compact/phone camera: deep focus, gentle bokeh ─────────
+    // Small sensors keep a wide band around the focus plane perfectly sharp and
+    // only softly separate strongly defocused regions. Nothing like cinema glass.
+    private static final float DOF_DEADZONE = 0.45f;  // relative defocus kept fully sharp
+    private static final float DOF_GAIN     = 3.0f;   // bokeh px per unit relative defocus
+    private static final float DOF_MAX_PX   = 6.0f;   // hard ceiling on bokeh radius
+
+    // ── Motion blur — stabilised (EIS): short, only on genuinely fast motion ────
+    private static final float MB_STAB      = 0.40f;  // fraction of apparent motion that survives
+    private static final float MB_THRESHOLD = 1.5f;   // ignore sub-threshold motion (px)
+    private static final float MB_MAX_DIV   = 50.0f;  // maxBlurPx = frameWidth / MB_MAX_DIV
 
     private static final int   FOCUS_DWELL_FRAMES = 20;
     private static final float FOCUS_TOL          = 0.25f;
@@ -488,7 +499,9 @@ public final class VideoRecorder {
             cropW = w; cropH = h;
         }
 
-        float maxCoC = 40.0f;
+        // Wider apertures separate a touch more, but the ceiling stays low so the
+        // frame reads as deep-focus phone/vlog footage rather than cinema bokeh.
+        float apFactor = Math.max(0.4f, Math.min(1.5f, 4.0f / ap));
         float[] cocMap = new float[w * h];
         for (int py = 0; py < h; py++) {
             for (int px = 0; px < w; px++) {
@@ -505,42 +518,45 @@ public final class VideoRecorder {
                     d = focus;
                 }
                 d = Math.max(d, 0.2f);
-                float coc = Math.abs(d - focus) * CoC_K / (ap * d * focus);
-                cocMap[py * w + px] = Math.min(coc * 0.5f, maxCoC * 0.5f);
+                // Relative defocus: how many focus-distances away the pixel sits.
+                // A dead zone keeps the near field sharp (small-sensor deep focus).
+                float rel  = Math.abs(d - focus) / Math.max(focus, 0.5f);
+                float soft = Math.max(0f, rel - DOF_DEADZONE);
+                cocMap[py * w + px] = Math.min(soft * DOF_GAIN * apFactor, DOF_MAX_PX);
             }
         }
-        float[] scaledCoc = new float[w * h];
-        for (int i = 0; i < cocMap.length; i++) scaledCoc[i] = cocMap[i] * 0.58f;
 
-        NativeImage dof1  = separableVariableBlur(pass1, scaledCoc, w, h);
-        NativeImage pass2 = separableVariableBlur(dof1,  scaledCoc, w, h); dof1.close();
+        // Single gentle pass — a low-radius box blur is all a small sensor needs.
+        NativeImage pass2 = separableVariableBlur(pass1, cocMap, w, h);
         pass1.close();
 
         // ── Pass 3: motion blur ───────────────────────────────────────────────────
         float fovH = meta.fovDeg();
         float fovV = fovH * 9f / 16f;
 
-        float rotSampleX =  meta.deltaYaw()   * w / fovH;
-        float rotSampleY = -meta.deltaPitch() * h / fovV;
+        // Electronic stabilisation absorbs most apparent motion: only MB_STAB of it
+        // survives as blur, capped short — like handheld phone/vlog footage with EIS.
+        float rotSampleX =  meta.deltaYaw()   * w / fovH * MB_STAB;
+        float rotSampleY = -meta.deltaPitch() * h / fovV * MB_STAB;
 
         float yawRad    = (float) Math.toRadians(meta.yaw());
         float strafeVel = ((float)(Math.cos(yawRad) * meta.velX()
                                  + Math.sin(yawRad) * meta.velZ()))
                         * (20.0f / currentFps);
-        float transScale = strafeVel * FOCAL_PX;
+        float transScale = strafeVel * FOCAL_PX * MB_STAB;
 
         float fwdVel = ((float)(-Math.sin(yawRad) * meta.velX()
                                + Math.cos(yawRad) * meta.velZ()))
-                     * (20.0f / currentFps);
+                     * (20.0f / currentFps) * MB_STAB;
         float cx = w * 0.5f, cy = h * 0.5f;
 
         float totalAtFocus = (float) Math.sqrt(
                 (rotSampleX + transScale / focus) * (rotSampleX + transScale / focus)
               + rotSampleY * rotSampleY);
         float cornerFwdBlur = (float) Math.sqrt(cx * cx + cy * cy) * Math.abs(fwdVel) / focus;
-        if (totalAtFocus < 0.5f && cornerFwdBlur < 0.5f) return pass2;
+        if (totalAtFocus < MB_THRESHOLD && cornerFwdBlur < MB_THRESHOLD) return pass2;
 
-        float maxBlurPx = w / 20.0f;
+        float maxBlurPx = w / MB_MAX_DIV;
 
         NativeImage pass3 = new NativeImage(w, h, false);
         for (int py = 0; py < h; py++) {
@@ -873,14 +889,15 @@ public final class VideoRecorder {
         return clamp((int) f);
     }
 
+    /**
+     * Phone / compact-camera lenses are well-corrected and the footage is usually
+     * shading-corrected in-camera — only a whisper of corner darkening remains,
+     * a touch more wide open. Nothing like a cinematic vignette.
+     */
     private static float apertureToVignette(float aperture) {
-        if (aperture <= 1.4f) return 0.70f;
-        if (aperture <= 2.0f) return 0.55f;
-        if (aperture <= 2.8f) return 0.40f;
-        if (aperture <= 4.0f) return 0.25f;
-        if (aperture <= 5.6f) return 0.15f;
-        if (aperture <= 8.0f) return 0.08f;
-        return 0.03f;
+        if (aperture <= 2.0f) return 0.10f;
+        if (aperture <= 4.0f) return 0.07f;
+        return 0.04f;
     }
 
     private static int clamp(int v) { return Math.max(0, Math.min(255, v)); }
