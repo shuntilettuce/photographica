@@ -164,9 +164,10 @@ public class SnapmaticaClient implements ClientModInitializer {
                 portraitOrientation = !portraitOrientation;
             }
 
-            // Toggle video recording
+            // Recording key: open settings screen when idle, stop directly when recording
             while (recordKey.wasPressed()) {
-                VideoRecorder.toggleRecording();
+                if (VideoRecorder.isRecording()) VideoRecorder.stopRecording();
+                else if (!VideoRecorder.isPostProcessing()) client.setScreen(new VideoRecorderScreen());
             }
 
             // Shoot key

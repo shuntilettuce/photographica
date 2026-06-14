@@ -55,6 +55,9 @@ public final class VideoRecorder {
     private static final int   FOCUS_DWELL_FRAMES = 20;
     private static final float FOCUS_TOL          = 0.25f;
 
+    // ── Smooth camera state ──────────────────────────────────────────────────────
+    private static boolean prevSmoothCamera = false;
+
     // ── Recording state ──────────────────────────────────────────────────────────
     private static volatile boolean recording      = false;
     private static volatile boolean postProcessing = false;
@@ -111,6 +114,7 @@ public final class VideoRecorder {
     public static int     getFrameCount()    { return frameCount; }
     public static long    getRecordStartMs() { return recordStartMs; }
     public static int     getCurrentFps()    { return currentFps; }
+    public static void    setFps(int fps)    { if (!recording) currentFps = fps; }
 
     // ── FrameMeta ────────────────────────────────────────────────────────────────
     record FrameMeta(int   idx,
@@ -159,6 +163,11 @@ public final class VideoRecorder {
             return;
         }
 
+        // Enable cinematic (smooth) camera so angular velocity tracking benefits
+        // from sub-tick interpolation rather than per-tick quantisation spikes.
+        prevSmoothCamera = mc.options.smoothCameraEnabled;
+        mc.options.smoothCameraEnabled = true;
+
         recording = true;
         mc.player.sendMessage(Text.literal("● REC 開始"), true);
     }
@@ -168,6 +177,8 @@ public final class VideoRecorder {
         recording = false;
 
         MinecraftClient mc = MinecraftClient.getInstance();
+        mc.options.smoothCameraEnabled = prevSmoothCamera;
+
         if (mc.player != null)
             mc.player.sendMessage(Text.literal("■ 録画停止 — 後処理中..."), true);
 
