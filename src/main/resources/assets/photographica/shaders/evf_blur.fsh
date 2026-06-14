@@ -41,26 +41,55 @@ float computeCoc(float depthM) {
 
 void main() {
     float rawD = texture(DepthSampler, texCoord).r;
-    float depth = linearDepth(rawD);
+    float depthM = linearDepth(rawD);
 
-    float coc = computeCoc(depth);
+    float coc = computeCoc(depthM);
 
-    int rad = int(ceil(coc));
-    rad = min(rad, 32);
+    // Small deadband: depth-buffer temporal jitter near the focus plane can produce
+    // tiny CoC fluctuations (<0.3 px) that flicker at high frame-rate. Treat them as
+    // "in focus" so objects at the focal plane stay clean rather than shimmering.
+    coc = max(coc - 0.3, 0.0);
 
-    if (rad == 0) {
+    if (coc < 0.5) {
         fragColor = texture(InSampler, texCoord);
         return;
     }
 
-    float sigma = max(coc * 0.5, 1.0);
+    // Is this pixel part of the foreground (closer than the focus plane)?
+    // Foreground and background blur require different edge treatment (see below).
+    bool isForeground = (FocusDist < 99999.0) && (depthM < FocusDist);
+
+    // Wider sigma (×0.50) and no artificial 1.0 floor gives a softer Gaussian tail
+    // so the blur blends gradually at depth boundaries (less "blocky" appearance).
+    float sigma = max(coc * 0.50, 0.1);
+    int rad = min(int(ceil(coc)), 32);
+
     vec4 col = vec4(0.0);
     float totalW = 0.0;
     for (int i = -rad; i <= rad; i++) {
+        vec2 sampleCoord = texCoord + BlurDir * float(i) * PixelSize;
+
         float fi = float(i);
-        float w = exp(-fi * fi / (2.0 * sigma * sigma));
-        col += texture(InSampler, texCoord + BlurDir * fi * PixelSize) * w;
-        totalW += w;
+        float gaussW = exp(-fi * fi / (2.0 * sigma * sigma));
+
+        float cocWeight = 1.0;
+        if (coc > 2.0) {
+            float sampleCoc = computeCoc(linearDepth(texture(DepthSampler, sampleCoord).r));
+            if (isForeground) {
+                // Foreground (near) blur: allow all contributions, including background
+                // pixels within the kernel radius. This lets the bokeh "disc" extend
+                // beyond the geometric silhouette of the near object — the near edges
+                // blend into the background, producing the soft halo a real lens gives.
+                cocWeight = 1.0;
+            } else {
+                // Background blur: reduce contribution from sharper / closer samples
+                // to prevent sharp in-focus foreground from bleeding into soft background.
+                cocWeight = clamp(sampleCoc / coc, 0.10, 1.0);
+            }
+        }
+
+        col += texture(InSampler, sampleCoord) * gaussW * cocWeight;
+        totalW += gaussW * cocWeight;
     }
     fragColor = col / totalW;
 }

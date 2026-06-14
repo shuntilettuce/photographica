@@ -1291,6 +1291,7 @@ public final class PhotoCapture {
 		float fmm = settings.focalLengthMm();
 		float pxPerMm = (float) ih / 24.0f;   // 24mm sensor height maps to image height px
 		float[] cocMap = new float[iw * ih];
+		boolean[] isFgMap = new boolean[iw * ih];   // true = closer than the focus plane
 		for (int iy = 0; iy < ih; iy++) {
 			for (int ix = 0; ix < iw; ix++) {
 				int fx    = Math.max(0, Math.min(fbW - 1, cropOffX + ix * croppedW / iw));
@@ -1303,6 +1304,7 @@ public final class PhotoCapture {
 					float s1mm = focusDist * 200f;
 					cocMM = (fmm * fmm) * Math.abs(depthM - focusDist)
 							/ (depthM * aperture * Math.max(s1mm - fmm, 1.0f));
+					isFgMap[iy * iw + ix] = (depthM < focusDist);
 				}
 				cocMap[iy * iw + ix] = Math.min(cocMM * pxPerMm, maxBlurPx);
 			}
@@ -1318,12 +1320,15 @@ public final class PhotoCapture {
 					continue;
 				}
 				int r = Math.min(maxR, (int) Math.ceil(coc));
+				boolean fg = isFgMap[iy * iw + ix];
 				float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
 				for (int dx = -r; dx <= r; dx++) {
 					int sx = Math.max(0, Math.min(iw - 1, ix + dx));
-					// Weight: neighbour contributes proportionally to how blurry it is
-					// relative to us. Sharper neighbours (CoC < ours) are down-weighted.
-					float w = Math.min(1.0f, cocMap[iy * iw + sx] / coc);
+					// Foreground pixels (nearer than focus): allow all contributions so the
+					// bokeh disc extends past the geometric silhouette, softening near edges.
+					// Background pixels: down-weight sharper/closer samples so in-focus
+					// foreground doesn't bleed into the soft background.
+					float w = fg ? 1.0f : Math.max(0.10f, Math.min(1.0f, cocMap[iy * iw + sx] / coc));
 					if (w < 0.01f) continue;
 					int c = src.getColor(sx, iy);
 					aa += ((c >>> 24) & 0xFF) * w;
@@ -1350,10 +1355,11 @@ public final class PhotoCapture {
 					continue;
 				}
 				int r = Math.min(maxR, (int) Math.ceil(coc));
+				boolean fg = isFgMap[iy * iw + ix];
 				float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
 				for (int dy = -r; dy <= r; dy++) {
 					int sy = Math.max(0, Math.min(ih - 1, iy + dy));
-					float w = Math.min(1.0f, cocMap[sy * iw + ix] / coc);
+					float w = fg ? 1.0f : Math.max(0.10f, Math.min(1.0f, cocMap[sy * iw + ix] / coc));
 					if (w < 0.01f) continue;
 					int c = hBuf[sy * iw + ix];
 					aa += ((c >>> 24) & 0xFF) * w;
