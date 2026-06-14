@@ -385,6 +385,7 @@ public final class PhotoCapture {
         float fmm = SnapmaticaClient.focalLengthMm;
         float pxPerMm = (float) ih / 24.0f;  // 24mm sensor height maps to ih pixels
         float[] cocMap = new float[iw * ih];
+        boolean[] isFgMap = new boolean[iw * ih];  // true = closer than focus plane
         for (int iy = 0; iy < ih; iy++) {
             for (int ix = 0; ix < iw; ix++) {
                 int fx    = Math.max(0, Math.min(fbW - 1, cropOffX + ix * croppedW / iw));
@@ -397,6 +398,7 @@ public final class PhotoCapture {
                     float s1mm = focusDist * 200f;
                     cocMM = (fmm * fmm) * Math.abs(depthM - focusDist)
                             / (depthM * aperture * Math.max(s1mm - fmm, 1.0f));
+                    isFgMap[iy * iw + ix] = (depthM < focusDist);
                 }
                 cocMap[iy * iw + ix] = Math.min(cocMM * pxPerMm, maxBlurPx);
             }
@@ -410,10 +412,16 @@ public final class PhotoCapture {
                 int r = Math.min(maxR, (int) Math.ceil(coc));
                 float sigma = Math.max(coc * 0.5f, 1.0f);
                 float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
+                boolean fg = isFgMap[iy * iw + ix];
                 for (int dx = -r; dx <= r; dx++) {
                     int sx = Math.max(0, Math.min(iw - 1, ix + dx));
                     float gauss = (float) Math.exp(-(float)(dx * dx) / (2.0f * sigma * sigma));
-                    float w = gauss * Math.min(1.0f, cocMap[iy * iw + sx] / coc);
+                    // Foreground pixels (nearer than focus): allow all contributions so the
+                    // bokeh disc extends past the geometric silhouette, giving soft edges.
+                    // Background pixels: limit contribution from sharper/closer samples to
+                    // stop in-focus foreground from bleeding into the soft background.
+                    float cocW = fg ? 1.0f : Math.max(0.10f, Math.min(1.0f, cocMap[iy * iw + sx] / coc));
+                    float w = gauss * cocW;
                     if (w < 0.001f) continue;
                     int c = getPixelAbgr(src, sx, iy);
                     aa += ((c >>> 24) & 0xFF) * w; ba += ((c >>> 16) & 0xFF) * w;
@@ -434,10 +442,12 @@ public final class PhotoCapture {
                 int r = Math.min(maxR, (int) Math.ceil(coc));
                 float sigma = Math.max(coc * 0.5f, 1.0f);
                 float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
+                boolean fg = isFgMap[iy * iw + ix];
                 for (int dy = -r; dy <= r; dy++) {
                     int sy = Math.max(0, Math.min(ih - 1, iy + dy));
                     float gauss = (float) Math.exp(-(float)(dy * dy) / (2.0f * sigma * sigma));
-                    float w = gauss * Math.min(1.0f, cocMap[sy * iw + ix] / coc);
+                    float cocW = fg ? 1.0f : Math.max(0.10f, Math.min(1.0f, cocMap[sy * iw + ix] / coc));
+                    float w = gauss * cocW;
                     if (w < 0.001f) continue;
                     int c = hBuf[sy * iw + ix];
                     aa += ((c >>> 24) & 0xFF) * w; ba += ((c >>> 16) & 0xFF) * w;
