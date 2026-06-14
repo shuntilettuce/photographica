@@ -25,6 +25,12 @@ public final class AutoFocus {
     // cos(5°) — entities must be within this cone of the look direction
     private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
 
+    // True when AF/MOB resolved its target to the infinity sentinel (sky / no subject).
+    // The focus value itself only eases to FAR_ANCHOR (to avoid the foreground-blur
+    // flicker that snapping to ∞ caused), so this flag lets the viewfinder still label
+    // the distance "inf" instead of showing the far-anchor metres.
+    public static volatile boolean afAtInfinity = false;
+
     // Focus-pull (rack) easing. AF does not snap instantly: focusDistance is eased
     // toward the target in log space, so the lens "pulls" focus like a real motor.
     // Per client tick (20 Hz): move a fraction of the remaining log-distance, capped
@@ -54,7 +60,9 @@ public final class AutoFocus {
             return;
         }
 
-        SnapmaticaClient.focusDistance = pullFocus(SnapmaticaClient.focusDistance, snapFocus(targetDepth));
+        float target = snapFocus(targetDepth);
+        afAtInfinity = (target >= SnapmaticaClient.FOCUS_INFINITY);
+        SnapmaticaClient.focusDistance = pullFocus(SnapmaticaClient.focusDistance, target);
     }
 
     /** Eases the current focus distance one tick toward the target stop in log space. */

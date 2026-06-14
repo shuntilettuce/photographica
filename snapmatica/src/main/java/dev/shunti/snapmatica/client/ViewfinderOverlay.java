@@ -91,8 +91,13 @@ public final class ViewfinderOverlay {
         ctx.drawTextWithShadow(tr, String.format("F%s  %s  ISO%d  %s",
                 fmt(dispAp),SHUTTERS[si],SnapmaticaClient.iso,fp),
                 fx+6,fy2-tr.fontHeight-14,0xFFE8DCC4);
-        if (SnapmaticaClient.lensType != 0 && SnapmaticaClient.focusDistance < SnapmaticaClient.FOCUS_INFINITY) {
-            String fd = fmtFocusDist(SnapmaticaClient.focusDistance);
+        if (SnapmaticaClient.lensType != 0) {
+            // "inf" when focus is at infinity: either an explicit MF ∞ stop, or AF/MOB
+            // resolving to sky / no subject (focusDistance only eases to the far anchor,
+            // so AutoFocus.afAtInfinity tells us the AF intent was infinity).
+            boolean atInf = SnapmaticaClient.focusDistance >= SnapmaticaClient.FOCUS_INFINITY
+                    || (SnapmaticaClient.focusMode != 0 && AutoFocus.afAtInfinity);
+            String fd = atInf ? "inf" : fmtFocusDist(SnapmaticaClient.focusDistance);
             ctx.drawTextWithShadow(tr, fd, fx2 - tr.getWidth(fd) - 6, fy + 4, rc);
         }
 
@@ -254,7 +259,7 @@ public final class ViewfinderOverlay {
     }
 
     private static String fmtFocusDist(float v) {
-        if (v >= SnapmaticaClient.FOCUS_INFINITY) return "∞";
+        if (v >= SnapmaticaClient.FOCUS_INFINITY) return "inf";
         if (v < 1.0f) return String.format("%.1fm", v);
         return v == (int)v ? ((int)v + "m") : String.format("%.1fm", v);
     }
