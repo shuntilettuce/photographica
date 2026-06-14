@@ -49,7 +49,7 @@ public final class VideoRecorder {
     private static final float NEAR  = 0.05f;
     private static final float FAR   = 512.0f;
 
-    private static final float CoC_K    = 100.0f;
+    private static final float CoC_K    = 55.0f;
     private static final float FOCAL_PX = 600f;
 
     private static final int   FOCUS_DWELL_FRAMES = 20;
@@ -513,8 +513,7 @@ public final class VideoRecorder {
         for (int i = 0; i < cocMap.length; i++) scaledCoc[i] = cocMap[i] * 0.58f;
 
         NativeImage dof1  = separableVariableBlur(pass1, scaledCoc, w, h);
-        NativeImage dof2  = separableVariableBlur(dof1,  scaledCoc, w, h); dof1.close();
-        NativeImage pass2 = separableVariableBlur(dof2,  scaledCoc, w, h); dof2.close();
+        NativeImage pass2 = separableVariableBlur(dof1,  scaledCoc, w, h); dof1.close();
         pass1.close();
 
         // ── Pass 3: motion blur ───────────────────────────────────────────────────
@@ -541,7 +540,7 @@ public final class VideoRecorder {
         float cornerFwdBlur = (float) Math.sqrt(cx * cx + cy * cy) * Math.abs(fwdVel) / focus;
         if (totalAtFocus < 0.5f && cornerFwdBlur < 0.5f) return pass2;
 
-        float maxBlurPx = w / 10.0f;
+        float maxBlurPx = w / 20.0f;
 
         NativeImage pass3 = new NativeImage(w, h, false);
         for (int py = 0; py < h; py++) {
