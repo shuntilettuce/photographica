@@ -172,7 +172,7 @@ public class PhotographicaClient implements ClientModInitializer {
 			if (unloadSdCardKey.consumeClick()) {
 				ClientPlayNetworking.send(new UnloadSdCardPayload());
 			}
-			while (orientationKey.wasPressed()) {
+			while (orientationKey.consumeClick()) {
 				ViewfinderHud.portraitOrientation = !ViewfinderHud.portraitOrientation;
 			}
 		});
