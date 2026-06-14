@@ -43,6 +43,12 @@ public final class VideoRecorder {
 
     private static int currentFps = FPS;
 
+    // Motion blur via ffmpeg frame-blending (tmix), applied at encode time. The
+    // per-frame CPU motion blur was removed in the "record the preview" rewrite to
+    // stop render-thread stalls; blending adjacent frames in the encoder gives the
+    // same look at zero in-game cost. 0 = off, 1 = light (2-frame), 2 = strong (4-frame).
+    private static volatile int motionBlur = 1;
+
     // ── Smooth camera state ──────────────────────────────────────────────────────
     private static boolean prevSmoothCamera = false;
 
@@ -83,6 +89,8 @@ public final class VideoRecorder {
     public static long    getRecordStartMs() { return recordStartMs; }
     public static int     getCurrentFps()    { return currentFps; }
     public static void    setFps(int fps)    { if (!recording) currentFps = fps; }
+    public static int     getMotionBlur()    { return motionBlur; }
+    public static void    setMotionBlur(int v) { motionBlur = Math.max(0, Math.min(2, v)); }
 
     // ── FrameMeta ────────────────────────────────────────────────────────────────
     // durationSec lets the concat demuxer hold each frame for the right wall-clock
@@ -311,18 +319,36 @@ public final class VideoRecorder {
 
     // ── ffmpeg ────────────────────────────────────────────────────────────────────
 
+    /**
+     * ffmpeg frame-blend motion-blur filter for the current strength, or null if off.
+     * tmix slides a window of N frames and averages them, one output frame per input
+     * frame, so the framerate (and the concat duration stamps that set playback speed)
+     * are preserved — it just adds the blended motion trail.
+     */
+    private static String motionBlurFilter() {
+        switch (motionBlur) {
+            case 1:  return "tmix=frames=2";   // light  — ~2-frame trail
+            case 2:  return "tmix=frames=4";   // strong — ~4-frame trail
+            default: return null;              // off
+        }
+    }
+
     private static boolean runFfmpeg(File concatFile, String outPath) {
         String[] candidates = {"ffmpeg", "/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"};
+        String vf = motionBlurFilter();
         for (String ff : candidates) {
             try {
                 // concat demuxer: each frame carries its own duration so the video
                 // plays at correct wall-clock speed even when frames were dropped.
-                ProcessBuilder pb = new ProcessBuilder(
+                List<String> cmd = new ArrayList<>(List.of(
                         ff, "-y",
                         "-f", "concat", "-safe", "0",
-                        "-i", concatFile.getAbsolutePath(),
+                        "-i", concatFile.getAbsolutePath()));
+                if (vf != null) { cmd.add("-vf"); cmd.add(vf); }
+                cmd.addAll(List.of(
                         "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
-                        outPath);
+                        outPath));
+                ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
                 pb.redirectError(ProcessBuilder.Redirect.DISCARD);
                 Process proc = pb.start();

@@ -40,7 +40,7 @@ public class VideoRecorderScreen extends Screen {
         int cx     = width  / 2;
         int cy     = height / 2;
         int rowX   = cx - ROW_W / 2;
-        int top    = cy - 46;
+        int top    = cy - 58;
         int row    = 0;
 
         // Aperture (F-value)
@@ -66,6 +66,11 @@ public class VideoRecorderScreen extends Screen {
                     int idx = FPS_LIST.indexOf(VideoRecorder.getCurrentFps()) + step;
                     VideoRecorder.setFps(FPS_LIST.get(clamp(idx, FPS_LIST.size())));
                 }, !VideoRecorder.isRecording());
+
+        // Motion blur (applied by ffmpeg frame-blending at encode time, no in-game cost)
+        addSettingRow(rowX, top + row++ * ROW_H, "モーションブラー",
+                () -> motionBlurLabel(VideoRecorder.getMotionBlur()),
+                step -> VideoRecorder.setMotionBlur(VideoRecorder.getMotionBlur() + step), true);
 
         // Action buttons
         int btnY = top + row * ROW_H + 12;
@@ -124,6 +129,14 @@ public class VideoRecorderScreen extends Screen {
 
     private static String fmt(float v) {
         return v == Math.floor(v) ? String.valueOf((int) v) : String.valueOf(v);
+    }
+
+    private static String motionBlurLabel(int v) {
+        switch (v) {
+            case 1:  return "弱";
+            case 2:  return "強";
+            default: return "オフ";
+        }
     }
 
     private static int nearestIdx(List<Float> list, float v) {
