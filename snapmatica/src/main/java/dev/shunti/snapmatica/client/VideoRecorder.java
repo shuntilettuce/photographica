@@ -451,8 +451,10 @@ public final class VideoRecorder {
 
         ppProgress = 100;
         if (ffmpegOk) {
-            ppMessage = "✓ 保存: snapmatica/videos/" + sessionId + ".mp4";
+            ppMessage = "✓ 保存&コピー: snapmatica/videos/" + sessionId + ".mp4";
             System.out.println("[VideoRecorder] Video saved: " + outMp4);
+            // Auto-copy the finished MP4 to the system clipboard as a file reference.
+            ClipboardUtil.copyFileAsync(new File(outMp4));
         } else {
             File pngDir = new File(vidDir, sessionId);
             processedDir.renameTo(pngDir);
