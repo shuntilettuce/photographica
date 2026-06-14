@@ -11,6 +11,7 @@ import org.lwjgl.opengl.GL11;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.FloatBuffer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -82,7 +83,8 @@ public final class VideoRecorder {
     public  static volatile long    doneAtMs       = 0L;
 
     private static String          sessionId;
-    private static int             frameCount;
+    private static int             frameCount;        // sequential PNG file index (0,1,2...)
+    private static int             virtualFrameCount; // timing index; skips slots when render is slow
     private static long            recordStartMs;
     private static long            nextFrameMs;
     private static File            rawDir;
@@ -145,7 +147,8 @@ public final class VideoRecorder {
                      float focusDepth,
                      float[] depthGrid,
                      int vpW, int vpH,
-                     int cropOffX, int cropOffY) {}
+                     int cropOffX, int cropOffY,
+                     float durationSec) {}
 
     // ── Start / Stop ─────────────────────────────────────────────────────────────
     public static void toggleRecording() {
@@ -167,7 +170,8 @@ public final class VideoRecorder {
         prevFramePitch     = 0f;
         smoothedDeltaYaw   = 0f;
         smoothedDeltaPitch = 0f;
-        frameCount    = 0;
+        frameCount        = 0;
+        virtualFrameCount = 0;
         recordStartMs = System.currentTimeMillis();
         nextFrameMs   = recordStartMs;
         frameMetas    = new ArrayList<>(MAX_FRAMES);
@@ -290,7 +294,7 @@ public final class VideoRecorder {
         if (!recording) return;
         long now = System.currentTimeMillis();
         if (now < nextFrameMs) return;
-        if (frameCount >= MAX_FRAMES) { stopRecording(); return; }
+        if (virtualFrameCount >= MAX_FRAMES) { stopRecording(); return; }
 
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
@@ -341,6 +345,19 @@ public final class VideoRecorder {
         prevFrameYaw   = yaw;
         prevFramePitch = pitch;
 
+        // Calculate how many frame slots this single PNG covers.
+        // When the render thread is slower than the target FPS, multiple time slots
+        // pass between captures. Storing durationSec lets the concat demuxer tell
+        // ffmpeg to hold each frame for exactly the right wall-clock duration, so the
+        // output video plays back at the correct speed regardless of render FPS.
+        long overdue = now - nextFrameMs;  // ≥ 0 at this point
+        int slotsConsumed = 1 + (int)(overdue * currentFps / 1000L);
+        slotsConsumed = Math.min(slotsConsumed, currentFps); // cap at 1 s to absorb pauses
+        float durationSec = (float) slotsConsumed / currentFps;
+
+        virtualFrameCount += slotsConsumed;
+        nextFrameMs = recordStartMs + (long)(virtualFrameCount * 1000.0 / currentFps);
+
         FrameMeta meta = new FrameMeta(
                 frameCount,
                 (float) vel.x, (float) vel.y, (float) vel.z,
@@ -350,15 +367,16 @@ public final class VideoRecorder {
                 currentFocusDepth,
                 depthGrid,
                 pendingVpW, pendingVpH,
-                pendingCropOffX, pendingCropOffY);
+                pendingCropOffX, pendingCropOffY,
+                durationSec);
 
         int  idx     = frameCount;
         File outFile = new File(rawDir, String.format("frame_%04d.png", idx));
         frameMetas.add(meta);
         frameCount++;
-        nextFrameMs = recordStartMs + (long)(frameCount * 1000.0 / currentFps);
 
-        if (frameCount == currentFps * 60 && mc.player != null)
+        if (virtualFrameCount >= currentFps * 60 && virtualFrameCount - slotsConsumed < currentFps * 60
+                && mc.player != null)
             mc.player.sendMessage(Text.literal("⚠ 残り 1:00"), true);
 
         //? if >=1.21.11 {
@@ -449,9 +467,23 @@ public final class VideoRecorder {
         ppMessage  = "MP4 エンコード中...";
         ppProgress = 80;
 
+        // Write per-frame duration file so ffmpeg holds each PNG for exactly the
+        // right wall-clock duration — this corrects for dropped frames when the
+        // game rendered slower than the target FPS.
+        File concatFile = new File(processedDir, "frames.txt");
+        try (PrintWriter pw = new PrintWriter(concatFile, java.nio.charset.StandardCharsets.UTF_8)) {
+            for (FrameMeta meta : metas) {
+                String fname = String.format("frame_%04d.png", meta.idx());
+                pw.println("file '" + fname.replace("'", "\\'") + "'");
+                pw.printf("duration %.6f%n", meta.durationSec());
+            }
+        } catch (IOException e) {
+            System.err.println("[VideoRecorder] concat file write failed: " + e);
+        }
+
         if (!vidDir.exists()) vidDir.mkdirs();
         String outMp4    = new File(vidDir, sessionId + ".mp4").getAbsolutePath();
-        boolean ffmpegOk = runFfmpeg(processedDir, outMp4);
+        boolean ffmpegOk = runFfmpeg(concatFile, outMp4);
 
         ppProgress = 100;
         if (ffmpegOk) {
@@ -716,6 +748,18 @@ public final class VideoRecorder {
         }
         int maxR = Math.max(1, (int) Math.ceil(DOF_MAX_PX));
 
+        // Precompute Gaussian weight tables once per frame — eliminates ~20M Math.exp()
+        // calls (≈400ms at 1280x720 with r=5) and replaces them with array lookups.
+        // gaussW[r][d+r] = exp(-d^2 / (2*sigma^2)) for d in [-r..r].
+        float[][] gaussW = new float[maxR + 1][];
+        for (int r = 1; r <= maxR; r++) {
+            float sigma = Math.max(r * 0.5f, 1.0f);
+            float inv2s2 = 1.0f / (2.0f * sigma * sigma);
+            float[] wt = new float[2 * r + 1];
+            for (int d = -r; d <= r; d++) wt[d + r] = (float) Math.exp(-(d * d) * inv2s2);
+            gaussW[r] = wt;
+        }
+
         // Horizontal pass → dofTemp* (ABGR channels)
         for (int py = 0; py < h; py++) {
             for (int px = 0; px < w; px++) {
@@ -729,13 +773,12 @@ public final class VideoRecorder {
                     dofTempR[base] =  c         & 0xFF;
                     continue;
                 }
-                int   r     = Math.min(maxR, (int) Math.ceil(coc));
-                float sigma = Math.max(coc * 0.5f, 1.0f);
+                int r = Math.min(maxR, (int) Math.ceil(coc));
+                float[] wts = gaussW[r];
                 float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
                 for (int dx = -r; dx <= r; dx++) {
                     int sx = Math.max(0, Math.min(w - 1, px + dx));
-                    float gauss = (float) Math.exp(-(dx * dx) / (2.0f * sigma * sigma));
-                    float wt = gauss * Math.min(1.0f, cocMap[py * w + sx] / coc);
+                    float wt = wts[dx + r] * Math.min(1.0f, cocMap[py * w + sx] / coc);
                     if (wt < 0.001f) continue;
                     int c = getPixel(src, sx, py);
                     aa += ((c >>> 24) & 0xFF) * wt; ba += ((c >>> 16) & 0xFF) * wt;
@@ -769,13 +812,12 @@ public final class VideoRecorder {
                           | (dofTempG[base] <<  8) |  dofTempR[base]);
                     continue;
                 }
-                int   r     = Math.min(maxR, (int) Math.ceil(coc));
-                float sigma = Math.max(coc * 0.5f, 1.0f);
+                int r = Math.min(maxR, (int) Math.ceil(coc));
+                float[] wts = gaussW[r];
                 float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
                 for (int dy = -r; dy <= r; dy++) {
                     int sy = Math.max(0, Math.min(h - 1, py + dy));
-                    float gauss = (float) Math.exp(-(dy * dy) / (2.0f * sigma * sigma));
-                    float wt = gauss * Math.min(1.0f, cocMap[sy * w + px] / coc);
+                    float wt = wts[dy + r] * Math.min(1.0f, cocMap[sy * w + px] / coc);
                     if (wt < 0.001f) continue;
                     int sbase = sy * w + px;
                     aa += dofTempA[sbase] * wt; ba += dofTempB[sbase] * wt;
@@ -798,14 +840,16 @@ public final class VideoRecorder {
 
     // ── ffmpeg ────────────────────────────────────────────────────────────────────
 
-    private static boolean runFfmpeg(File processedDir, String outPath) {
+    private static boolean runFfmpeg(File concatFile, String outPath) {
         String[] candidates = {"ffmpeg", "/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"};
         for (String ff : candidates) {
             try {
+                // concat demuxer: each frame carries its own duration so the video
+                // plays at correct wall-clock speed even when frames were dropped.
                 ProcessBuilder pb = new ProcessBuilder(
                         ff, "-y",
-                        "-framerate", String.valueOf(currentFps),
-                        "-i", new File(processedDir, "frame_%04d.png").getAbsolutePath(),
+                        "-f", "concat", "-safe", "0",
+                        "-i", concatFile.getAbsolutePath(),
                         "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
                         outPath);
                 pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
