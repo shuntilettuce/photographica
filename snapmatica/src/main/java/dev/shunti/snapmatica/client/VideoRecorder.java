@@ -44,8 +44,12 @@ public final class VideoRecorder {
 
     private static int currentFps = FPS;
 
-    private static final int   DEP_W = 32;
-    private static final int   DEP_H = 18;
+    // Depth grid resolution. A coarse grid makes DoF boundaries miss object edges,
+    // so background bokeh bleeds onto sharp subjects — the main source of the
+    // "unnatural blur" look. 128×72 follows silhouettes closely while staying tiny
+    // (and only every DEPTH_EVERY_N-th frame allocates a new grid, so memory is low).
+    private static final int   DEP_W = 128;
+    private static final int   DEP_H = 72;
     private static final float NEAR  = 0.05f;
     private static final float FAR   = 512.0f;
 
@@ -55,9 +59,9 @@ public final class VideoRecorder {
     // Small sensors keep a wide band around the focus plane perfectly sharp and
     // only softly separate strongly defocused regions. Nothing like cinema glass.
     private static final float DOF_DEADZONE = 0.70f;  // relative defocus kept fully sharp
-    private static final float DOF_GAIN     = 1.5f;   // bokeh px per unit relative defocus
-    private static final float DOF_MAX_PX   = 3.0f;   // hard ceiling on bokeh radius
-    private static final int   DOF_SMOOTH_R = 15;     // CoC map smoothing radius (px)
+    private static final float DOF_GAIN     = 1.7f;   // bokeh px per unit relative defocus
+    private static final float DOF_MAX_PX   = 5.0f;   // hard ceiling on bokeh radius
+    private static final int   DOF_SMOOTH_R = 4;      // CoC map smoothing radius (px)
 
     // ── Motion blur — stabilised (EIS): short, only on genuinely fast motion ────
     private static final float MB_STAB      = 0.40f;  // fraction of apparent motion that survives
@@ -551,12 +555,16 @@ public final class VideoRecorder {
             }
         }
 
-        // Smooth the CoC map so DoF transitions across depth edges are gradual
-        // rather than stepping along the 32×18 grid cell boundaries.
+        // Light CoC smoothing removes the residual grid banding without smearing the
+        // blur boundary across object edges (the heavy r=15 smoothing used to create
+        // a halo around sharp subjects).
         float[] smoothedCoc = boxBlurMap(cocMap, w, h, DOF_SMOOTH_R);
 
-        // Single gentle pass — a low-radius box blur is all a small sensor needs.
-        NativeImage pass2 = separableVariableBlur(pass1, smoothedCoc, w, h);
+        // Gaussian, bleed-guarded gather (same model as the photo path): produces a
+        // soft round falloff instead of a boxy average, and the per-neighbour
+        // min(1, cocN/coc) weight stops sharp foreground pixels smearing into the
+        // blurred background — which is what reads as "natural" bokeh.
+        NativeImage pass2 = gaussianDofBlur(pass1, smoothedCoc, w, h);
         pass1.close();
 
         // ── Pass 3: motion blur ───────────────────────────────────────────────────
@@ -694,80 +702,94 @@ public final class VideoRecorder {
         return dst;
     }
 
-    // ── Separable variable-radius box blur ────────────────────────────────────────
+    // ── Gaussian, bleed-guarded variable-radius blur ─────────────────────────────
+    // Separable two-pass gather with true Gaussian weights, plus a per-neighbour
+    // min(1, cocNeighbor / cocCenter) guard so a sharp foreground pixel cannot
+    // smear into a blurred neighbour. Same approach the photo pipeline uses.
 
-    private static NativeImage separableVariableBlur(NativeImage src,
-                                                     float[] radiusMap,
-                                                     int w, int h) {
+    private static NativeImage gaussianDofBlur(NativeImage src, float[] cocMap, int w, int h) {
         int size = w * h;
         if (dofTempCap < size) {
             dofTempR = new int[size]; dofTempG = new int[size];
             dofTempB = new int[size]; dofTempA = new int[size];
             dofTempCap = size;
         }
+        int maxR = Math.max(1, (int) Math.ceil(DOF_MAX_PX));
 
-        long[] prefR = new long[w + 1], prefG = new long[w + 1],
-               prefB = new long[w + 1], prefA = new long[w + 1];
-
-        // Horizontal pass
+        // Horizontal pass → dofTemp* (ABGR channels)
         for (int py = 0; py < h; py++) {
-            prefR[0] = prefG[0] = prefB[0] = prefA[0] = 0;
             for (int px = 0; px < w; px++) {
-                int c = getPixel(src, px, py);
-                prefA[px + 1] = prefA[px] + ((c >>> 24) & 0xFF);
-                prefB[px + 1] = prefB[px] + ((c >>> 16) & 0xFF);
-                prefG[px + 1] = prefG[px] + ((c >>>  8) & 0xFF);
-                prefR[px + 1] = prefR[px] + ( c         & 0xFF);
-            }
-            for (int px = 0; px < w; px++) {
-                int r    = (int) radiusMap[py * w + px];
                 int base = py * w + px;
-                if (r < 1) {
+                float coc = cocMap[base];
+                if (coc < 0.5f) {
+                    int c = getPixel(src, px, py);
+                    dofTempA[base] = (c >>> 24) & 0xFF;
+                    dofTempB[base] = (c >>> 16) & 0xFF;
+                    dofTempG[base] = (c >>>  8) & 0xFF;
+                    dofTempR[base] =  c         & 0xFF;
+                    continue;
+                }
+                int   r     = Math.min(maxR, (int) Math.ceil(coc));
+                float sigma = Math.max(coc * 0.5f, 1.0f);
+                float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
+                for (int dx = -r; dx <= r; dx++) {
+                    int sx = Math.max(0, Math.min(w - 1, px + dx));
+                    float gauss = (float) Math.exp(-(dx * dx) / (2.0f * sigma * sigma));
+                    float wt = gauss * Math.min(1.0f, cocMap[py * w + sx] / coc);
+                    if (wt < 0.001f) continue;
+                    int c = getPixel(src, sx, py);
+                    aa += ((c >>> 24) & 0xFF) * wt; ba += ((c >>> 16) & 0xFF) * wt;
+                    ga += ((c >>>  8) & 0xFF) * wt; ra += ( c         & 0xFF) * wt;
+                    tw += wt;
+                }
+                if (tw < 0.001f) {
                     int c = getPixel(src, px, py);
                     dofTempA[base] = (c >>> 24) & 0xFF;
                     dofTempB[base] = (c >>> 16) & 0xFF;
                     dofTempG[base] = (c >>>  8) & 0xFF;
                     dofTempR[base] =  c         & 0xFF;
                 } else {
-                    int x0 = Math.max(0, px - r), x1 = Math.min(w - 1, px + r);
-                    int cnt = x1 - x0 + 1;
-                    dofTempA[base] = (int)((prefA[x1 + 1] - prefA[x0]) / cnt);
-                    dofTempB[base] = (int)((prefB[x1 + 1] - prefB[x0]) / cnt);
-                    dofTempG[base] = (int)((prefG[x1 + 1] - prefG[x0]) / cnt);
-                    dofTempR[base] = (int)((prefR[x1 + 1] - prefR[x0]) / cnt);
+                    dofTempA[base] = clamp(Math.round(aa / tw));
+                    dofTempB[base] = clamp(Math.round(ba / tw));
+                    dofTempG[base] = clamp(Math.round(ga / tw));
+                    dofTempR[base] = clamp(Math.round(ra / tw));
                 }
             }
         }
 
-        long[] vprefR = new long[h + 1], vprefG = new long[h + 1],
-               vprefB = new long[h + 1], vprefA = new long[h + 1];
-
-        // Vertical pass
+        // Vertical pass → dst
         NativeImage dst = new NativeImage(w, h, false);
         for (int px = 0; px < w; px++) {
-            vprefR[0] = vprefG[0] = vprefB[0] = vprefA[0] = 0;
             for (int py = 0; py < h; py++) {
                 int base = py * w + px;
-                vprefA[py + 1] = vprefA[py] + dofTempA[base];
-                vprefB[py + 1] = vprefB[py] + dofTempB[base];
-                vprefG[py + 1] = vprefG[py] + dofTempG[base];
-                vprefR[py + 1] = vprefR[py] + dofTempR[base];
-            }
-            for (int py = 0; py < h; py++) {
-                int r    = (int) radiusMap[py * w + px];
-                int base = py * w + px;
-                if (r < 1) {
+                float coc = cocMap[base];
+                if (coc < 0.5f) {
+                    setPixel(dst, px, py,
+                            (dofTempA[base] << 24) | (dofTempB[base] << 16)
+                          | (dofTempG[base] <<  8) |  dofTempR[base]);
+                    continue;
+                }
+                int   r     = Math.min(maxR, (int) Math.ceil(coc));
+                float sigma = Math.max(coc * 0.5f, 1.0f);
+                float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
+                for (int dy = -r; dy <= r; dy++) {
+                    int sy = Math.max(0, Math.min(h - 1, py + dy));
+                    float gauss = (float) Math.exp(-(dy * dy) / (2.0f * sigma * sigma));
+                    float wt = gauss * Math.min(1.0f, cocMap[sy * w + px] / coc);
+                    if (wt < 0.001f) continue;
+                    int sbase = sy * w + px;
+                    aa += dofTempA[sbase] * wt; ba += dofTempB[sbase] * wt;
+                    ga += dofTempG[sbase] * wt; ra += dofTempR[sbase] * wt;
+                    tw += wt;
+                }
+                if (tw < 0.001f) {
                     setPixel(dst, px, py,
                             (dofTempA[base] << 24) | (dofTempB[base] << 16)
                           | (dofTempG[base] <<  8) |  dofTempR[base]);
                 } else {
-                    int y0  = Math.max(0, py - r), y1 = Math.min(h - 1, py + r);
-                    int cnt = y1 - y0 + 1;
-                    int av  = (int)((vprefA[y1 + 1] - vprefA[y0]) / cnt);
-                    int bv  = (int)((vprefB[y1 + 1] - vprefB[y0]) / cnt);
-                    int gv  = (int)((vprefG[y1 + 1] - vprefG[y0]) / cnt);
-                    int rv  = (int)((vprefR[y1 + 1] - vprefR[y0]) / cnt);
-                    setPixel(dst, px, py, (av << 24) | (bv << 16) | (gv << 8) | rv);
+                    setPixel(dst, px, py,
+                            (clamp(Math.round(aa / tw)) << 24) | (clamp(Math.round(ba / tw)) << 16)
+                          | (clamp(Math.round(ga / tw)) <<  8) |  clamp(Math.round(ra / tw)));
                 }
             }
         }

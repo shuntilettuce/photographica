@@ -139,9 +139,8 @@ public final class PhotoCapture {
             processed.writeTo(outFile);
             System.out.println("[Snapmatica] Photo saved: " + outFile.getAbsolutePath());
             // Auto-copy the freshly saved photo to the system clipboard.
+            // ClipboardUtil reports success/failure to the action bar itself.
             ClipboardUtil.copyImageAsync(outFile);
-            if (mc.player != null)
-                mc.player.sendMessage(net.minecraft.text.Text.literal("📋 写真をクリップボードにコピー"), true);
         } catch (IOException e) {
             System.err.println("[Snapmatica] Failed to save photo: " + e.getMessage());
         } finally {
