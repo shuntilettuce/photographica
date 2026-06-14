@@ -60,11 +60,14 @@ public final class DhIntegration {
         Vec3d eye  = mc.player.getCameraPosVec(1.0f);
         Vec3d look = mc.player.getRotationVec(1.0f);
 
+        // Cap the LOD raycast distance: a miss (looking at sky just above terrain)
+        // traverses the full distance, so 100k blocks could hitch badly. 8192 blocks
+        // is still far beyond any practical focus subject.
         DhApiResult<DhApiRaycastResult> result = terrainRepo.raycast(
                 level,
                 eye.x, eye.y, eye.z,
                 (float) look.x, (float) look.y, (float) look.z,
-                100_000,
+                8192,
                 dhCache);
 
         if (result == null || !result.success || result.payload == null) return -1f;

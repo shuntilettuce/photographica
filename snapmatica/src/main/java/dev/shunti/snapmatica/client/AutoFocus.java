@@ -36,7 +36,11 @@ public final class AutoFocus {
 
     public static void tick(MinecraftClient mc) {
         if (mc.player == null || mc.world == null) return;
-        if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isSneaking()) return;
+        // Track while the sneak viewfinder is up OR while recording (so the baked-in
+        // preview blur keeps focus on the subject even when not sneaking).
+        boolean active = (SnapmaticaClient.viewfinderSneakEnabled && mc.player.isSneaking())
+                || VideoRecorder.isRecording();
+        if (!active) return;
         if (SnapmaticaClient.focusMode == FOCUS_MF) return;
 
         float targetDepth;

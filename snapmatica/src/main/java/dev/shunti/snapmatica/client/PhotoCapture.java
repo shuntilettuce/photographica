@@ -42,6 +42,13 @@ public final class PhotoCapture {
 
     private static final long COOLDOWN_MS = 700L;
 
+    // AF subject-distance query throttle. The long-range raycast (and especially the
+    // Distant Horizons LOD raycast) is far too expensive to run every rendered frame —
+    // focusing on distant terrain / sky froze the game. Sampling at ~10 Hz is plenty
+    // since focus racks slowly; the depth texture for the blur is still copied each frame.
+    private static final long AF_QUERY_INTERVAL_MS = 100L;
+    private static long lastAfQueryMs = 0L;
+
     // ── Public API ──────────────────────────────────────────────────────────────
 
     public static boolean isCapturePending() {
@@ -166,38 +173,9 @@ public final class PhotoCapture {
         if (!sneakViewfinder && !capturePending && !VideoRecorder.isRecording()) return;
 
         //? if >=1.21.11 {
-        /*// In 1.21.11 glReadPixels(GL_DEPTH_COMPONENT) no longer reads the scene depth
-        // because depth lives in a GpuTexture, not the legacy default FBO depth attachment.
-        // mc.crosshairTarget is capped at interaction reach (~4.5 blocks), so it MISSes
-        // for anything farther — leaving the focus plane and reticle frozen. Do our own
-        // long-range raycast (blocks + entities) so focus tracks distant subjects too.
-        final double maxDist = 1000.0;
-        net.minecraft.util.math.Vec3d eye = mc.player.getCameraPosVec(1.0f);
-        net.minecraft.util.math.Vec3d look = mc.player.getRotationVec(1.0f);
-        net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
-        net.minecraft.util.hit.BlockHitResult blockHit = mc.world.raycast(
-                new net.minecraft.world.RaycastContext(eye, end,
-                        net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
-                        net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
-        double bestDist = (blockHit != null
-                && blockHit.getType() != net.minecraft.util.hit.HitResult.Type.MISS)
-                ? eye.distanceTo(blockHit.getPos()) : maxDist;
-        net.minecraft.util.math.Box searchBox = mc.player.getBoundingBox()
-                .stretch(look.multiply(maxDist)).expand(1.0);
-        net.minecraft.util.hit.EntityHitResult entityHit =
-                net.minecraft.entity.projectile.ProjectileUtil.raycast(mc.player, eye, end,
-                        searchBox, e -> !e.isSpectator() && e.isAlive(), bestDist * bestDist);
-        if (entityHit != null) {
-            double eDist = eye.distanceTo(entityHit.getPos());
-            if (eDist < bestDist) bestDist = eDist;
-        }
-        // The world raycast above is geometrically accurate for any loaded block out to
-        // maxDist (1000), which covers every vanilla render distance. It is the PRIMARY
-        // focus distance and is NOT overridden by the GPU depth reconstruction: that
-        // reconstruction saturates at currentDepthFar (≈ rd*64) and was the root cause of
-        // the "AF stuck at ~940m" bug.
-        lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : SnapmaticaClient.FOCUS_INFINITY;
-        // Capture the depth texture (the EVF blur shader needs it every frame).
+        /*// Capture the depth texture every frame — cheap GPU copy that the EVF blur
+        // shader samples. (glReadPixels(GL_DEPTH_COMPONENT) can't read scene depth in
+        // 1.21.11 since depth lives in a GpuTexture, not the legacy default FBO.)
         int[] viewport = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
         int vpW = viewport[2];
@@ -206,10 +184,40 @@ public final class PhotoCapture {
             int rd = mc.options.getViewDistance().getValue();
             EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
             EvfBlurRenderer.captureDepth(vpW, vpH);
-            // Only when the raycast missed (sky, or terrain beyond the loaded range) do we
-            // fall back: first the GPU centre depth (rejecting saturated readings near the
-            // far plane), then DH LOD terrain which may report km-scale distances.
-            if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY) {
+        }
+
+        // AF subject distance — THROTTLED. The 1000-block vanilla raycast plus the
+        // Distant Horizons LOD raycast are far too costly to run every frame; focusing
+        // on far terrain / sky froze the game (DH traverses many thousands of blocks).
+        // Sample at ~10 Hz and reuse lastSceneDepthBlocks in between; focus racks slowly
+        // so this is imperceptible.
+        long nowMs = System.currentTimeMillis();
+        if (nowMs - lastAfQueryMs >= AF_QUERY_INTERVAL_MS) {
+            lastAfQueryMs = nowMs;
+            final double maxDist = 1000.0;
+            net.minecraft.util.math.Vec3d eye = mc.player.getCameraPosVec(1.0f);
+            net.minecraft.util.math.Vec3d look = mc.player.getRotationVec(1.0f);
+            net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
+            net.minecraft.util.hit.BlockHitResult blockHit = mc.world.raycast(
+                    new net.minecraft.world.RaycastContext(eye, end,
+                            net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
+                            net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+            double bestDist = (blockHit != null
+                    && blockHit.getType() != net.minecraft.util.hit.HitResult.Type.MISS)
+                    ? eye.distanceTo(blockHit.getPos()) : maxDist;
+            net.minecraft.util.math.Box searchBox = mc.player.getBoundingBox()
+                    .stretch(look.multiply(maxDist)).expand(1.0);
+            net.minecraft.util.hit.EntityHitResult entityHit =
+                    net.minecraft.entity.projectile.ProjectileUtil.raycast(mc.player, eye, end,
+                            searchBox, e -> !e.isSpectator() && e.isAlive(), bestDist * bestDist);
+            if (entityHit != null) {
+                double eDist = eye.distanceTo(entityHit.getPos());
+                if (eDist < bestDist) bestDist = eDist;
+            }
+            lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : SnapmaticaClient.FOCUS_INFINITY;
+            // Only when the raycast missed (sky / beyond loaded range) fall back: GPU
+            // centre depth first (rejecting saturated far-plane readings), then DH LOD.
+            if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY && vpW > 0 && vpH > 0) {
                 float farPlane = EvfBlurRenderer.currentDepthFar;
                 float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
                 if (gpuDepth > 0.0f && gpuDepth < farPlane * 0.95f) {
@@ -220,18 +228,18 @@ public final class PhotoCapture {
                     if (dhDist > 0f) lastSceneDepthBlocks = dhDist;
                 }
             }
-            if (capturePending) {
-                // Use the depth texture's own dimensions, not the GL viewport: shader mods
-                // (Iris, etc.) can make those differ, causing readLinearDepthCpu to bail out
-                // and the saved photo to have no DoF even though the EVF preview looked fine.
-                float[] depth = EvfBlurRenderer.readLinearDepthCpu();
-                if (depth != null) {
-                    pendingLinearDepth = depth;
-                    pendingDepthFbW    = EvfBlurRenderer.depthTexW;
-                    pendingDepthFbH    = EvfBlurRenderer.depthTexH;
-                }
+        }
+
+        if (capturePending && vpW > 0 && vpH > 0) {
+            // Use the depth texture's own dimensions, not the GL viewport: shader mods
+            // (Iris, etc.) can make those differ, causing readLinearDepthCpu to bail out
+            // and the saved photo to have no DoF even though the EVF preview looked fine.
+            float[] depth = EvfBlurRenderer.readLinearDepthCpu();
+            if (depth != null) {
+                pendingLinearDepth = depth;
+                pendingDepthFbW    = EvfBlurRenderer.depthTexW;
+                pendingDepthFbH    = EvfBlurRenderer.depthTexH;
             }
-            VideoRecorder.onWorldRenderEnd(vpW, vpH);
         }*/
         //?} else {
         // Read from the currently bound framebuffer without switching.
@@ -267,8 +275,6 @@ public final class PhotoCapture {
         final float near = 0.05f;
         final float far  = EvfBlurRenderer.currentDepthFar;
         lastSceneDepthBlocks = 2.0f * near * far / (far + near - ndc * (far - near));
-
-        VideoRecorder.onWorldRenderEnd(vpW, vpH);
         //?}
     }
 
