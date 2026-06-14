@@ -10,7 +10,11 @@ import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
+//? if >=1.21.4 {
+/*import net.minecraft.util.ActionResult;*/
+//?} else {
 import net.minecraft.util.TypedActionResult;
+//?}
 import net.minecraft.world.World;
 
 import java.util.List;
@@ -24,6 +28,20 @@ public class PhotoItem extends Item {
 		super(settings.maxCount(64));
 	}
 
+	//? if >=1.21.4 {
+	/*@Override
+	public ActionResult use(World world, PlayerEntity user, Hand hand) {
+		ItemStack stack = user.getStackInHand(hand);
+		PhotoData data = stack.get(ModDataComponents.PHOTO_DATA);
+		if (data == null) {
+			return ActionResult.PASS;
+		}
+		if (world.isClient) {
+			clientOpenViewer.accept(data);
+		}
+		return ActionResult.SUCCESS;
+	}*/
+	//?} else {
 	@Override
 	public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
 		ItemStack stack = user.getStackInHand(hand);
@@ -36,6 +54,7 @@ public class PhotoItem extends Item {
 		}
 		return TypedActionResult.success(stack, world.isClient);
 	}
+	//?}
 
 	@Override
 	public Text getName(ItemStack stack) {

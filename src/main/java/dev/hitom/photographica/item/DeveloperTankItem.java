@@ -8,10 +8,15 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+//? if >=1.21.4 {
+/*import net.minecraft.item.consume.UseAction;
+import net.minecraft.util.ActionResult;*/
+//?} else {
 import net.minecraft.util.UseAction;
+import net.minecraft.util.TypedActionResult;
+//?}
 import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
-import net.minecraft.util.TypedActionResult;
 import net.minecraft.world.World;
 
 /**
@@ -39,11 +44,19 @@ public class DeveloperTankItem extends Item {
 		return UseAction.NONE;
 	}
 
+	//? if >=1.21.4 {
+	/*@Override
+	public ActionResult use(World world, PlayerEntity user, Hand hand) {
+		user.setCurrentHand(hand);
+		return ActionResult.CONSUME;
+	}*/
+	//?} else {
 	@Override
 	public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
 		user.setCurrentHand(hand);
 		return TypedActionResult.consume(user.getStackInHand(hand));
 	}
+	//?}
 
 	@Override
 	public void usageTick(World world, LivingEntity user, ItemStack stack, int remainingUseTicks) {

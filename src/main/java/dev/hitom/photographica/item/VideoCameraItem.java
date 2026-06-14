@@ -2,22 +2,30 @@ package dev.hitom.photographica.item;
 
 import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.component.VideoSettings;
-import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Equipment;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
-import net.minecraft.util.TypedActionResult;
 import net.minecraft.world.World;
+//? if >=1.21.4 {
+/*import net.minecraft.util.ActionResult;*/
+//?} else {
+import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.item.Equipment;
+import net.minecraft.util.TypedActionResult;
+//?}
 
 import java.util.List;
 import java.util.function.Consumer;
 
+//? if >=1.21.4 {
+/*public class VideoCameraItem extends Item {*/
+//?} else {
 public class VideoCameraItem extends Item implements Equipment {
+//?}
 
     /** Wired by PhotographicaClient: toggles recording on/off. */
     public static Consumer<ItemStack> clientToggleRecord = stack -> {};
@@ -28,11 +36,23 @@ public class VideoCameraItem extends Item implements Equipment {
         super(settings.maxCount(1));
     }
 
+    //? if <1.21.4 {
     @Override
     public EquipmentSlot getSlotType() {
         return EquipmentSlot.CHEST;
     }
+    //?}
 
+    //? if >=1.21.4 {
+    /*@Override
+    public ActionResult use(World world, PlayerEntity user, Hand hand) {
+        ItemStack stack = user.getStackInHand(hand);
+        if (world.isClient) {
+            clientToggleRecord.accept(stack);
+        }
+        return ActionResult.SUCCESS;
+    }*/
+    //?} else {
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
@@ -41,6 +61,7 @@ public class VideoCameraItem extends Item implements Equipment {
         }
         return TypedActionResult.success(stack, world.isClient);
     }
+    //?}
 
     public static VideoSettings getSettings(ItemStack stack) {
         VideoSettings s = stack.get(ModDataComponents.VIDEO_SETTINGS);

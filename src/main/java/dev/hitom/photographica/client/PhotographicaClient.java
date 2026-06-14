@@ -38,7 +38,11 @@ import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.render.OverlayTexture;
+//? if >=1.21.4 {
+/*import net.minecraft.item.ModelTransformationMode;*/
+//?} else {
 import net.minecraft.client.render.model.json.ModelTransformationMode;
+//?}
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.EquipmentSlot;
@@ -237,7 +241,11 @@ public class PhotographicaClient implements ClientModInitializer {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			mc.getItemRenderer().renderItem(
 					stack,
+					//? if >=1.21.4 {
+					/*ModelTransformationMode.FIXED,*/
+					//?} else {
 					ModelTransformationMode.FIXED,
+					//?}
 					light, OverlayTexture.DEFAULT_UV,
 					matrices, vertexConsumers,
 					entity.getWorld(), entity.getId());

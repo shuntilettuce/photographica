@@ -20,7 +20,11 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.state.StateManager;
+//? if >=1.21.4 {
+/*import net.minecraft.state.property.EnumProperty;*/
+//?} else {
 import net.minecraft.state.property.DirectionProperty;
+//?}
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.hit.BlockHitResult;
@@ -35,7 +39,11 @@ import org.jetbrains.annotations.Nullable;
 public class PhotoStandBlock extends BlockWithEntity {
 
     public static final MapCodec<PhotoStandBlock> CODEC = createCodec(PhotoStandBlock::new);
+    //? if >=1.21.4 {
+    /*public static final EnumProperty<Direction> FACING = Properties.HORIZONTAL_FACING;*/
+    //?} else {
     public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
+    //?}
 
     // Bounding box: base (full depth) + upright panel (y up to 9/16).
     // SOUTH/NORTH: stand extends along z. EAST/WEST: stand extends along x.

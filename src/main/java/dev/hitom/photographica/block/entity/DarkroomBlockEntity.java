@@ -9,8 +9,13 @@ import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.Inventories;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
+//? if >=1.21.11 {
+/*import net.minecraft.storage.WriteView;
+import net.minecraft.storage.ReadView;*/
+//?} else {
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.RegistryWrapper;
+//?}
 import net.minecraft.screen.NamedScreenHandlerFactory;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.text.Text;
@@ -83,6 +88,19 @@ public class DarkroomBlockEntity extends BlockEntity implements Inventory, Named
         inventory.clear();
     }
 
+    //? if >=1.21.11 {
+    /*@Override
+    protected void writeData(WriteView view) {
+        super.writeData(view);
+        Inventories.writeData(view, inventory);
+    }
+
+    @Override
+    protected void readData(ReadView view) {
+        super.readData(view);
+        Inventories.readData(view, inventory);
+    }*/
+    //?} else {
     @Override
     protected void writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registryLookup) {
         super.writeNbt(nbt, registryLookup);
@@ -94,4 +112,5 @@ public class DarkroomBlockEntity extends BlockEntity implements Inventory, Named
         super.readNbt(nbt, registryLookup);
         Inventories.readNbt(nbt, inventory, registryLookup);
     }
+    //?}
 }

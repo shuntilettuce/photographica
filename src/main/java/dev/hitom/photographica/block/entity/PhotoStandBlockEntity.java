@@ -1,14 +1,19 @@
 package dev.hitom.photographica.block.entity;
 
-import com.mojang.serialization.DataResult;
 import dev.hitom.photographica.component.PhotoData;
 import dev.hitom.photographica.registry.ModBlockEntities;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.nbt.NbtCompound;
+//? if >=1.21.11 {
+/*import net.minecraft.storage.WriteView;
+import net.minecraft.storage.ReadView;*/
+//?} else {
+import com.mojang.serialization.DataResult;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtOps;
+//?}
 import net.minecraft.network.listener.ClientPlayPacketListener;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
@@ -43,6 +48,21 @@ public class PhotoStandBlockEntity extends BlockEntity {
         }
     }
 
+    //? if >=1.21.11 {
+    /*@Override
+    protected void writeData(WriteView view) {
+        super.writeData(view);
+        if (photoData != null) {
+            view.put("Photo", PhotoData.CODEC, photoData);
+        }
+    }
+
+    @Override
+    protected void readData(ReadView view) {
+        super.readData(view);
+        photoData = view.read("Photo", PhotoData.CODEC).orElse(null);
+    }*/
+    //?} else {
     @Override
     protected void writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
         super.writeNbt(nbt, lookup);
@@ -63,6 +83,7 @@ public class PhotoStandBlockEntity extends BlockEntity {
             photoData = null;
         }
     }
+    //?}
 
     @Override
     public @Nullable Packet<ClientPlayPacketListener> toUpdatePacket() {

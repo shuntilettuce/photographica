@@ -21,7 +21,11 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.state.StateManager;
+//? if >=1.21.4 {
+/*import net.minecraft.state.property.EnumProperty;*/
+//?} else {
 import net.minecraft.state.property.DirectionProperty;
+//?}
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.hit.BlockHitResult;
@@ -36,7 +40,11 @@ import org.jetbrains.annotations.Nullable;
 public class PhotoFrameBlock extends BlockWithEntity {
 
     public static final MapCodec<PhotoFrameBlock> CODEC = createCodec(PhotoFrameBlock::new);
+    //? if >=1.21.4 {
+    /*public static final EnumProperty<Direction> FACING = Properties.HORIZONTAL_FACING;*/
+    //?} else {
     public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
+    //?}
 
     // 3:2 landscape shapes (12×8 face, 2px thick) matching the model geometry, one per facing direction.
     private static final VoxelShape SHAPE_SOUTH = VoxelShapes.cuboid(2.0/16, 4.0/16, 0,       14.0/16, 12.0/16, 2.0/16);
