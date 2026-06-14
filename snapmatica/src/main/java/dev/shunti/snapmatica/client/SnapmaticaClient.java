@@ -30,6 +30,7 @@ public class SnapmaticaClient implements ClientModInitializer {
     private static KeyBinding settingsKey;
     private static KeyBinding viewfinderSneakKey;  // toggle sneak-to-viewfinder mode
     private static KeyBinding orientationKey;       // toggle portrait/landscape framing
+    private static KeyBinding recordKey;            // start/stop video recording
     // ── Camera state (client-side only, no server sync needed) ───────────────────
     public static float aperture = 5.6f;
     public static int shutterSpeedIdx = 10;      // index into SHUTTER_SECONDS[] (1/30)
@@ -133,6 +134,22 @@ public class SnapmaticaClient implements ClientModInitializer {
         ));
         //?}
 
+        //? if >=1.21.11 {
+        /*recordKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.snapmatica.record",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_R,
+                SNAPMATICA_CATEGORY
+        ));*/
+        //?} else {
+        recordKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.snapmatica.record",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_R,            // default: R — start/stop video recording
+                "category.snapmatica"
+        ));
+        //?}
+
         // ── Tick handler ─────────────────────────────────────────────────────────
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
@@ -145,6 +162,11 @@ public class SnapmaticaClient implements ClientModInitializer {
             // Toggle portrait / landscape framing
             while (orientationKey.wasPressed()) {
                 portraitOrientation = !portraitOrientation;
+            }
+
+            // Toggle video recording
+            while (recordKey.wasPressed()) {
+                VideoRecorder.toggleRecording();
             }
 
             // Shoot key
@@ -163,8 +185,9 @@ public class SnapmaticaClient implements ClientModInitializer {
             updateAutoValues();
         });
 
-        // ── HUD overlay (viewfinder, blackout, flash) ───────────────────────────
+        // ── HUD overlay (viewfinder, blackout, flash, video REC) ────────────────
         HudRenderCallback.EVENT.register(ViewfinderOverlay::render);
+        HudRenderCallback.EVENT.register(VideoRecorderHud::render);
 
         // ── World render end (depth capture, etc.) ──────────────────────────────
         //? if >=1.21.11 {

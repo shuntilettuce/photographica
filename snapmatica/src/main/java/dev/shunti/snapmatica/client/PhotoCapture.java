@@ -155,12 +155,12 @@ public final class PhotoCapture {
      */
     public static void onWorldRenderEnd() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null || !mc.player.isSneaking()) return;
-        // When the viewfinder is disabled, sneaking is just normal sneaking — skip the
-        // depth capture and GL work entirely. Otherwise the per-frame depth-buffer copy /
-        // FBO reads run without their renderBlur cleanup partner, leaving GL state dirty
-        // and blacking out the hand and Distant Horizons passes.
-        if (!SnapmaticaClient.viewfinderSneakEnabled && !capturePending) return;
+        if (mc.player == null) return;
+        // Run when the viewfinder is active (sneaking + mode enabled), when a photo is
+        // pending, OR when video is recording (needs depth every frame regardless of sneak).
+        boolean sneakViewfinder = mc.player.isSneaking()
+                && (SnapmaticaClient.viewfinderSneakEnabled || capturePending);
+        if (!sneakViewfinder && !capturePending && !VideoRecorder.isRecording()) return;
 
         //? if >=1.21.11 {
         /*// In 1.21.11 glReadPixels(GL_DEPTH_COMPONENT) no longer reads the scene depth
@@ -228,6 +228,7 @@ public final class PhotoCapture {
                     pendingDepthFbH    = EvfBlurRenderer.depthTexH;
                 }
             }
+            VideoRecorder.onWorldRenderEnd(vpW, vpH);
         }*/
         //?} else {
         // Read from the currently bound framebuffer without switching.
@@ -263,6 +264,8 @@ public final class PhotoCapture {
         final float near = 0.05f;
         final float far  = EvfBlurRenderer.currentDepthFar;
         lastSceneDepthBlocks = 2.0f * near * far / (far + near - ndc * (far - near));
+
+        VideoRecorder.onWorldRenderEnd(vpW, vpH);
         //?}
     }
 

@@ -2,6 +2,7 @@ package dev.shunti.snapmatica.client.mixin;
 
 import dev.shunti.snapmatica.client.PhotoCapture;
 import dev.shunti.snapmatica.client.SnapmaticaClient;
+import dev.shunti.snapmatica.client.VideoRecorder;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
@@ -98,6 +99,7 @@ public class GameRendererMixin {
     private void snapmatica$captureAfterComposite(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
         boolean wasCapturePending = PhotoCapture.isCapturePending();
         PhotoCapture.captureIfPending();
+        VideoRecorder.captureFrameIfRecording();
         //? if <1.21.11 {
         MinecraftClient mc = MinecraftClient.getInstance();
         boolean viewfinderActive = SnapmaticaClient.viewfinderSneakEnabled
