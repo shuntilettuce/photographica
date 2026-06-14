@@ -100,7 +100,11 @@ public class PhotoStandBlock extends BlockWithEntity {
     @Override
     public ActionResult onUse(BlockState state, World world, BlockPos pos,
                                PlayerEntity player, BlockHitResult hit) {
+        //? if >=1.21.11 {
+        /*if (world.isClient()) return ActionResult.SUCCESS;*/
+        //?} else {
         if (world.isClient) return ActionResult.SUCCESS;
+        //?}
 
         BlockEntity be = world.getBlockEntity(pos);
         if (!(be instanceof PhotoStandBlockEntity stand)) return ActionResult.PASS;
@@ -131,6 +135,20 @@ public class PhotoStandBlock extends BlockWithEntity {
         return ActionResult.PASS;
     }
 
+    //? if >=1.21.11 {
+    /*@Override
+    public void onStateReplaced(BlockState state, net.minecraft.server.world.ServerWorld world, BlockPos pos, boolean moved) {
+        if (world.getBlockEntity(pos) instanceof PhotoStandBlockEntity stand) {
+            PhotoData photo = stand.getPhotoData();
+            if (photo != null) {
+                ItemStack photoStack = new ItemStack(ModItems.PHOTO);
+                photoStack.set(ModDataComponents.PHOTO_DATA, photo);
+                Block.dropStack(world, pos, photoStack);
+            }
+        }
+        super.onStateReplaced(state, world, pos, moved);
+    }*/
+    //?} else {
     @Override
     public void onStateReplaced(BlockState state, World world, BlockPos pos,
                                  BlockState newState, boolean moved) {
@@ -146,4 +164,5 @@ public class PhotoStandBlock extends BlockWithEntity {
         }
         super.onStateReplaced(state, world, pos, newState, moved);
     }
+    //?}
 }

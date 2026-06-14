@@ -48,8 +48,14 @@ public final class PhotoTextureCache {
             // Identifier path must be lowercase without hyphens.
             String path = "dynamic/photo_" + photoId.toString().replace("-", "");
             Identifier texId = Identifier.of(Photographica.MOD_ID, path);
+            final Identifier finalTexId = texId;
+            //? if >=1.21.11 {
+            /*MinecraftClient.getInstance().getTextureManager()
+                    .registerTexture(finalTexId, new NativeImageBackedTexture(() -> finalTexId.toString(), image));*/
+            //?} else {
             MinecraftClient.getInstance().getTextureManager()
                     .registerTexture(texId, new NativeImageBackedTexture(image));
+            //?}
             loaded.put(photoId, texId);
             return texId;
         } catch (IOException e) {

@@ -180,7 +180,7 @@ public final class PhotoCapture {
 
 		if (!LensKind.hasLens(settings.lensType())) {
 			mc.player.sendMessage(Text.literal("⚠ レンズが取り付けられていません"), true);
-			mc.getSoundManager().play(PositionedSoundInstance.master(
+			mc.getSoundManager().play(uiSound(
 					SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
 			return;
 		}
@@ -189,14 +189,14 @@ public final class PhotoCapture {
 		if (!isFilm) {
 			if (!cameraStack.contains(ModDataComponents.SD_CARD)) {
 				mc.player.sendMessage(Text.literal("⚠ SDカードが装填されていません"), true);
-				mc.getSoundManager().play(PositionedSoundInstance.master(
+				mc.getSoundManager().play(uiSound(
 						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
 				return;
 			}
 			SdCardData sd = cameraStack.get(ModDataComponents.SD_CARD);
 			if (sd != null && sd.isFull()) {
 				mc.player.sendMessage(Text.literal("⚠ SDカードがいっぱいです"), true);
-				mc.getSoundManager().play(PositionedSoundInstance.master(
+				mc.getSoundManager().play(uiSound(
 						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
 				return;
 			}
@@ -207,7 +207,7 @@ public final class PhotoCapture {
 			FilmRollData film = FilmCameraItem.getFilm(cameraStack);
 			if (film.totalExposures() == 0) {
 				mc.player.sendMessage(Text.literal("⚠ フィルムが装填されていません"), true);
-				mc.getSoundManager().play(PositionedSoundInstance.master(
+				mc.getSoundManager().play(uiSound(
 						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.5f, 0.7f));
 				return;
 			}
@@ -217,7 +217,7 @@ public final class PhotoCapture {
 			}
 			if (!film.wound()) {
 				mc.player.sendMessage(Text.literal("⚠ フィルムを巻き上げてください"), true);
-				mc.getSoundManager().play(PositionedSoundInstance.master(
+				mc.getSoundManager().play(uiSound(
 						SoundEvents.BLOCK_LEVER_CLICK, 0.5f, 0.9f));
 				return;
 			}
@@ -237,7 +237,7 @@ public final class PhotoCapture {
 			timerLastTickMs = now; // start ticking immediately
 			// Film: soft initial wind-up click; Digital: confirmation beep
 			boolean timerIsFilm = cameraStack.getItem() instanceof FilmCameraItem;
-			mc.getSoundManager().play(PositionedSoundInstance.master(
+			mc.getSoundManager().play(uiSound(
 					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(),
 					timerIsFilm ? 0.5f : 1.0f,
 					timerIsFilm ? 0.85f : 1.2f));
@@ -279,13 +279,13 @@ public final class PhotoCapture {
 
 		// Shutter sound — mechanical SLR / mirrorless / film SLR.
 		if (isFilm) {
-			mc.getSoundManager().play(PositionedSoundInstance.master(
+			mc.getSoundManager().play(uiSound(
 					SoundEvents.BLOCK_PISTON_CONTRACT, 1.2f, 1.4f));
 		} else if (isMirrorless) {
-			mc.getSoundManager().play(PositionedSoundInstance.master(
+			mc.getSoundManager().play(uiSound(
 					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 0.6f, 1.8f));
 		} else {
-			mc.getSoundManager().play(PositionedSoundInstance.master(
+			mc.getSoundManager().play(uiSound(
 					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 1.5f, 0.9f));
 		}
 	}
@@ -394,7 +394,13 @@ public final class PhotoCapture {
 			linearDepth = preRead != null ? preRead : readLinearDepth(fb, fbW, fbH);
 		}
 
+		//? if >=1.21.11 {
+		/*java.util.concurrent.atomic.AtomicReference<NativeImage> rawRef = new java.util.concurrent.atomic.AtomicReference<>();
+		ScreenshotRecorder.takeScreenshot(fb, rawRef::set);
+		NativeImage raw = rawRef.get();*/
+		//?} else {
 		NativeImage raw = ScreenshotRecorder.takeScreenshot(fb);
+		//?}
 
 		NativeImage cropped = null;
 		NativeImage downsampled = null;
@@ -476,7 +482,13 @@ public final class PhotoCapture {
 
 		// Take a color sample if the interval has elapsed.
 		if (now >= accumNextSampleMs && accumSamples < ACCUM_MAX_SAMPLES) {
+			//? if >=1.21.11 {
+			/*java.util.concurrent.atomic.AtomicReference<NativeImage> frameRef = new java.util.concurrent.atomic.AtomicReference<>();
+			ScreenshotRecorder.takeScreenshot(fb, frameRef::set);
+			NativeImage frame = frameRef.get();*/
+			//?} else {
 			NativeImage frame = ScreenshotRecorder.takeScreenshot(fb);
+			//?}
 			NativeImage cropped = null;
 			NativeImage ds = null;
 			try {
@@ -493,7 +505,7 @@ public final class PhotoCapture {
 				if (w == accumW && h == accumH) {
 					for (int y = 0; y < h; y++) {
 						for (int x = 0; x < w; x++) {
-							int c = ds.getColor(x, y);
+							int c = niGet(ds, x, y);
 							int idx = y * w + x;
 							accumR[idx] += c & 0xFF;
 							accumG[idx] += (c >> 8) & 0xFF;
@@ -544,7 +556,7 @@ public final class PhotoCapture {
 				int rv = clampCh(Math.round(r[idx] / n));
 				int gv = clampCh(Math.round(g[idx] / n));
 				int bv = clampCh(Math.round(b[idx] / n));
-				averaged.setColor(px, py, (0xFF << 24) | (bv << 16) | (gv << 8) | rv);
+				niSet(averaged, px, py, (0xFF << 24) | (bv << 16) | (gv << 8) | rv);
 			}
 		}
 
@@ -609,7 +621,7 @@ public final class PhotoCapture {
 
 	/** Called by the HUD callback when the mirror-down click is due. */
 	public static void playMirrorDownClick() {
-		MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(
+		MinecraftClient.getInstance().getSoundManager().play(uiSound(
 				SoundEvents.BLOCK_TRIPWIRE_CLICK_OFF, 1.3f, 1.0f));
 	}
 
@@ -640,7 +652,7 @@ public final class PhotoCapture {
 					timerLastTickMs = now;
 					// Alternating slight pitch variation gives a more mechanical feel
 					float pitch = (timerLastTickMs / tickInterval % 2 == 0) ? 0.85f : 0.90f;
-					mc.getSoundManager().play(PositionedSoundInstance.master(
+					mc.getSoundManager().play(uiSound(
 							SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.45f, pitch));
 				}
 			} else {
@@ -657,7 +669,7 @@ public final class PhotoCapture {
 						case 4  -> 1.2f;
 						default -> 1.1f;
 					};
-					mc.getSoundManager().play(PositionedSoundInstance.master(
+					mc.getSoundManager().play(uiSound(
 							SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.8f, pitch));
 				}
 			}
@@ -672,7 +684,7 @@ public final class PhotoCapture {
 			timerArmorStandEntityId = -1;
 
 			// Final click — slightly louder/higher than the ticks
-			mc.getSoundManager().play(PositionedSoundInstance.master(
+			mc.getSoundManager().play(uiSound(
 					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(),
 					isFilmTimer ? 0.7f : 1.0f,
 					isFilmTimer ? 1.1f : 2.0f));
@@ -711,7 +723,7 @@ public final class PhotoCapture {
 
 		if (!LensKind.hasLens(settings.lensType())) {
 			mc.player.sendMessage(Text.literal("⚠ レンズが取り付けられていません"), true);
-			mc.getSoundManager().play(PositionedSoundInstance.master(
+			mc.getSoundManager().play(uiSound(
 					SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
 			return;
 		}
@@ -720,7 +732,7 @@ public final class PhotoCapture {
 		if (!isFilm) {
 			if (!cameraStack.contains(ModDataComponents.SD_CARD)) {
 				mc.player.sendMessage(Text.literal("⚠ SDカードが装填されていません"), true);
-				mc.getSoundManager().play(PositionedSoundInstance.master(
+				mc.getSoundManager().play(uiSound(
 						SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
 				return;
 			}
@@ -761,7 +773,7 @@ public final class PhotoCapture {
 			timerArmorStandEntityId = entityId;
 			timerLastTickMs = now; // start ticking immediately
 			boolean timerIsFilmStand = cameraStack.getItem() instanceof FilmCameraItem;
-			mc.getSoundManager().play(PositionedSoundInstance.master(
+			mc.getSoundManager().play(uiSound(
 					SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(),
 					timerIsFilmStand ? 0.5f : 1.0f,
 					timerIsFilmStand ? 0.85f : 1.2f));
@@ -838,13 +850,13 @@ public final class PhotoCapture {
 
 		// Shutter sound
 		if (isFilm) {
-			mc.getSoundManager().play(PositionedSoundInstance.master(
+			mc.getSoundManager().play(uiSound(
 					SoundEvents.BLOCK_PISTON_CONTRACT, 1.2f, 1.4f));
 		} else if (isMirrorless) {
-			mc.getSoundManager().play(PositionedSoundInstance.master(
+			mc.getSoundManager().play(uiSound(
 					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 0.6f, 1.8f));
 		} else {
-			mc.getSoundManager().play(PositionedSoundInstance.master(
+			mc.getSoundManager().play(uiSound(
 					SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 1.5f, 0.9f));
 		}
 	}
@@ -924,7 +936,7 @@ public final class PhotoCapture {
 		NativeImage pass1 = new NativeImage(w, h, false);
 		for (int y = 0; y < h; y++) {
 			for (int x = 0; x < w; x++) {
-				int color = src.getColor(x, y);
+				int color = niGet(src, x, y);
 				int a     = (color >>> 24) & 0xFF;
 				int blue  = (color >>> 16) & 0xFF;
 				int green = (color >>>  8) & 0xFF;
@@ -982,7 +994,7 @@ public final class PhotoCapture {
 					}
 				}
 
-				pass1.setColor(x, y, (a << 24) | (blue << 16) | (green << 8) | red);
+				niSet(pass1, x, y, (a << 24) | (blue << 16) | (green << 8) | red);
 			}
 		}
 
@@ -1141,14 +1153,14 @@ public final class PhotoCapture {
 				int n = 0;
 				for (int dx = -radius; dx <= radius; dx++) {
 					int sx = Math.max(0, Math.min(w - 1, x + dx));
-					int c  = src.getColor(sx, y);
+					int c  = niGet(src, sx, y);
 					aa += (c >>> 24) & 0xFF;
 					ba += (c >>> 16) & 0xFF;
 					ga += (c >>>  8) & 0xFF;
 					ra +=  c         & 0xFF;
 					n++;
 				}
-				dst.setColor(x, y,
+				niSet(dst, x, y,
 						(((int)(aa / n)) << 24) | (((int)(ba / n)) << 16)
 						| (((int)(ga / n)) << 8) | (int)(ra / n));
 			}
@@ -1164,7 +1176,7 @@ public final class PhotoCapture {
 				long ra = 0, ga = 0, ba = 0, aa = 0;
 				for (int dy = -1; dy <= 1; dy++) {
 					for (int dx = -1; dx <= 1; dx++) {
-						int c = src.getColor(
+						int c = niGet(src,
 								Math.max(0, Math.min(w - 1, x + dx)),
 								Math.max(0, Math.min(h - 1, y + dy)));
 						aa += (c >>> 24) & 0xFF;
@@ -1173,7 +1185,7 @@ public final class PhotoCapture {
 						ra +=  c         & 0xFF;
 					}
 				}
-				dst.setColor(x, y,
+				niSet(dst, x, y,
 						(((int)(aa / 9)) << 24) | (((int)(ba / 9)) << 16)
 						| (((int)(ga / 9)) << 8) | (int)(ra / 9));
 			}
@@ -1193,7 +1205,9 @@ public final class PhotoCapture {
 	 * Near/far clip values are Minecraft defaults (0.05 / 512 blocks).
 	 */
 	private static float[] readLinearDepth(Framebuffer fb, int fbW, int fbH) {
+		//? if <1.21.11 {
 		fb.beginWrite(false); // binds the FBO
+		//?}
 		FloatBuffer buf = BufferUtils.createFloatBuffer(fbW * fbH);
 		GL11.glReadPixels(0, 0, fbW, fbH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
 
@@ -1316,7 +1330,7 @@ public final class PhotoCapture {
 			for (int ix = 0; ix < iw; ix++) {
 				float coc = cocMap[iy * iw + ix];
 				if (coc < 0.5f) {
-					hBuf[iy * iw + ix] = src.getColor(ix, iy);
+					hBuf[iy * iw + ix] = niGet(src, ix, iy);
 					continue;
 				}
 				int r = Math.min(maxR, (int) Math.ceil(coc));
@@ -1330,14 +1344,14 @@ public final class PhotoCapture {
 					// foreground doesn't bleed into the soft background.
 					float w = fg ? 1.0f : Math.max(0.10f, Math.min(1.0f, cocMap[iy * iw + sx] / coc));
 					if (w < 0.01f) continue;
-					int c = src.getColor(sx, iy);
+					int c = niGet(src, sx, iy);
 					aa += ((c >>> 24) & 0xFF) * w;
 					ba += ((c >>> 16) & 0xFF) * w;
 					ga += ((c >>>  8) & 0xFF) * w;
 					ra += ( c         & 0xFF) * w;
 					tw += w;
 				}
-				hBuf[iy * iw + ix] = (tw < 0.01f) ? src.getColor(ix, iy)
+				hBuf[iy * iw + ix] = (tw < 0.01f) ? niGet(src, ix, iy)
 						: ((clampCh(Math.round(aa / tw)) << 24)
 						| (clampCh(Math.round(ba / tw)) << 16)
 						| (clampCh(Math.round(ga / tw)) <<  8)
@@ -1351,7 +1365,7 @@ public final class PhotoCapture {
 			for (int iy = 0; iy < ih; iy++) {
 				float coc = cocMap[iy * iw + ix];
 				if (coc < 0.5f) {
-					result.setColor(ix, iy, src.getColor(ix, iy));
+					niSet(result, ix, iy, niGet(src, ix, iy));
 					continue;
 				}
 				int r = Math.min(maxR, (int) Math.ceil(coc));
@@ -1368,7 +1382,7 @@ public final class PhotoCapture {
 					ra += ( c         & 0xFF) * w;
 					tw += w;
 				}
-				result.setColor(ix, iy, (tw < 0.01f) ? hBuf[iy * iw + ix]
+				niSet(result, ix, iy, (tw < 0.01f) ? hBuf[iy * iw + ix]
 						: ((clampCh(Math.round(aa / tw)) << 24)
 						| (clampCh(Math.round(ba / tw)) << 16)
 						| (clampCh(Math.round(ga / tw)) <<  8)
@@ -1400,7 +1414,7 @@ public final class PhotoCapture {
 				int n = 0;
 				for (int sy = sy0; sy < sy1; sy++) {
 					for (int sx = sx0; sx < sx1; sx++) {
-						int c = src.getColor(sx, sy);
+						int c = niGet(src, sx, sy);
 						aa += (c >>> 24) & 0xFF;
 						ba += (c >>> 16) & 0xFF;
 						ga += (c >>> 8) & 0xFF;
@@ -1412,7 +1426,7 @@ public final class PhotoCapture {
 						| (((int) (ba / n)) << 16)
 						| (((int) (ga / n)) << 8)
 						| ((int) (ra / n));
-				dst.setColor(x, y, color);
+				niSet(dst, x, y, color);
 			}
 		}
 		return dst;
@@ -1438,9 +1452,27 @@ public final class PhotoCapture {
 		NativeImage dst = new NativeImage(targetW, targetH, false);
 		for (int y = 0; y < targetH; y++) {
 			for (int x = 0; x < targetW; x++) {
-				dst.setColor(x, y, src.getColor(x + offX, y + offY));
+				niSet(dst, x, y, niGet(src, x + offX, y + offY));
 			}
 		}
 		return dst;
 	}
+
+    //? if >=1.21.4 {
+    /*private static int niGet(net.minecraft.client.texture.NativeImage img, int x, int y) { return img.getColorArgb(x, y); }
+    private static void niSet(net.minecraft.client.texture.NativeImage img, int x, int y, int c) { img.setColorArgb(x, y, c); }*/
+    //?} else {
+    private static int niGet(net.minecraft.client.texture.NativeImage img, int x, int y) { return img.getColor(x, y); }
+    private static void niSet(net.minecraft.client.texture.NativeImage img, int x, int y, int c) { img.setColor(x, y, c); }
+    //?}
+
+    //? if >=1.21.11 {
+    /*private static net.minecraft.client.sound.SoundInstance uiSound(net.minecraft.sound.SoundEvent ev, float vol, float pitch) {
+        return net.minecraft.client.sound.PositionedSoundInstance.ui(ev, vol, pitch);
+    }*/
+    //?} else {
+    private static net.minecraft.client.sound.SoundInstance uiSound(net.minecraft.sound.SoundEvent ev, float vol, float pitch) {
+        return net.minecraft.client.sound.PositionedSoundInstance.master(ev, vol, pitch);
+    }
+    //?}
 }

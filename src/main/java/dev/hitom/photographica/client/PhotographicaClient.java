@@ -26,19 +26,29 @@ import dev.hitom.photographica.network.LoadSdCardPayload;
 import dev.hitom.photographica.network.UnloadSdCardPayload;
 import dev.hitom.photographica.network.WindFilmPayload;
 import net.fabricmc.api.ClientModInitializer;
+//? if <1.21.4 {
 import net.fabricmc.fabric.api.client.rendering.v1.ArmorRenderer;
+//?}
+//? if >=1.21.11 {
+/*import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;*/
+//?} else {
 import net.minecraft.client.render.block.entity.BlockEntityRendererFactories;
+//?}
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+//? if <1.21.11 {
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+//?}
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.render.OverlayTexture;
-//? if >=1.21.4 {
+//? if >=1.21.11 {
+/*// ModelTransformationMode removed in 1.21.11*/
+//?} else if >=1.21.4 {
 /*import net.minecraft.item.ModelTransformationMode;*/
 //?} else {
 import net.minecraft.client.render.model.json.ModelTransformationMode;
@@ -52,6 +62,11 @@ import net.minecraft.util.math.RotationAxis;
 import org.lwjgl.glfw.GLFW;
 
 public class PhotographicaClient implements ClientModInitializer {
+	//? if >=1.21.11 {
+	/*private static final KeyBinding.Category PHOTOGRAPHICA_CATEGORY =
+			KeyBinding.Category.create(net.minecraft.util.Identifier.of("photographica", "photographica"));*/
+	//?}
+
 	@Override
 	public void onInitializeClient() {
 		VideoCameraItem.clientToggleRecord = VideoRecorder::toggle;
@@ -81,49 +96,103 @@ public class PhotographicaClient implements ClientModInitializer {
 		HandledScreens.register(ModScreenHandlers.ENLARGER, EnlargerScreen::new);
 
 		// Settings key (unbound by default).
+		//? if >=1.21.11 {
+		/*KeyBinding settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.camera_settings",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_UNKNOWN,
+				PHOTOGRAPHICA_CATEGORY
+		));*/
+		//?} else {
 		KeyBinding settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.camera_settings",
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				"category.photographica"
 		));
+		//?}
 		// Wind-film key (unbound by default).
+		//? if >=1.21.11 {
+		/*KeyBinding windKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.wind_film",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_UNKNOWN,
+				PHOTOGRAPHICA_CATEGORY
+		));*/
+		//?} else {
 		KeyBinding windKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.wind_film",
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				"category.photographica"
 		));
+		//?}
 		// Load SD card key (unbound by default).
+		//? if >=1.21.11 {
+		/*KeyBinding loadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.load_sd_card",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_UNKNOWN,
+				PHOTOGRAPHICA_CATEGORY
+		));*/
+		//?} else {
 		KeyBinding loadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.load_sd_card",
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				"category.photographica"
 		));
+		//?}
 		// Unload SD card key (unbound by default).
+		//? if >=1.21.11 {
+		/*KeyBinding unloadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.unload_sd_card",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_UNKNOWN,
+				PHOTOGRAPHICA_CATEGORY
+		));*/
+		//?} else {
 		KeyBinding unloadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.unload_sd_card",
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				"category.photographica"
 		));
+		//?}
 		// Stop-recording key (default G).  Always stops an in-progress recording —
 		// works for handheld and for tripod recording where the view is locked to
 		// the stand, so the player is never trapped without a way to stop.
+		//? if >=1.21.11 {
+		/*KeyBinding stopRecordingKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.stop_recording",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_G,
+				PHOTOGRAPHICA_CATEGORY
+		));*/
+		//?} else {
 		KeyBinding stopRecordingKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.stop_recording",
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_G,
 				"category.photographica"
 		));
+		//?}
 		// Portrait / landscape orientation toggle (default V).
+		//? if >=1.21.11 {
+		/*KeyBinding orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.orientation",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_V,
+				PHOTOGRAPHICA_CATEGORY
+		));*/
+		//?} else {
 		KeyBinding orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.orientation",
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_V,
 				"category.photographica"
 		));
+		//?}
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			AutoCamera.tick(client);
@@ -169,8 +238,10 @@ public class PhotographicaClient implements ClientModInitializer {
 				}
 				if (stack.getItem() instanceof FilmCameraItem) {
 					ClientPlayNetworking.send(new WindFilmPayload());
+					//? if <1.21.11 {
 					client.getSoundManager().play(PositionedSoundInstance.master(
 							SoundEvents.BLOCK_LEVER_CLICK, 0.7f, 1.6f));
+					//?}
 				}
 			}
 			if (loadSdCardKey.wasPressed()) {
@@ -215,18 +286,33 @@ public class PhotographicaClient implements ClientModInitializer {
 			}
 		});
 
+		//? if >=1.21.11 {
+		/*net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents.END_MAIN.register(ctx -> {
+			PhotoCapture.onWorldRenderEnd();
+			VideoRecorder.onWorldRenderEnd();
+		});*/
+		//?} else {
 		WorldRenderEvents.LAST.register(ctx -> {
 			PhotoCapture.onWorldRenderEnd();
 			VideoRecorder.onWorldRenderEnd();
 		});
+		//?}
 
+		//? if >=1.21.11 {
+		/*BlockEntityRendererRegistry.register(ModBlockEntities.PHOTO_FRAME,
+				PhotoFrameBlockEntityRenderer::new);
+		BlockEntityRendererRegistry.register(ModBlockEntities.PHOTO_STAND,
+				PhotoStandBlockEntityRenderer::new);*/
+		//?} else {
 		BlockEntityRendererFactories.register(ModBlockEntities.PHOTO_FRAME,
 				PhotoFrameBlockEntityRenderer::new);
 		BlockEntityRendererFactories.register(ModBlockEntities.PHOTO_STAND,
 				PhotoStandBlockEntityRenderer::new);
+		//?}
 
 		// Render all four camera item models on the player's chest when worn.
 		// Uses the humanoid body bone for correct rotation with body/head animations.
+		//? if <1.21.4 {
 		ArmorRenderer.register((matrices, vertexConsumers, stack, entity, slot, light, contextModel) -> {
 			if (slot != EquipmentSlot.CHEST) return;
 			matrices.push();
@@ -241,16 +327,13 @@ public class PhotographicaClient implements ClientModInitializer {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			mc.getItemRenderer().renderItem(
 					stack,
-					//? if >=1.21.4 {
-					/*ModelTransformationMode.FIXED,*/
-					//?} else {
 					ModelTransformationMode.FIXED,
-					//?}
 					light, OverlayTexture.DEFAULT_UV,
 					matrices, vertexConsumers,
 					entity.getWorld(), entity.getId());
 			matrices.pop();
 		}, ModItems.VIDEO_CAMERA, ModItems.CAMERA, ModItems.MIRRORLESS_CAMERA, ModItems.FILM_CAMERA);
+		//?}
 
 		// Discard cached photo textures when disconnecting so stale GPU resources are freed.
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> PhotoTextureCache.clear());

@@ -43,7 +43,16 @@ public class VideoCameraItem extends Item implements Equipment {
     }
     //?}
 
-    //? if >=1.21.4 {
+    //? if >=1.21.11 {
+    /*@Override
+    public ActionResult use(World world, PlayerEntity user, Hand hand) {
+        ItemStack stack = user.getStackInHand(hand);
+        if (world.isClient()) {
+            clientToggleRecord.accept(stack);
+        }
+        return ActionResult.SUCCESS;
+    }*/
+    //?} else if >=1.21.4 {
     /*@Override
     public ActionResult use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
@@ -72,10 +81,21 @@ public class VideoCameraItem extends Item implements Equipment {
         stack.set(ModDataComponents.VIDEO_SETTINGS, settings);
     }
 
+    //? if >=1.21.11 {
+    /*@Override
+    public void appendTooltip(ItemStack stack, TooltipContext context,
+                               net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay,
+                               java.util.function.Consumer<Text> tooltipSink, TooltipType type) {
+        VideoSettings s = getSettings(stack);
+        tooltipSink.accept(Text.literal("絞り: F" + s.aperture()).formatted(Formatting.GRAY));
+        tooltipSink.accept(Text.literal("ISO AUTO  AF  24fps").formatted(Formatting.DARK_GRAY));
+    }*/
+    //?} else {
     @Override
     public void appendTooltip(ItemStack stack, TooltipContext context, List<Text> tooltip, TooltipType type) {
         VideoSettings s = getSettings(stack);
         tooltip.add(Text.literal("絞り: F" + s.aperture()).formatted(Formatting.GRAY));
         tooltip.add(Text.literal("ISO AUTO  AF  24fps").formatted(Formatting.DARK_GRAY));
     }
+    //?}
 }

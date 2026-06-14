@@ -42,7 +42,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
 
+	//? if <1.21.11 {
 	@Shadow private boolean renderHand;
+	//?}
 
 	/** True when the hand was hidden for an in-progress video frame capture. */
 	@Unique private boolean photographica$videoHandSuppressed = false;
@@ -58,6 +60,24 @@ public class GameRendererMixin {
 	 * (or press the stop key) to stop.  thirdPerson is forced false so the shot is a
 	 * clean first-person-from-the-stand view regardless of the player's F5 state.
 	 */
+	//? if >=1.21.11 {
+	/*@Redirect(method = "renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
+			at = @At(value = "INVOKE",
+					target = "Lnet/minecraft/client/render/Camera;update(Lnet/minecraft/world/World;Lnet/minecraft/entity/Entity;ZZF)V"))
+	private void photographica$focusCameraOnTripod(Camera camera, net.minecraft.world.World area,
+			Entity focused, boolean thirdPerson, boolean inverseView, float tickDelta) {
+		int standId = VideoRecorder.getRecordingArmorStandEntityId();
+		if (standId >= 0) {
+			MinecraftClient mc = MinecraftClient.getInstance();
+			Entity stand = mc.world != null ? mc.world.getEntityById(standId) : null;
+			if (stand != null) {
+				camera.update(area, stand, false, inverseView, tickDelta);
+				return;
+			}
+		}
+		camera.update(area, focused, thirdPerson, inverseView, tickDelta);
+	}*/
+	//?} else {
 	@Redirect(method = "renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
 			at = @At(value = "INVOKE",
 					target = "Lnet/minecraft/client/render/Camera;update(Lnet/minecraft/world/BlockView;Lnet/minecraft/entity/Entity;ZZF)V"))
@@ -74,23 +94,40 @@ public class GameRendererMixin {
 		}
 		camera.update(area, focused, thirdPerson, inverseView, tickDelta);
 	}
+	//?}
 
+	//? if >=1.21.4 {
+	/*@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)F",
+			at = @At("RETURN"),
+			cancellable = true)
+	private void photographica$applyFocalLength(Camera camera, float tickDelta, boolean changingFov,
+	                                            CallbackInfoReturnable<Float> cir) {*/
+	//?} else {
 	@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D",
 			at = @At("RETURN"),
 			cancellable = true)
 	private void photographica$applyFocalLength(Camera camera, float tickDelta, boolean changingFov,
 	                                            CallbackInfoReturnable<Double> cir) {
+	//?}
 		// Tripod recording: fixed camcorder-native FOV regardless of what the
 		// player is holding or looking through.
 		if (VideoRecorder.isTripodRecording()) {
+			//? if >=1.21.4 {
+			/*cir.setReturnValue((float) VideoRecorder.TRIPOD_FOV);*/
+			//?} else {
 			cir.setReturnValue((double) VideoRecorder.TRIPOD_FOV);
+			//?}
 			return;
 		}
 		// Armor stand capture mode: use the armor stand camera's focal length
 		if (PhotoCapture.armorStandCapturePending && PhotoCapture.armorStandFocalLength > 0) {
 			int f = PhotoCapture.armorStandFocalLength;
 			double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
+			//? if >=1.21.4 {
+			/*cir.setReturnValue((float) vFovDegrees);*/
+			//?} else {
 			cir.setReturnValue(vFovDegrees);
+			//?}
 			return;
 		}
 
@@ -101,7 +138,11 @@ public class GameRendererMixin {
 		int pendingFocal = PhotoCapture.pendingHandheldFocalLength();
 		if (pendingFocal > 0) {
 			double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / pendingFocal));
+			//? if >=1.21.4 {
+			/*cir.setReturnValue((float) vFovDegrees);*/
+			//?} else {
 			cir.setReturnValue(vFovDegrees);
+			//?}
 			return;
 		}
 
@@ -113,7 +154,11 @@ public class GameRendererMixin {
 		ItemStack vs = player.getMainHandStack();
 		if (!(vs.getItem() instanceof VideoCameraItem)) vs = player.getOffHandStack();
 		if (vs.getItem() instanceof VideoCameraItem) {
+			//? if >=1.21.4 {
+			/*cir.setReturnValue((float) VideoRecorder.videoFov);*/
+			//?} else {
 			cir.setReturnValue((double) VideoRecorder.videoFov);
+			//?}
 			return;
 		}
 
@@ -136,7 +181,11 @@ public class GameRendererMixin {
 
 		double halfSensorMm = dev.hitom.photographica.client.hud.ViewfinderHud.portraitOrientation ? 18.0 : 12.0;
 		double vFovDegrees = Math.toDegrees(2.0 * Math.atan(halfSensorMm / f));
+		//? if >=1.21.4 {
+		/*cir.setReturnValue((float) vFovDegrees);*/
+		//?} else {
 		cir.setReturnValue(vFovDegrees);
+		//?}
 	}
 
 	/**
@@ -162,7 +211,9 @@ public class GameRendererMixin {
 	private void photographica$suppressHandBeforeAccumSample(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
 		// Suppress hand during long-exposure accumulation AND armor stand capture
 		if (PhotoCapture.isAccumulating() || PhotoCapture.armorStandCapturePending) {
+			//? if <1.21.11 {
 			this.renderHand = false;
+			//?}
 		}
 		// Re-assert the armor stand as camera entity every frame to ensure renderWorld()
 		// always renders from the stand's perspective.  Without this, code that runs
@@ -175,7 +226,11 @@ public class GameRendererMixin {
 				MinecraftClient mc = MinecraftClient.getInstance();
 				if (mc.world != null) {
 					net.minecraft.entity.Entity stand = mc.world.getEntityById(standId);
+					//? if >=1.21.11 {
+					/*if (stand != null && mc.getCameraEntity() != stand) {*/
+					//?} else {
 					if (stand != null && mc.cameraEntity != stand) {
+					//?}
 						mc.setCameraEntity(stand);
 					}
 				}
@@ -186,7 +241,9 @@ public class GameRendererMixin {
 		// photographica$focusRenderOnTripod), so the first-person hand would be wrong
 		// anyway during tripod recording.
 		if (VideoRecorder.isRecording()) {
+			//? if <1.21.11 {
 			this.renderHand = false;
+			//?}
 			photographica$videoHandSuppressed = true;
 		} else {
 			photographica$videoHandSuppressed = false;
@@ -214,7 +271,9 @@ public class GameRendererMixin {
 		VideoRecorder.captureFrameIfRecording();
 		// Restore renderHand for the vanilla renderHand() call that follows
 		if (wasAccumulating || wasArmorStand || photographica$videoHandSuppressed) {
+			//? if <1.21.11 {
 			this.renderHand = true;
+			//?}
 		}
 	}
 

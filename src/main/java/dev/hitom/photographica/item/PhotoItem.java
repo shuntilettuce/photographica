@@ -28,7 +28,20 @@ public class PhotoItem extends Item {
 		super(settings.maxCount(64));
 	}
 
-	//? if >=1.21.4 {
+	//? if >=1.21.11 {
+	/*@Override
+	public ActionResult use(World world, PlayerEntity user, Hand hand) {
+		ItemStack stack = user.getStackInHand(hand);
+		PhotoData data = stack.get(ModDataComponents.PHOTO_DATA);
+		if (data == null) {
+			return ActionResult.PASS;
+		}
+		if (world.isClient()) {
+			clientOpenViewer.accept(data);
+		}
+		return ActionResult.SUCCESS;
+	}*/
+	//?} else if >=1.21.4 {
 	/*@Override
 	public ActionResult use(World world, PlayerEntity user, Hand hand) {
 		ItemStack stack = user.getStackInHand(hand);
@@ -60,11 +73,46 @@ public class PhotoItem extends Item {
 	public Text getName(ItemStack stack) {
 		PhotoData data = stack.get(ModDataComponents.PHOTO_DATA);
 		if (data != null && data.cameraAtCapture().isFilm()) {
-			return Text.translatable(getTranslationKey(stack)).formatted(Formatting.GOLD);
+		//? if >=1.21.4 {
+		/*return Text.translatable(getTranslationKey()).formatted(Formatting.GOLD);*/
+		//?} else {
+		return Text.translatable(getTranslationKey(stack)).formatted(Formatting.GOLD);
+		//?}
 		}
 		return super.getName(stack);
 	}
 
+	//? if >=1.21.11 {
+	/*@Override
+	public void appendTooltip(ItemStack stack, TooltipContext context,
+	                           net.minecraft.component.type.TooltipDisplayComponent tooltipDisplay,
+	                           java.util.function.Consumer<Text> tooltipSink, TooltipType type) {
+		PhotoData data = stack.get(ModDataComponents.PHOTO_DATA);
+		if (data == null) {
+			tooltipSink.accept(Text.literal("(未現像)").formatted(Formatting.GRAY, Formatting.ITALIC));
+			return;
+		}
+		boolean isFilm = data.cameraAtCapture().isFilm();
+		MutableText badge = isFilm
+				? Text.literal("[ フィルム写真 ]").formatted(Formatting.GOLD)
+				: Text.literal("[ デジタル写真 ]").formatted(Formatting.AQUA);
+		tooltipSink.accept(badge);
+		if (data.fogged()) {
+			tooltipSink.accept(Text.literal("⚠ 光被り").formatted(Formatting.RED));
+		}
+		tooltipSink.accept(Text.literal("撮影: " + data.photographer()).formatted(Formatting.GRAY));
+		tooltipSink.accept(Text.literal(String.format("F%.1f  ISO%d  %dmm",
+				data.cameraAtCapture().aperture(),
+				data.cameraAtCapture().iso(),
+				data.cameraAtCapture().focalLengthMm()))
+				.formatted(Formatting.DARK_GRAY));
+		tooltipSink.accept(Text.literal(String.format("[%s] (%d, %d, %d)",
+				data.dimension(), data.x(), data.y(), data.z()))
+				.formatted(Formatting.DARK_GRAY));
+		tooltipSink.accept(Text.literal("ID: " + data.id().toString().substring(0, 8))
+				.formatted(Formatting.DARK_GRAY));
+	}*/
+	//?} else {
 	@Override
 	public void appendTooltip(ItemStack stack, TooltipContext context, List<Text> tooltip, TooltipType type) {
 		PhotoData data = stack.get(ModDataComponents.PHOTO_DATA);
@@ -92,4 +140,5 @@ public class PhotoItem extends Item {
 		tooltip.add(Text.literal("ID: " + data.id().toString().substring(0, 8))
 				.formatted(Formatting.DARK_GRAY));
 	}
+	//?}
 }

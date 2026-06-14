@@ -26,6 +26,24 @@ import java.util.UUID;
  *   - Matrix is rotated to match the block's FACING before drawing.
  */
 @Environment(EnvType.CLIENT)
+//? if >=1.21.11 {
+/*public class PhotoFrameBlockEntityRenderer
+        implements BlockEntityRenderer<PhotoFrameBlockEntity, net.minecraft.client.render.block.entity.state.BlockEntityRenderState> {
+
+    public PhotoFrameBlockEntityRenderer(BlockEntityRendererFactory.Context ctx) {}
+
+    @Override
+    public net.minecraft.client.render.block.entity.state.BlockEntityRenderState createRenderState() {
+        return new net.minecraft.client.render.block.entity.state.BlockEntityRenderState();
+    }
+
+    @Override
+    public void render(net.minecraft.client.render.block.entity.state.BlockEntityRenderState renderState,
+                       MatrixStack matrices,
+                       net.minecraft.client.render.command.OrderedRenderCommandQueue queue,
+                       net.minecraft.client.render.state.CameraRenderState cameraState) {}
+}*/
+//?} else {
 public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoFrameBlockEntity> {
 
     // Inner black area of the 16×16 frame texture (px 2..13) mapped onto the 12×8 face:
@@ -54,7 +72,14 @@ public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoF
         matrices.push();
         // Rotate around the block centre to align with the block's facing direction.
         matrices.translate(0.5, 0.5, 0.5);
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-facing.asRotation()));
+        float rotDeg = switch (facing) {
+            case SOUTH -> 0f;
+            case WEST  -> 90f;
+            case NORTH -> 180f;
+            case EAST  -> 270f;
+            default    -> 0f;
+        };
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-rotDeg));
         matrices.translate(-0.5, -0.5, -0.5);
 
         MatrixStack.Entry entry = matrices.peek();
@@ -70,3 +95,4 @@ public class PhotoFrameBlockEntityRenderer implements BlockEntityRenderer<PhotoF
         matrices.pop();
     }
 }
+//?}

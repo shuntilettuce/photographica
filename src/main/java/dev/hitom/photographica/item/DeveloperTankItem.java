@@ -60,7 +60,11 @@ public class DeveloperTankItem extends Item {
 
 	@Override
 	public void usageTick(World world, LivingEntity user, ItemStack stack, int remainingUseTicks) {
+		//? if >=1.21.11 {
+		/*if (!world.isClient()) return;*/
+		//?} else {
 		if (!world.isClient) return;
+		//?}
 		if (!(user instanceof PlayerEntity player)) return;
 		int elapsed = USE_TICKS - remainingUseTicks;
 		int bars = elapsed * 10 / USE_TICKS;
@@ -70,7 +74,11 @@ public class DeveloperTankItem extends Item {
 
 	@Override
 	public ItemStack finishUsing(ItemStack stack, World world, LivingEntity user) {
+		//? if >=1.21.11 {
+		/*if (world.isClient() && user instanceof PlayerEntity) {*/
+		//?} else {
 		if (world.isClient && user instanceof PlayerEntity) {
+		//?}
 			sendDevelop();
 		}
 		return stack;

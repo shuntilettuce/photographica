@@ -456,7 +456,13 @@ public final class VideoRecorder {
 
         NativeImage raw;
         try {
+            //? if >=1.21.11 {
+            /*java.util.concurrent.atomic.AtomicReference<NativeImage> rawRef = new java.util.concurrent.atomic.AtomicReference<>();
+            ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), rawRef::set);
+            raw = rawRef.get();*/
+            //?} else {
             raw = ScreenshotRecorder.takeScreenshot(mc.getFramebuffer());
+            //?}
         } catch (Exception e) {
             Photographica.LOGGER.warn("[VideoRecorder] Screenshot failed frame {}", frameCount, e);
             nextFrameMs = recordStartMs + (long)((frameCount + 1) * 1000.0 / currentFps);
@@ -588,7 +594,7 @@ public final class VideoRecorder {
             float dy = (py - halfH) / halfH;
             float dy2 = dy * dy;
             for (int px = 0; px < w; px++) {
-                int c = src.getColor(px, py);
+                int c = niGet(src,px, py);
                 int a = (c >>> 24) & 0xFF;
                 int b = (c >>> 16) & 0xFF;
                 int g = (c >>>  8) & 0xFF;
@@ -604,7 +610,7 @@ public final class VideoRecorder {
                 g = clamp((int)(g * vf));
                 b = clamp((int)(b * vf));
 
-                pass1.setColor(px, py, (a << 24) | (b << 16) | (g << 8) | r);
+                niSet(pass1,px, py, (a << 24) | (b << 16) | (g << 8) | r);
             }
         }
 
@@ -737,7 +743,7 @@ public final class VideoRecorder {
                 int blurLen = (int) Math.min(blurMag, maxBlurPx);
 
                 if (blurLen < 1) {
-                    pass3.setColor(px, py, pass2.getColor(px, py));
+                    niSet(pass3,px, py, niGet(pass2,px, py));
                     continue;
                 }
 
@@ -750,14 +756,14 @@ public final class VideoRecorder {
                     float wt = (blurLen - s + 1);
                     int sx = Math.max(0, Math.min(w - 1, px + (int)(s * ndx)));
                     int sy = Math.max(0, Math.min(h - 1, py + (int)(s * ndy)));
-                    int c  = pass2.getColor(sx, sy);
+                    int c  = niGet(pass2,sx, sy);
                     aa += ((c >>> 24) & 0xFF) * wt;
                     ba += ((c >>> 16) & 0xFF) * wt;
                     ga += ((c >>>  8) & 0xFF) * wt;
                     ra += ( c         & 0xFF) * wt;
                     sumW += wt;
                 }
-                pass3.setColor(px, py,
+                niSet(pass3,px, py,
                         (clamp((int)(aa / sumW)) << 24) | (clamp((int)(ba / sumW)) << 16)
                       | (clamp((int)(ga / sumW)) <<  8) |  clamp((int)(ra / sumW)));
             }
@@ -783,7 +789,7 @@ public final class VideoRecorder {
         // Sample every 8th pixel — sufficient for a histogram
         for (int py = 0; py < h; py += 8) {
             for (int px = 0; px < w; px += 8) {
-                int c = src.getColor(px, py);
+                int c = niGet(src,px, py);
                 // NativeImage is ABGR; extract r, g, b correctly
                 int r =  c         & 0xFF;
                 int g = (c >>>  8) & 0xFF;
@@ -836,7 +842,7 @@ public final class VideoRecorder {
         for (int py = 0; py < h; py++) {
             prefR[0] = prefG[0] = prefB[0] = prefA[0] = 0;
             for (int px = 0; px < w; px++) {
-                int c = src.getColor(px, py);
+                int c = niGet(src,px, py);
                 prefA[px + 1] = prefA[px] + ((c >>> 24) & 0xFF);
                 prefB[px + 1] = prefB[px] + ((c >>> 16) & 0xFF);
                 prefG[px + 1] = prefG[px] + ((c >>>  8) & 0xFF);
@@ -846,7 +852,7 @@ public final class VideoRecorder {
                 int r = (int) radiusMap[py * w + px];
                 int base = py * w + px;
                 if (r < 1) {
-                    int c = src.getColor(px, py);
+                    int c = niGet(src,px, py);
                     dofTempA[base] = (c >>> 24) & 0xFF;
                     dofTempB[base] = (c >>> 16) & 0xFF;
                     dofTempG[base] = (c >>>  8) & 0xFF;
@@ -880,7 +886,7 @@ public final class VideoRecorder {
                 int r    = (int) radiusMap[py * w + px];
                 int base = py * w + px;
                 if (r < 1) {
-                    dst.setColor(px, py,
+                    niSet(dst,px, py,
                             (dofTempA[base] << 24) | (dofTempB[base] << 16)
                           | (dofTempG[base] <<  8) |  dofTempR[base]);
                 } else {
@@ -890,7 +896,7 @@ public final class VideoRecorder {
                     int b   = (int)((vprefB[y1 + 1] - vprefB[y0]) / cnt);
                     int g   = (int)((vprefG[y1 + 1] - vprefG[y0]) / cnt);
                     int rv  = (int)((vprefR[y1 + 1] - vprefR[y0]) / cnt);
-                    dst.setColor(px, py, (a << 24) | (b << 16) | (g << 8) | rv);
+                    niSet(dst,px, py, (a << 24) | (b << 16) | (g << 8) | rv);
                 }
             }
         }
@@ -1002,7 +1008,7 @@ public final class VideoRecorder {
         NativeImage dst = new NativeImage(tW, tH, false);
         for (int y = 0; y < tH; y++)
             for (int x = 0; x < tW; x++)
-                dst.setColor(x, y, src.getColor(x + offX, y + offY));
+                niSet(dst,x, y, niGet(src,x + offX, y + offY));
         return dst;
     }
 
@@ -1024,12 +1030,12 @@ public final class VideoRecorder {
                 int  n  = 0;
                 for (int sy = sy0; sy < sy1; sy++)
                     for (int sx = sx0; sx < sx1; sx++) {
-                        int c = src.getColor(sx, sy);
+                        int c = niGet(src,sx, sy);
                         aa += (c >>> 24) & 0xFF; ba += (c >>> 16) & 0xFF;
                         ga += (c >>>  8) & 0xFF; ra +=  c         & 0xFF;
                         n++;
                     }
-                dst.setColor(x, y,
+                niSet(dst,x, y,
                         ((int)(aa / n) << 24) | ((int)(ba / n) << 16)
                       | ((int)(ga / n) <<  8) |  (int)(ra / n));
             }
@@ -1065,4 +1071,12 @@ public final class VideoRecorder {
         if (files != null) for (File f : files) f.delete();
         dir.delete();
     }
+
+    //? if >=1.21.4 {
+    /*private static int niGet(net.minecraft.client.texture.NativeImage img, int x, int y) { return img.getColorArgb(x, y); }
+    private static void niSet(net.minecraft.client.texture.NativeImage img, int x, int y, int c) { img.setColorArgb(x, y, c); }*/
+    //?} else {
+    private static int niGet(net.minecraft.client.texture.NativeImage img, int x, int y) { return img.getColor(x, y); }
+    private static void niSet(net.minecraft.client.texture.NativeImage img, int x, int y, int c) { img.setColor(x, y, c); }
+    //?}
 }

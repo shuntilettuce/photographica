@@ -11,7 +11,9 @@ import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.WorldRenderer;
+//? if <1.21.11 {
 import net.minecraft.client.render.entity.EntityRenderDispatcher;
+//?}
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.BlockPos;
@@ -29,6 +31,25 @@ public class WorldRendererMixin {
 	 * Suppresses the block-selection outline during any capture or recording,
 	 * so it never bleeds into photos or video frames.
 	 */
+	//? if >=1.21.11 {
+	/*@Inject(
+			method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;DDDLnet/minecraft/client/render/state/OutlineRenderState;IF)V",
+			at = @At("HEAD"),
+			cancellable = true
+	)
+	private void photographica$hideOutlineDuringCapture(CallbackInfo ci) {
+		if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) ci.cancel();
+	}*/
+	//?} else if >=1.21.4 {
+	/*@Inject(
+			method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;Lnet/minecraft/entity/Entity;DDDLnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;I)V",
+			at = @At("HEAD"),
+			cancellable = true
+	)
+	private void photographica$hideOutlineDuringCapture(CallbackInfo ci) {
+		if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) ci.cancel();
+	}*/
+	//?} else {
 	@Inject(
 			method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;Lnet/minecraft/entity/Entity;DDDLnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)V",
 			at = @At("HEAD"),
@@ -41,6 +62,7 @@ public class WorldRendererMixin {
 			ci.cancel();
 		}
 	}
+	//?}
 
 	/**
 	 * Vanilla WorldRenderer.render() skips drawing a {@code ClientPlayerEntity} when
@@ -60,6 +82,7 @@ public class WorldRendererMixin {
 	 * {@code mc.player != mc.player} evaluates to {@code false} and the player
 	 * entity is rendered normally.
 	 */
+	//? if <1.21.11 {
 	@Redirect(
 			method = "render(Lnet/minecraft/client/render/RenderTickCounter;ZLnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/GameRenderer;Lnet/minecraft/client/render/LightmapTextureManager;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
 			at = @At(value = "INVOKE", ordinal = 3,
@@ -73,9 +96,11 @@ public class WorldRendererMixin {
 		}
 		return camera.getFocusedEntity();
 	}
+	//?}
 
 	/** During tripod recording, prevent the camera armor stand from being rendered
 	 *  so the view from inside its model is unobstructed. */
+	//? if <1.21.11 {
 	@Redirect(
 			method = "render(Lnet/minecraft/client/render/RenderTickCounter;ZLnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/GameRenderer;Lnet/minecraft/client/render/LightmapTextureManager;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
 			at = @At(value = "INVOKE",
@@ -89,4 +114,5 @@ public class WorldRendererMixin {
 		}
 		return dispatcher.shouldRender(entity, frustum, x, y, z);
 	}
+	//?}
 }

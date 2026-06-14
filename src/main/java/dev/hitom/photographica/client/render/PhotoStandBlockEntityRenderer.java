@@ -28,6 +28,24 @@ import java.util.UUID;
  * BER tilt matches model JSON: -22.5° around X, pivot at origin [8,1,12].
  */
 @Environment(EnvType.CLIENT)
+//? if >=1.21.11 {
+/*public class PhotoStandBlockEntityRenderer
+        implements BlockEntityRenderer<PhotoStandBlockEntity, net.minecraft.client.render.block.entity.state.BlockEntityRenderState> {
+
+    public PhotoStandBlockEntityRenderer(BlockEntityRendererFactory.Context ctx) {}
+
+    @Override
+    public net.minecraft.client.render.block.entity.state.BlockEntityRenderState createRenderState() {
+        return new net.minecraft.client.render.block.entity.state.BlockEntityRenderState();
+    }
+
+    @Override
+    public void render(net.minecraft.client.render.block.entity.state.BlockEntityRenderState renderState,
+                       MatrixStack matrices,
+                       net.minecraft.client.render.command.OrderedRenderCommandQueue queue,
+                       net.minecraft.client.render.state.CameraRenderState cameraState) {}
+}*/
+//?} else {
 public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoStandBlockEntity> {
 
     // Inner black area of the 16×16 panel texture mapped onto the 12×8 face:
@@ -61,7 +79,14 @@ public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoS
 
         // 1. Align to facing direction (Y-axis rotation around block centre).
         matrices.translate(0.5, 0.5, 0.5);
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-facing.asRotation()));
+        float rotDeg = switch (facing) {
+            case SOUTH -> 0f;
+            case WEST  -> 90f;
+            case NORTH -> 180f;
+            case EAST  -> 270f;
+            default    -> 0f;
+        };
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-rotDeg));
         matrices.translate(-0.5, -0.5, -0.5);
 
         // 2. Tilt panel -22.5° around X matching model JSON rotation origin [8,1,12].
@@ -81,3 +106,4 @@ public class PhotoStandBlockEntityRenderer implements BlockEntityRenderer<PhotoS
         matrices.pop();
     }
 }
+//?}

@@ -32,7 +32,14 @@ public class MirrorlessCameraItem extends CameraItem {
 		super(settings);
 	}
 
-	//? if >=1.21.4 {
+	//? if >=1.21.11 {
+	/*@Override
+	public ActionResult use(World world, PlayerEntity user, Hand hand) {
+		ItemStack stack = user.getStackInHand(hand);
+		if (world.isClient()) clientTakePhoto.accept(stack);
+		return ActionResult.SUCCESS;
+	}*/
+	//?} else if >=1.21.4 {
 	/*@Override
 	public ActionResult use(World world, PlayerEntity user, Hand hand) {
 		ItemStack stack = user.getStackInHand(hand);
