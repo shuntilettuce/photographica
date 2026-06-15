@@ -59,8 +59,13 @@ public final class VideoRecorder {
 
     // Autofocus state — independent of the still-camera focusDistance so video
     // DoF tracks the scene even when the viewfinder (sneak mode) is not active.
-    private static final int   FOCUS_DWELL_FRAMES = 20;
-    private static final float FOCUS_TOL          = 0.25f;
+    private static final int   FOCUS_DWELL_FRAMES  = 20;
+    private static final float FOCUS_TOL           = 0.25f;
+    // Log-space pull parameters (slower/smoother than still-camera AF).
+    private static final float PULL_RATE           = 0.07f;  // fraction of log-dist per frame
+    private static final float PULL_MAX_STEP       = 0.10f;  // max log-units per frame
+    private static final float PULL_SNAP_EPS       = 0.015f; // snap when this close (log-units)
+    private static final int   PULL_WARMUP_FRAMES  = 40;     // frames after dwell to ramp PULL_RATE
     private static float currentFocusDepth   = 5.0f;
     private static float focusCandidateDepth = 5.0f;
     private static int   focusCandidateFrames = 0;
@@ -208,16 +213,24 @@ public final class VideoRecorder {
                 && mc.player != null)
             mc.gui.setOverlayMessage(Component.literal("⚠ 残り 1:00"), true);
 
+        // Move crop+downsample to the IO thread so the screenshot callback (render thread)
+        // returns immediately and doesn't stall rendering during capture.
         Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> {
-            NativeImage cropped = cropTo16x9(raw);
-            NativeImage frame   = boxDownsample(cropped, 1280);
-            if (cropped != raw) cropped.close();
-            raw.close();
+            if (raw == null) { writtenFrames.incrementAndGet(); return; }
             ioExecutor.submit(() -> {
-                try { frame.writeToFile(outFile.toPath()); }
-                catch (IOException e) {
+                NativeImage cropped = null, frame = null;
+                try {
+                    cropped = cropTo16x9(raw);
+                    frame   = boxDownsample(cropped, 1280);
+                    frame.writeToFile(outFile.toPath());
+                } catch (IOException e) {
                     System.err.println("[VideoRecorder] Frame write failed: " + outFile);
-                } finally { frame.close(); writtenFrames.incrementAndGet(); }
+                } finally {
+                    if (frame != null && frame != cropped) frame.close();
+                    if (cropped != null && cropped != raw) cropped.close();
+                    raw.close();
+                    writtenFrames.incrementAndGet();
+                }
             });
         });
     }
@@ -243,13 +256,39 @@ public final class VideoRecorder {
         if (Math.abs(centreDepth - focusCandidateDepth)
                 / Math.max(focusCandidateDepth, 0.1f) <= FOCUS_TOL) {
             focusCandidateFrames++;
-            if (focusCandidateFrames >= FOCUS_DWELL_FRAMES) {
-                currentFocusDepth = currentFocusDepth * 0.65f + focusCandidateDepth * 0.35f;
-            }
         } else {
             focusCandidateDepth  = centreDepth;
             focusCandidateFrames = 0;
         }
+        if (focusCandidateFrames >= FOCUS_DWELL_FRAMES) {
+            currentFocusDepth = pullFocusToward(currentFocusDepth, focusCandidateDepth,
+                    focusCandidateFrames - FOCUS_DWELL_FRAMES);
+        }
+    }
+
+    /**
+     * Ease current focus toward target in log-space with a warmup ramp.
+     * warmupFrame=0 is the first pull frame (just past dwell). The rate starts at
+     * a fraction of PULL_RATE and reaches full PULL_RATE after PULL_WARMUP_FRAMES,
+     * giving the slow-start / accelerate / ease-out feel of a real focus motor.
+     */
+    private static float pullFocusToward(float current, float target, int warmupFrame) {
+        current = Math.max(0.01f, current);
+        target  = Math.max(0.01f, target);
+        float logCur = (float) Math.log(current);
+        float logTar = (float) Math.log(target);
+        float diff   = logTar - logCur;
+        if (Math.abs(diff) <= PULL_SNAP_EPS) return target;
+        // Ramp rate: 0.2× at warmupFrame=0, reaches 1.0× at PULL_WARMUP_FRAMES.
+        float ramp = 0.2f + 0.8f * Math.min(1.0f, (float) warmupFrame / PULL_WARMUP_FRAMES);
+        float step = diff * PULL_RATE * ramp;
+        if (step >  PULL_MAX_STEP) step =  PULL_MAX_STEP;
+        if (step < -PULL_MAX_STEP) step = -PULL_MAX_STEP;
+        // Prevent overshooting.
+        float next = logCur + step;
+        if (diff > 0 && next > logTar) return target;
+        if (diff < 0 && next < logTar) return target;
+        return (float) Math.exp(next);
     }
 
     private static float computeSceneFocusDepth(Minecraft mc) {
@@ -345,8 +384,10 @@ public final class VideoRecorder {
 
     private static String motionBlurFilter() {
         switch (motionBlur) {
-            case 1:  return "tmix=frames=2";
-            case 2:  return "tmix=frames=4";
+            // Light: 75% current + 25% previous — subtle shutter-trail effect.
+            case 1:  return "tmix=frames=2:weights='3 1'";
+            // Strong: equal 50/50 blend — pronounced cinematic motion blur.
+            case 2:  return "tmix=frames=2";
             default: return null;
         }
     }

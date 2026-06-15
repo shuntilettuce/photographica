@@ -57,10 +57,10 @@ void main() {
     // Foreground and background blur require different edge treatment (see below).
     bool isForeground = (FocusDist < 99999.0) && (depthM < FocusDist);
 
-    // Wider sigma (×0.50) and no artificial 1.0 floor gives a softer Gaussian tail
-    // so the blur blends gradually at depth boundaries (less "blocky" appearance).
-    float sigma = max(coc * 0.50, 0.1);
-    int rad = min(int(ceil(coc)), 32);
+    // sigma = 0.75 × coc: wide Gaussian tail for soft, physically realistic edge
+    // transitions between in-focus and out-of-focus regions.
+    float sigma = max(coc * 0.75, 0.1);
+    int rad = min(int(ceil(coc * 1.5)), 32);
 
     vec4 col = vec4(0.0);
     float totalW = 0.0;
@@ -82,7 +82,7 @@ void main() {
             } else {
                 // Background blur: reduce contribution from sharper / closer samples
                 // to prevent sharp in-focus foreground from bleeding into soft background.
-                cocWeight = clamp(sampleCoc / coc, 0.10, 1.0);
+                cocWeight = clamp(sampleCoc / coc, 0.05, 1.0);
             }
         }
 

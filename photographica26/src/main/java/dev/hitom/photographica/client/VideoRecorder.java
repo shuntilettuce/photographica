@@ -39,6 +39,10 @@ public final class VideoRecorder {
 
     private static final int   FOCUS_DWELL_FRAMES = 20;
     private static final float FOCUS_TOL          = 0.25f;
+    private static final float PULL_RATE          = 0.07f;
+    private static final float PULL_MAX_STEP      = 0.10f;
+    private static final float PULL_SNAP_EPS      = 0.015f;
+    private static final int   PULL_WARMUP_FRAMES = 40;
 
     // ── Recording state ────────────────────────────────────────────────────────
     private static volatile boolean recording      = false;
@@ -279,13 +283,31 @@ public final class VideoRecorder {
         if (Math.abs(centreDepth - focusCandidateDepth)
                 / Math.max(focusCandidateDepth, 0.1f) <= FOCUS_TOL) {
             focusCandidateFrames++;
-            if (focusCandidateFrames >= FOCUS_DWELL_FRAMES) {
-                currentFocusDepth = currentFocusDepth * 0.65f + focusCandidateDepth * 0.35f;
-            }
         } else {
             focusCandidateDepth  = centreDepth;
             focusCandidateFrames = 0;
         }
+        if (focusCandidateFrames >= FOCUS_DWELL_FRAMES) {
+            currentFocusDepth = pullFocusToward(currentFocusDepth, focusCandidateDepth,
+                    focusCandidateFrames - FOCUS_DWELL_FRAMES);
+        }
+    }
+
+    private static float pullFocusToward(float current, float target, int warmupFrame) {
+        current = Math.max(0.01f, current);
+        target  = Math.max(0.01f, target);
+        float logCur = (float) Math.log(current);
+        float logTar = (float) Math.log(target);
+        float diff   = logTar - logCur;
+        if (Math.abs(diff) <= PULL_SNAP_EPS) return target;
+        float ramp = 0.2f + 0.8f * Math.min(1.0f, (float) warmupFrame / PULL_WARMUP_FRAMES);
+        float step = diff * PULL_RATE * ramp;
+        if (step >  PULL_MAX_STEP) step =  PULL_MAX_STEP;
+        if (step < -PULL_MAX_STEP) step = -PULL_MAX_STEP;
+        float next = logCur + step;
+        if (diff > 0 && next > logTar) return target;
+        if (diff < 0 && next < logTar) return target;
+        return (float) Math.exp(next);
     }
 
     /** Raycasts from the camera along its view vector to find the focus subject distance. */
@@ -415,8 +437,11 @@ public final class VideoRecorder {
                         ff, "-y", "-f", "concat", "-safe", "0",
                         "-i", concatFile.getAbsolutePath()));
                 if (motionBlurSetting > 0) {
-                    int blendFrames = motionBlurSetting >= 2 ? 5 : 3;
-                    cmd.addAll(Arrays.asList("-vf", "tmix=frames=" + blendFrames));
+                    // Light: 75/25 blend — subtle shutter-trail. Strong: 50/50 blend.
+                    String mxFilter = motionBlurSetting >= 2
+                            ? "tmix=frames=2"
+                            : "tmix=frames=2:weights='3 1'";
+                    cmd.addAll(Arrays.asList("-vf", mxFilter));
                 }
                 cmd.addAll(Arrays.asList("-c:v", "libx264", "-crf", "18",
                         "-pix_fmt", "yuv420p", outPath));
