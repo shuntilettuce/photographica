@@ -1,7 +1,9 @@
 package dev.shunti.snapmatica.client.mixin;
 
+import dev.shunti.snapmatica.client.EvfBlurRenderer;
 import dev.shunti.snapmatica.client.PhotoCapture;
 import dev.shunti.snapmatica.client.SnapmaticaClient;
+import dev.shunti.snapmatica.client.VideoRecorder;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
@@ -54,6 +56,11 @@ public class GameRendererMixin {
                     target = "Lnet/minecraft/client/renderer/GameRenderer;renderLevel(Lnet/minecraft/client/DeltaTracker;)V",
                     shift = At.Shift.AFTER))
     private void snapmatica$captureAfterLevel(DeltaTracker deltaTracker, boolean tick, CallbackInfo ci) {
+        // Video frame capture applies its own full-frame blur internally.
+        VideoRecorder.captureFrameIfRecording();
+        // Photo capture: no EVF blur (photos use CPU DoF).
         PhotoCapture.captureIfPending();
+        // Apply scheduled viewfinder region blur for live preview (scheduled by ViewfinderOverlay).
+        EvfBlurRenderer.applyScheduledBlur();
     }
 }

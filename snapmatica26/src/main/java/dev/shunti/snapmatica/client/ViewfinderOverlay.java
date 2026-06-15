@@ -43,9 +43,8 @@ public final class ViewfinderOverlay {
         int fx = (sw-fw)/2, fy = (sh-fh)/2, fx2 = fx+fw, fy2 = fy+fh;
 
         boolean hasLensForBlur = SnapmaticaClient.lensType != 0;
-        if (hasLensForBlur && SnapmaticaClient.aperture < 8.0f
-                && SnapmaticaClient.focusDistance < SnapmaticaClient.FOCUS_INFINITY) {
-            EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2,
+        if (hasLensForBlur && SnapmaticaClient.aperture < 8.0f) {
+            EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2,
                     SnapmaticaClient.focusDistance, SnapmaticaClient.aperture,
                     SnapmaticaClient.focalLengthMm);
         }

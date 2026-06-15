@@ -3,5 +3,6 @@
   "key.snapmatica.settings": "カメラ設定",
   "key.snapmatica.viewfinder_sneak": "ビューファインダースニーク切り替え",
   "key.snapmatica.orientation": "縦／横 切り替え",
-  "category.snapmatica": "Snapmatica"
+  "key.snapmatica.record": "動画録画",
+  "key.category.snapmatica.category": "Snapmatica"
 }

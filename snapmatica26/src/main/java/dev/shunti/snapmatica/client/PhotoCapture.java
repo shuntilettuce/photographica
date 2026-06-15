@@ -114,6 +114,7 @@ public final class PhotoCapture {
         try {
             processed.writeToFile(outFile.toPath());
             System.out.println("[Snapmatica] Photo saved: " + outFile.getAbsolutePath());
+            ClipboardUtil.copyImageAsync(outFile);
         } catch (IOException e) {
             System.err.println("[Snapmatica] Failed to save photo: " + e.getMessage());
         } finally {

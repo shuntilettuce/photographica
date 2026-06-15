@@ -20,6 +20,7 @@ public class SnapmaticaClient implements ClientModInitializer {
     private static KeyMapping settingsKey;
     private static KeyMapping viewfinderSneakKey;
     private static KeyMapping orientationKey;
+    private static KeyMapping recordKey;
 
     public static float   aperture        = 5.6f;
     public static int     shutterSpeedIdx = 10;
@@ -83,6 +84,13 @@ public class SnapmaticaClient implements ClientModInitializer {
                 new KeyMapping.Category(Identifier.fromNamespaceAndPath("snapmatica", "category"))
         ));
 
+        recordKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.snapmatica.record",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_R,
+                new KeyMapping.Category(Identifier.fromNamespaceAndPath("snapmatica", "category"))
+        ));
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
 
@@ -91,6 +99,10 @@ public class SnapmaticaClient implements ClientModInitializer {
             }
             while (orientationKey.consumeClick()) {
                 portraitOrientation = !portraitOrientation;
+            }
+            while (recordKey.consumeClick()) {
+                if (VideoRecorder.isRecording()) VideoRecorder.stopRecording();
+                else if (!VideoRecorder.isPostProcessing()) client.setScreen(new VideoRecorderScreen());
             }
             if (shootKey.consumeClick()) {
                 PhotoCapture.take();
@@ -106,6 +118,11 @@ public class SnapmaticaClient implements ClientModInitializer {
         HudElementRegistry.addFirst(
                 Identifier.fromNamespaceAndPath("snapmatica", "viewfinder"),
                 ViewfinderOverlay::extractRenderState
+        );
+
+        HudElementRegistry.addLast(
+                Identifier.fromNamespaceAndPath("snapmatica", "video_recorder"),
+                VideoRecorderHud::render
         );
 
         LevelRenderEvents.END_MAIN.register(ctx -> PhotoCapture.onWorldRenderEnd());

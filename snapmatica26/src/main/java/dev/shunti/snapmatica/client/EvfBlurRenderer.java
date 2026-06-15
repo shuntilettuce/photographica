@@ -56,6 +56,37 @@ public final class EvfBlurRenderer {
     public static float currentDepthFar = 512.0f;
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
 
+    // Scheduled blur parameters (set in HUD extractRenderState, applied after renderLevel).
+    private static boolean blurScheduled      = false;
+    private static float   scheduledFocusDist = 0f;
+    private static float   scheduledAperture  = 0f;
+    private static float   scheduledFocalLen  = 0f;
+    private static int     scheduledFx = 0, scheduledFy = 0, scheduledFx2 = 0, scheduledFy2 = 0;
+
+    /**
+     * Store blur parameters from HUD extractRenderState (no raw GL allowed there).
+     * Call applyScheduledBlur() after renderLevel() to actually execute.
+     */
+    public static void scheduleBlur(int fx, int fy, int fx2, int fy2,
+                                    float focusDist, float aperture, float focalLenMm) {
+        scheduledFx = fx; scheduledFy = fy;
+        scheduledFx2 = fx2; scheduledFy2 = fy2;
+        scheduledFocusDist = focusDist;
+        scheduledAperture  = aperture;
+        scheduledFocalLen  = focalLenMm;
+        blurScheduled = true;
+    }
+
+    /**
+     * Execute the blur scheduled by scheduleBlur(). Safe to call after renderLevel() returns.
+     */
+    public static void applyScheduledBlur() {
+        if (!blurScheduled) return;
+        blurScheduled = false;
+        renderBlur(scheduledFx, scheduledFy, scheduledFx2, scheduledFy2,
+                scheduledFocusDist, scheduledAperture, scheduledFocalLen);
+    }
+
     /** Copy depth buffer. Call during LevelRenderEvents.END_MAIN. */
     public static void captureDepth(int fbW, int fbH) {
         RenderTarget mainFb = Minecraft.getInstance().getMainRenderTarget();
