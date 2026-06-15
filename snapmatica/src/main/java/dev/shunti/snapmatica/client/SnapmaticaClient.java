@@ -198,10 +198,12 @@ public class SnapmaticaClient implements ClientModInitializer {
         //? if >=1.21.11 {
         /*WorldRenderEvents.END_MAIN.register(ctx -> {
             PhotoCapture.onWorldRenderEnd();
+            VideoRecorder.onWorldRenderEnd();
         });*/
         //?} else {
         WorldRenderEvents.LAST.register(ctx -> {
             PhotoCapture.onWorldRenderEnd();
+            VideoRecorder.onWorldRenderEnd();
         });
         //?}
 

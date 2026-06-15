@@ -60,6 +60,10 @@ public final class EvfBlurRenderer {
     private static int locFocalLen   = -1;
     private static int locAperture   = -1;
     private static int locPxPerMm    = -1;
+    private static int locDofScale   = -1;
+
+    public static final float DOF_SCALE_STILL = 200.0f;   // 1 block = 20 cm (still viewfinder)
+    public static final float DOF_SCALE_VIDEO = 1000.0f;  // 1 block = 1 m  (video, realistic)
 
     private static final float NEAR = 0.05f;
     public static float currentDepthFar = 512.0f;
@@ -149,7 +153,8 @@ public final class EvfBlurRenderer {
      * maxBlurPx here is only a performance ceiling on the kernel radius.
      */
     public static void renderBlur(int fx, int fy, int fx2, int fy2,
-                                  float focusDist, float aperture, float focalLenMm) {
+                                  float focusDist, float aperture, float focalLenMm,
+                                  float dofScaleMm) {
         if (depthTex == -1) return;
         float maxBlurPx = Math.min(50.0f / aperture, 24.0f);
         if (maxBlurPx < 0.5f) return;
@@ -220,6 +225,7 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locFocalLen, focalLenMm);
         GL20.glUniform1f(locAperture, aperture);
         GL20.glUniform1f(locPxPerMm, fbH / 24.0f);  // 24mm sensor height maps to fbH px
+        GL20.glUniform1f(locDofScale, dofScaleMm);
 
         // Pass 1: Horizontal blur, main → aux
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, auxFbo);
@@ -363,6 +369,7 @@ public final class EvfBlurRenderer {
             locFocalLen  = GL20.glGetUniformLocation(program, "FocalLenMm");
             locAperture  = GL20.glGetUniformLocation(program, "Aperture");
             locPxPerMm   = GL20.glGetUniformLocation(program, "PxPerMm");
+            locDofScale  = GL20.glGetUniformLocation(program, "DofScale");
 
             float[] verts = {
                 -1f, -1f,  0f, 0f,

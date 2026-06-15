@@ -51,7 +51,7 @@ public final class ViewfinderOverlay {
             // infinity focus (coc = f²/(N·depth)), so no early-out needed here.
             EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2,
                     SnapmaticaClient.focusDistance, SnapmaticaClient.aperture,
-                    SnapmaticaClient.focalLengthMm);
+                    SnapmaticaClient.focalLengthMm, EvfBlurRenderer.DOF_SCALE_STILL);
         }
 
         // Bezels
