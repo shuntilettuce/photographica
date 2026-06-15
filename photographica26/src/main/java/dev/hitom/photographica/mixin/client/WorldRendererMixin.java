@@ -5,8 +5,6 @@ import dev.hitom.photographica.client.VideoRecorder;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.culling.Frustum;
-import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -47,7 +45,8 @@ public class WorldRendererMixin {
     @Redirect(
             method = "extractVisibleEntities(Lnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/culling/Frustum;Lnet/minecraft/client/DeltaTracker;Lnet/minecraft/client/renderer/state/level/LevelRenderState;)V",
             at = @At(value = "INVOKE", ordinal = 3,
-                    target = "Lnet/minecraft/client/Camera;entity()Lnet/minecraft/world/entity/Entity;")
+                    target = "Lnet/minecraft/client/Camera;entity()Lnet/minecraft/world/entity/Entity;"),
+            require = 0
     )
     private Entity photographica$allowPlayerRenderDuringArmorStandCapture(Camera camera) {
         if (PhotoCapture.armorStandCapturePending
@@ -56,21 +55,5 @@ public class WorldRendererMixin {
             if (mc.player != null) return mc.player;
         }
         return camera.entity();
-    }
-
-    /** During tripod recording, prevent the camera armor stand from being rendered
-     *  so the view from inside its model is unobstructed. */
-    @Redirect(
-            method = "extractVisibleEntities(Lnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/culling/Frustum;Lnet/minecraft/client/DeltaTracker;Lnet/minecraft/client/renderer/state/level/LevelRenderState;)V",
-            at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/client/renderer/entity/EntityRenderDispatcher;shouldRender(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/culling/Frustum;DDD)Z")
-    )
-    private boolean photographica$hideTripodStandFromRender(EntityRenderDispatcher dispatcher, Entity entity,
-            Frustum frustum, double x, double y, double z) {
-        if (VideoRecorder.isTripodRecording()
-                && entity.getId() == VideoRecorder.getRecordingArmorStandEntityId()) {
-            return false;
-        }
-        return dispatcher.shouldRender(entity, frustum, x, y, z);
     }
 }

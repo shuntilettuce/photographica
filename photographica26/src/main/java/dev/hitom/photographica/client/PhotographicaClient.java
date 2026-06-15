@@ -209,7 +209,6 @@ public class PhotographicaClient implements ClientModInitializer {
 
 		LevelRenderEvents.END_MAIN.register(ctx -> {
 			PhotoCapture.onWorldRenderEnd();
-			VideoRecorder.onWorldRenderEnd();
 		});
 
 		BlockEntityRendererRegistry.register(ModBlockEntities.PHOTO_FRAME,

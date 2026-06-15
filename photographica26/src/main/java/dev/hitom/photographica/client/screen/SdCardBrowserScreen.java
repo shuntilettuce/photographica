@@ -1,6 +1,7 @@
 package dev.hitom.photographica.client.screen;
 
 import dev.hitom.photographica.Photographica;
+import dev.hitom.photographica.client.ClipboardUtil;
 import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.component.PhotoData;
 import dev.hitom.photographica.component.SdCardData;
@@ -77,14 +78,16 @@ public class SdCardBrowserScreen extends Screen {
             return;
         }
 
-        // Prev / Next
+        // Prev / Next / Back  (3 buttons, each 64px)
         int navY = py + PANEL_H - 56;
-        addRenderableWidget(SafelightButton.of(cx - 105, navY, 100,
+        addRenderableWidget(SafelightButton.of(cx - 99, navY, 64,
                 Component.literal("◀ PREV"), b -> navigate(-1)));
-        addRenderableWidget(SafelightButton.of(cx + 5, navY, 100,
+        addRenderableWidget(SafelightButton.of(cx - 32, navY, 64,
                 Component.literal("NEXT ▶"), b -> navigate(1)));
+        addRenderableWidget(SafelightButton.ghost(cx + 35, navY, 64,
+                Component.literal("← 戻る"), b -> onClose()));
 
-        // Full-screen view / delete / back  (3 buttons, each 64px wide)
+        // Full-screen / Delete / Copy  (3 buttons, each 64px)
         int btnY = py + PANEL_H - 28;
         addRenderableWidget(SafelightButton.primary(cx - 99, btnY, 64,
                 Component.literal("全画面"),
@@ -93,7 +96,8 @@ public class SdCardBrowserScreen extends Screen {
                 Component.literal("削除"),
                 b -> deleteCurrentPhoto()));
         addRenderableWidget(SafelightButton.ghost(cx + 35, btnY, 64,
-                Component.literal("← 戻る"), b -> onClose()));
+                Component.literal("📋 コピー"),
+                b -> copyCurrentPhoto()));
     }
 
     private void navigate(int dir) {
@@ -180,6 +184,19 @@ public class SdCardBrowserScreen extends Screen {
     @Override
     public void onClose() {
         minecraft.setScreen(parent);
+    }
+
+    private void copyCurrentPhoto() {
+        if (photos.isEmpty()) return;
+        PhotoData p = photos.get(index);
+        Minecraft mc = Minecraft.getInstance();
+        File dir = new File(mc.gameDirectory, "photographica/photos");
+        File file = PhotoData.findPhotoFile(dir, p.id());
+        if (file == null) {
+            mc.gui.setOverlayMessage(Component.literal("⚠ 写真ファイルが見つかりません"), false);
+            return;
+        }
+        ClipboardUtil.copyImageAsync(file);
     }
 
     private void deleteCurrentPhoto() {

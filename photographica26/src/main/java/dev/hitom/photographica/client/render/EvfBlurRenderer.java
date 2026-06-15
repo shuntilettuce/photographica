@@ -173,6 +173,15 @@ public final class EvfBlurRenderer {
     }
 
     /**
+     * Applies DoF blur for video recording — same GPU pass as the viewfinder,
+     * but called directly (not via schedule) from VideoRecorder before each screenshot.
+     * Requires captureDepth() to have been called earlier this frame.
+     */
+    public static void applyVideoBlur(float focusDist, float aperture, float focalLenMm) {
+        renderBlur(0, 0, 0, 0, focusDist, aperture, focalLenMm);
+    }
+
+    /**
      * Executes the scheduled blur and writes the result directly back into mainTex.
      * Call AFTER the command encoder has flushed the world render (i.e. after
      * GameRenderer.renderLevel() returns), so mainTex already contains the current frame.
