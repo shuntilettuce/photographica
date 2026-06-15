@@ -56,39 +56,42 @@ public class SnapmaticaClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        KeyMapping.Category category = KeyMapping.Category.register(
+                Identifier.fromNamespaceAndPath("snapmatica", "category"));
+
         shootKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.snapmatica.shoot",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_ENTER,
-                new KeyMapping.Category(Identifier.fromNamespaceAndPath("snapmatica", "category"))
+                category
         ));
 
         settingsKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.snapmatica.settings",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_UNKNOWN,
-                new KeyMapping.Category(Identifier.fromNamespaceAndPath("snapmatica", "category"))
+                category
         ));
 
         viewfinderSneakKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.snapmatica.viewfinder_sneak",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_COMMA,
-                new KeyMapping.Category(Identifier.fromNamespaceAndPath("snapmatica", "category"))
+                category
         ));
 
         orientationKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.snapmatica.orientation",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_V,
-                new KeyMapping.Category(Identifier.fromNamespaceAndPath("snapmatica", "category"))
+                category
         ));
 
         recordKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.snapmatica.record",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_R,
-                new KeyMapping.Category(Identifier.fromNamespaceAndPath("snapmatica", "category"))
+                category
         ));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {

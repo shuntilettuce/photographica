@@ -15,7 +15,7 @@ public class ItemInHandRendererMixin {
     private void photographica$suppressHand(CallbackInfo ci) {
         if (PhotoCapture.isCapturePending()
                 || PhotoCapture.armorStandCapturePending
-                || VideoRecorder.isRecording()) {
+                || VideoRecorder.willCaptureThisFrame()) {
             ci.cancel();
         }
     }
