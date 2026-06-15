@@ -78,6 +78,11 @@ public final class VideoRecorder {
 
     private static int recordingArmorStandEntityId = -1;
 
+    /** Motion-blur strength for the active recording (0 = off, 1 = light, 2 = strong). */
+    private static int motionBlurSetting = 1;
+    /** smoothCamera state saved at record start, restored on stop. */
+    private static boolean prevSmoothCamera = false;
+
     /** Fixed vertical FOV (degrees) used for tripod-mounted camcorder frames. */
     public static final float TRIPOD_FOV = 70.0f;
 
@@ -175,7 +180,9 @@ public final class VideoRecorder {
             sessionId = ts + "_" + (System.currentTimeMillis() % 1000);
         }
 
-        currentFps      = VideoCameraItem.getSettings(stack).fps();
+        VideoSettings startSettings = VideoCameraItem.getSettings(stack);
+        currentFps        = startSettings.fps();
+        motionBlurSetting = startSettings.motionBlur();
         smoothedExpMult = 1.0f;
         prevFrameValid    = false;
         prevFrameYaw      = 0f;
@@ -203,6 +210,13 @@ public final class VideoRecorder {
 
         recordingArmorStandEntityId = armorStandEntityId;
 
+        // Enable cinematic (smooth) camera for steadier handheld panning footage.
+        // Skip for tripod recording — the stand is fixed, so the player keeps normal control.
+        if (armorStandEntityId < 0) {
+            prevSmoothCamera = mc.options.smoothCamera;
+            mc.options.smoothCamera = true;
+        }
+
         recording = true;
         if (mc.player != null)
             mc.gui.setOverlayMessage(Component.literal("● REC 開始"), false);
@@ -211,8 +225,10 @@ public final class VideoRecorder {
     public static void stopRecording() {
         if (!recording) return;
         recording = false;
+        boolean wasTripod = recordingArmorStandEntityId >= 0;
         recordingArmorStandEntityId = -1;
         Minecraft mc = Minecraft.getInstance();
+        if (!wasTripod) mc.options.smoothCamera = prevSmoothCamera;
         if (mc.player != null)
             mc.gui.setOverlayMessage(Component.literal("■ 録画停止 — 後処理中..."), false);
 
@@ -425,8 +441,9 @@ public final class VideoRecorder {
 
         ppProgress = 100;
         if (ffmpegOk) {
-            ppMessage = "✓ 保存: photographica/videos/" + sessionId + ".mp4";
+            ppMessage = "✓ 保存&コピー: photographica/videos/" + sessionId + ".mp4";
             Photographica.LOGGER.info("[VideoRecorder] Video saved: {}", outMp4);
+            ClipboardUtil.copyFileAsync(new File(outMp4));
         } else {
             File pngDir = new File(vidDir, sessionId);
             processedDir.renameTo(pngDir);
@@ -526,21 +543,23 @@ public final class VideoRecorder {
         pass1.close();
 
         // ── Pass 3: motion blur (angular + translational) ────────────────────
+        // Strength comes from the camcorder's motion-blur setting: 0 = off, 1 = light, 2 = strong.
+        float mbMult = motionBlurSetting == 0 ? 0f : (motionBlurSetting == 2 ? 2.0f : 1.0f);
         float fovH     = meta.fovDeg();
         float fovV     = fovH * 9f / 16f;
 
-        float rotSampleX =  meta.deltaYaw()   * w / fovH * ROT_BLUR_SCALE;
-        float rotSampleY = -meta.deltaPitch() * h / fovV * ROT_BLUR_SCALE;
+        float rotSampleX =  meta.deltaYaw()   * w / fovH * ROT_BLUR_SCALE * mbMult;
+        float rotSampleY = -meta.deltaPitch() * h / fovV * ROT_BLUR_SCALE * mbMult;
 
         float yawRad    = (float) Math.toRadians(meta.yaw());
         float strafeVel = ((float)(Math.cos(yawRad) * meta.velX()
                                  + Math.sin(yawRad) * meta.velZ()))
                         * (20.0f / currentFps);
-        float transScale = strafeVel * FOCAL_PX * TRANS_BLUR_SCALE;
+        float transScale = strafeVel * FOCAL_PX * TRANS_BLUR_SCALE * mbMult;
 
         float fwdVel = ((float)(-Math.sin(yawRad) * meta.velX()
                                + Math.cos(yawRad) * meta.velZ()))
-                     * (20.0f / currentFps) * TRANS_BLUR_SCALE;
+                     * (20.0f / currentFps) * TRANS_BLUR_SCALE * mbMult;
         float cx = w * 0.5f, cy = h * 0.5f;
 
         float totalAtFocus = (float) Math.sqrt(

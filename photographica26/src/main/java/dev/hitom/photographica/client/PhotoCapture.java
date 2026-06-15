@@ -431,8 +431,11 @@ public final class PhotoCapture {
 					Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 					return;
 				}
-				File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + "_" + fId.toString().replace("-", "") + ".png");
+				// File name must be exactly "<uuid>.png" so the SD-card browser / photo
+				// viewer (which look up "photographica/photos/<id>.png") can find it.
+				File outFile = new File(dir, fId + ".png");
 				processed.writeToFile(outFile.toPath());
+				ClipboardUtil.copyImageAsync(outFile);
 				Photographica.LOGGER.info("Photo saved: {} ({}x{})",
 						outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
 			} catch (IOException e) {
@@ -570,8 +573,9 @@ public final class PhotoCapture {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 				return;
 			}
-			File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + "_" + id.toString().replace("-", "") + ".png");
+			File outFile = new File(dir, id + ".png");
 			processed.writeToFile(outFile.toPath());
+			ClipboardUtil.copyImageAsync(outFile);
 			Photographica.LOGGER.info("Long-exposure photo saved: {} ({}x{}, {} frames accumulated)",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight(), n);
 		} catch (IOException e) {

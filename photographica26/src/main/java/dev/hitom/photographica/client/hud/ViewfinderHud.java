@@ -148,7 +148,7 @@ public final class ViewfinderHud {
 				s.iso(),
 				focalPart);
 		ctx.text(tr, exposure, fx + 6, fy2 - tr.lineHeight - 14, COLOR_TEXT, true);
-		if (LensKind.hasLens(s.lensType()) && s.focusDistance() < CameraSettings.FOCUS_INFINITY) {
+		if (LensKind.hasLens(s.lensType())) {
 			String fd = fmtFocusDist(s.focusDistance());
 			ctx.text(tr, fd, fx2 - tr.width(fd) - 6, fy + 4 + tr.lineHeight * 2 + 4, reticleColor, true);
 		}

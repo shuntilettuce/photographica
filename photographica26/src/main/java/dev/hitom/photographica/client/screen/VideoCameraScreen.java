@@ -38,7 +38,7 @@ public class VideoCameraScreen extends Screen {
 
     protected void init() {
         int cx  = width / 2;
-        int panelH = 130;
+        int panelH = 152;
         int py = Math.max(4, (height - panelH) / 2);
         int top = py + 16;
         int row = 0;
@@ -60,6 +60,14 @@ public class VideoCameraScreen extends Screen {
                     settings = settings.withFps(FPS_LIST.get(Math.max(0, idx)));
                     dirty = true;
                 }, !VideoRecorder.isRecording());   // lock fps while recording
+
+        // Motion blur row (off / light / strong)
+        addRow(cx, top + row++ * 22, "モーションブラー",
+                () -> motionBlurLabel(settings.motionBlur()),
+                step -> {
+                    settings = settings.withMotionBlur(settings.motionBlur() + step);
+                    dirty = true;
+                }, true);
 
         int btnY = top + row * 22 + 12;
 
@@ -107,7 +115,7 @@ public class VideoCameraScreen extends Screen {
 
         int cx     = width / 2;
         int panelW = 320;
-        int panelH = 130;
+        int panelH = 152;
         int px     = cx - panelW / 2;
         int py     = Math.max(4, (height - panelH) / 2);
 
@@ -159,6 +167,14 @@ public class VideoCameraScreen extends Screen {
 
     private static int clampIdx(int idx, int size) {
         return Math.max(0, Math.min(size - 1, idx));
+    }
+
+    private static String motionBlurLabel(int v) {
+        return switch (v) {
+            case 0  -> "オフ";
+            case 2  -> "強";
+            default -> "弱";
+        };
     }
 
     /** Find nearest index in the list to the given value. */

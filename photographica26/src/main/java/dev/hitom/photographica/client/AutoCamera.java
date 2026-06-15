@@ -12,7 +12,6 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.ClipContext;
@@ -88,14 +87,11 @@ public final class AutoCamera {
 	private static CameraSettings applyAutoExposure(Minecraft mc, CameraSettings s) {
 		if (s.exposureMode() == CameraSettings.EXP_M) return s;
 
-		// Scene-adaptive metering: measure actual ambient light (sky + block) so the
-		// AE centres the needle at the correct exposure for the current environment.
-		// Reference: ambientLight = 8 (indoor medium) → targetEV = 0 (neutral,
-		// F5.6 · 1/60 · ISO 400).  Full outdoor daylight (15) → −2.45 EV → faster
-		// shutter; pitch-dark cave (0) → +2.8 EV → slower shutter.
-		int skyLight   = mc.level.getBrightness(LightLayer.SKY,   mc.player.blockPosition());
-		int blockLight = mc.level.getBrightness(LightLayer.BLOCK, mc.player.blockPosition());
-		double targetEV = -(Math.max(skyLight, blockLight) - 8) * 0.35;
+		// The captured framebuffer is already correctly exposed by the game's own
+		// lighting, so auto-exposure centres the meter needle (EV deviation = 0,
+		// i.e. F5.6 · 1/60 · ISO 400 reference) rather than re-metering scene light —
+		// which would systematically under-/over-expose the already-correct render.
+		double targetEV = 0.0;
 
 		return switch (s.exposureMode()) {
 			case CameraSettings.EXP_AV -> {
