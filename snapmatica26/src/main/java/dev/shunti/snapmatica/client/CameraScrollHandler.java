@@ -30,7 +30,6 @@ public final class CameraScrollHandler {
     public static boolean onScroll(double delta) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.screen != null) return false;
-        if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isShiftKeyDown()) return false;
 
         int dir = delta > 0 ? 1 : -1;
 
@@ -39,6 +38,17 @@ public final class CameraScrollHandler {
                 || InputConstants.isKeyDown(win, GLFW.GLFW_KEY_RIGHT_CONTROL);
         boolean alt = InputConstants.isKeyDown(win, GLFW.GLFW_KEY_LEFT_ALT)
                 || InputConstants.isKeyDown(win, GLFW.GLFW_KEY_RIGHT_ALT);
+
+        // Alt + scroll = video zoom while recording (works without sneaking, mirrors
+        // photographica). Scroll up = zoom in = narrower FOV.
+        if (alt && VideoRecorder.isRecording()) {
+            VideoRecorder.videoFov = Math.max(VideoRecorder.VIDEO_FOV_MIN,
+                    Math.min(VideoRecorder.VIDEO_FOV_MAX,
+                            VideoRecorder.videoFov - dir * VideoRecorder.VIDEO_ZOOM_STEP));
+            return true;
+        }
+
+        if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isShiftKeyDown()) return false;
 
         if (ctrl && alt) {
             adjustFocusDistance(dir);

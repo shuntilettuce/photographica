@@ -33,13 +33,19 @@ public class GameRendererMixin {
                                              CallbackInfo ci) {
         Player player = Minecraft.getInstance().player;
         if (player == null) return;
-        if (!SnapmaticaClient.viewfinderSneakEnabled || !player.isShiftKeyDown()) return;
-        if (SnapmaticaClient.lensType == 0) return;
-        int f = SnapmaticaClient.focalLengthMm;
-        if (f <= 0) return;
 
-        double halfSensorMm = SnapmaticaClient.portraitOrientation ? 18.0 : 12.0;
-        float fovDeg = (float) Math.toDegrees(2.0 * Math.atan(halfSensorMm / f));
+        float fovDeg;
+        if (VideoRecorder.isRecording()) {
+            // Video recording: apply the Alt+scroll zoom FOV (works without sneaking).
+            fovDeg = VideoRecorder.videoFov;
+        } else {
+            if (!SnapmaticaClient.viewfinderSneakEnabled || !player.isShiftKeyDown()) return;
+            if (SnapmaticaClient.lensType == 0) return;
+            int f = SnapmaticaClient.focalLengthMm;
+            if (f <= 0) return;
+            double halfSensorMm = SnapmaticaClient.portraitOrientation ? 18.0 : 12.0;
+            fovDeg = (float) Math.toDegrees(2.0 * Math.atan(halfSensorMm / f));
+        }
 
         CameraRenderState camState = gameRenderState.levelRenderState.cameraRenderState;
         if (camState == null || camState.projectionMatrix == null) return;

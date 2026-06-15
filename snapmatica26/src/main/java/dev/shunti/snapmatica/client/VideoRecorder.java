@@ -30,6 +30,12 @@ public final class VideoRecorder {
     public static final int FPS        = 24;
     public static final int MAX_FRAMES = 30 * 120;  // 2 minutes @ 30 fps
 
+    public static final float VIDEO_FOV_MIN   = 10.0f;  // max zoom (telephoto)
+    public static final float VIDEO_FOV_MAX   = 70.0f;  // unzoomed
+    public static final float VIDEO_ZOOM_STEP = 5.0f;   // deg per scroll tick
+    /** Vertical FOV (deg) used while recording — Alt+scroll zoom adjusts this. */
+    public static volatile float videoFov = VIDEO_FOV_MAX;
+
     private static int currentFps = FPS;
 
     // 0 = off, 1 = light (2-frame), 2 = strong (4-frame)
@@ -96,6 +102,7 @@ public final class VideoRecorder {
         sessionId = ts;
 
         currentFps        = FPS;
+        videoFov          = VIDEO_FOV_MAX;   // each recording starts unzoomed
         frameCount        = 0;
         virtualFrameCount = 0;
         writtenFrames.set(0);

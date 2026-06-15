@@ -2,6 +2,7 @@ package dev.shunti.snapmatica.client.mixin;
 
 import dev.shunti.snapmatica.client.PhotoCapture;
 import dev.shunti.snapmatica.client.SnapmaticaClient;
+import dev.shunti.snapmatica.client.VideoRecorder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ItemInHandRenderer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -16,6 +17,7 @@ public class ItemInHandRendererMixin {
     private void snapmatica$suppressHand(CallbackInfo ci) {
         Minecraft mc = Minecraft.getInstance();
         if (PhotoCapture.isCapturePending() ||
+                VideoRecorder.isRecording() ||
                 (SnapmaticaClient.viewfinderSneakEnabled && mc.player != null && mc.player.isShiftKeyDown())) {
             ci.cancel();
         }
