@@ -49,6 +49,7 @@ public final class VideoRecorder {
 
     private static String          sessionId;
     private static int             frameCount;
+    private static int             virtualFrameCount;
     private static long            recordStartMs;
     private static long            nextFrameMs;
     private static File            rawDir;
@@ -127,7 +128,8 @@ public final class VideoRecorder {
         VideoSettings startSettings = VideoCameraItem.getSettings(stack);
         currentFps        = startSettings.fps();
         motionBlurSetting = startSettings.motionBlur();
-        frameCount    = 0;
+        frameCount        = 0;
+        virtualFrameCount = 0;
         recordStartMs = System.currentTimeMillis();
         nextFrameMs   = recordStartMs;
         frameMetas    = new ArrayList<>(MAX_FRAMES);
@@ -206,15 +208,71 @@ public final class VideoRecorder {
 
     public static void captureFrameIfRecording() {
         if (!recording) return;
-        long now = System.currentTimeMillis();
-        if (now < nextFrameMs) return;
-        if (frameCount >= MAX_FRAMES) { stopRecording(); return; }
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        // Dwell-time autofocus using the centre scene depth from PhotoCapture.
-        float centreDepth = Math.max(PhotoCapture.lastSceneDepthBlocks, 0.3f);
+        // ── Autofocus + DoF run EVERY render frame, not just on capture frames ──
+        // The blur is written into the live framebuffer, so applying it only on
+        // capture frames left the preview flickering between sharp and blurred.
+        // Running it every frame keeps a steady viewfinder-style preview.
+        updateAutofocus(mc);
+        applyVideoBlur(mc);
+
+        long now = System.currentTimeMillis();
+        if (now < nextFrameMs) return;
+        if (virtualFrameCount >= MAX_FRAMES) { stopRecording(); return; }
+
+        // Variable frame duration: when the game renders slower than the target FPS,
+        // assign the captured frame a longer duration so the encoded video plays back
+        // at correct real-time speed instead of running fast / looking sub-FPS.
+        long overdue = now - nextFrameMs;
+        int slotsConsumed = 1 + (int)(overdue * currentFps / 1000L);
+        slotsConsumed = Math.min(slotsConsumed, currentFps);
+        float durationSec = (float) slotsConsumed / currentFps;
+
+        virtualFrameCount += slotsConsumed;
+        nextFrameMs = recordStartMs + (long)(virtualFrameCount * 1000.0 / currentFps);
+
+        int  idx     = frameCount;
+        File outFile = new File(rawDir, String.format("frame_%04d.png", idx));
+        frameMetas.add(new FrameMeta(idx, durationSec));
+        frameCount++;
+
+        if (virtualFrameCount >= currentFps * 60
+                && virtualFrameCount - slotsConsumed < currentFps * 60 && mc.player != null)
+            mc.gui.setOverlayMessage(Component.literal("⚠ 残り 1:00"), false);
+
+        // The framebuffer is already EVF-blurred (applyVideoBlur above). Screenshot it,
+        // and do the crop+downsample on the I/O thread so the render thread isn't stalled.
+        Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> {
+            if (raw == null) return;
+            ioExecutor.submit(() -> {
+                NativeImage cropped = null, frame = null;
+                try {
+                    cropped = cropTo16x9(raw);
+                    frame   = boxDownsample(cropped, 1280);
+                    frame.writeToFile(outFile.toPath());
+                } catch (IOException e) {
+                    Photographica.LOGGER.warn("[VideoRecorder] Frame write failed: {}", outFile, e);
+                } finally {
+                    if (frame != null && frame != cropped) frame.close();
+                    if (cropped != null && cropped != raw) cropped.close();
+                    raw.close();
+                    writtenFrames.incrementAndGet();
+                }
+            });
+        });
+    }
+
+    /**
+     * Dwell-time autofocus driven by a long-range raycast from the active camera.
+     * PhotoCapture's centre-depth tracker only runs while a still camera is held with
+     * Shift down, so during camcorder recording we do our own scene probe here — otherwise
+     * focus is stuck near the default distance and the whole frame reads as out of focus.
+     */
+    private static void updateAutofocus(Minecraft mc) {
+        float centreDepth = Math.max(computeSceneFocusDepth(mc), 0.3f);
         if (Math.abs(centreDepth - focusCandidateDepth)
                 / Math.max(focusCandidateDepth, 0.1f) <= FOCUS_TOL) {
             focusCandidateFrames++;
@@ -225,37 +283,54 @@ public final class VideoRecorder {
             focusCandidateDepth  = centreDepth;
             focusCandidateFrames = 0;
         }
+    }
 
-        int idx = frameCount;
-        FrameMeta meta = new FrameMeta(idx, 1.0f / currentFps);
-        File outFile = new File(rawDir, String.format("frame_%04d.png", idx));
-        frameMetas.add(meta);
-        frameCount++;
-        nextFrameMs = recordStartMs + (long)(frameCount * 1000.0 / currentFps);
+    /** Raycasts from the camera along its view vector to find the focus subject distance. */
+    private static float computeSceneFocusDepth(Minecraft mc) {
+        if (mc.level == null || mc.player == null || mc.gameRenderer == null)
+            return currentFocusDepth;
+        net.minecraft.client.Camera cam = mc.gameRenderer.getMainCamera();
+        if (cam == null || !cam.isInitialized()) return currentFocusDepth;
 
-        if (frameCount == currentFps * 60 && mc.player != null)
-            mc.gui.setOverlayMessage(Component.literal("⚠ 残り 1:00"), false);
+        net.minecraft.world.phys.Vec3 eye = cam.position();
+        org.joml.Vector3fc f = cam.forwardVector();
+        net.minecraft.world.phys.Vec3 look =
+                new net.minecraft.world.phys.Vec3(f.x(), f.y(), f.z());
 
-        // Bake GPU DoF into the framebuffer so the recorded frame has the same blur
-        // as the viewfinder.  captureDepth() has already run this frame in PhotoCapture.
-        applyVideoBlur(mc);
+        // For tripod, the stand is the "shooter" so the player in front is focusable;
+        // for handheld, the player is the shooter so we don't focus on ourselves.
+        net.minecraft.world.entity.Entity shooter = mc.player;
+        if (recordingArmorStandEntityId >= 0) {
+            net.minecraft.world.entity.Entity stand = mc.level.getEntity(recordingArmorStandEntityId);
+            if (stand != null) shooter = stand;
+        }
 
-        Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> {
-            if (raw == null) return;
-            NativeImage cropped = cropTo16x9(raw);
-            NativeImage frame   = boxDownsample(cropped, 1280);
-            if (cropped != raw) cropped.close();
-            raw.close();
-            ioExecutor.submit(() -> {
-                try { frame.writeToFile(outFile.toPath()); }
-                catch (IOException e) {
-                    Photographica.LOGGER.warn("[VideoRecorder] Frame write failed: {}", outFile, e);
-                } finally {
-                    frame.close();
-                    writtenFrames.incrementAndGet();
-                }
-            });
-        });
+        final double maxBlockDist  = 1000.0;
+        final double maxEntityDist = 60.0;
+        net.minecraft.world.phys.BlockHitResult blockHit = mc.level.clip(
+                new net.minecraft.world.level.ClipContext(
+                        eye, eye.add(look.scale(maxBlockDist)),
+                        net.minecraft.world.level.ClipContext.Block.OUTLINE,
+                        net.minecraft.world.level.ClipContext.Fluid.NONE, mc.player));
+        double bestDist = (blockHit != null
+                && blockHit.getType() != net.minecraft.world.phys.HitResult.Type.MISS)
+                ? eye.distanceTo(blockHit.getLocation()) : maxBlockDist;
+
+        net.minecraft.world.phys.Vec3 entityEnd = eye.add(look.scale(maxEntityDist));
+        net.minecraft.world.phys.AABB entityBox =
+                new net.minecraft.world.phys.AABB(eye, entityEnd).inflate(1.0);
+        final net.minecraft.world.entity.Entity fShooter = shooter;
+        net.minecraft.world.phys.EntityHitResult entityHit =
+                net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(
+                        shooter, eye, entityEnd, entityBox,
+                        e -> !e.isSpectator() && e.isAlive() && e != fShooter
+                                && e.getId() != recordingArmorStandEntityId,
+                        maxEntityDist * maxEntityDist);
+        if (entityHit != null) {
+            double eDist = eye.distanceTo(entityHit.getLocation());
+            if (eDist < bestDist) bestDist = eDist;
+        }
+        return (float) Math.min(bestDist, 999.0);
     }
 
     private static void applyVideoBlur(Minecraft mc) {
