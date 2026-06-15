@@ -136,8 +136,13 @@ public final class VideoRecorder {
         recordingStack = stack;
         writtenFrames.set(0);
 
-        currentFocusDepth    = 5.0f;
-        focusCandidateDepth  = 5.0f;
+        recordingArmorStandEntityId = armorStandEntityId;
+
+        // Probe the scene immediately so the first frame doesn't default to 5 blocks
+        // and show wrong blur until the dwell-time AF kicks in.
+        float initDepth = computeSceneFocusDepth(mc);
+        currentFocusDepth    = (initDepth > 0.3f && initDepth < 999.0f) ? initDepth : 5.0f;
+        focusCandidateDepth  = currentFocusDepth;
         focusCandidateFrames = 0;
 
         rawDir = new File(mc.gameDirectory,
@@ -146,8 +151,6 @@ public final class VideoRecorder {
             Photographica.LOGGER.error("[VideoRecorder] Could not create raw dir: {}", rawDir);
             return;
         }
-
-        recordingArmorStandEntityId = armorStandEntityId;
 
         // Enable cinematic camera for steadier handheld panning; skip for tripod (stand is fixed).
         if (armorStandEntityId < 0) {

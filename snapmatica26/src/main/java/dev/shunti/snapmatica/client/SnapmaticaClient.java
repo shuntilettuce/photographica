@@ -128,7 +128,10 @@ public class SnapmaticaClient implements ClientModInitializer {
                 VideoRecorderHud::render
         );
 
-        LevelRenderEvents.END_MAIN.register(ctx -> PhotoCapture.onWorldRenderEnd());
+        LevelRenderEvents.END_MAIN.register(ctx -> {
+            PhotoCapture.onWorldRenderEnd();
+            VideoRecorder.onWorldRenderEnd();
+        });
 
         System.out.println("[Snapmatica] Initialized.");
     }

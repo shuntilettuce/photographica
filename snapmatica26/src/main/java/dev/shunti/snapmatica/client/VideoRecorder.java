@@ -3,6 +3,7 @@ package dev.shunti.snapmatica.client;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
+import com.mojang.blaze3d.pipeline.RenderTarget;
 import net.minecraft.network.chat.Component;
 
 import java.io.File;
@@ -50,6 +51,14 @@ public final class VideoRecorder {
 
     private static final AtomicInteger writtenFrames = new AtomicInteger(0);
 
+    // Autofocus state — independent of the still-camera focusDistance so video
+    // DoF tracks the scene even when the viewfinder (sneak mode) is not active.
+    private static final int   FOCUS_DWELL_FRAMES = 20;
+    private static final float FOCUS_TOL          = 0.25f;
+    private static float currentFocusDepth   = 5.0f;
+    private static float focusCandidateDepth = 5.0f;
+    private static int   focusCandidateFrames = 0;
+
     /** smoothCamera state saved at record start, restored on stop. */
     private static boolean prevSmoothCamera = false;
 
@@ -94,6 +103,13 @@ public final class VideoRecorder {
         nextFrameMs   = recordStartMs;
         frameMetas    = new ArrayList<>(MAX_FRAMES);
 
+        // Probe scene depth immediately so the first frame doesn't start with the
+        // 5-block default and show wrong blur until the dwell-time AF kicks in.
+        float initDepth = computeSceneFocusDepth(mc);
+        currentFocusDepth    = (initDepth > 0.3f && initDepth < 999.0f) ? initDepth : 5.0f;
+        focusCandidateDepth  = currentFocusDepth;
+        focusCandidateFrames = 0;
+
         rawDir = new File(mc.gameDirectory, "snapmatica/video_temp/" + sessionId + "/raw");
         if (!rawDir.mkdirs()) {
             System.err.println("[VideoRecorder] Could not create raw dir: " + rawDir);
@@ -132,17 +148,41 @@ public final class VideoRecorder {
     }
 
     /**
+     * Called at LevelRenderEvents.END_MAIN while the depth buffer is still valid.
+     * Captures the scene depth texture needed by the EVF blur shader.
+     * PhotoCapture.onWorldRenderEnd() only does this while Shift is held (viewfinder mode),
+     * so we must do it independently here while recording.
+     */
+    public static void onWorldRenderEnd() {
+        if (!recording) return;
+        Minecraft mc = Minecraft.getInstance();
+        RenderTarget mainFb = mc.getMainRenderTarget();
+        if (mainFb == null) return;
+        int fbW = mainFb.width, fbH = mainFb.height;
+        if (fbW > 0 && fbH > 0) {
+            int rd = mc.options.renderDistance().get();
+            EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
+            EvfBlurRenderer.captureDepth(fbW, fbH);
+        }
+    }
+
+    /**
      * Called from GameRendererMixin after renderLevel() (after shaders have composited).
      * Applies preview DoF blur to the whole framebuffer, then screenshots the frame.
      */
     public static void captureFrameIfRecording() {
         if (!recording) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+
+        // Update AF and apply blur every render frame so the live preview stays
+        // consistently DoF'd — eliminates the sharp/blurred flicker.
+        updateAutofocus(mc);
+        applyPreviewBlur(mc);
+
         long now = System.currentTimeMillis();
         if (now < nextFrameMs) return;
         if (virtualFrameCount >= MAX_FRAMES) { stopRecording(); return; }
-
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) return;
 
         long overdue = now - nextFrameMs;
         int slotsConsumed = 1 + (int)(overdue * currentFps / 1000L);
@@ -161,9 +201,6 @@ public final class VideoRecorder {
                 && mc.player != null)
             mc.gui.setOverlayMessage(Component.literal("⚠ 残り 1:00"), true);
 
-        // Bake the same GPU DoF the viewfinder uses into the full framebuffer.
-        applyPreviewBlur(mc);
-
         Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> {
             NativeImage cropped = cropTo16x9(raw);
             NativeImage frame   = boxDownsample(cropped, 1280);
@@ -179,7 +216,9 @@ public final class VideoRecorder {
     }
 
     /**
-     * Applies full-frame GPU depth-of-field blur (same as the live EVF preview).
+     * Applies full-frame GPU depth-of-field blur using the video AF focus depth.
+     * Uses currentFocusDepth (tracked via raycasts) rather than the still-camera
+     * SnapmaticaClient.focusDistance, which is only updated in sneak-viewfinder mode.
      */
     private static void applyPreviewBlur(Minecraft mc) {
         if (SnapmaticaClient.lensType == 0) return;
@@ -188,8 +227,59 @@ public final class VideoRecorder {
         int guiW = (int)(mc.getWindow().getWidth()  / guiScale);
         int guiH = (int)(mc.getWindow().getHeight() / guiScale);
         EvfBlurRenderer.renderBlur(0, 0, guiW, guiH,
-                SnapmaticaClient.focusDistance, SnapmaticaClient.aperture,
+                currentFocusDepth, SnapmaticaClient.aperture,
                 SnapmaticaClient.focalLengthMm);
+    }
+
+    private static void updateAutofocus(Minecraft mc) {
+        float centreDepth = Math.max(computeSceneFocusDepth(mc), 0.3f);
+        if (Math.abs(centreDepth - focusCandidateDepth)
+                / Math.max(focusCandidateDepth, 0.1f) <= FOCUS_TOL) {
+            focusCandidateFrames++;
+            if (focusCandidateFrames >= FOCUS_DWELL_FRAMES) {
+                currentFocusDepth = currentFocusDepth * 0.65f + focusCandidateDepth * 0.35f;
+            }
+        } else {
+            focusCandidateDepth  = centreDepth;
+            focusCandidateFrames = 0;
+        }
+    }
+
+    private static float computeSceneFocusDepth(Minecraft mc) {
+        if (mc.level == null || mc.player == null || mc.gameRenderer == null)
+            return currentFocusDepth;
+        net.minecraft.client.Camera cam = mc.gameRenderer.getMainCamera();
+        if (cam == null || !cam.isInitialized()) return currentFocusDepth;
+
+        net.minecraft.world.phys.Vec3 eye = cam.position();
+        org.joml.Vector3fc f = cam.forwardVector();
+        net.minecraft.world.phys.Vec3 look =
+                new net.minecraft.world.phys.Vec3(f.x(), f.y(), f.z());
+
+        final double maxBlockDist  = 1000.0;
+        final double maxEntityDist = 60.0;
+        net.minecraft.world.phys.BlockHitResult blockHit = mc.level.clip(
+                new net.minecraft.world.level.ClipContext(
+                        eye, eye.add(look.scale(maxBlockDist)),
+                        net.minecraft.world.level.ClipContext.Block.OUTLINE,
+                        net.minecraft.world.level.ClipContext.Fluid.NONE, mc.player));
+        double bestDist = (blockHit != null
+                && blockHit.getType() != net.minecraft.world.phys.HitResult.Type.MISS)
+                ? eye.distanceTo(blockHit.getLocation()) : maxBlockDist;
+
+        net.minecraft.world.phys.Vec3 entityEnd = eye.add(look.scale(maxEntityDist));
+        net.minecraft.world.phys.AABB entityBox =
+                new net.minecraft.world.phys.AABB(eye, entityEnd).inflate(1.0);
+        net.minecraft.world.phys.EntityHitResult entityHit =
+                net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(
+                        mc.player, eye, entityEnd, entityBox,
+                        e -> !e.isSpectator() && e.isAlive() && e != mc.player,
+                        maxEntityDist * maxEntityDist);
+        if (entityHit != null) {
+            double eDist = eye.distanceTo(entityHit.getLocation());
+            if (eDist < bestDist) bestDist = eDist;
+        }
+        return (float) Math.min(bestDist, 999.0);
     }
 
     private static void doPostProcess(List<FrameMeta> metas, File rawDirIn, File vidDir) {
