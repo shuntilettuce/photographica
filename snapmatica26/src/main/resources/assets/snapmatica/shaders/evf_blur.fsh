@@ -11,6 +11,7 @@ uniform float Far;               // far clip plane in blocks
 uniform float FocalLenMm;        // lens focal length in mm
 uniform float Aperture;          // f-number (N)
 uniform float PxPerMm;           // framebuffer pixels per mm of sensor height
+uniform float DofScale;          // mm of subject distance per Minecraft block
 
 in vec2 texCoord;
 out vec4 fragColor;
@@ -31,9 +32,9 @@ float computeCoc(float depthM) {
     float cocMM;
     if (FocusDist >= 99999.0) {
         // focus at infinity: coc_mm = f^2 / (N * S2_mm)
-        cocMM = (fmm * fmm) / (Aperture * depthM * 200.0);
+        cocMM = (fmm * fmm) / (Aperture * depthM * DofScale);
     } else {
-        float s1mm = FocusDist * 200.0;
+        float s1mm = FocusDist * DofScale;
         float denom = Aperture * max(s1mm - fmm, 1.0);
         cocMM = (fmm * fmm) * abs(depthM - FocusDist) / (depthM * denom);
     }

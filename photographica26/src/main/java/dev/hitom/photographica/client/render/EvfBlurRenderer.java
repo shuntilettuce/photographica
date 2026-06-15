@@ -82,6 +82,13 @@ public final class EvfBlurRenderer {
     private static int locFocalLen   = -1;
     private static int locAperture   = -1;
     private static int locPxPerMm    = -1;
+    private static int locDofScale   = -1;
+
+    /** mm of subject distance per block. 200 = miniature (strong bokeh, used to keep
+     *  the still viewfinder preview matching the CPU photo). 1000 = realistic 1 block
+     *  = 1 m, used for video so depth of field behaves like a real camera. */
+    public static final float DOF_SCALE_STILL = 200.0f;
+    public static final float DOF_SCALE_VIDEO = 1000.0f;
 
     private static final float NEAR = 0.05f;
     // FAR is computed dynamically from render settings — see currentDepthFar
@@ -177,8 +184,9 @@ public final class EvfBlurRenderer {
      * but called directly (not via schedule) from VideoRecorder before each screenshot.
      * Requires captureDepth() to have been called earlier this frame.
      */
-    public static void applyVideoBlur(float focusDist, float aperture, float focalLenMm) {
-        renderBlur(0, 0, 0, 0, focusDist, aperture, focalLenMm);
+    public static void applyVideoBlur(float focusDist, float aperture, float focalLenMm,
+                                      float dofScaleMm) {
+        renderBlur(0, 0, 0, 0, focusDist, aperture, focalLenMm, dofScaleMm);
     }
 
     /**
@@ -193,7 +201,7 @@ public final class EvfBlurRenderer {
         }
         blurScheduled = false;
         renderBlur(scheduledFx, scheduledFy, scheduledFx2, scheduledFy2,
-                scheduledFocusDist, scheduledAperture, scheduledFocalLen);
+                scheduledFocusDist, scheduledAperture, scheduledFocalLen, DOF_SCALE_STILL);
     }
 
     /**
@@ -261,7 +269,8 @@ public final class EvfBlurRenderer {
     // -------------------------------------------------------------------------
 
     private static void renderBlur(int fx, int fy, int fx2, int fy2,
-                                   float focusDist, float aperture, float focalLenMm) {
+                                   float focusDist, float aperture, float focalLenMm,
+                                   float dofScaleMm) {
         if (depthTex == -1) {
             Photographica.LOGGER.warn("[Photographica] renderBlur: depthTex not captured yet");
             return;
@@ -359,6 +368,7 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locFocalLen, focalLenMm);
         GL20.glUniform1f(locAperture, aperture);
         GL20.glUniform1f(locPxPerMm, fbH / 24.0f);  // 24mm sensor height maps to fbH px
+        GL20.glUniform1f(locDofScale, dofScaleMm);
 
         // ---- Pass 1: Horizontal blur, mainTex → auxTex ----
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, auxFbo);
@@ -435,6 +445,7 @@ public final class EvfBlurRenderer {
             locFocalLen  = GL20.glGetUniformLocation(program, "FocalLenMm");
             locAperture  = GL20.glGetUniformLocation(program, "Aperture");
             locPxPerMm   = GL20.glGetUniformLocation(program, "PxPerMm");
+            locDofScale  = GL20.glGetUniformLocation(program, "DofScale");
 
             // Full-screen quad (TRIANGLE_STRIP): BL, BR, TL, TR
             float[] verts = {

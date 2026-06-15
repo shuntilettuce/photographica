@@ -45,6 +45,9 @@ public final class VideoRecorder {
     private static final float AF_ZETA    = 0.50f;   // damping ratio (<1 → single overshoot)
     private static final float AF_VEL_CAP = 0.30f;   // safety clamp on log-velocity/frame
     private static final float AF_SETTLE  = 0.004f;  // snap threshold (log-units)
+    /** Multiplier from the render-FOV focal length to the (longer) bokeh focal length,
+     *  giving wide video a portrait-lens look while keeping the wide framing. */
+    private static final float BOKEH_FOCAL_BOOST = 3.0f;
 
     // ── Recording state ────────────────────────────────────────────────────────
     private static volatile boolean recording      = false;
@@ -374,8 +377,14 @@ public final class VideoRecorder {
         float aperture = vs.aperture();
         if (aperture >= 8.0f) return;
         float fovDeg = recordingArmorStandEntityId >= 0 ? TRIPOD_FOV : videoFov;
-        float focalLenMm = (float)(12.0 / Math.tan(Math.toRadians(fovDeg / 2.0)));
-        EvfBlurRenderer.applyVideoBlur(currentFocusDepth, aperture, focalLenMm);
+        // The render FOV gives a wide ~17 mm lens, which physically has near-infinite
+        // depth of field and almost no bokeh. With realistic 1 block = 1 m scaling, we
+        // boost the *bokeh* focal length to a cinematic portrait equivalent so the video
+        // keeps the wide framing but gains pleasing, real-camera-like subject separation.
+        float realFocalMm  = (float)(12.0 / Math.tan(Math.toRadians(fovDeg / 2.0)));
+        float bokehFocalMm = realFocalMm * BOKEH_FOCAL_BOOST;
+        EvfBlurRenderer.applyVideoBlur(currentFocusDepth, aperture, bokehFocalMm,
+                EvfBlurRenderer.DOF_SCALE_VIDEO);
     }
 
     // ── Post-processing ────────────────────────────────────────────────────────

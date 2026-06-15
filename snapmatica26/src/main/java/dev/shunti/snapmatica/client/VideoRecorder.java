@@ -251,9 +251,11 @@ public final class VideoRecorder {
         double guiScale = mc.getWindow().getGuiScale();
         int guiW = (int)(mc.getWindow().getWidth()  / guiScale);
         int guiH = (int)(mc.getWindow().getHeight() / guiScale);
+        // Realistic 1 block = 1 m scaling so DoF behaves like a real camera (the
+        // still viewfinder keeps the 200 miniature scale to match its CPU photo).
         EvfBlurRenderer.renderBlur(0, 0, guiW, guiH,
                 currentFocusDepth, SnapmaticaClient.aperture,
-                SnapmaticaClient.focalLengthMm);
+                SnapmaticaClient.focalLengthMm, EvfBlurRenderer.DOF_SCALE_VIDEO);
     }
 
     private static void updateAutofocus(Minecraft mc) {
