@@ -46,12 +46,13 @@ void main() {
 
     float coc = computeCoc(depthM);
 
-    // Small deadband: depth-buffer temporal jitter near the focus plane can produce
-    // tiny CoC fluctuations (<0.3 px) that flicker at high frame-rate. Treat them as
-    // "in focus" so objects at the focal plane stay clean rather than shimmering.
-    coc = max(coc - 0.3, 0.0);
+    // Deadband: keeps a band around the focus plane fully sharp. A larger value
+    // widens the depth of field so close / wide-open shots still hold a usable
+    // sharp subject (optical DoF alone is paper-thin there), and removes the
+    // high-frequency shimmer of depth jitter at the focus plane.
+    coc = max(coc - 1.5, 0.0);
 
-    if (coc < 0.5) {
+    if (coc < 0.3) {
         fragColor = texture(InSampler, texCoord);
         return;
     }
@@ -60,10 +61,10 @@ void main() {
     // Foreground and background blur require different edge treatment (see below).
     bool isForeground = (FocusDist < 99999.0) && (depthM < FocusDist);
 
-    // sigma = 0.75 × coc: wide Gaussian tail for soft, physically realistic edge
-    // transitions between in-focus and out-of-focus regions.
-    float sigma = max(coc * 0.75, 0.1);
-    int rad = min(int(ceil(coc * 1.5)), 32);
+    // sigma = 0.85 × coc with a 1.7× sample radius: wide Gaussian tail for soft,
+    // physically realistic transitions between in-focus and out-of-focus regions.
+    float sigma = max(coc * 0.85, 0.1);
+    int rad = min(int(ceil(coc * 1.7)), 36);
 
     vec4 col = vec4(0.0);
     float totalW = 0.0;
@@ -83,9 +84,12 @@ void main() {
                 // blend into the background, producing the soft halo a real lens gives.
                 cocWeight = 1.0;
             } else {
-                // Background blur: reduce contribution from sharper / closer samples
-                // to prevent sharp in-focus foreground from bleeding into soft background.
-                cocWeight = clamp(sampleCoc / coc, 0.05, 1.0);
+                // Background blur: down-weight sharper / closer samples so a sharp
+                // in-focus subject doesn't bleed into the soft background. A sqrt
+                // roll-off (instead of a linear ratio) keeps far more of the
+                // partially-blurred neighbours, so the silhouette of background
+                // bokeh dissolves into a soft gradient instead of a crisp edge.
+                cocWeight = clamp(sqrt(sampleCoc / coc), 0.12, 1.0);
             }
         }
 
