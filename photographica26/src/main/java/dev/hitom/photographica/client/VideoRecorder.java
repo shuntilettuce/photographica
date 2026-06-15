@@ -6,6 +6,7 @@ import dev.hitom.photographica.component.VideoSettings;
 import dev.hitom.photographica.item.VideoCameraItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
+import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.network.chat.Component;
@@ -181,7 +182,27 @@ public final class VideoRecorder {
         t.start();
     }
 
-    // ── Render-thread hook ─────────────────────────────────────────────────────
+    // ── Render-thread hooks ────────────────────────────────────────────────────
+
+    /**
+     * Called every frame at LevelRenderEvents.END_MAIN — while the scene depth buffer
+     * is still valid — to copy depth into the GPU texture EvfBlurRenderer samples.
+     * Without this the video DoF pass (applyVideoBlur, run after renderLevel) would
+     * have no depth and silently skip, leaving the footage with no bokeh.
+     * The still-camera viewfinder captures depth via PhotoCapture.onWorldRenderEnd(),
+     * but that path is inactive while holding the video camera, so we do it here.
+     */
+    public static void onWorldRenderEnd() {
+        if (!recording) return;
+        Minecraft mc = Minecraft.getInstance();
+        RenderTarget mainFb = mc.getMainRenderTarget();
+        if (mainFb == null) return;
+        int fbW = mainFb.width;
+        int fbH = mainFb.height;
+        if (fbW > 0 && fbH > 0) {
+            EvfBlurRenderer.captureDepth(fbW, fbH);
+        }
+    }
 
     public static void captureFrameIfRecording() {
         if (!recording) return;

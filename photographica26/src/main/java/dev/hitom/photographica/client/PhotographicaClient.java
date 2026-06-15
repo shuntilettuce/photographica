@@ -209,6 +209,8 @@ public class PhotographicaClient implements ClientModInitializer {
 
 		LevelRenderEvents.END_MAIN.register(ctx -> {
 			PhotoCapture.onWorldRenderEnd();
+			// Capture scene depth for the video DoF pass while the depth buffer is valid.
+			VideoRecorder.onWorldRenderEnd();
 		});
 
 		BlockEntityRendererRegistry.register(ModBlockEntities.PHOTO_FRAME,
