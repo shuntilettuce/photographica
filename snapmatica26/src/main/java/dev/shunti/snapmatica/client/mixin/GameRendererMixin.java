@@ -5,39 +5,48 @@ import dev.shunti.snapmatica.client.SnapmaticaClient;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.Projection;
+import net.minecraft.client.renderer.state.GameRenderState;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
 
+    @Shadow private GameRenderState gameRenderState;
+
     /**
-     * Overrides the perspective FOV that extractCamera() passes to Projection.setupPerspective().
-     * In MC 26.1.2 the old getFov() method no longer exists; the FOV is passed directly into
-     * Projection.setupPerspective(fov, zNear, zFar, width, height) inside extractCamera().
-     * We intercept argument index 0 (fov) and replace it with the focal-length-derived FOV
-     * when the player is looking through the viewfinder.
+     * Override the perspective FOV with focal-length-derived FOV when the player
+     * is looking through the viewfinder. In MC 26.1.2 getFov() no longer exists;
+     * extractCamera() builds CameraRenderState.projectionMatrix directly, so we
+     * overwrite both projectionMatrix and hudFov at its RETURN.
      */
-    @ModifyArg(
-            method = "extractCamera(Lnet/minecraft/client/DeltaTracker;FF)V",
-            at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/client/renderer/Projection;setupPerspective(FFFFF)V"),
-            index = 0
-    )
-    private float snapmatica$applyFocalLength(float fov) {
+    @Inject(method = "extractCamera(Lnet/minecraft/client/DeltaTracker;FF)V",
+            at = @At("RETURN"))
+    private void snapmatica$applyFocalLength(DeltaTracker dt, float f1, float f2,
+                                             CallbackInfo ci) {
         Player player = Minecraft.getInstance().player;
-        if (player == null) return fov;
-        if (!SnapmaticaClient.viewfinderSneakEnabled || !player.isShiftKeyDown()) return fov;
-        if (SnapmaticaClient.lensType == 0) return fov;
+        if (player == null) return;
+        if (!SnapmaticaClient.viewfinderSneakEnabled || !player.isShiftKeyDown()) return;
+        if (SnapmaticaClient.lensType == 0) return;
         int f = SnapmaticaClient.focalLengthMm;
-        if (f <= 0) return fov;
+        if (f <= 0) return;
+
         double halfSensorMm = SnapmaticaClient.portraitOrientation ? 18.0 : 12.0;
-        return (float) Math.toDegrees(2.0 * Math.atan(halfSensorMm / f));
+        float fovDeg = (float) Math.toDegrees(2.0 * Math.atan(halfSensorMm / f));
+
+        CameraRenderState camState = gameRenderState.levelRenderState.cameraRenderState;
+        if (camState == null || camState.projectionMatrix == null) return;
+
+        Minecraft mc = Minecraft.getInstance();
+        float aspect = (float) mc.getWindow().getWidth() / mc.getWindow().getHeight();
+        camState.projectionMatrix.setPerspective(
+                (float) Math.toRadians(fovDeg), aspect, 0.05f, camState.depthFar);
+        camState.hudFov = fovDeg;
     }
 
     @Inject(method = "render(Lnet/minecraft/client/DeltaTracker;Z)V",
