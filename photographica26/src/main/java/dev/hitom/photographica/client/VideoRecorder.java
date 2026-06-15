@@ -39,10 +39,12 @@ public final class VideoRecorder {
 
     private static final int   FOCUS_DWELL_FRAMES = 20;
     private static final float FOCUS_TOL          = 0.25f;
-    private static final float PULL_RATE          = 0.07f;
-    private static final float PULL_MAX_STEP      = 0.10f;
-    private static final float PULL_SNAP_EPS      = 0.015f;
-    private static final int   PULL_WARMUP_FRAMES = 40;
+    // Second-order spring-damper focus motor. Underdamped (zeta<1) so the lens
+    // overshoots the target once and settles back, like a real AF motor hunting.
+    private static final float AF_OMEGA   = 0.16f;   // natural frequency (per frame)
+    private static final float AF_ZETA    = 0.50f;   // damping ratio (<1 → single overshoot)
+    private static final float AF_VEL_CAP = 0.30f;   // safety clamp on log-velocity/frame
+    private static final float AF_SETTLE  = 0.004f;  // snap threshold (log-units)
 
     // ── Recording state ────────────────────────────────────────────────────────
     private static volatile boolean recording      = false;
@@ -70,6 +72,8 @@ public final class VideoRecorder {
     private static float focusCandidateDepth  = 5.0f;
     private static int   focusCandidateFrames = 0;
     private static float currentFocusDepth    = 5.0f;
+    private static float focusTargetDepth     = 5.0f;
+    private static float focusVelocity        = 0.0f;
 
     // Frame write counter for post-process progress tracking.
     private static final AtomicInteger writtenFrames = new AtomicInteger(0);
@@ -146,6 +150,8 @@ public final class VideoRecorder {
         // and show wrong blur until the dwell-time AF kicks in.
         float initDepth = computeSceneFocusDepth(mc);
         currentFocusDepth    = (initDepth > 0.3f && initDepth < 999.0f) ? initDepth : 5.0f;
+        focusTargetDepth     = currentFocusDepth;
+        focusVelocity        = 0.0f;
         focusCandidateDepth  = currentFocusDepth;
         focusCandidateFrames = 0;
 
@@ -283,31 +289,35 @@ public final class VideoRecorder {
         if (Math.abs(centreDepth - focusCandidateDepth)
                 / Math.max(focusCandidateDepth, 0.1f) <= FOCUS_TOL) {
             focusCandidateFrames++;
+            if (focusCandidateFrames >= FOCUS_DWELL_FRAMES) {
+                focusTargetDepth = focusCandidateDepth;  // commit a confirmed new target
+            }
         } else {
             focusCandidateDepth  = centreDepth;
             focusCandidateFrames = 0;
         }
-        if (focusCandidateFrames >= FOCUS_DWELL_FRAMES) {
-            currentFocusDepth = pullFocusToward(currentFocusDepth, focusCandidateDepth,
-                    focusCandidateFrames - FOCUS_DWELL_FRAMES);
-        }
+        stepFocusSpring();
     }
 
-    private static float pullFocusToward(float current, float target, int warmupFrame) {
-        current = Math.max(0.01f, current);
-        target  = Math.max(0.01f, target);
-        float logCur = (float) Math.log(current);
-        float logTar = (float) Math.log(target);
-        float diff   = logTar - logCur;
-        if (Math.abs(diff) <= PULL_SNAP_EPS) return target;
-        float ramp = 0.2f + 0.8f * Math.min(1.0f, (float) warmupFrame / PULL_WARMUP_FRAMES);
-        float step = diff * PULL_RATE * ramp;
-        if (step >  PULL_MAX_STEP) step =  PULL_MAX_STEP;
-        if (step < -PULL_MAX_STEP) step = -PULL_MAX_STEP;
-        float next = logCur + step;
-        if (diff > 0 && next > logTar) return target;
-        if (diff < 0 && next < logTar) return target;
-        return (float) Math.exp(next);
+    /**
+     * Advances focus one frame of a damped harmonic oscillator easing toward
+     * focusTargetDepth in log space. The velocity state makes focus start slowly,
+     * accelerate, overshoot the target once, then settle back — the hunting motion
+     * of a real autofocus motor.
+     */
+    private static void stepFocusSpring() {
+        float logCur = (float) Math.log(Math.max(0.01f, currentFocusDepth));
+        float logTar = (float) Math.log(Math.max(0.01f, focusTargetDepth));
+        float disp = logTar - logCur;
+        if (Math.abs(disp) < AF_SETTLE && Math.abs(focusVelocity) < AF_SETTLE) {
+            currentFocusDepth = focusTargetDepth;
+            focusVelocity = 0.0f;
+            return;
+        }
+        focusVelocity += AF_OMEGA * AF_OMEGA * disp - 2.0f * AF_ZETA * AF_OMEGA * focusVelocity;
+        if (focusVelocity >  AF_VEL_CAP) focusVelocity =  AF_VEL_CAP;
+        if (focusVelocity < -AF_VEL_CAP) focusVelocity = -AF_VEL_CAP;
+        currentFocusDepth = (float) Math.exp(logCur + focusVelocity);
     }
 
     /** Raycasts from the camera along its view vector to find the focus subject distance. */

@@ -61,12 +61,15 @@ public final class VideoRecorder {
     // DoF tracks the scene even when the viewfinder (sneak mode) is not active.
     private static final int   FOCUS_DWELL_FRAMES  = 20;
     private static final float FOCUS_TOL           = 0.25f;
-    // Log-space pull parameters (slower/smoother than still-camera AF).
-    private static final float PULL_RATE           = 0.07f;  // fraction of log-dist per frame
-    private static final float PULL_MAX_STEP       = 0.10f;  // max log-units per frame
-    private static final float PULL_SNAP_EPS       = 0.015f; // snap when this close (log-units)
-    private static final int   PULL_WARMUP_FRAMES  = 40;     // frames after dwell to ramp PULL_RATE
+    // Second-order spring-damper focus motor. Underdamped (zeta<1) so the lens
+    // overshoots the target once and settles back, like a real AF motor hunting.
+    private static final float AF_OMEGA   = 0.16f;   // natural frequency (per frame)
+    private static final float AF_ZETA    = 0.50f;   // damping ratio (<1 → single overshoot)
+    private static final float AF_VEL_CAP = 0.30f;   // safety clamp on log-velocity/frame
+    private static final float AF_SETTLE  = 0.004f;  // snap threshold (log-units)
     private static float currentFocusDepth   = 5.0f;
+    private static float focusTargetDepth    = 5.0f;
+    private static float focusVelocity       = 0.0f;
     private static float focusCandidateDepth = 5.0f;
     private static int   focusCandidateFrames = 0;
 
@@ -119,6 +122,8 @@ public final class VideoRecorder {
         // 5-block default and show wrong blur until the dwell-time AF kicks in.
         float initDepth = computeSceneFocusDepth(mc);
         currentFocusDepth    = (initDepth > 0.3f && initDepth < 999.0f) ? initDepth : 5.0f;
+        focusTargetDepth     = currentFocusDepth;
+        focusVelocity        = 0.0f;
         focusCandidateDepth  = currentFocusDepth;
         focusCandidateFrames = 0;
 
@@ -256,39 +261,35 @@ public final class VideoRecorder {
         if (Math.abs(centreDepth - focusCandidateDepth)
                 / Math.max(focusCandidateDepth, 0.1f) <= FOCUS_TOL) {
             focusCandidateFrames++;
+            if (focusCandidateFrames >= FOCUS_DWELL_FRAMES) {
+                focusTargetDepth = focusCandidateDepth;  // commit a confirmed new target
+            }
         } else {
             focusCandidateDepth  = centreDepth;
             focusCandidateFrames = 0;
         }
-        if (focusCandidateFrames >= FOCUS_DWELL_FRAMES) {
-            currentFocusDepth = pullFocusToward(currentFocusDepth, focusCandidateDepth,
-                    focusCandidateFrames - FOCUS_DWELL_FRAMES);
-        }
+        stepFocusSpring();
     }
 
     /**
-     * Ease current focus toward target in log-space with a warmup ramp.
-     * warmupFrame=0 is the first pull frame (just past dwell). The rate starts at
-     * a fraction of PULL_RATE and reaches full PULL_RATE after PULL_WARMUP_FRAMES,
-     * giving the slow-start / accelerate / ease-out feel of a real focus motor.
+     * Advances focus one frame of a damped harmonic oscillator easing toward
+     * focusTargetDepth in log space. The velocity state makes focus start slowly,
+     * accelerate, overshoot the target once, then settle back — the hunting motion
+     * of a real autofocus motor.
      */
-    private static float pullFocusToward(float current, float target, int warmupFrame) {
-        current = Math.max(0.01f, current);
-        target  = Math.max(0.01f, target);
-        float logCur = (float) Math.log(current);
-        float logTar = (float) Math.log(target);
-        float diff   = logTar - logCur;
-        if (Math.abs(diff) <= PULL_SNAP_EPS) return target;
-        // Ramp rate: 0.2× at warmupFrame=0, reaches 1.0× at PULL_WARMUP_FRAMES.
-        float ramp = 0.2f + 0.8f * Math.min(1.0f, (float) warmupFrame / PULL_WARMUP_FRAMES);
-        float step = diff * PULL_RATE * ramp;
-        if (step >  PULL_MAX_STEP) step =  PULL_MAX_STEP;
-        if (step < -PULL_MAX_STEP) step = -PULL_MAX_STEP;
-        // Prevent overshooting.
-        float next = logCur + step;
-        if (diff > 0 && next > logTar) return target;
-        if (diff < 0 && next < logTar) return target;
-        return (float) Math.exp(next);
+    private static void stepFocusSpring() {
+        float logCur = (float) Math.log(Math.max(0.01f, currentFocusDepth));
+        float logTar = (float) Math.log(Math.max(0.01f, focusTargetDepth));
+        float disp = logTar - logCur;
+        if (Math.abs(disp) < AF_SETTLE && Math.abs(focusVelocity) < AF_SETTLE) {
+            currentFocusDepth = focusTargetDepth;
+            focusVelocity = 0.0f;
+            return;
+        }
+        focusVelocity += AF_OMEGA * AF_OMEGA * disp - 2.0f * AF_ZETA * AF_OMEGA * focusVelocity;
+        if (focusVelocity >  AF_VEL_CAP) focusVelocity =  AF_VEL_CAP;
+        if (focusVelocity < -AF_VEL_CAP) focusVelocity = -AF_VEL_CAP;
+        currentFocusDepth = (float) Math.exp(logCur + focusVelocity);
     }
 
     private static float computeSceneFocusDepth(Minecraft mc) {
