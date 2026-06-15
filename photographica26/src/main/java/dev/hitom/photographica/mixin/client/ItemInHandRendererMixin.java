@@ -13,9 +13,13 @@ public class ItemInHandRendererMixin {
 
     @Inject(method = "renderHandsWithItems", at = @At("HEAD"), cancellable = true)
     private void photographica$suppressHand(CallbackInfo ci) {
+        // Hide the first-person hand only for photo capture and tripod (armor-stand)
+        // recording — where the held camera should never appear in the shot/footage.
+        // Handheld video recording keeps the hand visible (like the viewfinder), so the
+        // player isn't left looking "invisible" while filming.
         if (PhotoCapture.isCapturePending()
                 || PhotoCapture.armorStandCapturePending
-                || VideoRecorder.willCaptureThisFrame()) {
+                || VideoRecorder.isTripodRecording()) {
             ci.cancel();
         }
     }

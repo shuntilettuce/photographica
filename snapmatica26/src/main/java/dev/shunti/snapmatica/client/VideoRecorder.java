@@ -50,6 +50,9 @@ public final class VideoRecorder {
 
     private static final AtomicInteger writtenFrames = new AtomicInteger(0);
 
+    /** smoothCamera state saved at record start, restored on stop. */
+    private static boolean prevSmoothCamera = false;
+
     private static final ExecutorService ioExecutor =
             Executors.newSingleThreadExecutor(r -> {
                 Thread t = new Thread(r, "snapmatica-video-io");
@@ -97,6 +100,10 @@ public final class VideoRecorder {
             return;
         }
 
+        // Enable cinematic (smooth) camera for steadier handheld panning footage.
+        prevSmoothCamera = mc.options.smoothCamera;
+        mc.options.smoothCamera = true;
+
         recording = true;
         mc.gui.setOverlayMessage(Component.literal("● REC 開始"), true);
     }
@@ -106,6 +113,7 @@ public final class VideoRecorder {
         recording = false;
 
         Minecraft mc = Minecraft.getInstance();
+        mc.options.smoothCamera = prevSmoothCamera;
         if (mc.player != null)
             mc.gui.setOverlayMessage(Component.literal("■ 録画停止 — エンコード中..."), true);
 

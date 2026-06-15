@@ -1,6 +1,7 @@
 package dev.hitom.photographica.client.screen;
 
 import dev.hitom.photographica.Photographica;
+import dev.hitom.photographica.client.ClipboardUtil;
 import dev.hitom.photographica.component.PhotoData;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -50,9 +51,26 @@ public class PhotoViewerScreen extends Screen {
         missing = false;
         loadImage();
 
-        addRenderableWidget(SafelightButton.ghost(width / 2 - 40, height - 24, 80,
+        // Back/close button — pushed up to make room for the copy button below it.
+        addRenderableWidget(SafelightButton.ghost(width / 2 - 50, height - 46, 100,
                 Component.literal(parent != null ? "← 戻る" : "閉じる"),
                 b -> onClose()));
+
+        // Copy-to-clipboard button — copies the photo PNG as a pasteable image.
+        addRenderableWidget(SafelightButton.primary(width / 2 - 50, height - 24, 100,
+                Component.literal("📋 コピー"),
+                b -> copyToClipboard()));
+    }
+
+    private void copyToClipboard() {
+        Minecraft mc = Minecraft.getInstance();
+        File dir = new File(mc.gameDirectory, "photographica/photos");
+        File file = PhotoData.findPhotoFile(dir, data.id());
+        if (file == null) {
+            mc.gui.setOverlayMessage(Component.literal("⚠ 写真ファイルが見つかりません"), false);
+            return;
+        }
+        ClipboardUtil.copyImageAsync(file);
     }
 
     private void loadImage() {
