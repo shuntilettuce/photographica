@@ -1,6 +1,7 @@
 package dev.hitom.photographica.client.render;
 
 import dev.hitom.photographica.Photographica;
+import dev.hitom.photographica.component.PhotoData;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
@@ -37,7 +38,7 @@ public final class PhotoTextureCache {
         if (cached != null) return cached;
 
         File photoDir = new File(Minecraft.getInstance().gameDirectory, "photographica/photos");
-        File file = findPhotoFile(photoDir, photoId);
+        File file = PhotoData.findPhotoFile(photoDir, photoId);
         if (file == null) {
             failed.add(photoId);
             return null;
@@ -57,17 +58,6 @@ public final class PhotoTextureCache {
             failed.add(photoId);
             return null;
         }
-    }
-
-    private static @Nullable File findPhotoFile(File dir, UUID photoId) {
-        if (!dir.isDirectory()) return null;
-        // New format: <datetime>_<uuid_no_dashes>.png
-        String suffix = "_" + photoId.toString().replace("-", "") + ".png";
-        File[] matches = dir.listFiles((d, name) -> name.endsWith(suffix));
-        if (matches != null && matches.length > 0) return matches[0];
-        // Legacy format: <uuid>.png
-        File legacy = new File(dir, photoId + ".png");
-        return legacy.exists() ? legacy : null;
     }
 
     /** Call when leaving a world so stale textures from a previous session are discarded. */

@@ -174,8 +174,9 @@ public class FilmStripScreen extends Screen {
         loadedForIndex = index;
 
         Minecraft mc = Minecraft.getInstance();
-        File file = new File(mc.gameDirectory, "photographica/photos/" + data.id() + ".png");
-        if (!file.isFile()) {
+        File dir = new File(mc.gameDirectory, "photographica/photos");
+        File file = PhotoData.findPhotoFile(dir, data.id());
+        if (file == null) {
             thumbMissing = true;
             return;
         }

@@ -42,7 +42,7 @@ public class SdCardBrowserScreen extends Screen {
 
     // Panel dimensions
     private static final int PANEL_W = 320;
-    private static final int PANEL_H = 264;
+    private static final int PANEL_H = 280;
     // Thumbnail display constraints (in GUI pixels)
     private static final int THUMB_MAX_W = 288;
     private static final int THUMB_MAX_H = 144;
@@ -151,6 +151,13 @@ public class SdCardBrowserScreen extends Screen {
         ctx.centeredText(font, Component.literal(counter), cx, metaY, GuiHelper.CREAM);
         metaY += lineH;
 
+        // Capture date/time (empty for legacy photos)
+        String dateTime = p.captureDateTimeDisplay();
+        if (!dateTime.isEmpty()) {
+            ctx.centeredText(font, Component.literal(dateTime), cx, metaY, GuiHelper.CREAM_DIM);
+            metaY += lineH;
+        }
+
         String exposure = String.format("F%.1f  %s  ISO%d  %dmm",
                 p.cameraAtCapture().aperture(),
                 shutterLabel(p.cameraAtCapture().shutterSpeedIdx()),
@@ -180,10 +187,11 @@ public class SdCardBrowserScreen extends Screen {
         PhotoData p = photos.get(index);
         UUID photoId = p.id();
 
-        // Delete PNG from disk
+        // Delete PNG from disk — resolve by UUID so the date/time-named file is found.
         Minecraft mc = Minecraft.getInstance();
-        File file = new File(mc.gameDirectory, "photographica/photos/" + photoId + ".png");
-        file.delete();
+        File dir = new File(mc.gameDirectory, "photographica/photos");
+        File png = PhotoData.findPhotoFile(dir, photoId);
+        if (png != null) png.delete();
 
         // Release cached thumbnail texture
         if (thumb != null && loadedForIndex == index) {
@@ -216,8 +224,9 @@ public class SdCardBrowserScreen extends Screen {
         loadedForIndex = index;
 
         Minecraft mc = Minecraft.getInstance();
-        File file = new File(mc.gameDirectory, "photographica/photos/" + data.id() + ".png");
-        if (!file.isFile()) {
+        File dir = new File(mc.gameDirectory, "photographica/photos");
+        File file = PhotoData.findPhotoFile(dir, data.id());
+        if (file == null) {
             thumbMissing = true;
             return;
         }

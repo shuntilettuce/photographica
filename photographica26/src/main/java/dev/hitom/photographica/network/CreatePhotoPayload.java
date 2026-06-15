@@ -12,7 +12,7 @@ import java.util.UUID;
 /**
  * C2S: client successfully wrote a PNG; ask server to create the corresponding photo item.
  */
-public record CreatePhotoPayload(UUID id, CameraSettings settings) implements CustomPacketPayload {
+public record CreatePhotoPayload(UUID id, CameraSettings settings, long captureTime) implements CustomPacketPayload {
 	public static final CustomPacketPayload.Type<CreatePhotoPayload> ID =
 			new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(Photographica.MOD_ID, "create_photo"));
 
@@ -23,7 +23,8 @@ public record CreatePhotoPayload(UUID id, CameraSettings settings) implements Cu
 			long lo = buf.readLong();
 			UUID id = new UUID(hi, lo);
 			CameraSettings settings = CameraSettings.PACKET_CODEC.decode(buf);
-			return new CreatePhotoPayload(id, settings);
+			long captureTime = buf.readLong();
+			return new CreatePhotoPayload(id, settings, captureTime);
 		}
 
 		@Override
@@ -31,6 +32,7 @@ public record CreatePhotoPayload(UUID id, CameraSettings settings) implements Cu
 			buf.writeLong(v.id.getMostSignificantBits());
 			buf.writeLong(v.id.getLeastSignificantBits());
 			CameraSettings.PACKET_CODEC.encode(buf, v.settings);
+			buf.writeLong(v.captureTime);
 		}
 	};
 

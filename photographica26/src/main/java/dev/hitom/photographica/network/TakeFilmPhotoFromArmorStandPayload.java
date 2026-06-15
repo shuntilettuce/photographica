@@ -9,7 +9,7 @@ import net.minecraft.resources.Identifier;
 
 import java.util.UUID;
 
-public record TakeFilmPhotoFromArmorStandPayload(UUID id, CameraSettings settings, int entityId) implements CustomPacketPayload {
+public record TakeFilmPhotoFromArmorStandPayload(UUID id, CameraSettings settings, int entityId, long captureTime) implements CustomPacketPayload {
 	public static final CustomPacketPayload.Type<TakeFilmPhotoFromArmorStandPayload> ID =
 			new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(Photographica.MOD_ID, "take_film_photo_from_armor_stand"));
 
@@ -20,7 +20,8 @@ public record TakeFilmPhotoFromArmorStandPayload(UUID id, CameraSettings setting
 					UUID id = buf.readUUID();
 					CameraSettings settings = CameraSettings.PACKET_CODEC.decode(buf);
 					int entityId = buf.readInt();
-					return new TakeFilmPhotoFromArmorStandPayload(id, settings, entityId);
+					long captureTime = buf.readLong();
+					return new TakeFilmPhotoFromArmorStandPayload(id, settings, entityId, captureTime);
 				}
 
 				@Override
@@ -28,6 +29,7 @@ public record TakeFilmPhotoFromArmorStandPayload(UUID id, CameraSettings setting
 					buf.writeUUID(value.id());
 					CameraSettings.PACKET_CODEC.encode(buf, value.settings());
 					buf.writeInt(value.entityId());
+					buf.writeLong(value.captureTime());
 				}
 			};
 

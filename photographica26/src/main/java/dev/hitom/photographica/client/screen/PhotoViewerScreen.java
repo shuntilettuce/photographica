@@ -58,9 +58,10 @@ public class PhotoViewerScreen extends Screen {
     private void loadImage() {
         UUID id = data.id();
         Minecraft mc = Minecraft.getInstance();
-        File file = new File(mc.gameDirectory, "photographica/photos/" + id + ".png");
-        if (!file.isFile()) {
-            Photographica.LOGGER.warn("Photo PNG not found: {}", file);
+        File dir = new File(mc.gameDirectory, "photographica/photos");
+        File file = PhotoData.findPhotoFile(dir, id);
+        if (file == null) {
+            Photographica.LOGGER.warn("Photo PNG not found for {}", id);
             missing = true;
             return;
         }
@@ -209,6 +210,10 @@ public class PhotoViewerScreen extends Screen {
                 data.dimension(), data.x(), data.y(), data.z());
 
         ctx.centeredText(font, Component.literal(header), width / 2, 6, 0xFFFFFFFF);
+        String dateTime = data.captureDateTimeDisplay();
+        if (!dateTime.isEmpty()) {
+            ctx.centeredText(font, Component.literal(dateTime), width / 2, 18, 0xFFB0B0B0);
+        }
         ctx.text(font, Component.literal(exposure), 8, height - 40, 0xFFB0B0B0, true);
         ctx.text(font, Component.literal(location), 8, height - 28, 0xFF808080, true);
     }

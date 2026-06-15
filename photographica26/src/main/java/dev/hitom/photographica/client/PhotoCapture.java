@@ -6,6 +6,7 @@ import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.component.ModDataComponents;
+import dev.hitom.photographica.component.PhotoData;
 import dev.hitom.photographica.component.SdCardData;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.FilmCameraItem;
@@ -411,6 +412,7 @@ public final class PhotoCapture {
 		}
 
 		final UUID fId = id;
+		final long fCaptureTime = System.currentTimeMillis();
 		final CameraSettings fSettings = settings;
 		final boolean fIsFilm = isFilm;
 		final int fCaptureStandId = captureStandId;
@@ -431,9 +433,10 @@ public final class PhotoCapture {
 					Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 					return;
 				}
-				// File name must be exactly "<uuid>.png" so the SD-card browser / photo
-				// viewer (which look up "photographica/photos/<id>.png") can find it.
-				File outFile = new File(dir, fId + ".png");
+				// File name is the real-world capture date/time so the photos folder is
+				// human-browsable. The viewer reconstructs the same UTC-based name from
+				// PhotoData.captureTime (with a UUID fallback), so the image always resolves.
+				File outFile = new File(dir, PhotoData.fileBaseName(fCaptureTime, fId) + ".png");
 				processed.writeToFile(outFile.toPath());
 				ClipboardUtil.copyImageAsync(outFile);
 				Photographica.LOGGER.info("Photo saved: {} ({}x{})",
@@ -448,19 +451,19 @@ public final class PhotoCapture {
 			}
 			if (fCaptureStandId >= 0) {
 				if (fIsFilm) {
-					ClientPlayNetworking.send(new TakeFilmPhotoFromArmorStandPayload(fId, fSettings, fCaptureStandId));
+					ClientPlayNetworking.send(new TakeFilmPhotoFromArmorStandPayload(fId, fSettings, fCaptureStandId, fCaptureTime));
 					if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影 (防具立て・フィルム)"), false);
 				} else {
-					ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(fId, fSettings, fCaptureStandId));
+					ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(fId, fSettings, fCaptureStandId, fCaptureTime));
 					if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影 (防具立て)"), false);
 				}
 			} else if (fIsFilm) {
-				ClientPlayNetworking.send(new TakeFilmPhotoPayload(fId, fSettings));
+				ClientPlayNetworking.send(new TakeFilmPhotoPayload(fId, fSettings, fCaptureTime));
 				if (mc.player != null) {
 					mc.gui.setOverlayMessage(Component.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), false);
 				}
 			} else {
-				ClientPlayNetworking.send(new CreatePhotoPayload(fId, fSettings));
+				ClientPlayNetworking.send(new CreatePhotoPayload(fId, fSettings, fCaptureTime));
 				if (mc.player != null) {
 					mc.gui.setOverlayMessage(Component.literal("📸 撮影"), false);
 				}
@@ -534,6 +537,7 @@ public final class PhotoCapture {
 	/** Averages all accumulated frames, applies photographic effects, and saves the photo. */
 	private static void finalizeAccumulation(Minecraft mc) {
 		UUID id = accumId;
+		long captureTime = System.currentTimeMillis();
 		CameraSettings settings = accumSettings;
 		boolean isFilm = accumIsFilm;
 		int finalStandId = accumArmorStandEntityId; // capture before reset
@@ -573,7 +577,7 @@ public final class PhotoCapture {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 				return;
 			}
-			File outFile = new File(dir, id + ".png");
+			File outFile = new File(dir, PhotoData.fileBaseName(captureTime, id) + ".png");
 			processed.writeToFile(outFile.toPath());
 			ClipboardUtil.copyImageAsync(outFile);
 			Photographica.LOGGER.info("Long-exposure photo saved: {} ({}x{}, {} frames accumulated)",
@@ -587,10 +591,10 @@ public final class PhotoCapture {
 
 		if (finalStandId >= 0) {
 			if (isFilm) {
-				ClientPlayNetworking.send(new TakeFilmPhotoFromArmorStandPayload(id, settings, finalStandId));
+				ClientPlayNetworking.send(new TakeFilmPhotoFromArmorStandPayload(id, settings, finalStandId, captureTime));
 				if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影 (防具立て・フィルム)"), false);
 			} else {
-				ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(id, settings, finalStandId));
+				ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(id, settings, finalStandId, captureTime));
 				if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影 (防具立て)"), false);
 			}
 			// Restore player camera and perspective after armor stand long exposure
@@ -602,10 +606,10 @@ public final class PhotoCapture {
 			armorStandCapturePending = false;
 			armorStandFocalLength = 0;
 		} else if (isFilm) {
-			ClientPlayNetworking.send(new TakeFilmPhotoPayload(id, settings));
+			ClientPlayNetworking.send(new TakeFilmPhotoPayload(id, settings, captureTime));
 			if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), false);
 		} else {
-			ClientPlayNetworking.send(new CreatePhotoPayload(id, settings));
+			ClientPlayNetworking.send(new CreatePhotoPayload(id, settings, captureTime));
 			if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影"), false);
 		}
 	}

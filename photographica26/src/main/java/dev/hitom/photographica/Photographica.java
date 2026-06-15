@@ -113,6 +113,7 @@ public class Photographica implements ModInitializer {
 				BlockPos pos = player.blockPosition();
 				PhotoData photoData = new PhotoData(
 						payload.id(), player.getName().getString(), world.getGameTime(),
+						payload.captureTime(),
 						world.dimension().identifier().toString(),
 						pos.getX(), pos.getY(), pos.getZ(),
 						payload.settings()
@@ -146,6 +147,7 @@ public class Photographica implements ModInitializer {
 				BlockPos pos = player.blockPosition();
 				PhotoData shot = new PhotoData(
 						payload.id(), player.getName().getString(), world.getGameTime(),
+						payload.captureTime(),
 						world.dimension().identifier().toString(),
 						pos.getX(), pos.getY(), pos.getZ(),
 						payload.settings());
@@ -393,6 +395,7 @@ public class Photographica implements ModInitializer {
 				BlockPos pos = stand.blockPosition();
 				PhotoData photoData = new PhotoData(
 						payload.id(), player.getName().getString(), world.getGameTime(),
+						payload.captureTime(),
 						world.dimension().identifier().toString(),
 						pos.getX(), pos.getY(), pos.getZ(),
 						payload.settings());
@@ -434,6 +437,7 @@ public class Photographica implements ModInitializer {
 				BlockPos pos = stand.blockPosition();
 				PhotoData shot = new PhotoData(
 						payload.id(), player.getName().getString(), world.getGameTime(),
+						payload.captureTime(),
 						world.dimension().identifier().toString(),
 						pos.getX(), pos.getY(), pos.getZ(),
 						payload.settings());
