@@ -26,9 +26,7 @@ import dev.hitom.photographica.network.LoadSdCardPayload;
 import dev.hitom.photographica.network.UnloadSdCardPayload;
 import dev.hitom.photographica.network.WindFilmPayload;
 import net.fabricmc.api.ClientModInitializer;
-//? if <1.21.4 {
 import net.fabricmc.fabric.api.client.rendering.v1.ArmorRenderer;
-//?}
 //? if >=1.21.11 {
 /*import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;*/
 //?} else {
@@ -333,6 +331,25 @@ public class PhotographicaClient implements ClientModInitializer {
 					entity.getWorld(), entity.getId());
 			matrices.pop();
 		}, ModItems.VIDEO_CAMERA, ModItems.CAMERA, ModItems.MIRRORLESS_CAMERA, ModItems.FILM_CAMERA);
+		//?}
+		//? if >=1.21.11 {
+		/*ArmorRenderer.register((matrices, queue, stack, state, slot, light, contextModel) -> {
+			if (slot != EquipmentSlot.CHEST) return;
+			MinecraftClient mc = MinecraftClient.getInstance();
+			if (mc.world == null || mc.player == null) return;
+			matrices.push();
+			// Align with the body's current rotation (handles swimming, crawling, etc.)
+			contextModel.body.applyTransform(matrices);
+			matrices.translate(0.0, 0.12, -0.175);
+			matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(180f));
+			matrices.scale(0.35f, 0.35f, 0.35f);
+			net.minecraft.client.render.item.ItemRenderState itemState =
+					new net.minecraft.client.render.item.ItemRenderState();
+			mc.getItemModelManager().updateForLivingEntity(
+					itemState, stack, net.minecraft.item.ItemDisplayContext.FIXED, mc.player);
+			itemState.render(matrices, queue, light, OverlayTexture.DEFAULT_UV, 0);
+			matrices.pop();
+		}, ModItems.VIDEO_CAMERA, ModItems.CAMERA, ModItems.MIRRORLESS_CAMERA, ModItems.FILM_CAMERA);*/
 		//?}
 
 		// Discard cached photo textures when disconnecting so stale GPU resources are freed.
