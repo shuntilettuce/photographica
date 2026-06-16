@@ -30,6 +30,7 @@
 	"key.photographica.stop_recording": "Stop Recording",
 	"key.photographica.orientation": "Toggle Portrait / Landscape",
 	"category.photographica": "Photographica",
+	"key.category.photographica.photographica": "Photographica",
 	"block.photographica.darkroom": "Portable Darkroom",
 	"block.photographica.printer": "Printer",
 	"block.photographica.enlarger": "Enlarger",
