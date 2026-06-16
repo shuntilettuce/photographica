@@ -69,6 +69,33 @@ public final class EvfBlurRenderer {
     // GL_TEXTURE_COMPARE_MODE = 0x884C, GL_NONE = 0  (OpenGL 1.4+)
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
 
+    // EVF schedule→execute state (used by the 1.21.11 path). 1.21.11 routes HUD draws
+    // through a deferred GuiRenderState that discards raw-GL framebuffer writes done during
+    // HUD rendering, so the blur is instead scheduled from the HUD and executed right after
+    // renderWorld() — writing the result straight back into the scene colour texture via a
+    // dedicated FBO. Harmless/no-op on <1.21.11, which keeps drawing directly from the HUD.
+    private static int writeBackFbo   = -1;
+    private static int writeBackFbTex = 0;
+    private static boolean blurScheduled = false;
+    private static int   scheduledFx, scheduledFy, scheduledFx2, scheduledFy2;
+    private static float scheduledFocusDist, scheduledAperture, scheduledFocalLen;
+
+    /** Records EVF blur params to be executed after renderWorld() (1.21.11 schedule→execute). */
+    public static void scheduleBlur(int fx, int fy, int fx2, int fy2,
+                                    float focusDist, float aperture, float focalLenMm) {
+        scheduledFx = fx; scheduledFy = fy; scheduledFx2 = fx2; scheduledFy2 = fy2;
+        scheduledFocusDist = focusDist; scheduledAperture = aperture; scheduledFocalLen = focalLenMm;
+        blurScheduled = true;
+    }
+
+    /** Executes a scheduled blur; no-op if nothing is scheduled. Call after renderWorld(). */
+    public static void applyScheduledBlur() {
+        if (!blurScheduled) return;
+        blurScheduled = false;
+        renderBlur(scheduledFx, scheduledFy, scheduledFx2, scheduledFy2,
+                scheduledFocusDist, scheduledAperture, scheduledFocalLen, DOF_SCALE_STILL);
+    }
+
     /**
      * Derives the TRUE far plane from the live world projection matrix. LOD mods (Voxy, DH)
      * extend the projection far plane to draw distant terrain; using the correct far makes
@@ -152,8 +179,8 @@ public final class EvfBlurRenderer {
         //? if >=1.21.11 {
         /*com.mojang.blaze3d.textures.GpuTexture gpuTex = mainFb.getColorAttachment();
         if (gpuTex == null) return;
-        int mainTex = ((net.minecraft.client.texture.GlTexture) gpuTex).getGlId();*/
-        //?} else {
+        int mainTex = ((net.minecraft.client.texture.GlTexture) gpuTex).getGlId();
+        *///?} else {
         int mainTex = mainFb.getColorAttachment();
         //?}
         if (mainTex == 0) return;
@@ -215,7 +242,28 @@ public final class EvfBlurRenderer {
         GL20.glUniform2f(locBlurDir, 1.0f, 0.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
-        // ---- Pass 2: Vertical blur, aux → main (scissored to viewfinder) ----
+        // ---- Pass 2: Vertical blur, aux → main ----
+        //? if >=1.21.11 {
+        /*// Write the full-frame blur straight back into the scene colour texture via a
+        // dedicated FBO. The HUD bezels drawn later mask everything outside the viewfinder
+        // frame, so no scissor is needed; a raw-GL write to the HUD-time framebuffer would
+        // be discarded by 1.21.11's deferred GuiRenderState.
+        if (writeBackFbo == -1 || writeBackFbTex != mainTex) {
+            if (writeBackFbo != -1) GL30.glDeleteFramebuffers(writeBackFbo);
+            writeBackFbo = GL30.glGenFramebuffers();
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                    GL11.GL_TEXTURE_2D, mainTex, 0);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+            writeBackFbTex = mainTex;
+        }
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
+        GL11.glViewport(0, 0, fbW, fbH);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
+        GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+        *///?} else {
         double scale = mc.getWindow().getScaleFactor();
         int scX = (int)(fx  * scale);
         int scY = fbH - (int)(fy2 * scale);
@@ -230,6 +278,7 @@ public final class EvfBlurRenderer {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
         GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+        //?}
 
         // ---- Restore GL state ----
         if (!scissorWasEnabled) GL11.glDisable(GL11.GL_SCISSOR_TEST);

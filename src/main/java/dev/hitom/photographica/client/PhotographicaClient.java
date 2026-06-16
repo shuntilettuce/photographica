@@ -28,8 +28,8 @@ import dev.hitom.photographica.network.WindFilmPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.ArmorRenderer;
 //? if >=1.21.11 {
-/*import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;*/
-//?} else {
+/*import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;
+*///?} else {
 import net.minecraft.client.render.block.entity.BlockEntityRendererFactories;
 //?}
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
@@ -44,8 +44,10 @@ import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.render.OverlayTexture;
+// ModelTransformationMode: removed/unused in 1.21.11; in the item package on 1.21.4;
+// in the model.json package before that. (The >=1.21.11 branch below is intentionally
+// empty — a bare "//" note inside it gets its marker stripped on activation.)
 //? if >=1.21.11 {
-/*// ModelTransformationMode removed in 1.21.11*/
 //?} else if >=1.21.4 {
 /*import net.minecraft.item.ModelTransformationMode;*/
 //?} else {
@@ -62,8 +64,8 @@ import org.lwjgl.glfw.GLFW;
 public class PhotographicaClient implements ClientModInitializer {
 	//? if >=1.21.11 {
 	/*private static final KeyBinding.Category PHOTOGRAPHICA_CATEGORY =
-			KeyBinding.Category.create(net.minecraft.util.Identifier.of("photographica", "photographica"));*/
-	//?}
+			KeyBinding.Category.create(net.minecraft.util.Identifier.of("photographica", "photographica"));
+	*///?}
 
 	@Override
 	public void onInitializeClient() {
@@ -100,8 +102,8 @@ public class PhotographicaClient implements ClientModInitializer {
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				PHOTOGRAPHICA_CATEGORY
-		));*/
-		//?} else {
+		));
+		*///?} else {
 		KeyBinding settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.camera_settings",
 				InputUtil.Type.KEYSYM,
@@ -116,8 +118,8 @@ public class PhotographicaClient implements ClientModInitializer {
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				PHOTOGRAPHICA_CATEGORY
-		));*/
-		//?} else {
+		));
+		*///?} else {
 		KeyBinding windKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.wind_film",
 				InputUtil.Type.KEYSYM,
@@ -132,8 +134,8 @@ public class PhotographicaClient implements ClientModInitializer {
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				PHOTOGRAPHICA_CATEGORY
-		));*/
-		//?} else {
+		));
+		*///?} else {
 		KeyBinding loadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.load_sd_card",
 				InputUtil.Type.KEYSYM,
@@ -148,8 +150,8 @@ public class PhotographicaClient implements ClientModInitializer {
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_UNKNOWN,
 				PHOTOGRAPHICA_CATEGORY
-		));*/
-		//?} else {
+		));
+		*///?} else {
 		KeyBinding unloadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.unload_sd_card",
 				InputUtil.Type.KEYSYM,
@@ -166,8 +168,8 @@ public class PhotographicaClient implements ClientModInitializer {
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_G,
 				PHOTOGRAPHICA_CATEGORY
-		));*/
-		//?} else {
+		));
+		*///?} else {
 		KeyBinding stopRecordingKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.stop_recording",
 				InputUtil.Type.KEYSYM,
@@ -182,8 +184,8 @@ public class PhotographicaClient implements ClientModInitializer {
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_V,
 				PHOTOGRAPHICA_CATEGORY
-		));*/
-		//?} else {
+		));
+		*///?} else {
 		KeyBinding orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.orientation",
 				InputUtil.Type.KEYSYM,
@@ -288,8 +290,8 @@ public class PhotographicaClient implements ClientModInitializer {
 		/*net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents.END_MAIN.register(ctx -> {
 			PhotoCapture.onWorldRenderEnd();
 			VideoRecorder.onWorldRenderEnd();
-		});*/
-		//?} else {
+		});
+		*///?} else {
 		WorldRenderEvents.LAST.register(ctx -> {
 			PhotoCapture.onWorldRenderEnd();
 			VideoRecorder.onWorldRenderEnd();
@@ -300,8 +302,8 @@ public class PhotographicaClient implements ClientModInitializer {
 		/*BlockEntityRendererRegistry.register(ModBlockEntities.PHOTO_FRAME,
 				PhotoFrameBlockEntityRenderer::new);
 		BlockEntityRendererRegistry.register(ModBlockEntities.PHOTO_STAND,
-				PhotoStandBlockEntityRenderer::new);*/
-		//?} else {
+				PhotoStandBlockEntityRenderer::new);
+		*///?} else {
 		BlockEntityRendererFactories.register(ModBlockEntities.PHOTO_FRAME,
 				PhotoFrameBlockEntityRenderer::new);
 		BlockEntityRendererFactories.register(ModBlockEntities.PHOTO_STAND,
@@ -349,8 +351,8 @@ public class PhotographicaClient implements ClientModInitializer {
 					itemState, stack, net.minecraft.item.ItemDisplayContext.FIXED, mc.player);
 			itemState.render(matrices, queue, light, OverlayTexture.DEFAULT_UV, 0);
 			matrices.pop();
-		}, ModItems.VIDEO_CAMERA, ModItems.CAMERA, ModItems.MIRRORLESS_CAMERA, ModItems.FILM_CAMERA);*/
-		//?}
+		}, ModItems.VIDEO_CAMERA, ModItems.CAMERA, ModItems.MIRRORLESS_CAMERA, ModItems.FILM_CAMERA);
+		*///?}
 
 		// Discard cached photo textures when disconnecting so stale GPU resources are freed.
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> PhotoTextureCache.clear());

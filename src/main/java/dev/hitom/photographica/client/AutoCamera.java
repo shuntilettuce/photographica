@@ -95,15 +95,12 @@ public final class AutoCamera {
 	private static CameraSettings applyAutoExposure(MinecraftClient mc, CameraSettings s) {
 		if (s.exposureMode() == CameraSettings.EXP_M) return s;
 
-		// Map world light level (0-15) to a target EV deviation.
-		// The Minecraft framebuffer is ALREADY visible at its natural brightness (the
-		// engine tone-maps night so you can see), so auto-exposure must only gently nudge
-		// it — the old light-10 / 0.7-per-step curve pushed a light-5 night up by +3.5 EV
-		// (≈11×), badly over-exposing dark scenes. Recalibrate the neutral point to light
-		// 12 with a gentler slope, and clamp brightening to +1 EV (darkening is unclamped so
-		// blown daylight highlights can still be reined in).
-		int light = mc.world.getLightLevel(mc.player.getBlockPos());
-		double targetEV = Math.max(-3.0, Math.min(1.0, -(light - 12) * 0.35));
+		// The captured framebuffer is ALREADY correctly exposed by the game's own lighting
+		// engine (it tone-maps so night is visible), so auto-exposure must NOT re-meter the
+		// scene light and re-scale brightness — doing so systematically over-/under-exposes
+		// the already-correct render. Instead, centre the meter needle (EV deviation = 0 →
+		// F5.6 · 1/60 · ISO 400 reference), exactly like photographica26. mult resolves to 1.
+		double targetEV = 0.0;
 
 		return switch (s.exposureMode()) {
 			case CameraSettings.EXP_AV -> {
@@ -219,8 +216,8 @@ public final class AutoCamera {
 		for (LivingEntity e : mc.world.getEntitiesByClass(LivingEntity.class,
 				mc.player.getBoundingBox().expand(50.0), ent -> ent != mc.player && ent.isAlive())) {
 			//? if >=1.21.11 {
-			/*Vec3d toEnt = e.getEntityPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);*/
-			//?} else {
+			/*Vec3d toEnt = e.getEntityPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);
+			*///?} else {
 			Vec3d toEnt = e.getPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);
 			//?}
 			double dist = toEnt.length();

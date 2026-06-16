@@ -88,8 +88,15 @@ public final class ViewfinderHud {
 		// Per-pixel CoC is computed in the shader using the captured depth texture.
 		if (isMirrorless && LensKind.hasLens(s.lensType())
 				&& s.aperture() < 8.0f && s.focusDistance() < CameraSettings.FOCUS_INFINITY) {
+			//? if >=1.21.11 {
+			/*// 1.21.11 discards raw-GL framebuffer writes done during HUD rendering, so
+			// schedule the blur here and let GameRendererMixin execute it right after
+			// renderWorld() (write-back straight into the scene colour texture).
+			EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture(), s.focalLengthMm());
+			*///?} else {
 			EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture(), s.focalLengthMm(),
 					EvfBlurRenderer.DOF_SCALE_STILL);
+			//?}
 		}
 
 		// Bezels (dim outside frame)
@@ -235,8 +242,8 @@ public final class ViewfinderHud {
 			int countColor = remSec <= 1 ? 0xFFFF4444 : 0xFFFFFFFF;
 			//? if >=1.21.11 {
 			/*ctx.getMatrices().pushMatrix();
-			ctx.getMatrices().scale(3.0f, 3.0f);*/
-			//?} else {
+			ctx.getMatrices().scale(3.0f, 3.0f);
+			*///?} else {
 			ctx.getMatrices().push();
 			ctx.getMatrices().scale(3.0f, 3.0f, 1.0f);
 			//?}
@@ -245,8 +252,8 @@ public final class ViewfinderHud {
 					(sh / 2 - tr.fontHeight * 3 / 2) / 3 - 20,
 					countColor);
 			//? if >=1.21.11 {
-			/*ctx.getMatrices().popMatrix();*/
-			//?} else {
+			/*ctx.getMatrices().popMatrix();
+			*///?} else {
 			ctx.getMatrices().pop();
 			//?}
 		}

@@ -76,8 +76,8 @@ public class GameRendererMixin {
 			}
 		}
 		camera.update(area, focused, thirdPerson, inverseView, tickDelta);
-	}*/
-	//?} else {
+	}
+	*///?} else {
 	@Redirect(method = "renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
 			at = @At(value = "INVOKE",
 					target = "Lnet/minecraft/client/render/Camera;update(Lnet/minecraft/world/BlockView;Lnet/minecraft/entity/Entity;ZZF)V"))
@@ -111,6 +111,16 @@ public class GameRendererMixin {
 		}
 	}
 
+	// Tripod recording anchors the render camera to the armor stand (thirdPerson=false to
+	// keep the framing at the stand's eye), but first-person view-bob is still applied from
+	// the *player's* walk cycle, so the locked-off tripod shot jitters when the player walks.
+	// Cancel bobView() entirely while tripod-recording for a steady camcorder shot.
+	@Inject(method = "bobView(Lnet/minecraft/client/util/math/MatrixStack;F)V", at = @At("HEAD"), cancellable = true)
+	private void photographica$suppressBobDuringTripod(net.minecraft.client.util.math.MatrixStack matrices,
+			float tickDelta, CallbackInfo ci) {
+		if (VideoRecorder.isTripodRecording()) ci.cancel();
+	}
+
 	// After updateCamera() completes, reset mc.cameraEntity back to the player.
 	// In 1.21.11 updateCamera() may internally call mc.setCameraEntity(), which
 	// would freeze player input while tripod-recording (camera entity != player).
@@ -125,16 +135,16 @@ public class GameRendererMixin {
 				mc.setCameraEntity(mc.player);
 			}
 		}
-	}*/
-	//?}
+	}
+	*///?}
 
 	//? if >=1.21.4 {
 	/*@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)F",
 			at = @At("RETURN"),
 			cancellable = true)
 	private void photographica$applyFocalLength(Camera camera, float tickDelta, boolean changingFov,
-	                                            CallbackInfoReturnable<Float> cir) {*/
-	//?} else {
+	                                            CallbackInfoReturnable<Float> cir) {
+	*///?} else {
 	@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D",
 			at = @At("RETURN"),
 			cancellable = true)
@@ -145,8 +155,8 @@ public class GameRendererMixin {
 		// player is holding or looking through.
 		if (VideoRecorder.isTripodRecording()) {
 			//? if >=1.21.4 {
-			/*cir.setReturnValue((float) VideoRecorder.TRIPOD_FOV);*/
-			//?} else {
+			/*cir.setReturnValue((float) VideoRecorder.TRIPOD_FOV);
+			*///?} else {
 			cir.setReturnValue((double) VideoRecorder.TRIPOD_FOV);
 			//?}
 			return;
@@ -156,8 +166,8 @@ public class GameRendererMixin {
 			int f = PhotoCapture.armorStandFocalLength;
 			double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
 			//? if >=1.21.4 {
-			/*cir.setReturnValue((float) vFovDegrees);*/
-			//?} else {
+			/*cir.setReturnValue((float) vFovDegrees);
+			*///?} else {
 			cir.setReturnValue(vFovDegrees);
 			//?}
 			return;
@@ -171,8 +181,8 @@ public class GameRendererMixin {
 		if (pendingFocal > 0) {
 			double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / pendingFocal));
 			//? if >=1.21.4 {
-			/*cir.setReturnValue((float) vFovDegrees);*/
-			//?} else {
+			/*cir.setReturnValue((float) vFovDegrees);
+			*///?} else {
 			cir.setReturnValue(vFovDegrees);
 			//?}
 			return;
@@ -187,8 +197,8 @@ public class GameRendererMixin {
 		if (!(vs.getItem() instanceof VideoCameraItem)) vs = player.getOffHandStack();
 		if (vs.getItem() instanceof VideoCameraItem) {
 			//? if >=1.21.4 {
-			/*cir.setReturnValue((float) VideoRecorder.videoFov);*/
-			//?} else {
+			/*cir.setReturnValue((float) VideoRecorder.videoFov);
+			*///?} else {
 			cir.setReturnValue((double) VideoRecorder.videoFov);
 			//?}
 			return;
@@ -214,8 +224,8 @@ public class GameRendererMixin {
 		double halfSensorMm = dev.hitom.photographica.client.hud.ViewfinderHud.portraitOrientation ? 18.0 : 12.0;
 		double vFovDegrees = Math.toDegrees(2.0 * Math.atan(halfSensorMm / f));
 		//? if >=1.21.4 {
-		/*cir.setReturnValue((float) vFovDegrees);*/
-		//?} else {
+		/*cir.setReturnValue((float) vFovDegrees);
+		*///?} else {
 		cir.setReturnValue(vFovDegrees);
 		//?}
 	}
@@ -259,8 +269,8 @@ public class GameRendererMixin {
 				if (mc.world != null) {
 					net.minecraft.entity.Entity stand = mc.world.getEntityById(standId);
 					//? if >=1.21.11 {
-					/*if (stand != null && mc.getCameraEntity() != stand) {*/
-					//?} else {
+					/*if (stand != null && mc.getCameraEntity() != stand) {
+					*///?} else {
 					if (stand != null && mc.cameraEntity != stand) {
 					//?}
 						mc.setCameraEntity(stand);
@@ -301,6 +311,10 @@ public class GameRendererMixin {
 		boolean wasArmorStand = PhotoCapture.armorStandCapturePending;
 		PhotoCapture.captureIfPending();
 		VideoRecorder.captureFrameIfRecording();
+		// Execute any EVF preview blur scheduled by the HUD last frame. Runs here (after
+		// renderWorld, before the GUI) because 1.21.11 discards raw-GL framebuffer writes
+		// done during HUD rendering. No-op on <1.21.11 (which blurs directly from the HUD).
+		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur();
 		// Restore renderHand for the vanilla renderHand() call that follows
 		if (wasAccumulating || wasArmorStand || photographica$videoHandSuppressed) {
 			//? if <1.21.11 {
