@@ -86,8 +86,7 @@ public final class ViewfinderHud {
 
 		// EVF real-time DoF blur (mirrorless only, before any overlays).
 		// Per-pixel CoC is computed in the shader using the captured depth texture.
-		if (isMirrorless && LensKind.hasLens(s.lensType())
-				&& s.aperture() < 8.0f && s.focusDistance() < CameraSettings.FOCUS_INFINITY) {
+		if (isMirrorless && LensKind.hasLens(s.lensType()) && s.aperture() < 8.0f) {
 			//? if >=1.21.11 {
 			/*// 1.21.11 discards raw-GL framebuffer writes done during HUD rendering, so
 			// schedule the blur here and let GameRendererMixin execute it right after
@@ -147,7 +146,7 @@ public final class ViewfinderHud {
 				s.iso(),
 				focalPart);
 		ctx.drawTextWithShadow(tr, exposure, fx + 6, fy2 - tr.fontHeight - 14, COLOR_TEXT);
-		if (LensKind.hasLens(s.lensType()) && s.focusDistance() < CameraSettings.FOCUS_INFINITY) {
+		if (LensKind.hasLens(s.lensType())) {
 			String fd = fmtFocusDist(s.focusDistance());
 			ctx.drawTextWithShadow(tr, fd, fx2 - tr.getWidth(fd) - 6, fy + 4 + tr.fontHeight * 2 + 4, reticleColor);
 		}
