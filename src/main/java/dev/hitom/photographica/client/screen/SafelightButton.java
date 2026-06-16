@@ -50,6 +50,20 @@ public class SafelightButton extends ButtonWidget {
             }
         }
         ctx.fill(x + 1, y + 1, x + w - 1, y + 2, GuiHelper.FRAME_HI);
+
+        // 1.21.11 batches opaque fills into a layer that draws OVER text emitted on the
+        // same DrawContext, so a plain ctx.drawText would be hidden behind the button
+        // body.  Vanilla ButtonWidget$Text routes its label through
+        // DrawContext.getHoverListener(...), a DrawnTextConsumer that composites in the
+        // dedicated top text layer.  Mirror that here so the label stays visible.
+        int textColor = switch (style) {
+            case PRIMARY -> 0xFFFFF5E8;
+            case GHOST   -> GuiHelper.CREAM_DIM;
+            default      -> GuiHelper.CREAM;
+        };
+        net.minecraft.text.Text label = getMessage().copy().styled(s -> s.withColor(textColor & 0xFFFFFF));
+        ctx.getHoverListener(this, DrawContext.HoverType.NONE)
+                .text(label, x + 2, x + w - 2, y, y + 20);
     }*/
     //?} else {
     @Override
@@ -89,12 +103,6 @@ public class SafelightButton extends ButtonWidget {
         };
 
         var tr = MinecraftClient.getInstance().textRenderer;
-        // MC 1.21.11's GuiRenderState layers opaque fills above same-layer text,
-        // hiding the label behind the button body. Push the text onto a fresh
-        // top root layer so it renders above the fills.
-        //? if >=1.21.11 {
-        /*ctx.createNewRootLayer();*/
-        //?}
         ctx.drawCenteredTextWithShadow(tr, getMessage(), x + w / 2, y + 6, textColor);
     }
     //?}
