@@ -96,6 +96,38 @@ public class GameRendererMixin {
 	}
 	//?}
 
+	//? if >=1.21.11 {
+	/*// In 1.21.11 the hand is rendered by renderHand() inside renderWorld() rather than
+	// the deferred vanilla call, so the old renderHand=false flag has no effect.
+	// Cancel the call outright during any capture or recording so the hand never
+	// appears in footage or photos.
+	@Inject(method = "renderHand(FZLorg/joml/Matrix4f;)V", at = @At("HEAD"), cancellable = true)
+	private void photographica$suppressHandWhileCapturing(float tickDelta, boolean blockOutline,
+			org.joml.Matrix4f matrix, CallbackInfo ci) {
+		if (VideoRecorder.isRecording()
+				|| PhotoCapture.isAccumulating()
+				|| PhotoCapture.armorStandCapturePending) {
+			ci.cancel();
+		}
+	}
+
+	// After updateCamera() completes, reset mc.cameraEntity back to the player.
+	// In 1.21.11 updateCamera() may internally call mc.setCameraEntity(), which
+	// would freeze player input while tripod-recording (camera entity != player).
+	// The render camera is already redirected to the armor stand via @Redirect above;
+	// mc.cameraEntity must remain the player so WASD and interaction stay functional.
+	@Inject(method = "updateCamera(Lnet/minecraft/client/render/RenderTickCounter;)V",
+			at = @At("RETURN"))
+	private void photographica$restorePlayerCameraEntity(RenderTickCounter counter, CallbackInfo ci) {
+		if (!PhotoCapture.armorStandCapturePending) {
+			MinecraftClient mc = MinecraftClient.getInstance();
+			if (mc.player != null && mc.getCameraEntity() != mc.player) {
+				mc.setCameraEntity(mc.player);
+			}
+		}
+	}*/
+	//?}
+
 	//? if >=1.21.4 {
 	/*@Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)F",
 			at = @At("RETURN"),
