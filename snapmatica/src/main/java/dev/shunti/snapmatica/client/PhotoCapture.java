@@ -253,7 +253,7 @@ public final class PhotoCapture {
         int vpH = viewport[3];
         if (vpW <= 0 || vpH <= 0) return;
 
-        // GPU-side depth copy for EVF DoF blur.
+        // GPU-side depth copy for the EVF DoF blur (sampled by the shader every frame).
         int rd = mc.options.getViewDistance().getValue();
         // getBasicProjectionMatrix() reflects any far-plane extension a LOD mod
         // (Voxy, DH) applies; far/near are fov-independent so the 70° arg is irrelevant.
@@ -269,18 +269,57 @@ public final class PhotoCapture {
             }
         }
 
-        int cx = vpW / 2;
-        int cy = vpH / 2;
+        // AF subject distance — THROTTLED. The world raycast is the PRIMARY focus
+        // distance (good to 1000 m, covers all vanilla render distances). The GPU
+        // centre-depth reconstruction saturates at currentDepthFar (≈ rd*64), pinning
+        // every distant reading to ~940 m, so it (and the DH LOD raycast) is consulted
+        // ONLY when the raycast misses (sky / beyond loaded range). Without this the
+        // focus was stuck near the far plane — the "950 m cap" fixed in 172eca8.
+        long nowMs = System.currentTimeMillis();
+        if (nowMs - lastAfQueryMs >= AF_QUERY_INTERVAL_MS) {
+            lastAfQueryMs = nowMs;
+            final double maxDist = 1000.0;
+            net.minecraft.util.math.Vec3d eye = mc.player.getCameraPosVec(1.0f);
+            net.minecraft.util.math.Vec3d look = mc.player.getRotationVec(1.0f);
+            net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
+            net.minecraft.util.hit.BlockHitResult blockHit = mc.world.raycast(
+                    new net.minecraft.world.RaycastContext(eye, end,
+                            net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
+                            net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+            double bestDist = (blockHit != null
+                    && blockHit.getType() != net.minecraft.util.hit.HitResult.Type.MISS)
+                    ? eye.distanceTo(blockHit.getPos()) : maxDist;
+            net.minecraft.util.math.Box searchBox = mc.player.getBoundingBox()
+                    .stretch(look.multiply(maxDist)).expand(1.0);
+            net.minecraft.util.hit.EntityHitResult entityHit =
+                    net.minecraft.entity.projectile.ProjectileUtil.raycast(mc.player, eye, end,
+                            searchBox, e -> !e.isSpectator() && e.isAlive(), bestDist * bestDist);
+            if (entityHit != null) {
+                double eDist = eye.distanceTo(entityHit.getPos());
+                if (eDist < bestDist) bestDist = eDist;
+            }
+            lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : SnapmaticaClient.FOCUS_INFINITY;
 
-        FloatBuffer depthBuf = BufferUtils.createFloatBuffer(1);
-        GL11.glReadPixels(cx, cy, 1, 1, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, depthBuf);
-        float d = depthBuf.get(0);
-        float ndc = 2.0f * d - 1.0f;
-
-        // Reconstruct linear depth in world units (blocks ≈ metres)
-        final float near = 0.05f;
-        final float far  = EvfBlurRenderer.currentDepthFar;
-        lastSceneDepthBlocks = 2.0f * near * far / (far + near - ndc * (far - near));
+            if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY) {
+                // Raycast missed: reconstruct the GPU centre depth, rejecting saturated
+                // far-plane readings, then fall back to the DH LOD raycast.
+                int cx = vpW / 2;
+                int cy = vpH / 2;
+                FloatBuffer depthBuf = BufferUtils.createFloatBuffer(1);
+                GL11.glReadPixels(cx, cy, 1, 1, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, depthBuf);
+                float ndc = 2.0f * depthBuf.get(0) - 1.0f;
+                final float near     = 0.05f;
+                final float farPlane = EvfBlurRenderer.currentDepthFar;
+                float gpuDepth = 2.0f * near * farPlane / (farPlane + near - ndc * (farPlane - near));
+                if (gpuDepth > 0.0f && gpuDepth < farPlane * 0.95f) {
+                    lastSceneDepthBlocks = gpuDepth;
+                }
+                if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY) {
+                    float dhDist = DhIntegration.queryLookDistance(mc);
+                    if (dhDist > 0f) lastSceneDepthBlocks = dhDist;
+                }
+            }
+        }
         //?}
     }
 
