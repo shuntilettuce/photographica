@@ -473,6 +473,7 @@ public final class PhotoCapture {
 			processed.writeTo(outFile);
 			Photographica.LOGGER.info("Photo saved: {} ({}x{})",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
+			ClipboardUtil.copyImageAsync(outFile);
 		} catch (IOException e) {
 			Photographica.LOGGER.error("Photo capture failed", e);
 		} finally {
@@ -606,6 +607,7 @@ public final class PhotoCapture {
 			processed.writeTo(outFile);
 			Photographica.LOGGER.info("Long-exposure photo saved: {} ({}x{}, {} frames accumulated)",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight(), n);
+			ClipboardUtil.copyImageAsync(outFile);
 		} catch (IOException e) {
 			Photographica.LOGGER.error("Long-exposure photo capture failed", e);
 		} finally {

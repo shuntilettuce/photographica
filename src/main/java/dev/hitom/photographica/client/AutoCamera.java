@@ -96,9 +96,14 @@ public final class AutoCamera {
 		if (s.exposureMode() == CameraSettings.EXP_M) return s;
 
 		// Map world light level (0-15) to a target EV deviation.
-		// Light 10 → 0 EV (F5.6, 1/60, ISO400 is "correct"); each stop adds/subtracts ~0.7 EV.
+		// The Minecraft framebuffer is ALREADY visible at its natural brightness (the
+		// engine tone-maps night so you can see), so auto-exposure must only gently nudge
+		// it — the old light-10 / 0.7-per-step curve pushed a light-5 night up by +3.5 EV
+		// (≈11×), badly over-exposing dark scenes. Recalibrate the neutral point to light
+		// 12 with a gentler slope, and clamp brightening to +1 EV (darkening is unclamped so
+		// blown daylight highlights can still be reined in).
 		int light = mc.world.getLightLevel(mc.player.getBlockPos());
-		double targetEV = -(light - 10) * 0.7;
+		double targetEV = Math.max(-3.0, Math.min(1.0, -(light - 12) * 0.35));
 
 		return switch (s.exposureMode()) {
 			case CameraSettings.EXP_AV -> {
