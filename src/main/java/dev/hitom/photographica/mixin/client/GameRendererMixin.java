@@ -61,7 +61,7 @@ public class GameRendererMixin {
 	 * clean first-person-from-the-stand view regardless of the player's F5 state.
 	 */
 	//? if >=1.21.11 {
-	/*@Redirect(method = "renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
+	/*@Redirect(method = "updateCamera(Lnet/minecraft/client/render/RenderTickCounter;)V",
 			at = @At(value = "INVOKE",
 					target = "Lnet/minecraft/client/render/Camera;update(Lnet/minecraft/world/World;Lnet/minecraft/entity/Entity;ZZF)V"))
 	private void photographica$focusCameraOnTripod(Camera camera, net.minecraft.world.World area,
