@@ -89,6 +89,12 @@ public class SafelightButton extends ButtonWidget {
         };
 
         var tr = MinecraftClient.getInstance().textRenderer;
+        // MC 1.21.11's GuiRenderState layers opaque fills above same-layer text,
+        // hiding the label behind the button body. Push the text onto a fresh
+        // top root layer so it renders above the fills.
+        //? if >=1.21.11 {
+        /*ctx.createNewRootLayer();*/
+        //?}
         ctx.drawCenteredTextWithShadow(tr, getMessage(), x + w / 2, y + 6, textColor);
     }
     //?}
