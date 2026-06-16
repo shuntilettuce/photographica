@@ -223,7 +223,11 @@ public final class PhotoCapture {
             if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY && vpW > 0 && vpH > 0) {
                 float farPlane = EvfBlurRenderer.currentDepthFar;
                 float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
-                if (gpuDepth > 0.0f && gpuDepth < farPlane * 0.95f) {
+                // readCenterLinearDepthBlocks() already returns FOCUS_INFINITY for sky
+                // (rawD >= 0.999999), so compare against FOCUS_INFINITY rather than
+                // farPlane*0.95. The 0.95 cutoff rejected valid terrain near the far plane
+                // (e.g. 974m with farPlane=1024 linearises to ~975m > 972.8 → wrongly INF).
+                if (gpuDepth > 0.0f && gpuDepth < SnapmaticaClient.FOCUS_INFINITY) {
                     lastSceneDepthBlocks = gpuDepth;
                 }
                 if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY) {
@@ -307,12 +311,17 @@ public final class PhotoCapture {
                 int cy = vpH / 2;
                 FloatBuffer depthBuf = BufferUtils.createFloatBuffer(1);
                 GL11.glReadPixels(cx, cy, 1, 1, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, depthBuf);
-                float ndc = 2.0f * depthBuf.get(0) - 1.0f;
-                final float near     = 0.05f;
-                final float farPlane = EvfBlurRenderer.currentDepthFar;
-                float gpuDepth = 2.0f * near * farPlane / (farPlane + near - ndc * (farPlane - near));
-                if (gpuDepth > 0.0f && gpuDepth < farPlane * 0.95f) {
-                    lastSceneDepthBlocks = gpuDepth;
+                float rawD = depthBuf.get(0);
+                // Mirror the sky threshold used by readCenterLinearDepthBlocks (>=1.21.11):
+                // reject only depth values at/beyond the far plane (rawD >= 0.999999).
+                // The old farPlane*0.95 check on the linearised result rejected valid terrain
+                // near the far plane (e.g. 974m with farPlane=1024 gives ~975m > 972.8).
+                if (rawD >= 0.001f && rawD < 0.999999f) {
+                    float ndc = 2.0f * rawD - 1.0f;
+                    final float near     = 0.05f;
+                    final float farPlane = EvfBlurRenderer.currentDepthFar;
+                    float gpuDepth = 2.0f * near * farPlane / (farPlane + near - ndc * (farPlane - near));
+                    if (gpuDepth > 0.0f) lastSceneDepthBlocks = gpuDepth;
                 }
                 if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY) {
                     float dhDist = DhIntegration.queryLookDistance(mc);
