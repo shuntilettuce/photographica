@@ -76,6 +76,7 @@ public final class EvfBlurRenderer {
     // dedicated FBO. Harmless/no-op on <1.21.11, which keeps drawing directly from the HUD.
     private static int writeBackFbo   = -1;
     private static int writeBackFbTex = 0;
+    private static boolean writeBackWarned = false;
     private static boolean blurScheduled = false;
     private static int   scheduledFx, scheduledFy, scheduledFx2, scheduledFy2;
     private static float scheduledFocusDist, scheduledAperture, scheduledFocalLen;
@@ -254,15 +255,34 @@ public final class EvfBlurRenderer {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
             GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
                     GL11.GL_TEXTURE_2D, mainTex, 0);
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
             writeBackFbTex = mainTex;
+        } else {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
         }
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
-        GL11.glViewport(0, 0, fbW, fbH);
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
-        GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
-        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+        // Only write the blur back into the scene texture if this FBO is actually
+        // renderable. With Sodium/Iris the main colour attachment can be a format or
+        // target this raw-GL FBO cannot draw into; drawing anyway produces a fully
+        // BLACK viewfinder. When incomplete, skip the write-back so the un-blurred
+        // (but visible) scene is shown instead — captured photos still get CPU DoF
+        // independently, so no depth-of-field is lost on the saved image.
+        if (GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER) == GL30.GL_FRAMEBUFFER_COMPLETE) {
+            GL11.glViewport(0, 0, fbW, fbH);
+            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
+            GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
+            GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+        } else {
+            if (!writeBackWarned) {
+                writeBackWarned = true;
+                dev.hitom.photographica.Photographica.LOGGER.warn(
+                        "[EvfBlurRenderer] scene framebuffer not renderable for live EVF blur "
+                        + "(skipping preview blur; captured photos keep full DoF).");
+            }
+            // Drop the cached attachment so we retry next frame if the texture changes.
+            GL30.glDeleteFramebuffers(writeBackFbo);
+            writeBackFbo   = -1;
+            writeBackFbTex = 0;
+        }
         *///?} else {
         double scale = mc.getWindow().getScaleFactor();
         int scX = (int)(fx  * scale);
