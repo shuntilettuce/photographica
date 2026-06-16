@@ -23,17 +23,22 @@ import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 import java.util.function.Function;
 //? if >=1.21.11 {
-import net.minecraft.registry.RegistryKey;
+/*import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
-//?}
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.EquippableComponent;
+import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.item.equipment.EquipmentAsset;
+import net.minecraft.item.equipment.EquipmentAssetKeys;
+*///?}
 
 public final class ModItems {
 	private ModItems() {}
 
-	public static final Item VIDEO_CAMERA        = reg("video_camera",         s -> new VideoCameraItem(s));
-	public static final Item CAMERA              = reg("camera",               s -> new CameraItem(s));
-	public static final Item FILM_CAMERA         = reg("film_camera",          s -> new FilmCameraItem(s));
-	public static final Item MIRRORLESS_CAMERA   = reg("mirrorless_camera",    s -> new MirrorlessCameraItem(s));
+	public static final Item VIDEO_CAMERA        = reg("video_camera",         s -> new VideoCameraItem(chestEquippable(s)));
+	public static final Item CAMERA              = reg("camera",               s -> new CameraItem(chestEquippable(s)));
+	public static final Item FILM_CAMERA         = reg("film_camera",          s -> new FilmCameraItem(chestEquippable(s)));
+	public static final Item MIRRORLESS_CAMERA   = reg("mirrorless_camera",    s -> new MirrorlessCameraItem(chestEquippable(s)));
 	public static final Item LENS_PRIME_50       = reg("lens_prime_50mm",      s -> new LensItem(s, LensKind.PRIME_50MM));
 	public static final Item LENS_ZOOM_24_70     = reg("lens_zoom_24_70mm",    s -> new LensItem(s, LensKind.ZOOM_24_70));
 	public static final Item LENS_PRIME_35       = reg("lens_prime_35mm",      s -> new LensItem(s, LensKind.PRIME_35MM));
@@ -54,6 +59,26 @@ public final class ModItems {
 	public static final Item DEVELOPED_FILM      = reg("developed_film",       s -> new DevelopedFilmItem(s.maxCount(1)));
 	public static final Item SD_CARD             = reg("sd_card",              s -> new SdCardItem(s.maxCount(1)));
 	public static final Item PHOTO_PAPER         = reg("photo_paper",          s -> new PhotoPaperItem(s));
+
+	// Cameras occupy the chest slot. equipOnInteract + swappable lets the camera be
+	// right-clicked onto armor stands (tripods). The EquipmentAsset key need not
+	// resolve to a JSON asset — rendering is handled separately.
+	//? if >=1.21.11 {
+	/*private static Item.Settings chestEquippable(Item.Settings s) {
+		RegistryKey<EquipmentAsset> asset = RegistryKey.of(EquipmentAssetKeys.REGISTRY_KEY,
+				Identifier.of(Photographica.MOD_ID, "camera"));
+		return s.component(DataComponentTypes.EQUIPPABLE,
+				EquippableComponent.builder(EquipmentSlot.CHEST)
+						.model(asset)
+						.swappable(true)
+						.equipOnInteract(true)
+						.build());
+	}
+	*///?} else {
+	private static Item.Settings chestEquippable(Item.Settings s) {
+		return s;
+	}
+	//?}
 
 	//? if >=1.21.11 {
 	/*private static <T extends Item> T reg(String name, Function<Item.Settings, T> factory) {
