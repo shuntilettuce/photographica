@@ -47,8 +47,8 @@ public class GameRendererMixin {
         // Vertical sensor half-height: 12mm (24mm tall) landscape, 18mm (36mm tall) portrait
         double halfSensorMm = SnapmaticaClient.portraitOrientation ? 18.0 : 12.0;
         cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(halfSensorMm / f)));
-    }*/
-    //?} else {
+    }
+    *///?} else {
     @Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D",
             at = @At("RETURN"),
             cancellable = true)
@@ -107,8 +107,8 @@ public class GameRendererMixin {
         if (VideoRecorder.isRecording()) {
             ci.cancel();
         }
-    }*/
-    //?}
+    }
+    *///?}
 
     /**
      * Capture the screenshot after renderWorld() returns (after Iris shader composite if present).

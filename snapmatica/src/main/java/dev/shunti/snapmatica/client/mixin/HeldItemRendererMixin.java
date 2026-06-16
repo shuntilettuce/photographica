@@ -11,8 +11,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 //? if >=1.21.11 {
 /*import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
-import net.minecraft.client.util.math.MatrixStack;*/
-//?}
+import net.minecraft.client.util.math.MatrixStack;
+*///?}
 
 @Mixin(HeldItemRenderer.class)
 public class HeldItemRendererMixin {
@@ -28,6 +28,6 @@ public class HeldItemRendererMixin {
                 (SnapmaticaClient.viewfinderSneakEnabled && mc.player != null && mc.player.isSneaking())) {
             ci.cancel();
         }
-    }*/
-    //?}
+    }
+    *///?}
 }

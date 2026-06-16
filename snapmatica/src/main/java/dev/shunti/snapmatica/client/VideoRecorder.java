@@ -254,8 +254,8 @@ public final class VideoRecorder {
                     System.err.println("[VideoRecorder] Frame write failed: " + outFile);
                 } finally { frame.close(); }
             });
-        });*/
-        //?} else {
+        });
+        *///?} else {
         // takeScreenshot does the glReadPixels on the render thread — unavoidable.
         // Offload crop+downsample+write to the I/O thread so the render thread frees ASAP.
         NativeImage raw;
@@ -538,8 +538,8 @@ public final class VideoRecorder {
         int a = (abgr >>> 24) & 0xFF, b = (abgr >>> 16) & 0xFF,
             g = (abgr >>>  8) & 0xFF, r =  abgr         & 0xFF;
         img.setColorArgb(x, y, (a << 24) | (r << 16) | (g << 8) | b);
-    }*/
-    //?} else {
+    }
+    *///?} else {
     private static int getPixel(NativeImage img, int x, int y) { return img.getColor(x, y); }
     private static void setPixel(NativeImage img, int x, int y, int abgr) { img.setColor(x, y, abgr); }
     //?}

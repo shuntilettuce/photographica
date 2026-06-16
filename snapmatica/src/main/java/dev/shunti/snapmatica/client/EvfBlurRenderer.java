@@ -14,8 +14,8 @@ import org.lwjgl.opengl.GL30;
 //? if >=1.21.11 {
 /*import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL33;
-import org.lwjgl.opengl.GL43;*/
-//?}
+import org.lwjgl.opengl.GL43;
+*///?}
 
 import java.io.InputStream;
 import java.nio.FloatBuffer;
@@ -46,8 +46,8 @@ public final class EvfBlurRenderer {
 
     //? if >=1.21.11 {
     /*private static int writeBackFbo   = -1;
-    private static int centerReadFbo  = -1;*/
-    //?}
+    private static int centerReadFbo  = -1;
+    *///?}
 
     private static int locInSampler  = -1;
     private static int locDepthSamp  = -1;
@@ -68,6 +68,27 @@ public final class EvfBlurRenderer {
     private static final float NEAR = 0.05f;
     public static float currentDepthFar = 512.0f;
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
+
+    /**
+     * Derives the TRUE far plane from the live world projection matrix and stores it in
+     * {@link #currentDepthFar}. The old heuristic (renderDistance * 64) ignored the fact
+     * that LOD mods (Voxy, DH) push the projection far plane out to many thousands of
+     * blocks to draw distant terrain; linearising the depth buffer with the small vanilla
+     * far made every distant subject read far too close — a 300 m mountain reported 5000 m.
+     * Reading the real far plane that actually generated the depth buffer fixes both the
+     * AF distance readout and the EVF blur depth mapping. Falls back to {@code fallbackFar}
+     * when the matrix is missing or not a finite perspective (e.g. an infinite-far proj).
+     */
+    public static void updateDepthFar(org.joml.Matrix4f projection, float fallbackFar) {
+        float far = fallbackFar;
+        if (projection != null) {
+            try {
+                float pf = projection.perspectiveFar();
+                if (Float.isFinite(pf) && pf > 16.0f && pf < 1_000_000.0f) far = pf;
+            } catch (Throwable ignored) {}
+        }
+        currentDepthFar = far;
+    }
 
     /** GPU-side depth buffer copy. Call during WorldRenderEvents.LAST. */
     public static void captureDepth(int fbW, int fbH) {
@@ -111,8 +132,8 @@ public final class EvfBlurRenderer {
         GL43.glCopyImageSubData(
                 srcDepthId_, GL11.GL_TEXTURE_2D, 0, 0, 0, 0,
                 depthTex,    GL11.GL_TEXTURE_2D, 0, 0, 0, 0,
-                fw_, fh_, 1);*/
-        //?} else {
+                fw_, fh_, 1);
+        *///?} else {
         if (fbW <= 0 || fbH <= 0) return;
 
         int prevActiveTU = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
@@ -164,8 +185,8 @@ public final class EvfBlurRenderer {
         //? if >=1.21.11 {
         /*com.mojang.blaze3d.textures.GpuTexture gpuTex = mainFb.getColorAttachment();
         if (!(gpuTex instanceof net.minecraft.client.texture.GlTexture glTex)) return;
-        int mainTex = glTex.getGlId();*/
-        //?} else {
+        int mainTex = glTex.getGlId();
+        *///?} else {
         int mainTex = mainFb.getColorAttachment();
         //?}
         if (mainTex == 0) return;
@@ -188,14 +209,14 @@ public final class EvfBlurRenderer {
         // that persist after MC's draws. Our shader would sample through those instead of
         // the texture's own parameters, reading garbage. Unbind so our glTexParameteri wins.
         int prevSampler0 = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
-        GL33.glBindSampler(0, 0);*/
-        //?}
+        GL33.glBindSampler(0, 0);
+        *///?}
         GL13.glActiveTexture(GL13.GL_TEXTURE1);
         int prevTex1 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         //? if >=1.21.11 {
         /*int prevSampler1 = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
-        GL33.glBindSampler(1, 0);*/
-        //?}
+        GL33.glBindSampler(1, 0);
+        *///?}
         int[] prevViewport   = new int[4];
         int[] prevScissorBox = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT,    prevViewport);
@@ -246,8 +267,8 @@ public final class EvfBlurRenderer {
         /*if (writeBackFbo == -1) writeBackFbo = GL30.glGenFramebuffers();
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
         GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
-                GL11.GL_TEXTURE_2D, mainTex, 0);*/
-        //?} else {
+                GL11.GL_TEXTURE_2D, mainTex, 0);
+        *///?} else {
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
         //?}
         GL11.glViewport(0, 0, fbW, fbH);
@@ -260,8 +281,8 @@ public final class EvfBlurRenderer {
 
         //? if >=1.21.11 {
         /*GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
-                GL11.GL_TEXTURE_2D, 0, 0);*/
-        //?}
+                GL11.GL_TEXTURE_2D, 0, 0);
+        *///?}
 
         // Restore GL state
         if (!scissorWasEnabled) GL11.glDisable(GL11.GL_SCISSOR_TEST);
@@ -272,13 +293,13 @@ public final class EvfBlurRenderer {
         GL13.glActiveTexture(GL13.GL_TEXTURE1);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex1);
         //? if >=1.21.11 {
-        /*GL33.glBindSampler(1, prevSampler1);*/
-        //?}
+        /*GL33.glBindSampler(1, prevSampler1);
+        *///?}
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex0);
         //? if >=1.21.11 {
-        /*GL33.glBindSampler(0, prevSampler0);*/
-        //?}
+        /*GL33.glBindSampler(0, prevSampler0);
+        *///?}
         GL13.glActiveTexture(prevActiveTU);
         GL30.glBindVertexArray(prevVao);
         GL20.glUseProgram(prevProgram);
@@ -293,16 +314,26 @@ public final class EvfBlurRenderer {
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, centerReadFbo);
         GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
                 GL11.GL_TEXTURE_2D, depthTex, 0);
-        FloatBuffer buf = BufferUtils.createFloatBuffer(1);
-        GL11.glReadPixels(depthTexW / 2, depthTexH / 2, 1, 1,
-                GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
-        float rawD = buf.get(0);
+        // Read a small centre patch and keep the NEAREST real (non-sky) sample. A single
+        // centre pixel can slip through a gap between distant LOD quads and read the sky
+        // behind them, inflating the focus distance; the nearest-of-patch locks onto the
+        // subject the reticle is actually over.
+        final int N = 3;
+        int x0 = Math.max(0, depthTexW / 2 - N / 2);
+        int y0 = Math.max(0, depthTexH / 2 - N / 2);
+        FloatBuffer buf = BufferUtils.createFloatBuffer(N * N);
+        GL11.glReadPixels(x0, y0, N, N, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevReadFbo);
+        float rawD = 1.0f;
+        for (int i = 0; i < N * N; i++) {
+            float d = buf.get(i);
+            if (d > 0.001f && d < rawD) rawD = d;
+        }
         if (rawD >= 0.999999f) return SnapmaticaClient.FOCUS_INFINITY;  // sky / beyond far plane
         if (rawD < 0.001f) return -1.0f;
         return NEAR * currentDepthFar / (currentDepthFar - rawD * (currentDepthFar - NEAR));
-    }*/
-    //?}
+    }
+    *///?}
 
     /**
      * Reads the captured depth texture back to the CPU as linearised depth in blocks.

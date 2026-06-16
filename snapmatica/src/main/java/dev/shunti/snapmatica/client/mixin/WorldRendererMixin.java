@@ -30,8 +30,8 @@ public class WorldRendererMixin {
         if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) {
             ci.cancel();
         }
-    }*/
-    //?} else if >=1.21.4 {
+    }
+    *///?} else if >=1.21.4 {
     /*@Inject(
             method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;Lnet/minecraft/entity/Entity;DDDLnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;I)V",
             at = @At("HEAD"),

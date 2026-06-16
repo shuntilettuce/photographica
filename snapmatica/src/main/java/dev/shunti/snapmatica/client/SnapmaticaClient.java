@@ -8,8 +8,8 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 //? if >=1.21.11 {
 /*import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.util.Identifier;*/
-//?} else {
+import net.minecraft.util.Identifier;
+*///?} else {
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 //?}
 import net.minecraft.client.MinecraftClient;
@@ -22,8 +22,8 @@ public class SnapmaticaClient implements ClientModInitializer {
 
     //? if >=1.21.11 {
     /*private static final KeyBinding.Category SNAPMATICA_CATEGORY =
-            KeyBinding.Category.create(Identifier.of("snapmatica", "snapmatica"));*/
-    //?}
+            KeyBinding.Category.create(Identifier.of("snapmatica", "snapmatica"));
+    *///?}
 
     // ── Key Bindings ─────────────────────────────────────────────────────────────
     private static KeyBinding shootKey;
@@ -79,8 +79,8 @@ public class SnapmaticaClient implements ClientModInitializer {
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_ENTER,
                 SNAPMATICA_CATEGORY
-        ));*/
-        //?} else {
+        ));
+        *///?} else {
         shootKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.shoot",
                 InputUtil.Type.KEYSYM,
@@ -95,8 +95,8 @@ public class SnapmaticaClient implements ClientModInitializer {
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_UNKNOWN,
                 SNAPMATICA_CATEGORY
-        ));*/
-        //?} else {
+        ));
+        *///?} else {
         settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.settings",
                 InputUtil.Type.KEYSYM,
@@ -111,8 +111,8 @@ public class SnapmaticaClient implements ClientModInitializer {
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_COMMA,
                 SNAPMATICA_CATEGORY
-        ));*/
-        //?} else {
+        ));
+        *///?} else {
         viewfinderSneakKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.viewfinder_sneak",
                 InputUtil.Type.KEYSYM,
@@ -127,8 +127,8 @@ public class SnapmaticaClient implements ClientModInitializer {
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_V,
                 SNAPMATICA_CATEGORY
-        ));*/
-        //?} else {
+        ));
+        *///?} else {
         orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.orientation",
                 InputUtil.Type.KEYSYM,
@@ -143,8 +143,8 @@ public class SnapmaticaClient implements ClientModInitializer {
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_R,
                 SNAPMATICA_CATEGORY
-        ));*/
-        //?} else {
+        ));
+        *///?} else {
         recordKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.record",
                 InputUtil.Type.KEYSYM,
@@ -199,8 +199,8 @@ public class SnapmaticaClient implements ClientModInitializer {
         /*WorldRenderEvents.END_MAIN.register(ctx -> {
             PhotoCapture.onWorldRenderEnd();
             VideoRecorder.onWorldRenderEnd();
-        });*/
-        //?} else {
+        });
+        *///?} else {
         WorldRenderEvents.LAST.register(ctx -> {
             PhotoCapture.onWorldRenderEnd();
             VideoRecorder.onWorldRenderEnd();

@@ -96,8 +96,8 @@ public final class PhotoCapture {
         pendingDepthFbH = 0;
 
         //? if >=1.21.11 {
-        /*ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), raw -> processScreenshot(mc, raw, capturedDepth, capturedFbW, capturedFbH));*/
-        //?} else {
+        /*ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), raw -> processScreenshot(mc, raw, capturedDepth, capturedFbW, capturedFbH));
+        *///?} else {
         NativeImage raw;
         try {
             raw = ScreenshotRecorder.takeScreenshot(mc.getFramebuffer());
@@ -182,7 +182,10 @@ public final class PhotoCapture {
         int vpH = viewport[3];
         if (vpW > 0 && vpH > 0) {
             int rd = mc.options.getViewDistance().getValue();
-            EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
+            // getBasicProjectionMatrix() reflects any far-plane extension a LOD mod
+            // (Voxy, DH) applies; far/near are fov-independent so the 70° arg is irrelevant.
+            EvfBlurRenderer.updateDepthFar(mc.gameRenderer.getBasicProjectionMatrix(70.0f),
+                    Math.max(rd * 64f, 256f));
             EvfBlurRenderer.captureDepth(vpW, vpH);
         }
 
@@ -240,8 +243,8 @@ public final class PhotoCapture {
                 pendingDepthFbW    = EvfBlurRenderer.depthTexW;
                 pendingDepthFbH    = EvfBlurRenderer.depthTexH;
             }
-        }*/
-        //?} else {
+        }
+        *///?} else {
         // Read from the currently bound framebuffer without switching.
         GL11.glGetError(); // clear any pending GL error
         int[] viewport = new int[4];
@@ -252,7 +255,10 @@ public final class PhotoCapture {
 
         // GPU-side depth copy for EVF DoF blur.
         int rd = mc.options.getViewDistance().getValue();
-        EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
+        // getBasicProjectionMatrix() reflects any far-plane extension a LOD mod
+        // (Voxy, DH) applies; far/near are fov-independent so the 70° arg is irrelevant.
+        EvfBlurRenderer.updateDepthFar(mc.gameRenderer.getBasicProjectionMatrix(70.0f),
+                Math.max(rd * 64f, 256f));
         EvfBlurRenderer.captureDepth(vpW, vpH);
         if (capturePending) {
             float[] depth = EvfBlurRenderer.readLinearDepthCpu();
@@ -475,8 +481,8 @@ public final class PhotoCapture {
         int a = (abgr >>> 24) & 0xFF; int b = (abgr >>> 16) & 0xFF;
         int g = (abgr >>>  8) & 0xFF; int r =  abgr         & 0xFF;
         img.setColorArgb(x, y, (a << 24) | (r << 16) | (g << 8) | b);
-    }*/
-    //?} else {
+    }
+    *///?} else {
     private static int getPixelAbgr(NativeImage img, int x, int y) { return img.getColor(x, y); }
     private static void setPixelAbgr(NativeImage img, int x, int y, int abgr) { img.setColor(x, y, abgr); }
     //?}
