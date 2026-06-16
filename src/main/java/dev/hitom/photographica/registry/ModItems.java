@@ -21,8 +21,8 @@ import net.minecraft.item.ItemGroups;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
-//? if >=1.21.11 {
 import java.util.function.Function;
+//? if >=1.21.11 {
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 //?}
@@ -56,15 +56,15 @@ public final class ModItems {
 	public static final Item PHOTO_PAPER         = reg("photo_paper",          s -> new PhotoPaperItem(s));
 
 	//? if >=1.21.11 {
-	private static <T extends Item> T reg(String name, Function<Item.Settings, T> factory) {
+	/*private static <T extends Item> T reg(String name, Function<Item.Settings, T> factory) {
 		RegistryKey<Item> key = RegistryKey.of(RegistryKeys.ITEM, Identifier.of(Photographica.MOD_ID, name));
 		return Registry.register(Registries.ITEM, key, factory.apply(new Item.Settings().registryKey(key)));
 	}
-	/*?} else {*/
-	/*private static <T extends Item> T reg(String name, Function<Item.Settings, T> factory) {
+	*///?} else {
+	private static <T extends Item> T reg(String name, Function<Item.Settings, T> factory) {
 		return Registry.register(Registries.ITEM, Identifier.of(Photographica.MOD_ID, name), factory.apply(new Item.Settings()));
 	}
-	*///?}
+	//?}
 
 	public static void register() {
 		ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> {

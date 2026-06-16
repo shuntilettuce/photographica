@@ -394,38 +394,17 @@ public final class PhotoCapture {
 			linearDepth = preRead != null ? preRead : readLinearDepth(fb, fbW, fbH);
 		}
 
+		// Final references for use in the async screenshot callback (1.21.11+).
+		final float[] fLinearDepth = linearDepth;
+		final int fFbW = fbW;
+		final int fFbH = fbH;
 		//? if >=1.21.11 {
-		/*java.util.concurrent.atomic.AtomicReference<NativeImage> rawRef = new java.util.concurrent.atomic.AtomicReference<>();
-		ScreenshotRecorder.takeScreenshot(fb, rawRef::set);
-		NativeImage raw = rawRef.get();*/
+		/*ScreenshotRecorder.takeScreenshot(fb, raw ->
+				processAndSavePhoto(raw, mc, id, settings, fLinearDepth, fFbW, fFbH));*/
 		//?} else {
 		NativeImage raw = ScreenshotRecorder.takeScreenshot(fb);
+		processAndSavePhoto(raw, mc, id, settings, fLinearDepth, fFbW, fFbH);
 		//?}
-
-		NativeImage cropped = null;
-		NativeImage downsampled = null;
-		NativeImage processed = null;
-		try {
-			cropped = cropTo3to2(raw);
-			downsampled = boxDownsample(cropped, 1280);
-			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH, true);
-			File dir = new File(mc.runDirectory, "photographica/photos");
-			if (!dir.exists() && !dir.mkdirs()) {
-				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
-				return;
-			}
-			File outFile = new File(dir, id + ".png");
-			processed.writeTo(outFile);
-			Photographica.LOGGER.info("Photo saved: {} ({}x{})",
-					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
-		} catch (IOException e) {
-			Photographica.LOGGER.error("Photo capture failed", e);
-		} finally {
-			if (processed != null) processed.close();
-			if (downsampled != null && downsampled != cropped && downsampled != raw) downsampled.close();
-			if (cropped != null && cropped != raw) cropped.close();
-			raw.close();
-		}
 
 		if (captureStandId >= 0) {
 			if (isFilm) {
@@ -458,6 +437,44 @@ public final class PhotoCapture {
 	}
 
 	/**
+	 * Crops, downsamples, applies photographic effects and writes the captured
+	 * framebuffer image to disk. Closes every NativeImage it owns, including
+	 * {@code raw}. On 1.21.11+ this runs inside the async screenshot callback,
+	 * where {@code raw} may be null if the GPU read-back produced no image.
+	 */
+	private static void processAndSavePhoto(NativeImage raw, MinecraftClient mc, UUID id,
+			CameraSettings settings, float[] linearDepth, int fbW, int fbH) {
+		if (raw == null) {
+			Photographica.LOGGER.error("Photo capture failed: framebuffer read-back returned null");
+			return;
+		}
+		NativeImage cropped = null;
+		NativeImage downsampled = null;
+		NativeImage processed = null;
+		try {
+			cropped = cropTo3to2(raw);
+			downsampled = boxDownsample(cropped, 1280);
+			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH, true);
+			File dir = new File(mc.runDirectory, "photographica/photos");
+			if (!dir.exists() && !dir.mkdirs()) {
+				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
+				return;
+			}
+			File outFile = new File(dir, id + ".png");
+			processed.writeTo(outFile);
+			Photographica.LOGGER.info("Photo saved: {} ({}x{})",
+					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
+		} catch (IOException e) {
+			Photographica.LOGGER.error("Photo capture failed", e);
+		} finally {
+			if (processed != null) processed.close();
+			if (downsampled != null && downsampled != cropped && downsampled != raw) downsampled.close();
+			if (cropped != null && cropped != raw) cropped.close();
+			raw.close();
+		}
+	}
+
+	/**
 	 * Per-frame accumulation tick for long-exposure shots.
 	 * Called every render frame while {@link #accumId} != null.
 	 * On the first call it steals the pre-read depth and immediately takes a color sample.
@@ -483,47 +500,54 @@ public final class PhotoCapture {
 		// Take a color sample if the interval has elapsed.
 		if (now >= accumNextSampleMs && accumSamples < ACCUM_MAX_SAMPLES) {
 			//? if >=1.21.11 {
-			/*java.util.concurrent.atomic.AtomicReference<NativeImage> frameRef = new java.util.concurrent.atomic.AtomicReference<>();
-			ScreenshotRecorder.takeScreenshot(fb, frameRef::set);
-			NativeImage frame = frameRef.get();*/
+			/*ScreenshotRecorder.takeScreenshot(fb, PhotoCapture::accumulateFrame);*/
 			//?} else {
-			NativeImage frame = ScreenshotRecorder.takeScreenshot(fb);
+			accumulateFrame(ScreenshotRecorder.takeScreenshot(fb));
 			//?}
-			NativeImage cropped = null;
-			NativeImage ds = null;
-			try {
-				cropped = cropTo3to2(frame);
-				ds = boxDownsample(cropped, 1280);
-				int w = ds.getWidth();
-				int h = ds.getHeight();
-				if (accumR == null) {
-					accumW = w; accumH = h;
-					accumR = new float[w * h];
-					accumG = new float[w * h];
-					accumB = new float[w * h];
-				}
-				if (w == accumW && h == accumH) {
-					for (int y = 0; y < h; y++) {
-						for (int x = 0; x < w; x++) {
-							int c = niGet(ds, x, y);
-							int idx = y * w + x;
-							accumR[idx] += c & 0xFF;
-							accumG[idx] += (c >> 8) & 0xFF;
-							accumB[idx] += (c >> 16) & 0xFF;
-						}
-					}
-					accumSamples++;
-				}
-			} finally {
-				if (ds != null && ds != cropped && ds != frame) ds.close();
-				if (cropped != null && cropped != frame) cropped.close();
-				frame.close();
-			}
 			accumNextSampleMs = now + accumSampleIntervalMs;
 		}
 
 		if (now >= accumEndMs || accumSamples >= ACCUM_MAX_SAMPLES) {
 			finalizeAccumulation(mc);
+		}
+	}
+
+	/**
+	 * Adds one framebuffer sample to the long-exposure accumulation buffers and
+	 * closes {@code frame}. On 1.21.11+ this runs inside the async screenshot
+	 * callback, where {@code frame} may be null.
+	 */
+	private static void accumulateFrame(NativeImage frame) {
+		if (frame == null) return;
+		NativeImage cropped = null;
+		NativeImage ds = null;
+		try {
+			cropped = cropTo3to2(frame);
+			ds = boxDownsample(cropped, 1280);
+			int w = ds.getWidth();
+			int h = ds.getHeight();
+			if (accumR == null) {
+				accumW = w; accumH = h;
+				accumR = new float[w * h];
+				accumG = new float[w * h];
+				accumB = new float[w * h];
+			}
+			if (w == accumW && h == accumH) {
+				for (int y = 0; y < h; y++) {
+					for (int x = 0; x < w; x++) {
+						int c = niGet(ds, x, y);
+						int idx = y * w + x;
+						accumR[idx] += c & 0xFF;
+						accumG[idx] += (c >> 8) & 0xFF;
+						accumB[idx] += (c >> 16) & 0xFF;
+					}
+				}
+				accumSamples++;
+			}
+		} finally {
+			if (ds != null && ds != cropped && ds != frame) ds.close();
+			if (cropped != null && cropped != frame) cropped.close();
+			frame.close();
 		}
 	}
 

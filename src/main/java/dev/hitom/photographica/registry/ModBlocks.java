@@ -104,7 +104,7 @@ public final class ModBlocks {
     }
 
     //? if >=1.21.11 {
-    private static AbstractBlock.Settings bs(String name) {
+    /*private static AbstractBlock.Settings bs(String name) {
         RegistryKey<Block> key = RegistryKey.of(RegistryKeys.BLOCK, Identifier.of(Photographica.MOD_ID, name));
         return AbstractBlock.Settings.create().registryKey(key);
     }
@@ -113,13 +113,13 @@ public final class ModBlocks {
         RegistryKey<Item> key = RegistryKey.of(RegistryKeys.ITEM, Identifier.of(Photographica.MOD_ID, name));
         return new Item.Settings().registryKey(key);
     }
-    /*?} else {*/
-    /*private static AbstractBlock.Settings bs(String name) {
+    *///?} else {
+    private static AbstractBlock.Settings bs(String name) {
         return AbstractBlock.Settings.create();
     }
 
     private static Item.Settings is(String name) {
         return new Item.Settings();
     }
-    *///?}
+    //?}
 }
