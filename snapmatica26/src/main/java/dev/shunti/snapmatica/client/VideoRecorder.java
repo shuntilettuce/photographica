@@ -178,7 +178,8 @@ public final class VideoRecorder {
         int fbW = mainFb.width, fbH = mainFb.height;
         if (fbW > 0 && fbH > 0) {
             int rd = mc.options.renderDistance().get();
-            EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
+            EvfBlurRenderer.updateDepthFar(mc.gameRenderer.getBasicProjectionMatrix(70.0f),
+                    Math.max(rd * 64f, 256f));
             EvfBlurRenderer.captureDepth(fbW, fbH);
         }
     }

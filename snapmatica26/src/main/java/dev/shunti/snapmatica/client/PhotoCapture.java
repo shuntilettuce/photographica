@@ -158,7 +158,8 @@ public final class PhotoCapture {
         int vpH = viewport[3];
         if (vpW > 0 && vpH > 0) {
             int rd = mc.options.renderDistance().get();
-            EvfBlurRenderer.currentDepthFar = Math.max(rd * 64f, 256f);
+            EvfBlurRenderer.updateDepthFar(mc.gameRenderer.getBasicProjectionMatrix(70.0f),
+                    Math.max(rd * 64f, 256f));
             EvfBlurRenderer.captureDepth(vpW, vpH);
             // The world raycast above is the PRIMARY focus distance. The GPU depth
             // reconstruction saturates at currentDepthFar (≈ rd*64), so only consult it

@@ -209,7 +209,13 @@ public final class VideoRecorder {
         Framebuffer mainFb = mc.getFramebuffer();
         if (mainFb == null) return;
         int fbW = mainFb.textureWidth, fbH = mainFb.textureHeight;
-        if (fbW > 0 && fbH > 0) EvfBlurRenderer.captureDepth(fbW, fbH);
+        if (fbW > 0 && fbH > 0) {
+            if (mc.gameRenderer != null) {
+                EvfBlurRenderer.updateDepthFar(mc.gameRenderer.getBasicProjectionMatrix(70.0f),
+                        Math.max(mc.options.getViewDistance().getValue() * 64f, 256f));
+            }
+            EvfBlurRenderer.captureDepth(fbW, fbH);
+        }
     }
 
     public static void captureFrameIfRecording() {

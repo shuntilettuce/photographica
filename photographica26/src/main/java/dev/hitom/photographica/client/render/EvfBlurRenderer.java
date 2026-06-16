@@ -58,9 +58,25 @@ public final class EvfBlurRenderer {
     private static int writeBackFbo    = -1;
     private static int writeBackFbTex  = 0;  // GL id of the texture currently attached
 
-    // Set by GameRendererMixin each frame from CameraRenderState.depthFar.
-    // Must match the projection matrix far plane for correct depth linearization.
+    // Must match the projection matrix far plane actually used to render the depth buffer.
+    // Updated each frame via updateDepthFar(); falls back to 512 on startup.
     public static float currentDepthFar = 512f;
+
+    /**
+     * Derives the TRUE far plane from the live world projection matrix. LOD mods (Voxy, DH)
+     * extend the projection far plane to draw distant terrain; using the correct far makes
+     * depth linearisation accurate so AF distance and EVF DoF blur match reality.
+     */
+    public static void updateDepthFar(org.joml.Matrix4f projection, float fallbackFar) {
+        float far = fallbackFar;
+        if (projection != null) {
+            try {
+                float pf = projection.perspectiveFar();
+                if (Float.isFinite(pf) && pf > 16.0f && pf < 1_000_000.0f) far = pf;
+            } catch (Throwable ignored) {}
+        }
+        currentDepthFar = far;
+    }
 
     // Scheduled blur parameters: set by ViewfinderHud.extractRenderState() (no raw GL there),
     // consumed by applyScheduledBlur() in onWorldRenderEnd() where raw GL is safe.

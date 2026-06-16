@@ -326,6 +326,11 @@ public final class PhotoCapture {
 				// captureDepth must run at END_MAIN while the depth buffer is still valid.
 				// applyScheduledBlur() is called later (after renderLevel returns) so mainFb
 				// already has the current frame's colour content.
+				if (mc.gameRenderer != null) {
+					dev.hitom.photographica.client.render.EvfBlurRenderer.updateDepthFar(
+							mc.gameRenderer.getBasicProjectionMatrix(70.0f),
+							Math.max(mc.options.renderDistance().get() * 64f, 256f));
+				}
 				dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(fbW, fbH);
 
 				if (pendingId != null) {

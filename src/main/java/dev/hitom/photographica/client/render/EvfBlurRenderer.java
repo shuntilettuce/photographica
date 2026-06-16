@@ -64,10 +64,26 @@ public final class EvfBlurRenderer {
     public static final float DOF_SCALE_VIDEO = 1000.0f;  // 1 block = 1 m  (video, realistic)
 
     private static final float NEAR = 0.05f;
-    private static final float FAR  = 512.0f;
+    public  static float currentDepthFar = 512.0f;
 
     // GL_TEXTURE_COMPARE_MODE = 0x884C, GL_NONE = 0  (OpenGL 1.4+)
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
+
+    /**
+     * Derives the TRUE far plane from the live world projection matrix. LOD mods (Voxy, DH)
+     * extend the projection far plane to draw distant terrain; using the correct far makes
+     * depth linearisation accurate so AF distance and EVF DoF blur match reality.
+     */
+    public static void updateDepthFar(org.joml.Matrix4f projection, float fallbackFar) {
+        float far = fallbackFar;
+        if (projection != null) {
+            try {
+                float pf = projection.perspectiveFar();
+                if (Float.isFinite(pf) && pf > 16.0f && pf < 1_000_000.0f) far = pf;
+            } catch (Throwable ignored) {}
+        }
+        currentDepthFar = far;
+    }
 
     /**
      * Copies the current framebuffer's depth buffer into a texture (GPU-side, no
@@ -185,7 +201,7 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locFocusDist, focusDist);
         GL20.glUniform1f(locMaxBlurPx, maxBlurPx);
         GL20.glUniform1f(locNear, NEAR);
-        GL20.glUniform1f(locFar,  FAR);
+        GL20.glUniform1f(locFar,  currentDepthFar);
         GL20.glUniform1f(locFocalLen, focalLenMm);
         GL20.glUniform1f(locAperture, aperture);
         GL20.glUniform1f(locPxPerMm, fbH / 24.0f);  // 24mm sensor height maps to fbH px

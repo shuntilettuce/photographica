@@ -316,6 +316,14 @@ public final class PhotoCapture {
 			int vpW = viewport[2];
 			int vpH = viewport[3];
 			if (vpW > 0 && vpH > 0) {
+				// Update the far plane each frame so the EVF blur and depth readout stay
+				// accurate when a LOD mod (Voxy, DH) extends the projection.
+				MinecraftClient mc2 = MinecraftClient.getInstance();
+				if (mc2 != null && mc2.gameRenderer != null) {
+					dev.hitom.photographica.client.render.EvfBlurRenderer.updateDepthFar(
+							mc2.gameRenderer.getBasicProjectionMatrix(70.0f),
+							Math.max(mc2.options.getViewDistance().getValue() * 64f, 256f));
+				}
 				// EVF: GPU-side copy (no CPU readback — fast enough for every frame)
 				if (evfActive) {
 					dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(vpW, vpH);
@@ -325,7 +333,8 @@ public final class PhotoCapture {
 					FloatBuffer buf = BufferUtils.createFloatBuffer(vpW * vpH);
 					GL11.glReadPixels(0, 0, vpW, vpH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
 					float[] depth = new float[vpW * vpH];
-					final float near = 0.05f, far = 512.0f;
+					final float near = 0.05f;
+					final float far = dev.hitom.photographica.client.render.EvfBlurRenderer.currentDepthFar;
 					for (int i = 0; i < depth.length; i++) {
 						float d = buf.get(i);
 						float ndc = 2.0f * d - 1.0f;
@@ -1268,14 +1277,23 @@ public final class PhotoCapture {
 		int vpW = viewport[2];
 		int vpH = viewport[3];
 		if (vpW <= 0 || vpH <= 0) return;
-		int cx = vpW / 2;
-		int cy = vpH / 2; // OpenGL Y=0 is bottom → centre is fine
-		FloatBuffer buf = BufferUtils.createFloatBuffer(1);
-		GL11.glReadPixels(cx, cy, 1, 1, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
-		float d   = buf.get(0);
-		float ndc = 2.0f * d - 1.0f;
+		// Sample a 3×3 centre patch and keep the nearest real (non-sky) depth so the
+		// reticle locks onto the subject rather than slipping through gaps in distant LOD.
+		final int N = 3;
+		int x0 = Math.max(0, vpW / 2 - N / 2);
+		int y0 = Math.max(0, vpH / 2 - N / 2);
+		FloatBuffer buf = BufferUtils.createFloatBuffer(N * N);
+		GL11.glReadPixels(x0, y0, N, N, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
+		float rawD = 1.0f;
+		for (int i = 0; i < N * N; i++) {
+			float s = buf.get(i);
+			if (s > 0.001f && s < rawD) rawD = s;
+		}
+		if (rawD >= 0.999999f) { lastSceneDepthBlocks = dev.hitom.photographica.component.CameraSettings.FOCUS_INFINITY; return; }
+		if (rawD < 0.001f) return;
 		final float near = 0.05f;
-		final float far  = 512.0f;
+		final float far  = dev.hitom.photographica.client.render.EvfBlurRenderer.currentDepthFar;
+		float ndc = 2.0f * rawD - 1.0f;
 		lastSceneDepthBlocks = 2.0f * near * far / (far + near - ndc * (far - near));
 	}
 
