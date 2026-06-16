@@ -50,20 +50,21 @@ public class SafelightButton extends ButtonWidget {
             }
         }
         ctx.fill(x + 1, y + 1, x + w - 1, y + 2, GuiHelper.FRAME_HI);
+        // Exact vanilla pattern: drawLabel routes text through the DrawnTextConsumer
+        // so it composites in the correct top layer above the fill batches.
+        drawLabel(ctx.getHoverListener(this, DrawContext.HoverType.NONE));
+    }
 
-        // 1.21.11 batches opaque fills into a layer that draws OVER text emitted on the
-        // same DrawContext, so a plain ctx.drawText would be hidden behind the button
-        // body.  Vanilla ButtonWidget$Text routes its label through
-        // DrawContext.getHoverListener(...), a DrawnTextConsumer that composites in the
-        // dedicated top text layer.  Mirror that here so the label stays visible.
+    @Override
+    protected void drawLabel(net.minecraft.client.font.DrawnTextConsumer consumer) {
         int textColor = switch (style) {
             case PRIMARY -> 0xFFFFF5E8;
             case GHOST   -> GuiHelper.CREAM_DIM;
             default      -> GuiHelper.CREAM;
         };
-        net.minecraft.text.Text label = getMessage().copy().styled(s -> s.withColor(textColor & 0xFFFFFF));
-        ctx.getHoverListener(this, DrawContext.HoverType.NONE)
-                .text(label, x + 2, x + w - 2, y, y + 20);
+        net.minecraft.text.Text label = getMessage().copy()
+                .styled(s -> s.withColor(net.minecraft.text.TextColor.fromRgb(textColor & 0xFFFFFF)));
+        drawTextWithMargin(consumer, label, 2);
     }*/
     //?} else {
     @Override
