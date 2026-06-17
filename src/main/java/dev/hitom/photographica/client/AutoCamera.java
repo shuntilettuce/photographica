@@ -57,6 +57,11 @@ public final class AutoCamera {
 	private static final float PULL_RATE     = 0.30f;  // fraction of remaining log-distance / tick
 	private static final float PULL_MAX_STEP = 0.22f;  // max log units / tick (caps rack speed)
 	private static final float PULL_SNAP_EPS = 0.01f;  // lock onto target below this log-distance
+	// When AF/MOB hits sky, focus eases to FAR_ANCHOR rather than snapping to FOCUS_INFINITY.
+	// Snapping to ∞ would activate infinity-foreground-blur every time the reticle sweeps sky,
+	// causing visible flicker. The flag lets the viewfinder still label the distance "inf".
+	private static final float FAR_ANCHOR = 1000.0f;
+	public  static volatile boolean afAtInfinity = false;
 
 	public static void tick(MinecraftClient mc) {
 		if (mc.player == null || mc.world == null) return;
@@ -152,6 +157,7 @@ public final class AutoCamera {
 		// Ease the *current* live focus distance toward the snapped stop in log
 		// space (focus-pull). This runs every client tick, so the lens racks
 		// smoothly over several ticks instead of jumping in one frame.
+		afAtInfinity = (snapped >= CameraSettings.FOCUS_INFINITY);
 		float pulled = pullFocus(original.focusDistance(), snapped);
 		// Only short-circuit once we've effectively reached the eased target this
 		// tick — comparing against `pulled` (not `snapped`) keeps the easing
@@ -162,8 +168,10 @@ public final class AutoCamera {
 
 	/** Eases the current focus distance one tick toward the target stop in log space. */
 	private static float pullFocus(float current, float target) {
-		if (target >= CameraSettings.FOCUS_INFINITY) return CameraSettings.FOCUS_INFINITY;
-		if (current >= CameraSettings.FOCUS_INFINITY) current = 1000.0f;  // refocus anchor
+		// Ease to FAR_ANCHOR instead of snapping to FOCUS_INFINITY so sky hits don't
+		// trigger the infinity-foreground-blur mode and cause flicker.
+		if (target >= CameraSettings.FOCUS_INFINITY) target = FAR_ANCHOR;
+		if (current >= CameraSettings.FOCUS_INFINITY) current = FAR_ANCHOR;
 		current = Math.max(0.01f, current);
 		float logCur = (float) Math.log(current);
 		float logTar = (float) Math.log(target);

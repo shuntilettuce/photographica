@@ -1,5 +1,6 @@
 package dev.hitom.photographica.client.hud;
 
+import dev.hitom.photographica.client.AutoCamera;
 import dev.hitom.photographica.client.PhotoCapture;
 import dev.hitom.photographica.client.render.EvfBlurRenderer;
 import dev.hitom.photographica.component.CameraSettings;
@@ -148,7 +149,11 @@ public final class ViewfinderHud {
 				focalPart);
 		ctx.drawTextWithShadow(tr, exposure, fx + 6, fy2 - tr.fontHeight - 14, COLOR_TEXT);
 		if (LensKind.hasLens(s.lensType())) {
-			String fd = fmtFocusDist(s.focusDistance());
+			// Show "∞" when focus is truly at infinity, or when AF resolved to sky / no subject
+			// (focus value only eases to FAR_ANCHOR to avoid flicker; afAtInfinity carries intent).
+			boolean atInf = s.focusDistance() >= CameraSettings.FOCUS_INFINITY
+					|| (s.focusMode() != CameraSettings.FOCUS_MF && AutoCamera.afAtInfinity);
+			String fd = atInf ? "∞" : fmtFocusDist(s.focusDistance());
 			ctx.drawTextWithShadow(tr, fd, fx2 - tr.getWidth(fd) - 6, fy + 4 + tr.fontHeight * 2 + 4, reticleColor);
 		}
 
@@ -325,7 +330,9 @@ public final class ViewfinderHud {
 		if (!dev.hitom.photographica.component.LensKind.hasLens(s.lensType())) return COLOR_FRAME;
 		if (s.aperture() >= 8.0f) return COLOR_FRAME; // deep DoF, colour unnecessary
 		float focus = s.focusDistance();
-		if (focus >= CameraSettings.FOCUS_INFINITY) return COLOR_FRAME;       // infinity focus
+		boolean atInf = focus >= CameraSettings.FOCUS_INFINITY
+				|| (s.focusMode() != CameraSettings.FOCUS_MF && AutoCamera.afAtInfinity);
+		if (atInf) return COLOR_FRAME;       // infinity focus
 
 		float sceneDepth = dev.hitom.photographica.client.PhotoCapture.lastSceneDepthBlocks;
 		if (sceneDepth >= CameraSettings.FOCUS_INFINITY) return 0xFFE04040; // sky / beyond range — always out of focus
