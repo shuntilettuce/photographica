@@ -49,7 +49,6 @@ public final class VideoRecorder {
     private static final float AF_VEL_CAP            = 0.30f;
     private static final float AF_SETTLE             = 0.004f;
     private static final long  AF_QUERY_INTERVAL_MS  = 100L;
-    private static final float BOKEH_FOCAL_BOOST     = 3.0f;
 
     // ── Recording state ────────────────────────────────────────────────────────
     private static volatile boolean recording      = false;
@@ -369,13 +368,15 @@ public final class VideoRecorder {
         float aperture = vs.aperture();
         if (aperture >= 8.0f) return;
         float fovDeg = recordingArmorStandEntityId >= 0 ? TRIPOD_FOV : videoFov;
-        // The render FOV gives a wide lens (~17 mm) with near-infinite depth of field.
-        // Boost the bokeh focal length so the video has pleasing subject separation
-        // while keeping the wide framing unchanged.
-        float realFocalMm  = (float)(12.0 / Math.tan(Math.toRadians(fovDeg / 2.0)));
-        float bokehFocalMm = realFocalMm * BOKEH_FOCAL_BOOST;
-        EvfBlurRenderer.applyVideoBlur(currentFocusDepth, aperture, bokehFocalMm,
-                EvfBlurRenderer.DOF_SCALE_VIDEO);
+        // Derive the focal length from the live video FOV (the focal that physically
+        // produces this FOV on a 24 mm-tall sensor). No bokeh boost: the DoF is exactly
+        // what a still photo at this same angle of view would show, so wide shots have
+        // deep DoF and zooming in shallows it — like a real lens. Alt+scroll zoom changes
+        // fovDeg live, so the bokeh tracks the zoom. DOF_SCALE_STILL matches the still EVF
+        // so F5.6 video = F5.6 stills at equal framing.
+        float realFocalMm = (float)(12.0 / Math.tan(Math.toRadians(fovDeg / 2.0)));
+        EvfBlurRenderer.applyVideoBlur(currentFocusDepth, aperture, realFocalMm,
+                EvfBlurRenderer.DOF_SCALE_STILL);
     }
 
     // ── Post-processing ────────────────────────────────────────────────────────

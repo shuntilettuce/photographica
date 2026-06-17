@@ -296,10 +296,14 @@ public final class VideoRecorder {
         if (SnapmaticaClient.aperture >= 8.0f) return;
         int sw = mc.getWindow().getScaledWidth();
         int sh = mc.getWindow().getScaledHeight();
-        // Use currentFocusDepth (spring-damper AF) and realistic video DoF scale.
+        // Video renders at the lens FOV (focalLengthMm) and uses that same focal length
+        // for DoF with DOF_SCALE_STILL — so the video bokeh equals the still viewfinder's
+        // at the same lens (F5.6 video = F5.6 stills). No boost: the DoF is exactly what a
+        // still photo through this lens would show. Changing the lens focal length zooms
+        // both the framing and the bokeh together, like a real lens.
         EvfBlurRenderer.renderBlur(0, 0, sw, sh,
                 currentFocusDepth, SnapmaticaClient.aperture,
-                SnapmaticaClient.focalLengthMm, EvfBlurRenderer.DOF_SCALE_VIDEO);
+                SnapmaticaClient.focalLengthMm, EvfBlurRenderer.DOF_SCALE_STILL);
     }
 
     // ── Autofocus ────────────────────────────────────────────────────────────────
