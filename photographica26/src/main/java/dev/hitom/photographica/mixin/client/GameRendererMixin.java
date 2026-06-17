@@ -54,9 +54,10 @@ public class GameRendererMixin {
      * the player — and PhotographicaClient's per-tick safety net re-asserts the player
      * as a second line of defence so movement/look/sneak can never freeze.
      */
-    @Redirect(method = "update(Lnet/minecraft/client/DeltaTracker;Z)V",
+    @Redirect(method = "update(Lnet/minecraft/client/DeltaTracker;)V",
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/client/Camera;update(Lnet/minecraft/client/DeltaTracker;)V"))
+                    target = "Lnet/minecraft/client/Camera;update(Lnet/minecraft/client/DeltaTracker;)V"),
+            require = 0)
     private void photographica$focusCameraOnTripod(Camera camera, DeltaTracker dt) {
         int standId = VideoRecorder.getRecordingArmorStandEntityId();
         Minecraft mc = Minecraft.getInstance();
