@@ -91,7 +91,7 @@ public class SdCardBrowserScreen extends Screen {
         int btnY = py + PANEL_H - 28;
         addRenderableWidget(SafelightButton.primary(cx - 99, btnY, 64,
                 Component.literal("全画面"),
-                b -> minecraft.setScreen(new PhotoViewerScreen(photos.get(index), this))));
+                b -> minecraft.gui.setScreen(new PhotoViewerScreen(photos.get(index), this))));
         addRenderableWidget(SafelightButton.of(cx - 32, btnY, 64,
                 Component.literal("削除"),
                 b -> deleteCurrentPhoto()));
@@ -183,7 +183,7 @@ public class SdCardBrowserScreen extends Screen {
 
     @Override
     public void onClose() {
-        minecraft.setScreen(parent);
+        minecraft.gui.setScreen(parent);
     }
 
     private void copyCurrentPhoto() {
@@ -193,7 +193,7 @@ public class SdCardBrowserScreen extends Screen {
         File dir = new File(mc.gameDirectory, "photographica/photos");
         File file = PhotoData.findPhotoFile(dir, p.id());
         if (file == null) {
-            mc.gui.setOverlayMessage(Component.literal("⚠ 写真ファイルが見つかりません"), false);
+            mc.gui.hud.setOverlayMessage(Component.literal("⚠ 写真ファイルが見つかりません"), false);
             return;
         }
         ClipboardUtil.copyImageAsync(file);

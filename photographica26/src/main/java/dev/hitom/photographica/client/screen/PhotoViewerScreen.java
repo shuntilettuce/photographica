@@ -68,7 +68,7 @@ public class PhotoViewerScreen extends Screen {
         File dir = new File(mc.gameDirectory, "photographica/photos");
         File file = PhotoData.findPhotoFile(dir, data.id());
         if (file == null) {
-            mc.gui.setOverlayMessage(Component.literal("⚠ 写真ファイルが見つかりません"), false);
+            mc.gui.hud.setOverlayMessage(Component.literal("⚠ 写真ファイルが見つかりません"), false);
             return;
         }
         ClipboardUtil.copyImageAsync(file);
@@ -249,7 +249,7 @@ public class PhotoViewerScreen extends Screen {
     @Override
     public void onClose() {
         if (parent != null) {
-            Minecraft.getInstance().setScreen(parent);
+            Minecraft.getInstance().gui.setScreen(parent);
         } else {
             super.onClose();
         }

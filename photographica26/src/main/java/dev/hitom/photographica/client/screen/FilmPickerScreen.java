@@ -58,7 +58,7 @@ public class FilmPickerScreen extends Screen {
                     Component.literal(label),
                     b -> {
                         ClientPlayNetworking.send(new LoadFilmPayload(finalFt));
-                        minecraft.setScreen(null);
+                        minecraft.gui.setScreen(null);
                     }));
             y += ROW_H;
         }
@@ -66,7 +66,7 @@ public class FilmPickerScreen extends Screen {
         y += 6;
         addRenderableWidget(SafelightButton.ghost(bx, y, bw,
                 Component.literal("キャンセル"),
-                b -> minecraft.setScreen(parent)));
+                b -> minecraft.gui.setScreen(parent)));
     }
 
     @Override
@@ -91,6 +91,6 @@ public class FilmPickerScreen extends Screen {
 
     @Override
     public void onClose() {
-        minecraft.setScreen(parent);
+        minecraft.gui.setScreen(parent);
     }
 }

@@ -56,25 +56,25 @@ public class PhotographicaClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		VideoCameraItem.clientToggleRecord = VideoRecorder::toggle;
 		VideoCameraItem.clientOpenScreen = stack ->
-				Minecraft.getInstance().setScreen(new VideoCameraScreen(stack));
+				Minecraft.getInstance().gui.setScreen(new VideoCameraScreen(stack));
 
 		CameraItem.clientOpenScreen = stack ->
-				Minecraft.getInstance().setScreen(new CameraScreen(stack));
+				Minecraft.getInstance().gui.setScreen(new CameraScreen(stack));
 		CameraItem.clientTakePhoto = PhotoCapture::take;
 
 		MirrorlessCameraItem.clientOpenScreen = stack ->
-				Minecraft.getInstance().setScreen(new CameraScreen(stack));
+				Minecraft.getInstance().gui.setScreen(new CameraScreen(stack));
 		MirrorlessCameraItem.clientTakePhoto = PhotoCapture::take;
 
 		FilmCameraItem.clientOpenScreen = stack ->
-				Minecraft.getInstance().setScreen(new FilmCameraScreen(stack));
+				Minecraft.getInstance().gui.setScreen(new FilmCameraScreen(stack));
 		FilmCameraItem.clientTakePhoto = PhotoCapture::take;
 
 		PhotoItem.clientOpenViewer = data ->
-				Minecraft.getInstance().setScreen(new PhotoViewerScreen(data));
+				Minecraft.getInstance().gui.setScreen(new PhotoViewerScreen(data));
 
 		DevelopedFilmItem.clientOpenFilmStrip = stack ->
-				Minecraft.getInstance().setScreen(new FilmStripScreen(stack));
+				Minecraft.getInstance().gui.setScreen(new FilmStripScreen(stack));
 
 		MenuScreens.register(ModScreenHandlers.DARKROOM, DarkroomScreen::new);
 		MenuScreens.register(ModScreenHandlers.PRINTER, PrinterScreen::new);
@@ -147,7 +147,7 @@ public class PhotographicaClient implements ClientModInitializer {
 				int recStandId = VideoRecorder.getRecordingArmorStandEntityId();
 				if (recStandId >= 0) {
 					// Armor-stand recording active: open stop screen even without camera in hand
-					client.setScreen(new VideoCameraScreen(VideoRecorder.getRecordingStack(), recStandId));
+					client.gui.setScreen(new VideoCameraScreen(VideoRecorder.getRecordingStack(), recStandId));
 				} else {
 					ItemStack stack = client.player.getMainHandItem();
 					if (!openCameraScreen(stack)) {

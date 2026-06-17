@@ -46,7 +46,7 @@ public final class ViewfinderHud {
 
 	public static void extractRenderState(GuiGraphicsExtractor ctx, net.minecraft.client.DeltaTracker tickCounter) {
 		Minecraft mc = Minecraft.getInstance();
-		if (mc.player == null || mc.options.hideGui) return;
+		if (mc.player == null || mc.gui.hud.isHidden()) return;
 		// Viewfinder only active while the player holds Shift
 		if (!mc.player.isShiftKeyDown()) return;
 
@@ -58,7 +58,7 @@ public final class ViewfinderHud {
 			if (!isCamera(stack)) return;
 		}
 		// Hide while a screen (camera GUI / inventory) is open
-		if (mc.screen != null) return;
+		if (mc.gui.screen() != null) return;
 
 		boolean isFilm = stack.getItem() instanceof FilmCameraItem;
 		CameraSettings s = isFilm ? FilmCameraItem.getSettings(stack) : CameraItem.getSettings(stack);

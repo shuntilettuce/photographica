@@ -105,13 +105,13 @@ public class SnapmaticaClient implements ClientModInitializer {
             }
             while (recordKey.consumeClick()) {
                 if (VideoRecorder.isRecording()) VideoRecorder.stopRecording();
-                else if (!VideoRecorder.isPostProcessing()) client.setScreen(new VideoRecorderScreen());
+                else if (!VideoRecorder.isPostProcessing()) client.gui.setScreen(new VideoRecorderScreen());
             }
             if (shootKey.consumeClick()) {
                 PhotoCapture.take();
             }
             if (settingsKey.consumeClick()) {
-                client.setScreen(new CameraScreen());
+                client.gui.setScreen(new CameraScreen());
             }
 
             AutoFocus.tick(client);

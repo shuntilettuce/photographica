@@ -3,9 +3,9 @@ plugins {
     id("maven-publish")
 }
 
-val mcVersion     = "26.1.2"
-val loaderVersion = "0.19.2"
-val fabricVersion = "0.149.1+26.1.2"
+val mcVersion     = "26.2"
+val loaderVersion = "0.19.3"
+val fabricVersion = "0.152.1+26.2"
 val modVersion    = "0.2.0"
 
 version = "$modVersion+$mcVersion"

@@ -77,7 +77,7 @@ public final class PhotoCapture {
         pendingDepthFbW = 0;
         pendingDepthFbH = 0;
 
-        Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> processScreenshot(mc, raw, capturedDepth, capturedFbW, capturedFbH));
+        Screenshot.takeScreenshot(mc.gameRenderer.mainRenderTarget(), raw -> processScreenshot(mc, raw, capturedDepth, capturedFbW, capturedFbH));
     }
 
     private static void processScreenshot(Minecraft mc, NativeImage raw, float[] linearDepth, int fbW, int fbH) {
@@ -159,7 +159,7 @@ public final class PhotoCapture {
         if (vpW > 0 && vpH > 0) {
             int rd = mc.options.renderDistance().get();
             net.minecraft.client.renderer.state.level.CameraRenderState camSt =
-                    mc.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState;
+                    mc.gameRenderer.gameRenderState().levelRenderState.cameraRenderState;
             EvfBlurRenderer.updateDepthFar(
                     camSt != null ? camSt.projectionMatrix : null,
                     Math.max(rd * 64f, 256f));

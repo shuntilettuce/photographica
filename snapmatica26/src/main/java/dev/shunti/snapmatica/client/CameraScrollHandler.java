@@ -29,7 +29,7 @@ public final class CameraScrollHandler {
 
     public static boolean onScroll(double delta) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.screen != null) return false;
+        if (mc.player == null || mc.gui.screen() != null) return false;
 
         int dir = delta > 0 ? 1 : -1;
 

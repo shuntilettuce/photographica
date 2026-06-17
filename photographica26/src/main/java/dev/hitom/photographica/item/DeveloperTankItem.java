@@ -52,7 +52,7 @@ public class DeveloperTankItem extends Item {
 		int elapsed = USE_TICKS - remainingUseTicks;
 		int bars = elapsed * 10 / USE_TICKS;
 		String bar = "█".repeat(bars) + "░".repeat(10 - bars);
-		net.minecraft.client.Minecraft.getInstance().gui.setOverlayMessage(Component.literal("§b現像中... [" + bar + "]"), false);
+		net.minecraft.client.Minecraft.getInstance().gui.hud.setOverlayMessage(Component.literal("§b現像中... [" + bar + "]"), false);
 	}
 
 	@Override

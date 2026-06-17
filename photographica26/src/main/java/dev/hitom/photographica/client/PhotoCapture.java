@@ -192,7 +192,7 @@ public final class PhotoCapture {
 				: CameraItem.getSettings(cameraStack);
 
 		if (!LensKind.hasLens(settings.lensType())) {
-			mc.gui.setOverlayMessage(Component.literal("⚠ レンズが取り付けられていません"), false);
+			mc.gui.hud.setOverlayMessage(Component.literal("⚠ レンズが取り付けられていません"), false);
 			mc.getSoundManager().play(SimpleSoundInstance.forUI(
 					SoundEvents.NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
 			return;
@@ -201,14 +201,14 @@ public final class PhotoCapture {
 		// Digital cameras require an SD card to save photos.
 		if (!isFilm) {
 			if (!cameraStack.has(ModDataComponents.SD_CARD)) {
-				mc.gui.setOverlayMessage(Component.literal("⚠ SDカードが装填されていません"), false);
+				mc.gui.hud.setOverlayMessage(Component.literal("⚠ SDカードが装填されていません"), false);
 				mc.getSoundManager().play(SimpleSoundInstance.forUI(
 						SoundEvents.NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
 				return;
 			}
 			SdCardData sd = cameraStack.get(ModDataComponents.SD_CARD);
 			if (sd != null && sd.isFull()) {
-				mc.gui.setOverlayMessage(Component.literal("⚠ SDカードがいっぱいです"), false);
+				mc.gui.hud.setOverlayMessage(Component.literal("⚠ SDカードがいっぱいです"), false);
 				mc.getSoundManager().play(SimpleSoundInstance.forUI(
 						SoundEvents.NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
 				return;
@@ -219,17 +219,17 @@ public final class PhotoCapture {
 		if (isFilm) {
 			FilmRollData film = FilmCameraItem.getFilm(cameraStack);
 			if (film.totalExposures() == 0) {
-				mc.gui.setOverlayMessage(Component.literal("⚠ フィルムが装填されていません"), false);
+				mc.gui.hud.setOverlayMessage(Component.literal("⚠ フィルムが装填されていません"), false);
 				mc.getSoundManager().play(SimpleSoundInstance.forUI(
 						SoundEvents.NOTE_BLOCK_BASEDRUM.value(), 0.5f, 0.7f));
 				return;
 			}
 			if (film.isExposed()) {
-				mc.gui.setOverlayMessage(Component.literal("⚠ フィルム使用済み — 現像してください"), false);
+				mc.gui.hud.setOverlayMessage(Component.literal("⚠ フィルム使用済み — 現像してください"), false);
 				return;
 			}
 			if (!film.wound()) {
-				mc.gui.setOverlayMessage(Component.literal("⚠ フィルムを巻き上げてください"), false);
+				mc.gui.hud.setOverlayMessage(Component.literal("⚠ フィルムを巻き上げてください"), false);
 				mc.getSoundManager().play(SimpleSoundInstance.forUI(
 						SoundEvents.LEVER_CLICK, 0.5f, 0.9f));
 				return;
@@ -317,7 +317,7 @@ public final class PhotoCapture {
 		boolean evfActive = isEvfActive(mc);
 
 		if (evfActive || pendingId != null) {
-			RenderTarget mainFb = mc.getMainRenderTarget();
+			RenderTarget mainFb = mc.gameRenderer.mainRenderTarget();
 			int fbW = mainFb.width;
 			int fbH = mainFb.height;
 			if (fbW > 0 && fbH > 0) {
@@ -328,7 +328,7 @@ public final class PhotoCapture {
 				// already has the current frame's colour content.
 				if (mc.gameRenderer != null) {
 					net.minecraft.client.renderer.state.level.CameraRenderState camSt_ =
-							mc.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState;
+							mc.gameRenderer.gameRenderState().levelRenderState.cameraRenderState;
 					dev.hitom.photographica.client.render.EvfBlurRenderer.updateDepthFar(
 							camSt_ != null ? camSt_.projectionMatrix : null,
 							Math.max(mc.options.renderDistance().get() * 64f, 256f));
@@ -362,7 +362,7 @@ public final class PhotoCapture {
 	}
 
 	private static boolean isEvfActive(Minecraft mc) {
-		if (mc.player == null || !mc.player.isShiftKeyDown() || mc.screen != null) return false;
+		if (mc.player == null || !mc.player.isShiftKeyDown() || mc.gui.screen() != null) return false;
 		ItemStack stack = mc.player.getMainHandItem();
 		if (stack.getItem() instanceof MirrorlessCameraItem) return true;
 		stack = mc.player.getOffhandItem();
@@ -370,7 +370,7 @@ public final class PhotoCapture {
 	}
 
 	/** Called from GameRendererMixin after GameRenderer.renderLevel() returns. At this point
-	 *  Iris (if present) has already blitted its pipeline output to mc.getMainRenderTarget(). */
+	 *  Iris (if present) has already blitted its pipeline output to mc.gameRenderer.mainRenderTarget(). */
 	public static void captureIfPending() {
 		tickTimer();
 
@@ -388,7 +388,7 @@ public final class PhotoCapture {
 		if (pendingId == null) return;
 
 		Minecraft mc = Minecraft.getInstance();
-		RenderTarget fb = mc.getMainRenderTarget();
+		RenderTarget fb = mc.gameRenderer.mainRenderTarget();
 
 		UUID id = pendingId;
 		CameraSettings settings = pendingSettings;
@@ -459,20 +459,20 @@ public final class PhotoCapture {
 			if (fCaptureStandId >= 0) {
 				if (fIsFilm) {
 					ClientPlayNetworking.send(new TakeFilmPhotoFromArmorStandPayload(fId, fSettings, fCaptureStandId, fCaptureTime));
-					if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影 (防具立て・フィルム)"), false);
+					if (mc.player != null) mc.gui.hud.setOverlayMessage(Component.literal("📸 撮影 (防具立て・フィルム)"), false);
 				} else {
 					ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(fId, fSettings, fCaptureStandId, fCaptureTime));
-					if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影 (防具立て)"), false);
+					if (mc.player != null) mc.gui.hud.setOverlayMessage(Component.literal("📸 撮影 (防具立て)"), false);
 				}
 			} else if (fIsFilm) {
 				ClientPlayNetworking.send(new TakeFilmPhotoPayload(fId, fSettings, fCaptureTime));
 				if (mc.player != null) {
-					mc.gui.setOverlayMessage(Component.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), false);
+					mc.gui.hud.setOverlayMessage(Component.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), false);
 				}
 			} else {
 				ClientPlayNetworking.send(new CreatePhotoPayload(fId, fSettings, fCaptureTime));
 				if (mc.player != null) {
-					mc.gui.setOverlayMessage(Component.literal("📸 撮影"), false);
+					mc.gui.hud.setOverlayMessage(Component.literal("📸 撮影"), false);
 				}
 			}
 		});
@@ -484,7 +484,7 @@ public final class PhotoCapture {
 	private static void tickAccumulation() {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc == null) return;
-		RenderTarget fb = mc.getMainRenderTarget();
+		RenderTarget fb = mc.gameRenderer.mainRenderTarget();
 		long now = System.currentTimeMillis();
 
 		// First tick: initialise accumulation state and consume the pending capture id.
@@ -599,10 +599,10 @@ public final class PhotoCapture {
 		if (finalStandId >= 0) {
 			if (isFilm) {
 				ClientPlayNetworking.send(new TakeFilmPhotoFromArmorStandPayload(id, settings, finalStandId, captureTime));
-				if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影 (防具立て・フィルム)"), false);
+				if (mc.player != null) mc.gui.hud.setOverlayMessage(Component.literal("📸 撮影 (防具立て・フィルム)"), false);
 			} else {
 				ClientPlayNetworking.send(new CreatePhotoFromArmorStandPayload(id, settings, finalStandId, captureTime));
-				if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影 (防具立て)"), false);
+				if (mc.player != null) mc.gui.hud.setOverlayMessage(Component.literal("📸 撮影 (防具立て)"), false);
 			}
 			// Restore player camera and perspective after armor stand long exposure
 			if (mc.player != null) mc.setCameraEntity(mc.player);
@@ -614,10 +614,10 @@ public final class PhotoCapture {
 			armorStandFocalLength = 0;
 		} else if (isFilm) {
 			ClientPlayNetworking.send(new TakeFilmPhotoPayload(id, settings, captureTime));
-			if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), false);
+			if (mc.player != null) mc.gui.hud.setOverlayMessage(Component.literal("📸 撮影 (フィルム — 巻き上げ待ち)"), false);
 		} else {
 			ClientPlayNetworking.send(new CreatePhotoPayload(id, settings, captureTime));
-			if (mc.player != null) mc.gui.setOverlayMessage(Component.literal("📸 撮影"), false);
+			if (mc.player != null) mc.gui.hud.setOverlayMessage(Component.literal("📸 撮影"), false);
 		}
 	}
 
@@ -733,7 +733,7 @@ public final class PhotoCapture {
 				: CameraItem.getSettings(cameraStack);
 
 		if (!LensKind.hasLens(settings.lensType())) {
-			mc.gui.setOverlayMessage(Component.literal("⚠ レンズが取り付けられていません"), false);
+			mc.gui.hud.setOverlayMessage(Component.literal("⚠ レンズが取り付けられていません"), false);
 			mc.getSoundManager().play(SimpleSoundInstance.forUI(
 					SoundEvents.NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
 			return;
@@ -742,14 +742,14 @@ public final class PhotoCapture {
 		// Digital: check SD card
 		if (!isFilm) {
 			if (!cameraStack.has(ModDataComponents.SD_CARD)) {
-				mc.gui.setOverlayMessage(Component.literal("⚠ SDカードが装填されていません"), false);
+				mc.gui.hud.setOverlayMessage(Component.literal("⚠ SDカードが装填されていません"), false);
 				mc.getSoundManager().play(SimpleSoundInstance.forUI(
 						SoundEvents.NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.8f));
 				return;
 			}
 			SdCardData sd = cameraStack.get(ModDataComponents.SD_CARD);
 			if (sd != null && sd.isFull()) {
-				mc.gui.setOverlayMessage(Component.literal("⚠ SDカードがいっぱいです"), false);
+				mc.gui.hud.setOverlayMessage(Component.literal("⚠ SDカードがいっぱいです"), false);
 				return;
 			}
 		}
@@ -758,15 +758,15 @@ public final class PhotoCapture {
 		if (isFilm) {
 			FilmRollData film = FilmCameraItem.getFilm(cameraStack);
 			if (film.totalExposures() == 0) {
-				mc.gui.setOverlayMessage(Component.literal("⚠ フィルムが装填されていません"), false);
+				mc.gui.hud.setOverlayMessage(Component.literal("⚠ フィルムが装填されていません"), false);
 				return;
 			}
 			if (film.isExposed()) {
-				mc.gui.setOverlayMessage(Component.literal("⚠ フィルム使用済み — 現像してください"), false);
+				mc.gui.hud.setOverlayMessage(Component.literal("⚠ フィルム使用済み — 現像してください"), false);
 				return;
 			}
 			if (!film.wound()) {
-				mc.gui.setOverlayMessage(Component.literal("⚠ フィルムを巻き上げてください"), false);
+				mc.gui.hud.setOverlayMessage(Component.literal("⚠ フィルムを巻き上げてください"), false);
 				return;
 			}
 		}

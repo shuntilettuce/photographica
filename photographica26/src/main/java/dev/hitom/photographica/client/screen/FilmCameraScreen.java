@@ -208,7 +208,7 @@ public class FilmCameraScreen extends Screen {
                                 onClose();
                             } else if (available.size() > 1) {
                                 flushDirty();
-                                minecraft.setScreen(new FilmPickerScreen(this, available));
+                                minecraft.gui.setScreen(new FilmPickerScreen(this, available));
                             } else {
                                 ClientPlayNetworking.send(new LoadFilmPayload(0));
                                 onClose();

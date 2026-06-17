@@ -138,7 +138,7 @@ public final class VideoRecorder {
         mc.options.smoothCamera = true;
 
         recording = true;
-        mc.gui.setOverlayMessage(Component.literal("● REC 開始"), true);
+        mc.gui.hud.setOverlayMessage(Component.literal("● REC 開始"), true);
     }
 
     public static void stopRecording() {
@@ -148,7 +148,7 @@ public final class VideoRecorder {
         Minecraft mc = Minecraft.getInstance();
         mc.options.smoothCamera = prevSmoothCamera;
         if (mc.player != null)
-            mc.gui.setOverlayMessage(Component.literal("■ 録画停止 — エンコード中..."), true);
+            mc.gui.hud.setOverlayMessage(Component.literal("■ 録画停止 — エンコード中..."), true);
 
         final List<FrameMeta> metas  = new ArrayList<>(frameMetas);
         final File            rawSnap = rawDir;
@@ -173,13 +173,13 @@ public final class VideoRecorder {
     public static void onWorldRenderEnd() {
         if (!recording) return;
         Minecraft mc = Minecraft.getInstance();
-        RenderTarget mainFb = mc.getMainRenderTarget();
+        RenderTarget mainFb = mc.gameRenderer.mainRenderTarget();
         if (mainFb == null) return;
         int fbW = mainFb.width, fbH = mainFb.height;
         if (fbW > 0 && fbH > 0) {
             int rd = mc.options.renderDistance().get();
             net.minecraft.client.renderer.state.level.CameraRenderState camSt =
-                    mc.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState;
+                    mc.gameRenderer.gameRenderState().levelRenderState.cameraRenderState;
             EvfBlurRenderer.updateDepthFar(
                     camSt != null ? camSt.projectionMatrix : null,
                     Math.max(rd * 64f, 256f));
@@ -220,11 +220,11 @@ public final class VideoRecorder {
 
         if (virtualFrameCount >= currentFps * 60 && virtualFrameCount - slotsConsumed < currentFps * 60
                 && mc.player != null)
-            mc.gui.setOverlayMessage(Component.literal("⚠ 残り 1:00"), true);
+            mc.gui.hud.setOverlayMessage(Component.literal("⚠ 残り 1:00"), true);
 
         // Move crop+downsample to the IO thread so the screenshot callback (render thread)
         // returns immediately and doesn't stall rendering during capture.
-        Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> {
+        Screenshot.takeScreenshot(mc.gameRenderer.mainRenderTarget(), raw -> {
             if (raw == null) { writtenFrames.incrementAndGet(); return; }
             ioExecutor.submit(() -> {
                 NativeImage cropped = null, frame = null;
@@ -304,7 +304,7 @@ public final class VideoRecorder {
     private static float computeSceneFocusDepth(Minecraft mc) {
         if (mc.level == null || mc.player == null || mc.gameRenderer == null)
             return currentFocusDepth;
-        net.minecraft.client.Camera cam = mc.gameRenderer.getMainCamera();
+        net.minecraft.client.Camera cam = mc.gameRenderer.mainCamera();
         if (cam == null || !cam.isInitialized()) return currentFocusDepth;
 
         net.minecraft.world.phys.Vec3 eye = cam.position();

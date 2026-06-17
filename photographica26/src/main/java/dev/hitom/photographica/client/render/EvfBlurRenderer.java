@@ -120,7 +120,7 @@ public final class EvfBlurRenderer {
      * Must be called from onWorldRenderEnd() before the main depth buffer is cleared.
      */
     public static void captureDepth(int fbW, int fbH) {
-        RenderTarget mainFb = Minecraft.getInstance().getMainRenderTarget();
+        RenderTarget mainFb = Minecraft.getInstance().gameRenderer.mainRenderTarget();
         if (mainFb == null) return;
         com.mojang.blaze3d.textures.GpuTexture depthGpu = mainFb.getDepthTexture();
         if (!(depthGpu instanceof GlTexture glDepth)) {
@@ -225,7 +225,7 @@ public final class EvfBlurRenderer {
      * GPU→CPU stall — call once per capture only.
      */
     public static float[] readLinearDepthCpu(int fbW, int fbH) {
-        RenderTarget mainFb = Minecraft.getInstance().getMainRenderTarget();
+        RenderTarget mainFb = Minecraft.getInstance().gameRenderer.mainRenderTarget();
         if (mainFb == null) return null;
         com.mojang.blaze3d.textures.GpuTexture depthGpu = mainFb.getDepthTexture();
         if (!(depthGpu instanceof GlTexture glDepth)) return null;
@@ -298,7 +298,7 @@ public final class EvfBlurRenderer {
         }
 
         Minecraft mc = Minecraft.getInstance();
-        RenderTarget mainFb = mc.getMainRenderTarget();
+        RenderTarget mainFb = mc.gameRenderer.mainRenderTarget();
         if (mainFb == null) {
             Photographica.LOGGER.warn("[Photographica] renderBlur: mainFb is null");
             return;

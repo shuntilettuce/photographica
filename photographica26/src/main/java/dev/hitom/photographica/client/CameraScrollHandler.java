@@ -50,7 +50,7 @@ public final class CameraScrollHandler {
 	/** Positive delta = scroll up. Returns true if consumed. */
 	public static boolean onScroll(double delta) {
 		Minecraft mc = Minecraft.getInstance();
-		if (mc.player == null || mc.screen != null) return false;
+		if (mc.player == null || mc.gui.screen() != null) return false;
 
 		boolean alt = InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
 				|| InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);

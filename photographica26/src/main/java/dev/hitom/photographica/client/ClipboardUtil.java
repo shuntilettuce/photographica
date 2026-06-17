@@ -115,7 +115,7 @@ public final class ClipboardUtil {
 
     private static void actionBar(String msg) {
         Minecraft mc = Minecraft.getInstance();
-        mc.execute(() -> mc.gui.setOverlayMessage(Component.literal(msg), false));
+        mc.execute(() -> mc.gui.hud.setOverlayMessage(Component.literal(msg), false));
     }
 
     private static Clipboard clipboard() {

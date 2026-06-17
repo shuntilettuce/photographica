@@ -112,7 +112,7 @@ public final class EvfBlurRenderer {
 
     /** Copy depth buffer. Call during LevelRenderEvents.END_MAIN. */
     public static void captureDepth(int fbW, int fbH) {
-        RenderTarget mainFb = Minecraft.getInstance().getMainRenderTarget();
+        RenderTarget mainFb = Minecraft.getInstance().gameRenderer.mainRenderTarget();
         if (mainFb == null) return;
         GpuTexture depthGpu = mainFb.getDepthTexture();
         if (!(depthGpu instanceof GlTexture glDepth)) return;
@@ -156,7 +156,7 @@ public final class EvfBlurRenderer {
         if (maxBlurPx < 0.5f) return;
 
         Minecraft mc = Minecraft.getInstance();
-        RenderTarget mainFb = mc.getMainRenderTarget();
+        RenderTarget mainFb = mc.gameRenderer.mainRenderTarget();
         GpuTexture gpuTex = mainFb.getColorTexture();
         if (!(gpuTex instanceof GlTexture glTex)) return;
         int mainTex = glTex.glId();

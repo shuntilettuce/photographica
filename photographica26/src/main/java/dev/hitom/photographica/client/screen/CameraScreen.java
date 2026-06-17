@@ -195,7 +195,7 @@ public class CameraScreen extends Screen {
                                 ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
                                 dirty = false;
                             }
-                            minecraft.setScreen(new SdCardBrowserScreen(stack, sdData, this));
+                            minecraft.gui.setScreen(new SdCardBrowserScreen(stack, sdData, this));
                         }));
                 addRenderableWidget(SafelightButton.ghost(cx + 5, btnY, 100,
                         Component.literal("閉じる"), b -> onClose()));

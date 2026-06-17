@@ -21,7 +21,7 @@ public final class ViewfinderOverlay {
 
     public static void extractRenderState(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.options.hideGui) return;
+        if (mc.player == null || mc.gui.hud.isHidden()) return;
         long now = System.currentTimeMillis();
         int sw = ctx.guiWidth(), sh = ctx.guiHeight();
 
@@ -35,7 +35,7 @@ public final class ViewfinderOverlay {
             return;
         }
         if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isShiftKeyDown()) return;
-        if (mc.screen != null) return;
+        if (mc.gui.screen() != null) return;
 
         float aspect = SnapmaticaClient.portraitOrientation ? 2f/3f : 3f/2f;
         int fh = (int)(sh*0.86f), fw = (int)(fh*aspect);

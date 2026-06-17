@@ -32,7 +32,7 @@ public final class VideoRecorderHud {
 
     public static void render(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.options.hideGui || mc.screen != null) return;
+        if (mc.player == null || mc.gui.hud.isHidden() || mc.gui.screen() != null) return;
 
         if (VideoRecorder.isRecording()) {
             renderRecording(ctx, mc);
