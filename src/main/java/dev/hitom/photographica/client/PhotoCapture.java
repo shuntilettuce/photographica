@@ -328,7 +328,10 @@ public final class PhotoCapture {
 				if (evfActive) {
 					dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(vpW, vpH);
 				}
-				// Photo capture: full CPU readback for per-pixel DoF processing
+				//? if <1.21.11 {
+				// Photo capture: CPU depth readback for per-pixel DoF.
+				// Skipped on >=1.21.11 where applyScheduledBlur() bakes GPU bokeh
+				// into the screenshot before capture, eliminating the GPU→CPU stall.
 				if (pendingId != null) {
 					FloatBuffer buf = BufferUtils.createFloatBuffer(vpW * vpH);
 					GL11.glReadPixels(0, 0, vpW, vpH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
@@ -344,6 +347,7 @@ public final class PhotoCapture {
 					pendingDepthFbW = vpW;
 					pendingDepthFbH = vpH;
 				}
+				//?}
 			}
 		}
 	}
@@ -398,10 +402,14 @@ public final class PhotoCapture {
 		float[] linearDepth = null;
 		int fbW = preRead != null ? pendingDepthFbW : fb.textureWidth;
 		int fbH = preRead != null ? pendingDepthFbH : fb.textureHeight;
+		//? if <1.21.11 {
+		// On >=1.21.11 applyScheduledBlur() bakes GPU bokeh into the framebuffer before
+		// capture, so linearDepth stays null and CPU DoF is skipped (no stall).
 		if (LensKind.hasLens(settings.lensType())
 				&& settings.aperture() <= 5.6f) {
 			linearDepth = preRead != null ? preRead : readLinearDepth(fb, fbW, fbH);
 		}
+		//?}
 
 		// Final references for use in the async screenshot callback (1.21.11+).
 		final float[] fLinearDepth = linearDepth;

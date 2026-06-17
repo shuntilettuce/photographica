@@ -309,12 +309,11 @@ public class GameRendererMixin {
 		// Snapshot state BEFORE captureIfPending() — both flags reset inside that call.
 		boolean wasAccumulating = PhotoCapture.isAccumulating();
 		boolean wasArmorStand = PhotoCapture.armorStandCapturePending;
+		// Apply EVF blur BEFORE capture so the screenshot contains GPU bokeh (1.21.11).
+		// No-op on <1.21.11 (blurScheduled is never set; blur is drawn directly from HUD).
+		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur();
 		PhotoCapture.captureIfPending();
 		VideoRecorder.captureFrameIfRecording();
-		// Execute any EVF preview blur scheduled by the HUD last frame. Runs here (after
-		// renderWorld, before the GUI) because 1.21.11 discards raw-GL framebuffer writes
-		// done during HUD rendering. No-op on <1.21.11 (which blurs directly from the HUD).
-		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur();
 		// Restore renderHand for the vanilla renderHand() call that follows
 		if (wasAccumulating || wasArmorStand || photographica$videoHandSuppressed) {
 			//? if <1.21.11 {
