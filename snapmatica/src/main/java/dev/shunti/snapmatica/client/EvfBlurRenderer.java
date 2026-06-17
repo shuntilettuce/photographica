@@ -47,6 +47,9 @@ public final class EvfBlurRenderer {
     //? if >=1.21.11 {
     /*private static int writeBackFbo   = -1;
     private static int centerReadFbo  = -1;
+    private static boolean blurScheduled = false;
+    private static int     schedFx, schedFy, schedFx2, schedFy2;
+    private static float   schedFocusDist, schedAperture, schedFocalLen;
     *///?}
 
     private static int locInSampler  = -1;
@@ -332,6 +335,24 @@ public final class EvfBlurRenderer {
         if (rawD >= 0.999999f) return SnapmaticaClient.FOCUS_INFINITY;  // sky / beyond far plane
         if (rawD < 0.001f) return -1.0f;
         return NEAR * currentDepthFar / (currentDepthFar - rawD * (currentDepthFar - NEAR));
+    }
+    *///?}
+
+    //? if >=1.21.11 {
+    /*// Records EVF blur parameters; actual rendering runs in applyScheduledBlur().
+    public static void scheduleBlur(int fx, int fy, int fx2, int fy2,
+                                    float focusDist, float aperture, float focalLenMm) {
+        schedFx = fx; schedFy = fy; schedFx2 = fx2; schedFy2 = fy2;
+        schedFocusDist = focusDist; schedAperture = aperture; schedFocalLen = focalLenMm;
+        blurScheduled = true;
+    }
+
+    // Applies the scheduled EVF blur (if any) to mainTex and clears the schedule.
+    public static void applyScheduledBlur() {
+        if (!blurScheduled) return;
+        blurScheduled = false;
+        renderBlur(schedFx, schedFy, schedFx2, schedFy2,
+                   schedFocusDist, schedAperture, schedFocalLen, DOF_SCALE_STILL);
     }
     *///?}
 

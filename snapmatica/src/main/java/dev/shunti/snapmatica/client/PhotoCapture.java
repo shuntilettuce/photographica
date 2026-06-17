@@ -237,17 +237,10 @@ public final class PhotoCapture {
             }
         }
 
-        if (capturePending && vpW > 0 && vpH > 0) {
-            // Use the depth texture's own dimensions, not the GL viewport: shader mods
-            // (Iris, etc.) can make those differ, causing readLinearDepthCpu to bail out
-            // and the saved photo to have no DoF even though the EVF preview looked fine.
-            float[] depth = EvfBlurRenderer.readLinearDepthCpu();
-            if (depth != null) {
-                pendingLinearDepth = depth;
-                pendingDepthFbW    = EvfBlurRenderer.depthTexW;
-                pendingDepthFbH    = EvfBlurRenderer.depthTexH;
-            }
-        }
+        // Depth readback for CPU DoF is no longer needed in 1.21.11: the EVF blur
+        // (GPU bokeh) is applied to mainTex in GameRendererMixin before captureIfPending(),
+        // so the screenshot already contains the correct DoF. Eliminating readLinearDepthCpu()
+        // removes the GPU→CPU sync stall that caused the freeze on photo capture.
         *///?} else {
         // Read from the currently bound framebuffer without switching.
         GL11.glGetError(); // clear any pending GL error
