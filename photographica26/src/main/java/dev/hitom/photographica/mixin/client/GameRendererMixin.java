@@ -94,8 +94,10 @@ public class GameRendererMixin {
         Minecraft mc = Minecraft.getInstance();
         float aspect = (float) mc.getWindow().getWidth() / (float) mc.getWindow().getHeight();
         float fovRad = (float) Math.toRadians(vFovDeg);
-        // JOML setPerspective: (fovY radians, aspect, zNear, zFar)
-        camState.projectionMatrix.setPerspective(fovRad, aspect, 0.05f, camState.depthFar);
+        // 26.2 uses reverse-Z with device-dependent ZeroToOne convention.
+        // Vanilla Projection.getMatrix() calls setPerspective(fov, aspect, zFar, zNear, zZeroToOne).
+        boolean zZeroToOne = com.mojang.blaze3d.systems.RenderSystem.getDevice().getDeviceInfo().isZZeroToOne();
+        camState.projectionMatrix.setPerspective(fovRad, aspect, camState.depthFar, 0.05f, zZeroToOne);
         camState.hudFov = (float) vFovDeg;
     }
 

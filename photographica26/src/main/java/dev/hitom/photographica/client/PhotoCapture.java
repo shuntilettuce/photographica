@@ -1179,9 +1179,9 @@ public final class PhotoCapture {
 		final float far  = 512.0f;
 		float[] depth = new float[fbW * fbH];
 		for (int i = 0; i < depth.length; i++) {
-			float d   = buf.get(i);
-			float ndc = 2.0f * d - 1.0f;
-			depth[i]  = 2.0f * near * far / (far + near - ndc * (far - near));
+			float d = buf.get(i);
+			// Reverse-Z [0,1]: d=1 at near, d=0 at far.
+			depth[i] = near * far / (near + d * (far - near));
 		}
 		return depth;
 	}

@@ -17,8 +17,8 @@ in vec2 texCoord;
 out vec4 fragColor;
 
 float linearDepth(float d) {
-    float ndc = 2.0 * d - 1.0;
-    return 2.0 * Near * Far / (Far + Near - ndc * (Far - Near));
+    // Reverse-Z [0,1]: d=1 at near, d=0 at far.
+    return Near * Far / (Near + d * (Far - Near));
 }
 
 // Physically-based thin-lens circle of confusion, projected onto the sensor and
