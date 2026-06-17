@@ -178,7 +178,10 @@ public final class VideoRecorder {
         int fbW = mainFb.width, fbH = mainFb.height;
         if (fbW > 0 && fbH > 0) {
             int rd = mc.options.renderDistance().get();
-            EvfBlurRenderer.updateDepthFar(mc.gameRenderer.getBasicProjectionMatrix(70.0f),
+            net.minecraft.client.renderer.state.level.CameraRenderState camSt =
+                    mc.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState;
+            EvfBlurRenderer.updateDepthFar(
+                    camSt != null ? camSt.projectionMatrix : null,
                     Math.max(rd * 64f, 256f));
             EvfBlurRenderer.captureDepth(fbW, fbH);
         }
@@ -252,11 +255,11 @@ public final class VideoRecorder {
         double guiScale = mc.getWindow().getGuiScale();
         int guiW = (int)(mc.getWindow().getWidth()  / guiScale);
         int guiH = (int)(mc.getWindow().getHeight() / guiScale);
-        // Realistic 1 block = 1 m scaling so DoF behaves like a real camera (the
-        // still viewfinder keeps the 200 miniature scale to match its CPU photo).
+        // Use the same DoF scale as the still viewfinder (DOF_SCALE_STILL) so that F5.6
+        // in video and F5.6 in the viewfinder produce matching bokeh.
         EvfBlurRenderer.renderBlur(0, 0, guiW, guiH,
                 currentFocusDepth, SnapmaticaClient.aperture,
-                SnapmaticaClient.focalLengthMm, EvfBlurRenderer.DOF_SCALE_VIDEO);
+                SnapmaticaClient.focalLengthMm, EvfBlurRenderer.DOF_SCALE_STILL);
     }
 
     private static void updateAutofocus(Minecraft mc) {

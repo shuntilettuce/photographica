@@ -158,7 +158,10 @@ public final class PhotoCapture {
         int vpH = viewport[3];
         if (vpW > 0 && vpH > 0) {
             int rd = mc.options.renderDistance().get();
-            EvfBlurRenderer.updateDepthFar(mc.gameRenderer.getBasicProjectionMatrix(70.0f),
+            net.minecraft.client.renderer.state.level.CameraRenderState camSt =
+                    mc.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState;
+            EvfBlurRenderer.updateDepthFar(
+                    camSt != null ? camSt.projectionMatrix : null,
                     Math.max(rd * 64f, 256f));
             EvfBlurRenderer.captureDepth(vpW, vpH);
             // The world raycast above is the PRIMARY focus distance. The GPU depth

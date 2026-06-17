@@ -219,7 +219,10 @@ public final class VideoRecorder {
         int fbH = mainFb.height;
         if (fbW > 0 && fbH > 0) {
             if (mc.gameRenderer != null) {
-                EvfBlurRenderer.updateDepthFar(mc.gameRenderer.getBasicProjectionMatrix(70.0f),
+                net.minecraft.client.renderer.state.level.CameraRenderState camSt =
+                        mc.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState;
+                EvfBlurRenderer.updateDepthFar(
+                        camSt != null ? camSt.projectionMatrix : null,
                         Math.max(mc.options.renderDistance().get() * 64f, 256f));
             }
             EvfBlurRenderer.captureDepth(fbW, fbH);
@@ -381,14 +384,13 @@ public final class VideoRecorder {
         float aperture = vs.aperture();
         if (aperture >= 8.0f) return;
         float fovDeg = recordingArmorStandEntityId >= 0 ? TRIPOD_FOV : videoFov;
-        // The render FOV gives a wide ~17 mm lens, which physically has near-infinite
-        // depth of field and almost no bokeh. With realistic 1 block = 1 m scaling, we
-        // boost the *bokeh* focal length to a cinematic portrait equivalent so the video
-        // keeps the wide framing but gains pleasing, real-camera-like subject separation.
+        // The render FOV gives a wide ~17 mm lens. Boost to a portrait equivalent so the
+        // video DoF matches the still viewfinder (which uses a 50 mm+ user-selected lens).
+        // Use DOF_SCALE_STILL (same as the still EVF) so F5.6 in video = F5.6 in stills.
         float realFocalMm  = (float)(12.0 / Math.tan(Math.toRadians(fovDeg / 2.0)));
         float bokehFocalMm = realFocalMm * BOKEH_FOCAL_BOOST;
         EvfBlurRenderer.applyVideoBlur(currentFocusDepth, aperture, bokehFocalMm,
-                EvfBlurRenderer.DOF_SCALE_VIDEO);
+                EvfBlurRenderer.DOF_SCALE_STILL);
     }
 
     // ── Post-processing ────────────────────────────────────────────────────────

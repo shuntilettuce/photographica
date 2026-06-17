@@ -327,8 +327,10 @@ public final class PhotoCapture {
 				// applyScheduledBlur() is called later (after renderLevel returns) so mainFb
 				// already has the current frame's colour content.
 				if (mc.gameRenderer != null) {
+					net.minecraft.client.renderer.state.level.CameraRenderState camSt_ =
+							mc.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState;
 					dev.hitom.photographica.client.render.EvfBlurRenderer.updateDepthFar(
-							mc.gameRenderer.getBasicProjectionMatrix(70.0f),
+							camSt_ != null ? camSt_.projectionMatrix : null,
 							Math.max(mc.options.renderDistance().get() * 64f, 256f));
 				}
 				dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(fbW, fbH);
