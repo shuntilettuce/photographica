@@ -17,7 +17,7 @@ import net.minecraft.item.ItemGroups;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
-//? if >=1.21.11 {
+//? if >=1.21.4 {
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 //?}
@@ -103,7 +103,7 @@ public final class ModBlocks {
         });
     }
 
-    //? if >=1.21.11 {
+    //? if >=1.21.4 {
     /*private static AbstractBlock.Settings bs(String name) {
         RegistryKey<Block> key = RegistryKey.of(RegistryKeys.BLOCK, Identifier.of(Photographica.MOD_ID, name));
         return AbstractBlock.Settings.create().registryKey(key);

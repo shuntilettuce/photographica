@@ -46,8 +46,11 @@ public final class CameraScrollHandler {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.currentScreen != null) return false;
 
-        // Only active while sneaking with viewfinder mode enabled
-        if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isSneaking()) return false;
+        // Active while sneaking with viewfinder mode enabled, OR any time while recording
+        // (lets you zoom / adjust the lens mid-shot — recording happens in any pose, not
+        // just the sneak viewfinder pose).
+        if (!VideoRecorder.isRecording()
+                && (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isSneaking())) return false;
 
         int dir = delta > 0 ? 1 : -1;
 

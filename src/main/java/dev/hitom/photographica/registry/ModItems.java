@@ -22,7 +22,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 import java.util.function.Function;
-//? if >=1.21.11 {
+//? if >=1.21.4 {
 /*import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.component.DataComponentTypes;
@@ -74,13 +74,25 @@ public final class ModItems {
 						.equipOnInteract(true)
 						.build());
 	}
+	*///?} else if >=1.21.4 {
+	/*private static Item.Settings chestEquippable(Item.Settings s) {
+		// 1.21.4 lacks EquippableComponent.Builder#equipOnInteract (added in 1.21.5);
+		// swappable=true still lets the camera be placed on armor-stand tripods.
+		RegistryKey<EquipmentAsset> asset = RegistryKey.of(EquipmentAssetKeys.REGISTRY_KEY,
+				Identifier.of(Photographica.MOD_ID, "camera"));
+		return s.component(DataComponentTypes.EQUIPPABLE,
+				EquippableComponent.builder(EquipmentSlot.CHEST)
+						.model(asset)
+						.swappable(true)
+						.build());
+	}
 	*///?} else {
 	private static Item.Settings chestEquippable(Item.Settings s) {
 		return s;
 	}
 	//?}
 
-	//? if >=1.21.11 {
+	//? if >=1.21.4 {
 	/*private static <T extends Item> T reg(String name, Function<Item.Settings, T> factory) {
 		RegistryKey<Item> key = RegistryKey.of(RegistryKeys.ITEM, Identifier.of(Photographica.MOD_ID, name));
 		return Registry.register(Registries.ITEM, key, factory.apply(new Item.Settings().registryKey(key)));
