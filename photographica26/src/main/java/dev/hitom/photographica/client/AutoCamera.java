@@ -43,6 +43,14 @@ public final class AutoCamera {
 	// cos(5°) — entities must be within this cone of the look direction
 	private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
 
+	// True when AF/MOB resolved its target to the infinity sentinel (sky / no subject).
+	// Focus only eases to FAR_ANCHOR (940m) to avoid flicker; this flag lets the
+	// viewfinder still label the distance "inf" rather than showing the anchor metres.
+	public static volatile boolean afAtInfinity = false;
+
+	// Largest finite focus stop, used as the easing anchor when AF targets infinity.
+	private static final float FAR_ANCHOR = 940.0f;
+
 	// Focus-pull (rack) easing. AF does not snap instantly: focusDistance is eased
 	// toward the target stop in log space each tick, so the lens "pulls" focus like
 	// a real motor instead of jumping.
@@ -140,6 +148,7 @@ public final class AutoCamera {
 		}
 
 		float snapped = snapFocus(targetDepth);
+		afAtInfinity = (snapped >= CameraSettings.FOCUS_INFINITY);
 		float current = updated.focusDistance();
 		float eased = pullFocus(current, snapped);
 		// Locked onto the target stop (or already there): nothing left to rack.
@@ -149,8 +158,9 @@ public final class AutoCamera {
 
 	/** Eases the current focus distance one tick toward the target stop in log space. */
 	private static float pullFocus(float current, float target) {
-		if (target >= CameraSettings.FOCUS_INFINITY) return CameraSettings.FOCUS_INFINITY;
-		if (current >= CameraSettings.FOCUS_INFINITY) current = 1000.0f;
+		// Ease toward FAR_ANCHOR instead of snapping to FOCUS_INFINITY on sky hits.
+		if (target >= CameraSettings.FOCUS_INFINITY) target = FAR_ANCHOR;
+		if (current >= CameraSettings.FOCUS_INFINITY) current = FAR_ANCHOR;
 		current = Math.max(0.01f, current);
 		float logCur = (float) Math.log(current);
 		float logTar = (float) Math.log(target);

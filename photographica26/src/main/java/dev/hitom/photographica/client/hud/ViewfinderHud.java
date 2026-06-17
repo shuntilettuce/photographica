@@ -1,5 +1,6 @@
 package dev.hitom.photographica.client.hud;
 
+import dev.hitom.photographica.client.AutoCamera;
 import dev.hitom.photographica.client.PhotoCapture;
 import dev.hitom.photographica.client.render.EvfBlurRenderer;
 import dev.hitom.photographica.component.CameraSettings;
@@ -86,11 +87,9 @@ public final class ViewfinderHud {
 		// scheduleBlur() stores parameters only — no raw GL here.
 		// applyScheduledBlur() in onWorldRenderEnd() applies the blur and writes the result
 		// directly into mainTex before the HUD starts, so no blit is needed here.
-		if (isMirrorless && LensKind.hasLens(s.lensType()) && s.aperture() < 8.0f) {
-			// Use the eased focusDistance from AutoCamera.tick() so the EVF blur
-			// transitions smoothly rather than snapping to the new depth instantly.
-			float evfFocusDist = s.focusDistance();
-			EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2, evfFocusDist, s.aperture(), s.focalLengthMm());
+		if (isMirrorless && LensKind.hasLens(s.lensType())) {
+			EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2,
+					s.focusDistance(), s.aperture(), s.focalLengthMm());
 		}
 
 		// Bezels (dim outside frame)
@@ -142,7 +141,9 @@ public final class ViewfinderHud {
 				focalPart);
 		ctx.text(tr, exposure, fx + 6, fy2 - tr.lineHeight - 14, COLOR_TEXT, true);
 		if (LensKind.hasLens(s.lensType())) {
-			String fd = fmtFocusDist(s.focusDistance());
+			boolean atInf = s.focusDistance() >= CameraSettings.FOCUS_INFINITY
+					|| (s.focusMode() != CameraSettings.FOCUS_MF && AutoCamera.afAtInfinity);
+			String fd = atInf ? "inf" : fmtFocusDist(s.focusDistance());
 			ctx.text(tr, fd, fx2 - tr.width(fd) - 6, fy + 4 + tr.lineHeight * 2 + 4, reticleColor, true);
 		}
 

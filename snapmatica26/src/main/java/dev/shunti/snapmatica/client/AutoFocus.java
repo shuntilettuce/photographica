@@ -22,19 +22,24 @@ public final class AutoFocus {
     private static final int FOCUS_AF  = 1;
     private static final int FOCUS_MOB = 2;
 
-    private static final float FAR_ANCHOR = 1000.0f;
-
-    private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
+    // True when AF/MOB resolved its target to the infinity sentinel (sky / no subject).
+    // The focus value only eases to FAR_ANCHOR to avoid foreground-blur flicker, so
+    // this flag lets the viewfinder label the distance "inf" instead of showing metres.
+    public static volatile boolean afAtInfinity = false;
 
     // Focus-pull (rack) easing. AF does not snap instantly: focusDistance is eased
     // toward the target in log space, so the lens "pulls" focus like a real motor.
     private static final float PULL_RATE     = 0.30f;  // fraction of remaining log-distance / tick
     private static final float PULL_MAX_STEP = 0.22f;  // max log units / tick (caps rack speed)
     private static final float PULL_SNAP_EPS = 0.01f;  // lock onto target below this log-distance
+    private static final float FAR_ANCHOR    = 1000.0f; // refocus from ∞ starts here (raycast range)
+    private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
 
     public static void tick(Minecraft mc) {
         if (mc.player == null || mc.level == null) return;
-        if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isShiftKeyDown()) return;
+        boolean active = (SnapmaticaClient.viewfinderSneakEnabled && mc.player.isShiftKeyDown())
+                || VideoRecorder.isRecording();
+        if (!active) return;
         if (SnapmaticaClient.focusMode == FOCUS_MF) return;
 
         float targetDepth;
@@ -48,12 +53,16 @@ public final class AutoFocus {
             return;
         }
 
-        SnapmaticaClient.focusDistance = pullFocus(SnapmaticaClient.focusDistance, snapFocus(targetDepth));
+        float target = snapFocus(targetDepth);
+        afAtInfinity = (target >= SnapmaticaClient.FOCUS_INFINITY);
+        SnapmaticaClient.focusDistance = pullFocus(SnapmaticaClient.focusDistance, target);
     }
 
     /** Eases the current focus distance one tick toward the target stop in log space. */
     private static float pullFocus(float current, float target) {
-        if (target >= SnapmaticaClient.FOCUS_INFINITY) return SnapmaticaClient.FOCUS_INFINITY;
+        // Ease toward FAR_ANCHOR instead of snapping to FOCUS_INFINITY on sky hits,
+        // to prevent bokeh flicker when the centre pixel briefly sweeps across sky.
+        if (target >= SnapmaticaClient.FOCUS_INFINITY) target = FAR_ANCHOR;
         if (current >= SnapmaticaClient.FOCUS_INFINITY) current = FAR_ANCHOR;
         current = Math.max(0.01f, current);
         float logCur = (float) Math.log(current);
