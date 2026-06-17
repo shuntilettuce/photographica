@@ -10,8 +10,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(EntityRenderer.class)
 public abstract class EntityRendererMixin {
 
+    // 26.x EntityRenderer hides name tags via submitNameDisplay (not submitNameTag).
     @Inject(
-            method = "submitNameTag",
+            method = "submitNameDisplay(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V",
             at = @At("HEAD"),
             cancellable = true,
             require = 0

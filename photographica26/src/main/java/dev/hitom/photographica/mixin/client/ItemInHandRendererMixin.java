@@ -11,7 +11,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ItemInHandRenderer.class)
 public class ItemInHandRendererMixin {
 
-    @Inject(method = "renderHandsWithItems", at = @At("HEAD"), cancellable = true)
+    // 26.2 renamed ItemInHandRenderer.renderHandsWithItems → submitHandsWithItems.
+    @Inject(method = "submitHandsWithItems", at = @At("HEAD"), cancellable = true)
     private void photographica$suppressHand(CallbackInfo ci) {
         // Hide the first-person hand during photo capture and during any video recording
         // (handheld or tripod) so the held camera/arm never appears in the shot or footage.

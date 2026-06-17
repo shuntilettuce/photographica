@@ -11,8 +11,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LevelRenderer.class)
 public class LevelRendererMixin {
 
+    // 26.2 renamed LevelRenderer.renderHitOutline → submitHitOutline.
     @Inject(
-            method = "renderHitOutline",
+            method = "submitHitOutline",
             at = @At("HEAD"),
             cancellable = true
     )

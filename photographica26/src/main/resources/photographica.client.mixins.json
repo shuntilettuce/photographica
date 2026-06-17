@@ -8,6 +8,7 @@
     "EntityRendererMixin",
     "GameRendererMixin",
     "ItemInHandRendererMixin",
+    "LevelExtractorMixin",
     "MouseMixin",
     "PlayerEntityRendererMixin",
     "WorldRendererMixin"
