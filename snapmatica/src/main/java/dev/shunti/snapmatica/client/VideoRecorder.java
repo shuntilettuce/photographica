@@ -57,7 +57,7 @@ public final class VideoRecorder {
     private static final float FOCUS_TOL          = 0.25f;
     // Second-order spring-damper focus motor. Critically damped (zeta = 1) so the lens
     // eases smoothly to the target and settles exactly on it — no overshoot/hunting.
-    private static final float AF_OMEGA   = 0.16f;
+    private static final float AF_OMEGA   = 0.35f;
     private static final float AF_ZETA    = 1.0f;
     private static final float AF_VEL_CAP = 0.30f;
     private static final float AF_SETTLE  = 0.004f;

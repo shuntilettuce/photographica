@@ -43,7 +43,7 @@ public final class VideoRecorder {
 
     private static final int   FOCUS_DWELL_FRAMES    = 20;
     private static final float FOCUS_TOL             = 0.25f;
-    private static final float AF_OMEGA              = 0.16f;
+    private static final float AF_OMEGA              = 0.35f;
     // Critically damped (zeta = 1): focus eases to the target with no overshoot/hunting.
     private static final float AF_ZETA               = 1.0f;
     private static final float AF_VEL_CAP            = 0.30f;
