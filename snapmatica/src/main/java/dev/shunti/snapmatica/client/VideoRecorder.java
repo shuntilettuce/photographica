@@ -55,10 +55,10 @@ public final class VideoRecorder {
     // ── Autofocus spring-damper constants ────────────────────────────────────────
     private static final int   FOCUS_DWELL_FRAMES = 20;
     private static final float FOCUS_TOL          = 0.25f;
-    // Second-order spring-damper focus motor. Underdamped (zeta<1) so the lens
-    // overshoots the target once and settles back, like a real AF motor hunting.
+    // Second-order spring-damper focus motor. Critically damped (zeta = 1) so the lens
+    // eases smoothly to the target and settles exactly on it — no overshoot/hunting.
     private static final float AF_OMEGA   = 0.16f;
-    private static final float AF_ZETA    = 0.50f;
+    private static final float AF_ZETA    = 1.0f;
     private static final float AF_VEL_CAP = 0.30f;
     private static final float AF_SETTLE  = 0.004f;
     // Throttle scene raycast to 10 Hz to avoid stalling on long-range/DH raycasts.

@@ -39,10 +39,10 @@ public final class VideoRecorder {
 
     private static final int   FOCUS_DWELL_FRAMES = 20;
     private static final float FOCUS_TOL          = 0.25f;
-    // Second-order spring-damper focus motor. Underdamped (zeta<1) so the lens
-    // overshoots the target once and settles back, like a real AF motor hunting.
+    // Second-order spring-damper focus motor. Critically damped (zeta = 1) so the lens
+    // eases smoothly to the target and settles exactly on it — no overshoot/hunting.
     private static final float AF_OMEGA   = 0.16f;   // natural frequency (per frame)
-    private static final float AF_ZETA    = 0.50f;   // damping ratio (<1 → single overshoot)
+    private static final float AF_ZETA    = 1.0f;    // damping ratio (=1 → no overshoot)
     private static final float AF_VEL_CAP = 0.30f;   // safety clamp on log-velocity/frame
     private static final float AF_SETTLE  = 0.004f;  // snap threshold (log-units)
     /** Multiplier from the render-FOV focal length to the (longer) bokeh focal length,
@@ -312,8 +312,7 @@ public final class VideoRecorder {
     /**
      * Advances focus one frame of a damped harmonic oscillator easing toward
      * focusTargetDepth in log space. The velocity state makes focus start slowly,
-     * accelerate, overshoot the target once, then settle back — the hunting motion
-     * of a real autofocus motor.
+     * accelerate, then ease in and settle exactly on the target — smooth, no overshoot.
      */
     private static void stepFocusSpring() {
         float logCur = (float) Math.log(Math.max(0.01f, currentFocusDepth));
