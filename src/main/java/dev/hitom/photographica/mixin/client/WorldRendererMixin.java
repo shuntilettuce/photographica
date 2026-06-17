@@ -85,7 +85,7 @@ public class WorldRendererMixin {
 	 * {@code mc.player != mc.player} evaluates to {@code false} and the player
 	 * entity is rendered normally.
 	 */
-	//? if <1.21.11 {
+	//? if <1.21.4 {
 	@Redirect(
 			method = "render(Lnet/minecraft/client/render/RenderTickCounter;ZLnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/GameRenderer;Lnet/minecraft/client/render/LightmapTextureManager;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
 			at = @At(value = "INVOKE", ordinal = 3,
@@ -99,11 +99,28 @@ public class WorldRendererMixin {
 		}
 		return camera.getFocusedEntity();
 	}
-	//?}
+	//?} else if <1.21.11 {
+	/*// 1.21.4: the entity loop moved into getEntitiesToRender(). The self-player skip is
+	// still the 4th getFocusedEntity() call (ordinal 3):
+	//   if (entity instanceof ClientPlayerEntity && camera.getFocusedEntity() != entity) continue;
+	@Redirect(
+			method = "getEntitiesToRender(Lnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/Frustum;Ljava/util/List;)Z",
+			at = @At(value = "INVOKE", ordinal = 3,
+					target = "Lnet/minecraft/client/render/Camera;getFocusedEntity()Lnet/minecraft/entity/Entity;")
+	)
+	private Entity photographica$allowPlayerRenderDuringArmorStandCapture(Camera camera) {
+		if (PhotoCapture.armorStandCapturePending
+				|| VideoRecorder.isTripodRecording()) {
+			MinecraftClient mc = MinecraftClient.getInstance();
+			if (mc.player != null) return mc.player;
+		}
+		return camera.getFocusedEntity();
+	}
+	*///?}
 
 	/** During tripod recording, prevent the camera armor stand from being rendered
 	 *  so the view from inside its model is unobstructed. */
-	//? if <1.21.11 {
+	//? if <1.21.4 {
 	@Redirect(
 			method = "render(Lnet/minecraft/client/render/RenderTickCounter;ZLnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/GameRenderer;Lnet/minecraft/client/render/LightmapTextureManager;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
 			at = @At(value = "INVOKE",
@@ -117,7 +134,22 @@ public class WorldRendererMixin {
 		}
 		return dispatcher.shouldRender(entity, frustum, x, y, z);
 	}
-	//?}
+	//?} else if <1.21.11 {
+	/*// 1.21.4: the single shouldRender() cull also lives in getEntitiesToRender().
+	@Redirect(
+			method = "getEntitiesToRender(Lnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/Frustum;Ljava/util/List;)Z",
+			at = @At(value = "INVOKE",
+					target = "Lnet/minecraft/client/render/entity/EntityRenderDispatcher;shouldRender(Lnet/minecraft/entity/Entity;Lnet/minecraft/client/render/Frustum;DDD)Z")
+	)
+	private boolean photographica$hideTripodStandFromRender(EntityRenderDispatcher dispatcher, Entity entity,
+			Frustum frustum, double x, double y, double z) {
+		if (VideoRecorder.isTripodRecording()
+				&& entity.getId() == VideoRecorder.getRecordingArmorStandEntityId()) {
+			return false;
+		}
+		return dispatcher.shouldRender(entity, frustum, x, y, z);
+	}
+	*///?}
 
 	// ── 1.21.11 port ──────────────────────────────────────────────────────────────
 	// In 1.21.11 the per-entity render loop (incl. the self-player skip and the
