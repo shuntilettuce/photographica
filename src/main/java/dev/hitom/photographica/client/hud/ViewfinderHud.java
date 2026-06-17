@@ -88,19 +88,11 @@ public final class ViewfinderHud {
 		// Per-pixel CoC is computed in the shader using the captured depth texture.
 		if (isMirrorless && LensKind.hasLens(s.lensType()) && s.aperture() < 8.0f) {
 			//? if >=1.21.11 {
-			/*// With Iris shaders the HUD render phase discards raw-GL writes (they are
-			// batched by GuiRenderState), so the blur must be deferred: scheduled here and
-			// executed by GameRendererMixin.applyScheduledBlur() right after renderWorld(),
-			// which writes it back into the scene colour texture via the writeBackFbo path.
-			// Without Iris (vanilla 1.21.11) the raw-GL call path is used directly here;
-			// renderBlur() falls back to the prevFbo+scissor approach, avoiding the black-
-			// screen and NVIDIA driver crash the writeBackFbo approach causes with vanilla.
-			if (EvfBlurRenderer.isIrisShadersActive()) {
-			    EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture(), s.focalLengthMm());
-			} else {
-			    EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture(), s.focalLengthMm(),
-			            EvfBlurRenderer.DOF_SCALE_STILL);
-			}
+			/*// Schedule the blur to run in GameRendererMixin before captureIfPending() so the
+			// screenshot captures the already-blurred scene. applyScheduledBlur() writes the
+			// result straight into the scene colour texture (writeBackFbo), scissored to the
+			// viewfinder frame — works for both vanilla and Iris on 1.21.11.
+			EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture(), s.focalLengthMm());
 			*///?} else {
 			EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture(), s.focalLengthMm(),
 					EvfBlurRenderer.DOF_SCALE_STILL);

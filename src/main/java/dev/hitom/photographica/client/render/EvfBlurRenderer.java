@@ -69,44 +69,15 @@ public final class EvfBlurRenderer {
     // GL_TEXTURE_COMPARE_MODE = 0x884C, GL_NONE = 0  (OpenGL 1.4+)
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
 
-    // EVF schedule→execute state (used by the 1.21.11 + Iris path). With Iris shaders the
-    // HUD render phase is recorded by GuiRenderState and discards raw-GL writes, so the blur
-    // is deferred: scheduled from the HUD, executed right after renderWorld() via applyScheduledBlur().
-    // Without Iris (vanilla 1.21.11) we call renderBlur() directly from the HUD instead, using
-    // the prevFbo+scissor fallback to avoid the black-screen / NVIDIA driver crash that the
-    // writeBackFbo approach causes with vanilla's framebuffer management.
+    // EVF schedule→execute state (1.21.11). 1.21.11 routes HUD draws through a deferred
+    // GuiRenderState that discards raw-GL framebuffer writes done during HUD rendering, so the
+    // blur is scheduled from the HUD and executed right after renderWorld() — writing the result
+    // straight into the scene colour texture (writeBackFbo), scissored to the viewfinder frame.
+    // Works for both vanilla and Iris. Harmless/no-op on <1.21.11, which draws directly from the HUD.
     private static int writeBackFbo   = -1;
-    private static int writeBackFbTex = 0;
-    private static boolean writeBackWarned = false;
     private static boolean blurScheduled = false;
     private static int   scheduledFx, scheduledFy, scheduledFx2, scheduledFy2;
     private static float scheduledFocusDist, scheduledAperture, scheduledFocalLen;
-
-    // Cached result of Iris shader-pack detection (refreshed every 2 s).
-    private static boolean shadersActive  = false;
-    private static long    shadersCheckMs = 0L;
-
-    /**
-     * Returns true when Iris (or Oculus) has a shader pack active. Checked via reflection
-     * so there is no compile-time Iris dependency. Result is cached for 2 s to keep the
-     * per-frame fast path to two integer comparisons.
-     */
-    public static boolean isIrisShadersActive() {
-        long now = System.currentTimeMillis();
-        if (now - shadersCheckMs < 2000L) return shadersActive;
-        shadersCheckMs = now;
-        boolean result = false;
-        try {
-            net.fabricmc.loader.api.FabricLoader loader = net.fabricmc.loader.api.FabricLoader.getInstance();
-            if (loader.isModLoaded("iris") || loader.isModLoaded("oculus")) {
-                Class<?> cls = Class.forName("net.irisshaders.iris.api.v0.IrisApi");
-                Object api = cls.getMethod("getInstance").invoke(null);
-                result = (Boolean) api.getClass().getMethod("isShaderPackInUse").invoke(api);
-            }
-        } catch (Throwable ignored) {}
-        shadersActive = result;
-        return result;
-    }
 
     /** Records EVF blur params to be executed after renderWorld() (1.21.11 schedule→execute). */
     public static void scheduleBlur(int fx, int fy, int fx2, int fy2,
@@ -275,60 +246,26 @@ public final class EvfBlurRenderer {
         GL20.glUniform2f(locBlurDir, 1.0f, 0.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
-        // ---- Pass 2: Vertical blur, aux → main ----
-        //? if >=1.21.11 {
-        /*if (isIrisShadersActive()) {
-            // Iris path: write the full-frame blur back into the scene colour texture via a
-            // dedicated FBO. The HUD bezels drawn later mask everything outside the viewfinder
-            // so no scissor is needed. try-finally ensures the texture is always detached
-            // before ScreenshotRecorder.takeScreenshot() runs — two FBOs holding the same
-            // texture simultaneously crashes the NVIDIA driver (EXCEPTION_ACCESS_VIOLATION).
-            if (writeBackFbo == -1) writeBackFbo = GL30.glGenFramebuffers();
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
-            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
-                    GL11.GL_TEXTURE_2D, mainTex, 0);
-            writeBackFbTex = mainTex;
-            try {
-                if (GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER) == GL30.GL_FRAMEBUFFER_COMPLETE) {
-                    GL11.glViewport(0, 0, fbW, fbH);
-                    GL13.glActiveTexture(GL13.GL_TEXTURE0);
-                    GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
-                    GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
-                    GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
-                } else if (!writeBackWarned) {
-                    writeBackWarned = true;
-                    Photographica.LOGGER.warn("[EvfBlurRenderer] scene FBO not renderable — skipping EVF blur.");
-                }
-            } finally {
-                GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
-                        GL11.GL_TEXTURE_2D, 0, 0);
-            }
-        } else {
-            // Vanilla path (no Iris): render to the currently-bound FBO with a scissor
-            // clipped to the viewfinder area. Avoids the black-screen / driver crash that
-            // the writeBackFbo approach causes with vanilla's framebuffer management.
-            double scale = mc.getWindow().getScaleFactor();
-            int scX = (int)(fx  * scale);
-            int scY = fbH - (int)(fy2 * scale);
-            int scW = (int)((fx2 - fx) * scale);
-            int scH = (int)((fy2 - fy) * scale);
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
-            GL11.glViewport(0, 0, fbW, fbH);
-            GL11.glEnable(GL11.GL_SCISSOR_TEST);
-            GL11.glScissor(scX, scY, scW, scH);
-            GL13.glActiveTexture(GL13.GL_TEXTURE0);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
-            GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
-            GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
-        }
-        *///?} else {
+        // ---- Pass 2: Vertical blur, aux → main (scissored to viewfinder region) ----
         double scale = mc.getWindow().getScaleFactor();
         int scX = (int)(fx  * scale);
         int scY = fbH - (int)(fy2 * scale);
         int scW = (int)((fx2 - fx) * scale);
         int scH = (int)((fy2 - fy) * scale);
 
+        //? if >=1.21.11 {
+        /*// Write the blur straight back into the scene colour texture via a dedicated FBO.
+        // Scissored to the viewfinder frame so only that region is overwritten. mainTex is
+        // detached immediately after the draw: leaving it attached while ScreenshotRecorder
+        // reads the same texture from the main framebuffer crashes the NVIDIA driver
+        // (EXCEPTION_ACCESS_VIOLATION in nvoglv64.dll).
+        if (writeBackFbo == -1) writeBackFbo = GL30.glGenFramebuffers();
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                GL11.GL_TEXTURE_2D, mainTex, 0);
+        *///?} else {
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
+        //?}
         GL11.glViewport(0, 0, fbW, fbH);
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
         GL11.glScissor(scX, scY, scW, scH);
@@ -336,7 +273,11 @@ public final class EvfBlurRenderer {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
         GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
-        //?}
+
+        //? if >=1.21.11 {
+        /*GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                GL11.GL_TEXTURE_2D, 0, 0);
+        *///?}
 
         // ---- Restore GL state ----
         if (!scissorWasEnabled) GL11.glDisable(GL11.GL_SCISSOR_TEST);
