@@ -249,22 +249,26 @@ public final class EvfBlurRenderer {
         // dedicated FBO. The HUD bezels drawn later mask everything outside the viewfinder
         // frame, so no scissor is needed; a raw-GL write to the HUD-time framebuffer would
         // be discarded by 1.21.11's deferred GuiRenderState.
-        if (writeBackFbo == -1 || writeBackFbTex != mainTex) {
-            if (writeBackFbo != -1) GL30.glDeleteFramebuffers(writeBackFbo);
+        if (writeBackFbo == -1) {
             writeBackFbo = GL30.glGenFramebuffers();
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
+        }
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
+        // Always (re-)attach mainTex: we detach at the end of each call so that
+        // ScreenshotRecorder.takeScreenshot() never sees the same texture in two FBOs
+        // simultaneously (causes EXCEPTION_ACCESS_VIOLATION in nvoglv64.dll).
+        if (writeBackFbTex != mainTex) {
             GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
                     GL11.GL_TEXTURE_2D, mainTex, 0);
             writeBackFbTex = mainTex;
         } else {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                    GL11.GL_TEXTURE_2D, mainTex, 0);
         }
         // Only write the blur back into the scene texture if this FBO is actually
         // renderable. With Sodium/Iris the main colour attachment can be a format or
         // target this raw-GL FBO cannot draw into; drawing anyway produces a fully
         // BLACK viewfinder. When incomplete, skip the write-back so the un-blurred
-        // (but visible) scene is shown instead — captured photos still get CPU DoF
-        // independently, so no depth-of-field is lost on the saved image.
+        // (but visible) scene is shown instead.
         if (GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER) == GL30.GL_FRAMEBUFFER_COMPLETE) {
             GL11.glViewport(0, 0, fbW, fbH);
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
@@ -276,13 +280,15 @@ public final class EvfBlurRenderer {
                 writeBackWarned = true;
                 dev.hitom.photographica.Photographica.LOGGER.warn(
                         "[EvfBlurRenderer] scene framebuffer not renderable for live EVF blur "
-                        + "(skipping preview blur; captured photos keep full DoF).");
+                        + "(skipping preview blur).");
             }
-            // Drop the cached attachment so we retry next frame if the texture changes.
-            GL30.glDeleteFramebuffers(writeBackFbo);
-            writeBackFbo   = -1;
-            writeBackFbTex = 0;
         }
+        // Detach mainTex immediately after use. Leaving it attached while
+        // ScreenshotRecorder reads the same texture from the main framebuffer
+        // puts two FBOs in conflict over the same texture, which crashes the
+        // NVIDIA driver (EXCEPTION_ACCESS_VIOLATION in nvoglv64.dll).
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                GL11.GL_TEXTURE_2D, 0, 0);
         *///?} else {
         double scale = mc.getWindow().getScaleFactor();
         int scX = (int)(fx  * scale);
