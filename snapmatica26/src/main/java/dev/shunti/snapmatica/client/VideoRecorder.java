@@ -36,10 +36,6 @@ public final class VideoRecorder {
     /** Vertical FOV (deg) used while recording — Alt+scroll zoom adjusts this. */
     public static volatile float videoFov = VIDEO_FOV_MAX;
 
-    /** Multiplier from the render-FOV focal length to the (longer) bokeh focal length,
-     *  giving wide video a portrait-lens look while keeping the wide framing. */
-    private static final float BOKEH_FOCAL_BOOST = 3.0f;
-
     private static int currentFps = FPS;
 
     // 0 = off, 1 = light (2-frame), 2 = strong (4-frame)
@@ -260,15 +256,14 @@ public final class VideoRecorder {
         int guiW = (int)(mc.getWindow().getWidth()  / guiScale);
         int guiH = (int)(mc.getWindow().getHeight() / guiScale);
         // Depth of field follows the video angle of view (zoom). Derive the focal length
-        // from the live video FOV — zooming in (narrower FOV) lengthens the focal length
-        // and shallows the DoF, just like a real lens. Boost to a portrait equivalent so a
-        // wide shot still separates the subject. DOF_SCALE_STILL matches the still EVF so
-        // F5.6 in video = F5.6 in the viewfinder.
-        float realFocalMm  = (float)(12.0 / Math.tan(Math.toRadians(videoFov / 2.0)));
-        float bokehFocalMm = realFocalMm * BOKEH_FOCAL_BOOST;
+        // from the live video FOV (the focal that physically produces this FOV on a 24 mm
+        // sensor). No bokeh boost: the DoF is exactly what a still photo at this same angle
+        // of view would show, so wide shots have deep DoF and zooming in shallows it — like
+        // a real lens. DOF_SCALE_STILL matches the still EVF so F5.6 video = F5.6 stills.
+        float realFocalMm = (float)(12.0 / Math.tan(Math.toRadians(videoFov / 2.0)));
         EvfBlurRenderer.renderBlur(0, 0, guiW, guiH,
                 currentFocusDepth, SnapmaticaClient.aperture,
-                bokehFocalMm, EvfBlurRenderer.DOF_SCALE_STILL);
+                realFocalMm, EvfBlurRenderer.DOF_SCALE_STILL);
     }
 
     private static void updateAutofocus(Minecraft mc) {

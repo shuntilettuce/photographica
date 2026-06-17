@@ -45,9 +45,6 @@ public final class VideoRecorder {
     private static final float AF_ZETA    = 1.0f;    // damping ratio (=1 → no overshoot)
     private static final float AF_VEL_CAP = 0.30f;   // safety clamp on log-velocity/frame
     private static final float AF_SETTLE  = 0.004f;  // snap threshold (log-units)
-    /** Multiplier from the render-FOV focal length to the (longer) bokeh focal length,
-     *  giving wide video a portrait-lens look while keeping the wide framing. */
-    private static final float BOKEH_FOCAL_BOOST = 3.0f;
 
     // ── Recording state ────────────────────────────────────────────────────────
     private static volatile boolean recording      = false;
@@ -383,12 +380,14 @@ public final class VideoRecorder {
         float aperture = vs.aperture();
         if (aperture >= 8.0f) return;
         float fovDeg = recordingArmorStandEntityId >= 0 ? TRIPOD_FOV : videoFov;
-        // The render FOV gives a wide ~17 mm lens. Boost to a portrait equivalent so the
-        // video DoF matches the still viewfinder (which uses a 50 mm+ user-selected lens).
-        // Use DOF_SCALE_STILL (same as the still EVF) so F5.6 in video = F5.6 in stills.
-        float realFocalMm  = (float)(12.0 / Math.tan(Math.toRadians(fovDeg / 2.0)));
-        float bokehFocalMm = realFocalMm * BOKEH_FOCAL_BOOST;
-        EvfBlurRenderer.applyVideoBlur(currentFocusDepth, aperture, bokehFocalMm,
+        // Derive the focal length from the live video FOV (the focal that physically
+        // produces this FOV on a 24 mm-tall sensor). No bokeh boost: the DoF is now
+        // exactly what a still photo at this same angle of view would show, so wide
+        // shots have deep DoF and zooming in shallows it — like a real lens. Zooming
+        // (Alt+scroll) changes fovDeg live, so the bokeh tracks the zoom. DOF_SCALE_STILL
+        // matches the still EVF so F5.6 video = F5.6 stills at equal framing.
+        float realFocalMm = (float)(12.0 / Math.tan(Math.toRadians(fovDeg / 2.0)));
+        EvfBlurRenderer.applyVideoBlur(currentFocusDepth, aperture, realFocalMm,
                 EvfBlurRenderer.DOF_SCALE_STILL);
     }
 
