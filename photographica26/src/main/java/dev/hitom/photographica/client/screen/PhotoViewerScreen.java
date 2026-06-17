@@ -51,13 +51,14 @@ public class PhotoViewerScreen extends Screen {
         missing = false;
         loadImage();
 
-        // Back/close button — pushed up to make room for the copy button below it.
-        addRenderableWidget(SafelightButton.ghost(width / 2 - 50, height - 46, 100,
+        // Close and copy buttons sit side by side on a single row so they don't
+        // stack vertically into the photo above them.
+        addRenderableWidget(SafelightButton.ghost(width / 2 - 102, height - 26, 100,
                 Component.literal(parent != null ? "← 戻る" : "閉じる"),
                 b -> onClose()));
 
         // Copy-to-clipboard button — copies the photo PNG as a pasteable image.
-        addRenderableWidget(SafelightButton.primary(width / 2 - 50, height - 24, 100,
+        addRenderableWidget(SafelightButton.primary(width / 2 + 2, height - 26, 100,
                 Component.literal("📋 コピー"),
                 b -> copyToClipboard()));
     }
@@ -227,10 +228,19 @@ public class PhotoViewerScreen extends Screen {
         String location = String.format("%s (%d, %d, %d)",
                 data.dimension(), data.x(), data.y(), data.z());
 
-        ctx.centeredText(font, Component.literal(header), width / 2, 6, 0xFFFFFFFF);
+        // Photographer + capture date/time share one horizontal line at the top so
+        // the date doesn't stack below the header and overlap the photo.
         String dateTime = data.captureDateTimeDisplay();
-        if (!dateTime.isEmpty()) {
-            ctx.centeredText(font, Component.literal(dateTime), width / 2, 18, 0xFFB0B0B0);
+        if (dateTime.isEmpty()) {
+            ctx.centeredText(font, Component.literal(header), width / 2, 6, 0xFFFFFFFF);
+        } else {
+            String sep = "   ";
+            int hw = font.width(header);
+            int sw = font.width(sep);
+            int dw = font.width(dateTime);
+            int startX = width / 2 - (hw + sw + dw) / 2;
+            ctx.text(font, Component.literal(header), startX, 6, 0xFFFFFFFF, true);
+            ctx.text(font, Component.literal(dateTime), startX + hw + sw, 6, 0xFFB0B0B0, true);
         }
         ctx.text(font, Component.literal(exposure), 8, height - 40, 0xFFB0B0B0, true);
         ctx.text(font, Component.literal(location), 8, height - 28, 0xFF808080, true);

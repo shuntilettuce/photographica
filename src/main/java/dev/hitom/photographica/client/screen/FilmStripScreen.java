@@ -130,10 +130,10 @@ public class FilmStripScreen extends Screen {
             // Amber sprocket-hole border
             ctx.fill(tx - 1, ty - 1, tx + thumb.guiW() + 1, ty + thumb.guiH() + 1, 0xFFB07018);
             //? if >=1.21.11 {
-            /*ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, thumb.id(), tx, ty, 0f, 0f, thumb.guiW(), thumb.guiH(), thumb.texW(), thumb.texH());*/
+            /*ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, thumb.id(), tx, ty, 0f, 0f, thumb.guiW(), thumb.guiH(), thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH());*/
             //?} else {
             //? if >=1.21.4 {
-            /*ctx.drawTexture(net.minecraft.client.render.RenderLayer::getGuiTextured, thumb.id(), tx, ty, 0f, 0f, thumb.guiW(), thumb.guiH(), thumb.texW(), thumb.texH());*/
+            /*ctx.drawTexture(net.minecraft.client.render.RenderLayer::getGuiTextured, thumb.id(), tx, ty, 0f, 0f, thumb.guiW(), thumb.guiH(), thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH());*/
             //?} else {
             ctx.drawTexture(thumb.id(), tx, ty, thumb.guiW(), thumb.guiH(),
                     0f, 0f, thumb.texW(), thumb.texH(), thumb.texW(), thumb.texH());

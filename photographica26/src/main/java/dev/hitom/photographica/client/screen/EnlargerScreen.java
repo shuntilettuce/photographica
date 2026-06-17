@@ -27,7 +27,13 @@ public class EnlargerScreen extends AbstractContainerScreen<EnlargerScreenHandle
                 b -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 1)));
     }
 
-    public void extractContents(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    @Override
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+        // Draw the world dirt/blur backdrop first, then our panel chrome on top.
+        // The base AbstractContainerScreen.extractContents (run during extractRenderState)
+        // then handles labels (extractLabels), slot item icons and the button widgets.
+        super.extractBackground(ctx, mouseX, mouseY, delta);
+
         int x = this.leftPos, y = this.topPos, w = imageWidth, h = imageHeight;
 
         GuiHelper.drawPanel(ctx, x, y, w, h);
@@ -67,13 +73,6 @@ public class EnlargerScreen extends AbstractContainerScreen<EnlargerScreenHandle
 
         // Nameplate
         GuiHelper.drawNameplate(ctx, x + 6, y + 80, 164);
-    }
-
-    @Override
-    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
-        this.extractBackground(ctx, mouseX, mouseY, delta);
-        super.extractRenderState(ctx, mouseX, mouseY, delta);
-        this.extractTooltip(ctx, mouseX, mouseY);
     }
 
     protected void extractLabels(GuiGraphicsExtractor ctx, int mouseX, int mouseY) {
