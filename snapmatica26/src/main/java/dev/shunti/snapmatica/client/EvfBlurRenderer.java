@@ -273,8 +273,8 @@ public final class EvfBlurRenderer {
         float[] linear = new float[fbW * fbH];
         for (int i = 0; i < linear.length; i++) {
             float d = buf.get(i);
-            // Reverse-Z [0,1]: d=1 at near, d=0 at far.
-            linear[i] = near * far / (near + d * (far - near));
+            float ndc = 2.0f * d - 1.0f;
+            linear[i] = 2.0f * near * far / (far + near - ndc * (far - near));
         }
         return linear;
     }
