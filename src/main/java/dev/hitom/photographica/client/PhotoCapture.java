@@ -1389,11 +1389,8 @@ public final class PhotoCapture {
 				boolean fg = isFgMap[iy * iw + ix];
 				float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
 				for (int dx = -r; dx <= r; dx++) {
-					int sx = Math.max(0, Math.min(iw - 1, ix + dx));
-					// Foreground pixels (nearer than focus): allow all contributions so the
-					// bokeh disc extends past the geometric silhouette, softening near edges.
-					// Background pixels: down-weight sharper/closer samples so in-focus
-					// foreground doesn't bleed into the soft background.
+					int sx = ix + dx;
+					if (sx < 0 || sx >= iw) continue;
 					float w = fg ? 1.0f : Math.max(0.10f, Math.min(1.0f, cocMap[iy * iw + sx] / coc));
 					if (w < 0.01f) continue;
 					int c = niGet(src, sx, iy);
@@ -1424,7 +1421,8 @@ public final class PhotoCapture {
 				boolean fg = isFgMap[iy * iw + ix];
 				float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
 				for (int dy = -r; dy <= r; dy++) {
-					int sy = Math.max(0, Math.min(ih - 1, iy + dy));
+					int sy = iy + dy;
+					if (sy < 0 || sy >= ih) continue;
 					float w = fg ? 1.0f : Math.max(0.10f, Math.min(1.0f, cocMap[sy * iw + ix] / coc));
 					if (w < 0.01f) continue;
 					int c = hBuf[sy * iw + ix];

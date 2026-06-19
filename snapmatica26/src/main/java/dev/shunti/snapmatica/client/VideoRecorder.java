@@ -57,21 +57,18 @@ public final class VideoRecorder {
 
     private static final AtomicInteger writtenFrames = new AtomicInteger(0);
 
-    // Autofocus state — independent of the still-camera focusDistance so video
-    // DoF tracks the scene even when the viewfinder (sneak mode) is not active.
-    private static final int   FOCUS_DWELL_FRAMES  = 20;
-    private static final float FOCUS_TOL           = 0.25f;
-    // Second-order spring-damper focus motor. Critically damped (zeta = 1) so the lens
-    // eases smoothly to the target and settles exactly on it — no overshoot/hunting.
-    private static final float AF_OMEGA   = 0.16f;   // natural frequency (per frame)
-    private static final float AF_ZETA    = 1.0f;    // damping ratio (=1 → no overshoot)
-    private static final float AF_VEL_CAP = 0.30f;   // safety clamp on log-velocity/frame
-    private static final float AF_SETTLE  = 0.004f;  // snap threshold (log-units)
-    private static float currentFocusDepth   = 5.0f;
-    private static float focusTargetDepth    = 5.0f;
-    private static float focusVelocity       = 0.0f;
-    private static float focusCandidateDepth = 5.0f;
-    private static int   focusCandidateFrames = 0;
+    // Autofocus constants — identical to AutoFocus.java for same feel as photo viewfinder.
+    private static final float AF_PULL_RATE  = 0.50f;
+    private static final float AF_PULL_MAX   = 0.22f;
+    private static final float AF_SNAP_EPS   = 0.01f;
+    // Throttle scene raycast to 10 Hz to avoid stalling on long-range/DH raycasts.
+    private static final long  AF_QUERY_INTERVAL_MS = 100L;
+    // Step focus at 20 Hz to match AutoFocus.tick() rate.
+    private static final long  AF_STEP_INTERVAL_MS  =  50L;
+    private static float currentFocusDepth = 5.0f;
+    private static float focusTargetDepth  = 5.0f;
+    private static long  lastAfQueryMs     = 0L;
+    private static long  lastAfStepMs      = 0L;
 
     /** smoothCamera state saved at record start, restored on stop. */
     private static boolean prevSmoothCamera = false;
@@ -118,14 +115,12 @@ public final class VideoRecorder {
         nextFrameMs   = recordStartMs;
         frameMetas    = new ArrayList<>(MAX_FRAMES);
 
-        // Probe scene depth immediately so the first frame doesn't start with the
-        // 5-block default and show wrong blur until the dwell-time AF kicks in.
+        // Probe scene depth immediately so the first frame gets correct focus/DoF.
         float initDepth = computeSceneFocusDepth(mc);
-        currentFocusDepth    = (initDepth > 0.3f && initDepth < 999.0f) ? initDepth : 5.0f;
-        focusTargetDepth     = currentFocusDepth;
-        focusVelocity        = 0.0f;
-        focusCandidateDepth  = currentFocusDepth;
-        focusCandidateFrames = 0;
+        currentFocusDepth = (initDepth > 0.3f && initDepth < 999.0f) ? initDepth : 5.0f;
+        focusTargetDepth  = currentFocusDepth;
+        lastAfQueryMs     = System.currentTimeMillis();
+        lastAfStepMs      = System.currentTimeMillis();
 
         rawDir = new File(mc.gameDirectory, "snapmatica/video_temp/" + sessionId + "/raw");
         if (!rawDir.mkdirs()) {
@@ -267,38 +262,26 @@ public final class VideoRecorder {
     }
 
     private static void updateAutofocus(Minecraft mc) {
-        float centreDepth = Math.max(computeSceneFocusDepth(mc), 0.3f);
-        if (Math.abs(centreDepth - focusCandidateDepth)
-                / Math.max(focusCandidateDepth, 0.1f) <= FOCUS_TOL) {
-            focusCandidateFrames++;
-            if (focusCandidateFrames >= FOCUS_DWELL_FRAMES) {
-                focusTargetDepth = focusCandidateDepth;  // commit a confirmed new target
-            }
-        } else {
-            focusCandidateDepth  = centreDepth;
-            focusCandidateFrames = 0;
+        long nowMs = System.currentTimeMillis();
+        if (nowMs - lastAfQueryMs >= AF_QUERY_INTERVAL_MS) {
+            lastAfQueryMs = nowMs;
+            float sceneDepth = computeSceneFocusDepth(mc);
+            focusTargetDepth = Math.max(sceneDepth, 0.3f);
         }
-        stepFocusSpring();
+        if (nowMs - lastAfStepMs >= AF_STEP_INTERVAL_MS) {
+            lastAfStepMs = nowMs;
+            stepFocusLerp();
+        }
     }
 
-    /**
-     * Advances focus one frame of a damped harmonic oscillator easing toward
-     * focusTargetDepth in log space. The velocity state makes focus start slowly,
-     * accelerate, then ease in and settle exactly on the target — smooth, no overshoot.
-     */
-    private static void stepFocusSpring() {
-        float logCur = (float) Math.log(Math.max(0.01f, currentFocusDepth));
-        float logTar = (float) Math.log(Math.max(0.01f, focusTargetDepth));
-        float disp = logTar - logCur;
-        if (Math.abs(disp) < AF_SETTLE && Math.abs(focusVelocity) < AF_SETTLE) {
-            currentFocusDepth = focusTargetDepth;
-            focusVelocity = 0.0f;
-            return;
-        }
-        focusVelocity += AF_OMEGA * AF_OMEGA * disp - 2.0f * AF_ZETA * AF_OMEGA * focusVelocity;
-        if (focusVelocity >  AF_VEL_CAP) focusVelocity =  AF_VEL_CAP;
-        if (focusVelocity < -AF_VEL_CAP) focusVelocity = -AF_VEL_CAP;
-        currentFocusDepth = (float) Math.exp(logCur + focusVelocity);
+    private static void stepFocusLerp() {
+        float logCur = (float) Math.log(Math.max(0.1f, currentFocusDepth));
+        float logTar = (float) Math.log(Math.max(0.1f, focusTargetDepth));
+        float diff   = logTar - logCur;
+        if (Math.abs(diff) < AF_SNAP_EPS) { currentFocusDepth = focusTargetDepth; return; }
+        float step = diff * AF_PULL_RATE;
+        if (Math.abs(step) > AF_PULL_MAX) step = Math.signum(step) * AF_PULL_MAX;
+        currentFocusDepth = (float) Math.exp(logCur + step);
     }
 
     private static float computeSceneFocusDepth(Minecraft mc) {

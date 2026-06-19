@@ -78,26 +78,26 @@ public class SdCardBrowserScreen extends Screen {
             return;
         }
 
-        // Prev / Next / Back  (3 buttons, each 64px)
+        // Prev / Full-screen / Next  (top row, 3 buttons, each 64px)
         int navY = py + PANEL_H - 56;
         addRenderableWidget(SafelightButton.of(cx - 99, navY, 64,
                 Component.literal("◀ PREV"), b -> navigate(-1)));
-        addRenderableWidget(SafelightButton.of(cx - 32, navY, 64,
-                Component.literal("NEXT ▶"), b -> navigate(1)));
-        addRenderableWidget(SafelightButton.ghost(cx + 35, navY, 64,
-                Component.literal("← 戻る"), b -> onClose()));
-
-        // Full-screen / Delete / Copy  (3 buttons, each 64px)
-        int btnY = py + PANEL_H - 28;
-        addRenderableWidget(SafelightButton.primary(cx - 99, btnY, 64,
+        addRenderableWidget(SafelightButton.primary(cx - 32, navY, 64,
                 Component.literal("全画面"),
                 b -> minecraft.setScreen(new PhotoViewerScreen(photos.get(index), this))));
-        addRenderableWidget(SafelightButton.of(cx - 32, btnY, 64,
-                Component.literal("削除"),
-                b -> deleteCurrentPhoto()));
-        addRenderableWidget(SafelightButton.ghost(cx + 35, btnY, 64,
+        addRenderableWidget(SafelightButton.of(cx + 35, navY, 64,
+                Component.literal("NEXT ▶"), b -> navigate(1)));
+
+        // Back / Copy / Delete  (bottom row, 3 buttons, each 64px)
+        int btnY = py + PANEL_H - 28;
+        addRenderableWidget(SafelightButton.ghost(cx - 99, btnY, 64,
+                Component.literal("← 戻る"), b -> onClose()));
+        addRenderableWidget(SafelightButton.ghost(cx - 32, btnY, 64,
                 Component.literal("📋 コピー"),
                 b -> copyCurrentPhoto()));
+        addRenderableWidget(SafelightButton.of(cx + 35, btnY, 64,
+                Component.literal("削除"),
+                b -> deleteCurrentPhoto()));
     }
 
     private void navigate(int dir) {

@@ -69,7 +69,7 @@ public class SnapmaticaClient implements ClientModInitializer {
         settingsKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.snapmatica.settings",
                 InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN,
+                GLFW.GLFW_KEY_G,
                 category
         ));
 

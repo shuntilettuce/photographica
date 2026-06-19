@@ -100,14 +100,14 @@ public class PhotographicaClient implements ClientModInitializer {
 		/*KeyBinding settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.camera_settings",
 				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_UNKNOWN,
+				GLFW.GLFW_KEY_G,
 				PHOTOGRAPHICA_CATEGORY
 		));
 		*///?} else {
 		KeyBinding settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.camera_settings",
 				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_UNKNOWN,
+				GLFW.GLFW_KEY_G,
 				"category.photographica"
 		));
 		//?}
@@ -116,14 +116,14 @@ public class PhotographicaClient implements ClientModInitializer {
 		/*KeyBinding windKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.wind_film",
 				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_UNKNOWN,
+				GLFW.GLFW_KEY_V,
 				PHOTOGRAPHICA_CATEGORY
 		));
 		*///?} else {
 		KeyBinding windKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.wind_film",
 				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_UNKNOWN,
+				GLFW.GLFW_KEY_V,
 				"category.photographica"
 		));
 		//?}
@@ -132,14 +132,14 @@ public class PhotographicaClient implements ClientModInitializer {
 		/*KeyBinding loadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.load_sd_card",
 				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_UNKNOWN,
+				GLFW.GLFW_KEY_U,
 				PHOTOGRAPHICA_CATEGORY
 		));
 		*///?} else {
 		KeyBinding loadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.load_sd_card",
 				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_UNKNOWN,
+				GLFW.GLFW_KEY_U,
 				"category.photographica"
 		));
 		//?}
@@ -148,14 +148,14 @@ public class PhotographicaClient implements ClientModInitializer {
 		/*KeyBinding unloadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.unload_sd_card",
 				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_UNKNOWN,
+				GLFW.GLFW_KEY_Y,
 				PHOTOGRAPHICA_CATEGORY
 		));
 		*///?} else {
 		KeyBinding unloadSdCardKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.unload_sd_card",
 				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_UNKNOWN,
+				GLFW.GLFW_KEY_Y,
 				"category.photographica"
 		));
 		//?}
@@ -182,14 +182,14 @@ public class PhotographicaClient implements ClientModInitializer {
 		/*KeyBinding orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.orientation",
 				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_V,
+				GLFW.GLFW_KEY_B,
 				PHOTOGRAPHICA_CATEGORY
 		));
 		*///?} else {
 		KeyBinding orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.photographica.orientation",
 				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_V,
+				GLFW.GLFW_KEY_B,
 				"category.photographica"
 		));
 		//?}

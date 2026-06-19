@@ -35,7 +35,7 @@ public final class AutoFocus {
     // toward the target in log space, so the lens "pulls" focus like a real motor.
     // Per client tick (20 Hz): move a fraction of the remaining log-distance, capped
     // so a big focus change racks over a visible ~0.6–1.0 s instead of jumping.
-    private static final float PULL_RATE     = 0.30f;  // fraction of remaining log-distance / tick
+    private static final float PULL_RATE     = 0.50f;  // fraction of remaining log-distance / tick
     private static final float PULL_MAX_STEP = 0.22f;  // max log units / tick (caps rack speed)
     private static final float PULL_SNAP_EPS = 0.01f;  // lock onto target below this log-distance
     private static final float FAR_ANCHOR    = 1000.0f; // refocus from ∞ starts here (raycast range)
@@ -100,9 +100,7 @@ public final class AutoFocus {
      */
     private static float snapFocus(float depth) {
         if (depth >= SnapmaticaClient.FOCUS_INFINITY) return SnapmaticaClient.FOCUS_INFINITY;
-        depth = Math.max(0.1f, depth);
-        if (depth <= 5.0f) return Math.round(depth * 10f) / 10f;   // 0.1 m steps
-        return Math.round(depth);                                  // 1 m steps, finite
+        return Math.max(0.1f, depth);
     }
 
     private static Float nearestMobInCone(MinecraftClient mc) {

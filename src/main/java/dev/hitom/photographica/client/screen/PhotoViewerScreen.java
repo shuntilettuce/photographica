@@ -220,12 +220,18 @@ public class PhotoViewerScreen extends Screen {
 				data.cameraAtCapture().aperture(),
 				data.cameraAtCapture().iso(),
 				data.cameraAtCapture().focalLengthMm());
+		String dim = data.dimension();
+		int dimColon = dim.lastIndexOf(':');
+		if (dimColon >= 0) dim = dim.substring(dimColon + 1);
 		String location = String.format("%s (%d, %d, %d)",
-				data.dimension(), data.x(), data.y(), data.z());
+				dim, data.x(), data.y(), data.z());
 
 		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(header), width / 2, 6, 0xFFFFFFFF);
-		ctx.drawTextWithShadow(textRenderer, Text.literal(exposure), 8, height - 40, 0xFFB0B0B0);
-		ctx.drawTextWithShadow(textRenderer, Text.literal(location), 8, height - 28, 0xFF808080);
+		// Camera settings sit bottom-left and dimension+coords bottom-right so the
+		// two no longer stack and overlap the buttons below.
+		ctx.drawTextWithShadow(textRenderer, Text.literal(exposure), 8, height - 20, 0xFFB0B0B0);
+		int locW = textRenderer.getWidth(location);
+		ctx.drawTextWithShadow(textRenderer, Text.literal(location), width - 8 - locW, height - 20, 0xFF808080);
 	}
 
 	@Override

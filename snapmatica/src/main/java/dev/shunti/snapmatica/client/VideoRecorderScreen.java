@@ -95,7 +95,7 @@ public class VideoRecorderScreen extends Screen {
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
         renderBackground(ctx, mouseX, mouseY, delta);
         ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("動画設定"),
-                width / 2, height / 2 - 60, 0xFFFFFFFF);
+                width / 2, height / 2 - 80, 0xFFFFFFFF);
         super.render(ctx, mouseX, mouseY, delta);
     }
 

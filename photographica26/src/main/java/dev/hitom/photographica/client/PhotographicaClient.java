@@ -84,25 +84,25 @@ public class PhotographicaClient implements ClientModInitializer {
 		KeyMapping settingsKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.photographica.camera_settings",
 				InputConstants.Type.KEYSYM,
-				GLFW.GLFW_KEY_UNKNOWN,
+				GLFW.GLFW_KEY_G,
 				photographicaCategory
 		));
 		KeyMapping windKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.photographica.wind_film",
 				InputConstants.Type.KEYSYM,
-				GLFW.GLFW_KEY_UNKNOWN,
+				GLFW.GLFW_KEY_V,
 				photographicaCategory
 		));
 		KeyMapping loadSdCardKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.photographica.load_sd_card",
 				InputConstants.Type.KEYSYM,
-				GLFW.GLFW_KEY_UNKNOWN,
+				GLFW.GLFW_KEY_U,
 				photographicaCategory
 		));
 		KeyMapping unloadSdCardKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.photographica.unload_sd_card",
 				InputConstants.Type.KEYSYM,
-				GLFW.GLFW_KEY_UNKNOWN,
+				GLFW.GLFW_KEY_Y,
 				photographicaCategory
 		));
 		// Stop-recording key (default G).  Always stops an in-progress recording.
@@ -115,7 +115,7 @@ public class PhotographicaClient implements ClientModInitializer {
 		KeyMapping orientationKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.photographica.orientation",
 				InputConstants.Type.KEYSYM,
-				GLFW.GLFW_KEY_V,
+				GLFW.GLFW_KEY_B,
 				photographicaCategory
 		));
 

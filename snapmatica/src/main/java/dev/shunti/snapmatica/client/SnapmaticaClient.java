@@ -93,14 +93,14 @@ public class SnapmaticaClient implements ClientModInitializer {
         /*settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.settings",
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN,
+                GLFW.GLFW_KEY_G,
                 SNAPMATICA_CATEGORY
         ));
         *///?} else {
         settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.settings",
                 InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN,       // unbound by default
+                GLFW.GLFW_KEY_G,            // default: G — open camera settings
                 "category.snapmatica"
         ));
         //?}

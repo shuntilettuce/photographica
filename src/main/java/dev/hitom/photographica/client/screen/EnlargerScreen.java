@@ -1,14 +1,11 @@
 package dev.hitom.photographica.client.screen;
 
-import dev.hitom.photographica.component.FilmRollData;
-import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.screen.EnlargerScreenHandler;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 
 @Environment(EnvType.CLIENT)
@@ -96,17 +93,6 @@ public class EnlargerScreen extends HandledScreen<EnlargerScreenHandler> {
         // Slot labels (BRASS_BRIGHT, above slots)
         ctx.drawText(textRenderer, Text.literal("NEG"),   36, 24, GuiHelper.BRASS_BRIGHT, false);
         ctx.drawText(textRenderer, Text.literal("PAPER"), 74, 24, GuiHelper.BRASS_BRIGHT, false);
-
-        // Film roll exposure count (on neg slot if film loaded)
-        ItemStack film = this.handler.getSlot(0).getStack();
-        if (!film.isEmpty() && film.contains(ModDataComponents.FILM_ROLL)) {
-            FilmRollData data = film.get(ModDataComponents.FILM_ROLL);
-            if (data != null && !data.exposures().isEmpty()) {
-                String count = data.exposures().size() + "fr";
-                int tx = 44 + 8 - textRenderer.getWidth(count) / 2;
-                ctx.drawText(textRenderer, Text.literal(count), tx, 35, GuiHelper.EMBER, false);
-            }
-        }
 
         // Nameplate text
         ctx.drawCenteredTextWithShadow(textRenderer,

@@ -1297,11 +1297,9 @@ public final class PhotoCapture {
 				boolean fg = isFgMap[iy * iw + ix];
 				float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
 				for (int dx = -r; dx <= r; dx++) {
-					int sx = Math.max(0, Math.min(iw - 1, ix + dx));
+					int sx = ix + dx;
+					if (sx < 0 || sx >= iw) continue;
 					float gauss = (float) Math.exp(-(float)(dx * dx) / (2.0f * sigma * sigma));
-					// Foreground pixels: allow all contributions (soft silhouette edges);
-					// background pixels: down-weight sharper/closer samples to stop in-focus
-					// foreground bleeding into the soft background.
 					float cocW = fg ? 1.0f : Math.max(0.10f, Math.min(1.0f, cocMap[iy * iw + sx] / coc));
 					float w = gauss * cocW;
 					if (w < 0.001f) continue;
@@ -1334,7 +1332,8 @@ public final class PhotoCapture {
 				boolean fg = isFgMap[iy * iw + ix];
 				float ra = 0, ga = 0, ba = 0, aa = 0, tw = 0;
 				for (int dy = -r; dy <= r; dy++) {
-					int sy = Math.max(0, Math.min(ih - 1, iy + dy));
+					int sy = iy + dy;
+					if (sy < 0 || sy >= ih) continue;
 					float gauss = (float) Math.exp(-(float)(dy * dy) / (2.0f * sigma * sigma));
 					float cocW = fg ? 1.0f : Math.max(0.10f, Math.min(1.0f, cocMap[sy * iw + ix] / coc));
 					float w = gauss * cocW;

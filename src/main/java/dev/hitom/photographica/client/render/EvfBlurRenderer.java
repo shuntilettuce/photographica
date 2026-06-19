@@ -306,12 +306,17 @@ public final class EvfBlurRenderer {
         GL20.glUniform2f(locBlurDir, 1.0f, 0.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
-        // ---- Pass 2: Vertical blur, aux → main (scissored to viewfinder region) ----
+        // ---- Pass 2: Vertical blur, aux → main (scissored to viewfinder + bleed margin) ----
         double scale = mc.getWindow().getScaleFactor();
         int scX = (int)(fx  * scale);
         int scY = fbH - (int)(fy2 * scale);
         int scW = (int)((fx2 - fx) * scale);
         int scH = (int)((fy2 - fy) * scale);
+        int bleed = (int) maxBlurPx;
+        int expX = Math.max(0, scX - bleed);
+        int expY = Math.max(0, scY - bleed);
+        int expW = Math.min(fbW - expX, scW + 2 * bleed);
+        int expH = Math.min(fbH - expY, scH + 2 * bleed);
 
         //? if >=1.21.11 {
         /*// Write the blur straight back into the scene colour texture via a dedicated FBO.
@@ -328,7 +333,7 @@ public final class EvfBlurRenderer {
         //?}
         GL11.glViewport(0, 0, fbW, fbH);
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
-        GL11.glScissor(scX, scY, scW, scH);
+        GL11.glScissor(expX, expY, expW, expH);
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
         GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);

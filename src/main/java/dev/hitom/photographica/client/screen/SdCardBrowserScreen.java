@@ -1,6 +1,7 @@
 package dev.hitom.photographica.client.screen;
 
 import dev.hitom.photographica.Photographica;
+import dev.hitom.photographica.client.ClipboardUtil;
 import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.component.PhotoData;
 import dev.hitom.photographica.component.SdCardData;
@@ -77,23 +78,26 @@ public class SdCardBrowserScreen extends Screen {
             return;
         }
 
-        // Prev / Next
+        // Prev / Full-screen / Next  (top row, 3 buttons, each 64px wide)
         int navY = py + PANEL_H - 56;
-        addDrawableChild(SafelightButton.of(cx - 105, navY, 100,
+        addDrawableChild(SafelightButton.of(cx - 99, navY, 64,
                 Text.literal("◀ PREV"), b -> navigate(-1)));
-        addDrawableChild(SafelightButton.of(cx + 5, navY, 100,
-                Text.literal("NEXT ▶"), b -> navigate(1)));
-
-        // Full-screen view / delete / back  (3 buttons, each 64px wide)
-        int btnY = py + PANEL_H - 28;
-        addDrawableChild(SafelightButton.primary(cx - 99, btnY, 64,
+        addDrawableChild(SafelightButton.primary(cx - 32, navY, 64,
                 Text.literal("全画面"),
                 b -> client.setScreen(new PhotoViewerScreen(photos.get(index), this))));
-        addDrawableChild(SafelightButton.of(cx - 32, btnY, 64,
+        addDrawableChild(SafelightButton.of(cx + 35, navY, 64,
+                Text.literal("NEXT ▶"), b -> navigate(1)));
+
+        // Back / Copy / Delete  (bottom row, 3 buttons, each 64px wide)
+        int btnY = py + PANEL_H - 28;
+        addDrawableChild(SafelightButton.ghost(cx - 99, btnY, 64,
+                Text.literal("← 戻る"), b -> close()));
+        addDrawableChild(SafelightButton.ghost(cx - 32, btnY, 64,
+                Text.literal("📋 コピー"),
+                b -> copyCurrentPhoto()));
+        addDrawableChild(SafelightButton.of(cx + 35, btnY, 64,
                 Text.literal("削除"),
                 b -> deleteCurrentPhoto()));
-        addDrawableChild(SafelightButton.ghost(cx + 35, btnY, 64,
-                Text.literal("← 戻る"), b -> close()));
     }
 
     private void navigate(int dir) {
@@ -181,6 +185,18 @@ public class SdCardBrowserScreen extends Screen {
     @Override
     public void close() {
         client.setScreen(parent);
+    }
+
+    private void copyCurrentPhoto() {
+        if (photos.isEmpty()) return;
+        PhotoData p = photos.get(index);
+        MinecraftClient mc = MinecraftClient.getInstance();
+        File file = new File(mc.runDirectory, "photographica/photos/" + p.id() + ".png");
+        if (!file.isFile()) {
+            mc.inGameHud.setOverlayMessage(Text.literal("⚠ 写真ファイルが見つかりません"), false);
+            return;
+        }
+        ClipboardUtil.copyImageAsync(file);
     }
 
     private void deleteCurrentPhoto() {

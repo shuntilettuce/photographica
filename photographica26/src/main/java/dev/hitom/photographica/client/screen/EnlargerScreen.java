@@ -1,7 +1,5 @@
 package dev.hitom.photographica.client.screen;
 
-import dev.hitom.photographica.component.FilmRollData;
-import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.screen.EnlargerScreenHandler;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -9,7 +7,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.item.ItemStack;
 
 @Environment(EnvType.CLIENT)
 public class EnlargerScreen extends AbstractContainerScreen<EnlargerScreenHandler> {
@@ -90,17 +87,6 @@ public class EnlargerScreen extends AbstractContainerScreen<EnlargerScreenHandle
         // Slot labels (BRASS_BRIGHT, above slots)
         ctx.text(font, Component.literal("NEG"),   36, 24, GuiHelper.BRASS_BRIGHT, false);
         ctx.text(font, Component.literal("PAPER"), 74, 24, GuiHelper.BRASS_BRIGHT, false);
-
-        // Film roll exposure count (on neg slot if film loaded)
-        ItemStack film = this.menu.getSlot(0).getItem();
-        if (!film.isEmpty() && film.has(ModDataComponents.FILM_ROLL)) {
-            FilmRollData data = film.get(ModDataComponents.FILM_ROLL);
-            if (data != null && !data.exposures().isEmpty()) {
-                String count = data.exposures().size() + "fr";
-                int tx = 44 + 8 - font.width(count) / 2;
-                ctx.text(font, Component.literal(count), tx, 35, GuiHelper.EMBER, false);
-            }
-        }
 
         // Nameplate text
         ctx.centeredText(font,

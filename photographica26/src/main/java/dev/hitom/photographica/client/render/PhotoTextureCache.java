@@ -30,7 +30,13 @@ public final class PhotoTextureCache {
     private PhotoTextureCache() {}
 
     private static final Map<UUID, Identifier> loaded = new HashMap<>();
+    private static final Map<UUID, Boolean> portrait = new HashMap<>();
     private static final Set<UUID> failed = new HashSet<>();
+
+    /** True when the photo's PNG is taller than it is wide (a portrait/2:3 shot). */
+    public static boolean isPortrait(UUID photoId) {
+        return Boolean.TRUE.equals(portrait.get(photoId));
+    }
 
     public static @Nullable Identifier getOrLoad(UUID photoId) {
         if (failed.contains(photoId)) return null;
@@ -46,6 +52,7 @@ public final class PhotoTextureCache {
 
         try (InputStream is = new FileInputStream(file)) {
             NativeImage image = NativeImage.read(is);
+            portrait.put(photoId, image.getHeight() > image.getWidth());
             // Identifier path must be lowercase without hyphens.
             String path = "dynamic/photo_" + photoId.toString().replace("-", "");
             Identifier texId = Identifier.fromNamespaceAndPath(Photographica.MOD_ID, path);
@@ -67,6 +74,7 @@ public final class PhotoTextureCache {
             mc.getTextureManager().release(id);
         }
         loaded.clear();
+        portrait.clear();
         failed.clear();
     }
 }
