@@ -103,11 +103,18 @@ void main() {
             gaussW    = exp(-fi * fi / (2.0 * sigma * sigma));
             cocWeight = 1.0;
         } else if (sFg && sCoc > coc) {
-            // Foreground sample bleeding into background edge (scatter-as-gather):
-            // use the foreground sample's own CoC as the kernel width so its bokeh
-            // disc smears naturally over neighbouring background pixels.
-            float fgSigma = max(sCoc * 0.85, 0.1);
-            gaussW    = exp(-fi * fi / (2.0 * fgSigma * fgSigma));
+            // Foreground sample scattering onto this background pixel (scatter-as-gather).
+            // Model the foreground pixel as a bokeh disc of radius sCoc and take the
+            // separable (1-D) slice through it: the chord length falls SMOOTHLY to zero
+            // at the disc edge (fi = sCoc). A gaussian + radius clamp instead leaves the
+            // halo with weight ~0.5 right up to the cutoff, then drops to 0 the next
+            // pixel out — that discontinuity is the hard near-object outline. The chord
+            // profile removes it, so a foreground object's edge dissolves softly over
+            // whatever is behind it (while background-behind-subject edges, handled in
+            // the branch below, stay crisp).
+            float t = fi / max(sCoc, 0.01);
+            if (abs(t) >= 1.0) continue;            // outside this fg pixel's bokeh disc
+            gaussW    = sqrt(1.0 - t * t) / max(sCoc, 0.01);
             cocWeight = 1.0;
         } else {
             // Background pixel sampling background: suppress sharp/closer samples so
