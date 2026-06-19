@@ -20,9 +20,10 @@ import org.lwjgl.glfw.GLFW;
 @Environment(EnvType.CLIENT)
 public class SnapmaticaClient implements ClientModInitializer {
 
+
     //? if >=1.21.11 {
     /*private static final KeyBinding.Category SNAPMATICA_CATEGORY =
-            KeyBinding.Category.create(Identifier.of("snapmatica", "snapmatica"));
+            new KeyBinding.Category(Identifier.of("snapmatica", "snapmatica"));
     *///?}
 
     // ── Key Bindings ─────────────────────────────────────────────────────────────
@@ -75,82 +76,26 @@ public class SnapmaticaClient implements ClientModInitializer {
         // ── Register key bindings ───────────────────────────────────────────────
         //? if >=1.21.11 {
         /*shootKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.shoot",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_ENTER,
-                SNAPMATICA_CATEGORY
-        ));
+                "key.snapmatica.shoot", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_ENTER, SNAPMATICA_CATEGORY));
+        settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.snapmatica.settings", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, SNAPMATICA_CATEGORY));
+        viewfinderSneakKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.snapmatica.viewfinder_sneak", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_COMMA, SNAPMATICA_CATEGORY));
+        orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.snapmatica.orientation", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, SNAPMATICA_CATEGORY));
+        recordKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.snapmatica.record", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, SNAPMATICA_CATEGORY));
         *///?} else {
         shootKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.shoot",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_ENTER,         // default: Enter
-                "category.snapmatica"
-        ));
-        //?}
-
-        //? if >=1.21.11 {
-        /*settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.settings",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_G,
-                SNAPMATICA_CATEGORY
-        ));
-        *///?} else {
+                "key.snapmatica.shoot", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_ENTER, "category.snapmatica"));
         settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.settings",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_G,            // default: G — open camera settings
-                "category.snapmatica"
-        ));
-        //?}
-
-        //? if >=1.21.11 {
-        /*viewfinderSneakKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.viewfinder_sneak",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_COMMA,
-                SNAPMATICA_CATEGORY
-        ));
-        *///?} else {
+                "key.snapmatica.settings", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.snapmatica"));
         viewfinderSneakKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.viewfinder_sneak",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_COMMA,         // default: comma
-                "category.snapmatica"
-        ));
-        //?}
-
-        //? if >=1.21.11 {
-        /*orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.orientation",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_V,
-                SNAPMATICA_CATEGORY
-        ));
-        *///?} else {
+                "key.snapmatica.viewfinder_sneak", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_COMMA, "category.snapmatica"));
         orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.orientation",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_V,            // default: V — toggle portrait/landscape
-                "category.snapmatica"
-        ));
-        //?}
-
-        //? if >=1.21.11 {
-        /*recordKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.record",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_R,
-                SNAPMATICA_CATEGORY
-        ));
-        *///?} else {
+                "key.snapmatica.orientation", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, "category.snapmatica"));
         recordKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.record",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_R,            // default: R — start/stop video recording
-                "category.snapmatica"
-        ));
+                "key.snapmatica.record", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.snapmatica"));
         //?}
 
         // ── Tick handler ─────────────────────────────────────────────────────────
