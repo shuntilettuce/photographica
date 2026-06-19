@@ -347,11 +347,22 @@ public final class EvfBlurRenderer {
     }
 
     // Applies the scheduled EVF blur (if any) to mainTex and clears the schedule.
-    public static void applyScheduledBlur() {
+    // forCapture=true: blur the full framebuffer so the photo crop is covered.
+    //   The photo crop (3:2) extends beyond the viewfinder frame (86% height × 3:2),
+    //   so the viewfinder scissor would leave ~90px unblurred on each side in the photo.
+    // forCapture=false: blur only the viewfinder area (live EVF, bezels cover the rest).
+    public static void applyScheduledBlur(boolean forCapture) {
         if (!blurScheduled) return;
         blurScheduled = false;
-        renderBlur(schedFx, schedFy, schedFx2, schedFy2,
-                   schedFocusDist, schedAperture, schedFocalLen, DOF_SCALE_STILL);
+        if (forCapture) {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            int sw = mc.getWindow().getScaledWidth();
+            int sh = mc.getWindow().getScaledHeight();
+            renderBlur(0, 0, sw, sh, schedFocusDist, schedAperture, schedFocalLen, DOF_SCALE_STILL);
+        } else {
+            renderBlur(schedFx, schedFy, schedFx2, schedFy2,
+                       schedFocusDist, schedAperture, schedFocalLen, DOF_SCALE_STILL);
+        }
     }
 
     /**

@@ -62,11 +62,13 @@ public class GameRendererMixin {
                     target = "Lnet/minecraft/client/renderer/GameRenderer;renderLevel(Lnet/minecraft/client/DeltaTracker;)V",
                     shift = At.Shift.AFTER))
     private void snapmatica$captureAfterLevel(DeltaTracker deltaTracker, boolean tick, CallbackInfo ci) {
+        // Apply scheduled EVF blur BEFORE capture: forCapture=true blurs the full
+        // framebuffer so the 3:2 photo crop is fully covered (viewfinder frame is only
+        // 86% height, leaving ~90px unblurred on each edge of the photo otherwise).
+        boolean wasCapturePending = PhotoCapture.isCapturePending();
+        EvfBlurRenderer.applyScheduledBlur(wasCapturePending);
+        PhotoCapture.captureIfPending();
         // Video frame capture applies its own full-frame blur internally.
         VideoRecorder.captureFrameIfRecording();
-        // Photo capture: no EVF blur (photos use CPU DoF).
-        PhotoCapture.captureIfPending();
-        // Apply scheduled viewfinder region blur for live preview (scheduled by ViewfinderOverlay).
-        EvfBlurRenderer.applyScheduledBlur();
     }
 }

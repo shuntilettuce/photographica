@@ -102,12 +102,23 @@ public final class EvfBlurRenderer {
 
     /**
      * Execute the blur scheduled by scheduleBlur(). Safe to call after renderLevel() returns.
+     * forCapture=true: blur the full framebuffer so the photo crop is fully covered.
+     *   The photo 3:2 crop extends beyond the viewfinder frame (86% height), so without
+     *   full-screen blur ~90px on each side of the photo would be unblurred.
+     * forCapture=false: blur only the scissored viewfinder area (live EVF).
      */
-    public static void applyScheduledBlur() {
+    public static void applyScheduledBlur(boolean forCapture) {
         if (!blurScheduled) return;
         blurScheduled = false;
-        renderBlur(scheduledFx, scheduledFy, scheduledFx2, scheduledFy2,
-                scheduledFocusDist, scheduledAperture, scheduledFocalLen, DOF_SCALE_STILL);
+        if (forCapture) {
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            int sw = mc.getWindow().getGuiScaledWidth();
+            int sh = mc.getWindow().getGuiScaledHeight();
+            renderBlur(0, 0, sw, sh, scheduledFocusDist, scheduledAperture, scheduledFocalLen, DOF_SCALE_STILL);
+        } else {
+            renderBlur(scheduledFx, scheduledFy, scheduledFx2, scheduledFy2,
+                    scheduledFocusDist, scheduledAperture, scheduledFocalLen, DOF_SCALE_STILL);
+        }
     }
 
     /** Copy depth buffer. Call during LevelRenderEvents.END_MAIN. */

@@ -122,7 +122,9 @@ public class GameRendererMixin {
         boolean wasCapturePending = PhotoCapture.isCapturePending();
         // Apply the EVF blur (scheduled during the previous frame's HUD render) BEFORE
         // capturing, so the screenshot includes GPU bokeh on all versions.
-        dev.shunti.snapmatica.client.EvfBlurRenderer.applyScheduledBlur();
+        // Pass forCapture=true when a screenshot is about to be taken so the blur covers
+        // the full photo crop area (not just the scissored viewfinder frame).
+        dev.shunti.snapmatica.client.EvfBlurRenderer.applyScheduledBlur(wasCapturePending);
         PhotoCapture.captureIfPending();
         VideoRecorder.captureFrameIfRecording();
         //? if <1.21.11 {
