@@ -56,6 +56,7 @@ public class FilmCameraScreen extends Screen {
 	private final int armorStandEntityId; // -1 = player's hand camera
 	private CameraSettings settings;
 	private boolean dirty = false;
+	private int rowH, panelPy, panelH, topRow;
 
 	public FilmCameraScreen(ItemStack stack) {
 		this(stack, -1);
@@ -71,13 +72,16 @@ public class FilmCameraScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = width / 2;
-		int top = height / 2 - 110;
+		rowH = Math.min(22, Math.max(20, (height - 90) / 10));
+		panelH = 10 * rowH + 82;
+		panelPy = Math.max(4, (height - panelH) / 2);
+		topRow = panelPy + 16;
 		int row = 0;
 
 		// Aperture — disabled when auto controls it (Tv or P)
 		boolean apAuto = settings.exposureMode() == CameraSettings.EXP_TV
 				|| settings.exposureMode() == CameraSettings.EXP_P;
-		addRow(cx, top + row++ * 22, "絞り",
+		addRow(cx, topRow + row++ * rowH, "絞り",
 				() -> apAuto ? "AUTO" : "F" + formatFloat(settings.aperture()),
 				step -> {
 					int idx = clampStep(APERTURES.indexOf(settings.aperture()), step, APERTURES.size());
@@ -87,20 +91,20 @@ public class FilmCameraScreen extends Screen {
 		// Shutter — disabled when auto controls it (Av or P)
 		boolean ssAuto = settings.exposureMode() == CameraSettings.EXP_AV
 				|| settings.exposureMode() == CameraSettings.EXP_P;
-		addRow(cx, top + row++ * 22, "シャッター",
+		addRow(cx, topRow + row++ * rowH, "シャッター",
 				() -> ssAuto ? "AUTO" : SHUTTERS[clampIdx(settings.shutterSpeedIdx(), SHUTTERS.length)],
 				step -> settings = withShutter(clampStep(settings.shutterSpeedIdx(), step, SHUTTERS.length)),
 				!ssAuto);
 
 		// ISO is film-locked → display only.
-		addRow(cx, top + row++ * 22, "ISO (フィルム)",
+		addRow(cx, topRow + row++ * rowH, "ISO (フィルム)",
 				() -> "ISO " + settings.iso() + " §8(固定)",
 				step -> {}, false);
 
 		// Focus distance — disabled when AF or MOB
 		boolean focusAuto = settings.focusMode() != CameraSettings.FOCUS_MF;
 		String focusAutoLabel = settings.focusMode() == CameraSettings.FOCUS_MOB ? "MOB" : "AF";
-		addRow(cx, top + row++ * 22, "フォーカス",
+		addRow(cx, topRow + row++ * rowH, "フォーカス",
 				() -> focusAuto ? focusAutoLabel : formatFocus(settings.focusDistance()),
 				step -> {
 					int curIdx = nearestIdxFloat(FOCUS_VALUES, settings.focusDistance());
@@ -109,7 +113,7 @@ public class FilmCameraScreen extends Screen {
 				}, !focusAuto);
 
 		boolean focalEditable = LensKind.isZoom(settings.lensType());
-		addRow(cx, top + row++ * 22, "焦点距離",
+		addRow(cx, topRow + row++ * rowH, "焦点距離",
 				() -> LensKind.hasLens(settings.lensType()) ? settings.focalLengthMm() + "mm" : "—",
 				step -> {
 					if (!LensKind.isZoom(settings.lensType())) return;
@@ -120,7 +124,7 @@ public class FilmCameraScreen extends Screen {
 					settings = withFocalLength(stops.get(newIdx));
 				}, focalEditable);
 
-		addRow(cx, top + row++ * 22, "レンズ",
+		addRow(cx, topRow + row++ * rowH, "レンズ",
 				() -> LensKind.displayName(settings.lensType()),
 				step -> {
 					List<Integer> available = availableLensKinds();
@@ -134,19 +138,19 @@ public class FilmCameraScreen extends Screen {
 				}, true);
 
 		// Exposure mode row (M / Av / Tv / P)
-		addRow(cx, top + row++ * 22, "露出モード",
+		addRow(cx, topRow + row++ * rowH, "露出モード",
 				() -> EXP_MODE_LABELS[Math.max(0, Math.min(EXP_MODE_LABELS.length - 1, settings.exposureMode()))],
 				step -> settings = withExposureMode(clampStep(settings.exposureMode(), step, EXP_MODE_LABELS.length)),
 				true);
 
 		// Focus mode row (MF / AF / MOB)
-		addRow(cx, top + row++ * 22, "フォーカスモード",
+		addRow(cx, topRow + row++ * rowH, "フォーカスモード",
 				() -> FOCUS_MODE_LABELS[Math.max(0, Math.min(FOCUS_MODE_LABELS.length - 1, settings.focusMode()))],
 				step -> settings = withFocusMode(clampStep(settings.focusMode(), step, FOCUS_MODE_LABELS.length)),
 				true);
 
 		// Self-timer
-		addRow(cx, top + row++ * 22, "タイマー",
+		addRow(cx, topRow + row++ * rowH, "タイマー",
 				() -> {
 					int t = settings.timerSeconds();
 					return t == 0 ? "なし" : t + "秒";
@@ -162,7 +166,7 @@ public class FilmCameraScreen extends Screen {
 				}, true);
 
 		// Motion blur — enables long-exposure frame accumulation for tripod / slow shutter shots
-		addRow(cx, top + row++ * 22, "モーションブラー",
+		addRow(cx, topRow + row++ * rowH, "モーションブラー",
 				() -> settings.motionBlur() ? "§aON" : "§cOFF",
 				step -> {
 					settings = settings.withMotionBlur(!settings.motionBlur());
@@ -171,7 +175,7 @@ public class FilmCameraScreen extends Screen {
 
 		FilmRollData film = FilmCameraItem.getFilm(stack);
 		boolean loaded = film.totalExposures() > 0;
-		int btnY = top + row * 22 + 14;
+		int btnY = topRow + 10 * rowH + 14;
 
 		if (armorStandEntityId >= 0) {
 			// Armor stand mode: "Shoot" | "Remove camera" | "Close"
@@ -257,20 +261,19 @@ public class FilmCameraScreen extends Screen {
 
 		// Draw dark panel background
 		int cx = width / 2;
-		int top = height / 2 - 110;
 		int panelW = 320;
-		int panelH = 302;
 		int px = cx - panelW / 2;
-		int py = top - 16;
-		GuiHelper.drawPanel(ctx, px, py, panelW, panelH);
+		GuiHelper.drawPanel(ctx, px, panelPy, panelW, panelH);
 
 		// Nameplate at top of panel
-		GuiHelper.drawNameplate(ctx, px + 6, py + 5, panelW - 12);
+		GuiHelper.drawNameplate(ctx, px + 6, panelPy + 5, panelW - 12);
 
 		// Rule below nameplate
-		GuiHelper.drawRule(ctx, px + 6, py + 17, panelW - 12);
+		GuiHelper.drawRule(ctx, px + 6, panelPy + 17, panelW - 12);
 
-		// Film status — drawn ABOVE the buttons
+		super.render(ctx, mouseX, mouseY, delta);
+
+		// Film status — drawn after widgets so it's visible between rows and buttons
 		FilmRollData film = FilmCameraItem.getFilm(stack);
 		String status;
 		int statusColor;
@@ -287,12 +290,10 @@ public class FilmCameraScreen extends Screen {
 					+ "  ·  " + wound;
 			statusColor = GuiHelper.CREAM;
 		}
-		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, py + 216, statusColor);
-
-		super.render(ctx, mouseX, mouseY, delta);
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, topRow + 10 * rowH + 2, statusColor);
 
 		// Title text on nameplate
-		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("FILM CAMERA"), cx, py + 6, GuiHelper.CREAM);
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("FILM CAMERA"), cx, panelPy + 6, GuiHelper.CREAM);
 	}
 
 	/** Sends pending settings to the server without closing the screen. */
