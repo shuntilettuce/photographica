@@ -120,13 +120,9 @@ public class GameRendererMixin {
                     shift = At.Shift.AFTER))
     private void snapmatica$captureAfterComposite(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
         boolean wasCapturePending = PhotoCapture.isCapturePending();
-        //? if >=1.21.11 {
-        /*// Apply the EVF blur (scheduled during the previous frame's HUD render) BEFORE
-        // capturing, so the screenshot includes GPU bokeh. This replaces the old approach
-        // of reading back the full depth texture to CPU (readLinearDepthCpu), which caused
-        // a visible freeze when the Photon shader was active.
+        // Apply the EVF blur (scheduled during the previous frame's HUD render) BEFORE
+        // capturing, so the screenshot includes GPU bokeh on all versions.
         dev.shunti.snapmatica.client.EvfBlurRenderer.applyScheduledBlur();
-        *///?}
         PhotoCapture.captureIfPending();
         VideoRecorder.captureFrameIfRecording();
         //? if <1.21.11 {

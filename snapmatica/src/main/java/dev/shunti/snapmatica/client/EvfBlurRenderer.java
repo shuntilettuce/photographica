@@ -44,13 +44,13 @@ public final class EvfBlurRenderer {
     static int depthTexW = 0;
     static int depthTexH = 0;
 
+    private static int writeBackFbo   = -1;
     //? if >=1.21.11 {
-    /*private static int writeBackFbo   = -1;
-    private static int centerReadFbo  = -1;
+    /*private static int centerReadFbo  = -1;
+    *///?}
     private static boolean blurScheduled = false;
     private static int     schedFx, schedFy, schedFx2, schedFy2;
     private static float   schedFocusDist, schedAperture, schedFocalLen;
-    *///?}
 
     private static int locInSampler  = -1;
     private static int locDepthSamp  = -1;
@@ -272,14 +272,10 @@ public final class EvfBlurRenderer {
         int expW = Math.min(fbW - expX, scW + 2 * bleed);
         int expH = Math.min(fbH - expY, scH + 2 * bleed);
 
-        //? if >=1.21.11 {
-        /*if (writeBackFbo == -1) writeBackFbo = GL30.glGenFramebuffers();
+        if (writeBackFbo == -1) writeBackFbo = GL30.glGenFramebuffers();
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
         GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
                 GL11.GL_TEXTURE_2D, mainTex, 0);
-        *///?} else {
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
-        //?}
         GL11.glViewport(0, 0, fbW, fbH);
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
         GL11.glScissor(expX, expY, expW, expH);
@@ -288,10 +284,8 @@ public final class EvfBlurRenderer {
         GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
-        //? if >=1.21.11 {
-        /*GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
                 GL11.GL_TEXTURE_2D, 0, 0);
-        *///?}
 
         // Restore GL state
         if (!scissorWasEnabled) GL11.glDisable(GL11.GL_SCISSOR_TEST);
@@ -344,8 +338,7 @@ public final class EvfBlurRenderer {
     }
     *///?}
 
-    //? if >=1.21.11 {
-    /*// Records EVF blur parameters; actual rendering runs in applyScheduledBlur().
+    // Records EVF blur parameters; actual rendering runs in applyScheduledBlur().
     public static void scheduleBlur(int fx, int fy, int fx2, int fy2,
                                     float focusDist, float aperture, float focalLenMm) {
         schedFx = fx; schedFy = fy; schedFx2 = fx2; schedFy2 = fy2;
@@ -360,7 +353,6 @@ public final class EvfBlurRenderer {
         renderBlur(schedFx, schedFy, schedFx2, schedFy2,
                    schedFocusDist, schedAperture, schedFocalLen, DOF_SCALE_STILL);
     }
-    *///?}
 
     /**
      * Reads the captured depth texture back to the CPU as linearised depth in blocks.

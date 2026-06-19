@@ -257,14 +257,6 @@ public final class PhotoCapture {
         EvfBlurRenderer.updateDepthFar(mc.gameRenderer.getBasicProjectionMatrix(70.0f),
                 Math.max(rd * 64f, 256f));
         EvfBlurRenderer.captureDepth(vpW, vpH);
-        if (capturePending) {
-            float[] depth = EvfBlurRenderer.readLinearDepthCpu();
-            if (depth != null) {
-                pendingLinearDepth = depth;
-                pendingDepthFbW    = EvfBlurRenderer.depthTexW;
-                pendingDepthFbH    = EvfBlurRenderer.depthTexH;
-            }
-        }
 
         // AF subject distance — THROTTLED. The world raycast is the PRIMARY focus
         // distance (good to 1000 m, covers all vanilla render distances). The GPU

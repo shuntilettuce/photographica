@@ -47,20 +47,11 @@ public final class ViewfinderOverlay {
         // so it only affects the scene inside the viewfinder frame.
         boolean hasLensForBlur = SnapmaticaClient.lensType != 0;
         if (hasLensForBlur && SnapmaticaClient.aperture < 8.0f) {
-            //? if >=1.21.11 {
-            /*// Schedule blur to run in GameRendererMixin before captureIfPending() so
-            // the screenshot captures the already-blurred scene. This eliminates the
-            // readLinearDepthCpu() GPU→CPU stall that caused the freeze on photo capture.
+            // Schedule for applyScheduledBlur() in GameRendererMixin (fires before HUD each
+            // frame), so both the live EVF and captured photos receive GPU bokeh.
             EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2,
                     SnapmaticaClient.focusDistance, SnapmaticaClient.aperture,
                     SnapmaticaClient.focalLengthMm);
-            *///?} else {
-            // FOCUS_INFINITY is a valid input: the shader computes foreground blur at
-            // infinity focus (coc = f²/(N·depth)), so no early-out needed here.
-            EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2,
-                    SnapmaticaClient.focusDistance, SnapmaticaClient.aperture,
-                    SnapmaticaClient.focalLengthMm, EvfBlurRenderer.DOF_SCALE_STILL);
-            //?}
         }
 
         // Bezels

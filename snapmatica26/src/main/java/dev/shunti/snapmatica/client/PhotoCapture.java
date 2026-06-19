@@ -175,14 +175,6 @@ public final class PhotoCapture {
                     lastSceneDepthBlocks = gpuDepth;
                 }
             }
-            if (capturePending) {
-                float[] depth = EvfBlurRenderer.readLinearDepthCpu();
-                if (depth != null) {
-                    pendingLinearDepth = depth;
-                    pendingDepthFbW    = EvfBlurRenderer.depthTexW;
-                    pendingDepthFbH    = EvfBlurRenderer.depthTexH;
-                }
-            }
         }
     }
 
