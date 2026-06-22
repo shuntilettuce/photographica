@@ -1,0 +1,22 @@
+# Build artifacts and source directories — not part of the gh-pages site
+.gradle/
+build/
+META-INF/
+net/
+versions/
+src/
+snapmatica/
+snapmatica26/
+photographica26/
+release/
+*.jar
+gradle/
+gradlew
+gradlew.bat
+*.gradle
+*.gradle.kts
+*.toml
+*.properties
+*.json
+*.bak
+*.txt
