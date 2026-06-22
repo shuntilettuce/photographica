@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>チュートリアル / Tutorial — Photographica</title>
+  <meta name="description" content="Photographica & Snapmatica チュートリアル / Tutorial">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Tutorial-specific styles */
+    .toc {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 8px;
+    }
+    .toc h3 { margin: 0 0 12px; font-size: 14px; color: var(--text-dim); }
+    .toc ol { padding-left: 20px; }
+    .toc li { line-height: 2; font-size: 13px; }
+
+    .section-anchor { scroll-margin-top: 68px; }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      white-space: pre;
+      margin: 12px 0;
+      color: #aaa;
+      line-height: 1.5;
+    }
+
+    .step-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .step-table th {
+      background: var(--bg3);
+      padding: 8px 12px;
+      text-align: left;
+      color: var(--text-dim);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+    }
+    .step-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .step-table tr:last-child td { border-bottom: none; }
+
+    .warn {
+      background: #1a1200;
+      border-left: 3px solid #c8902e;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: 12px 16px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .warn strong { color: #e8a040; }
+
+    .color-green { color: var(--green); }
+    .color-accent { color: var(--accent); }
+
+    ul { padding-left: 20px; margin-bottom: 12px; }
+    ul li { line-height: 2; font-size: 14px; }
+    ol { padding-left: 20px; margin-bottom: 12px; }
+    ol li { line-height: 2; font-size: 14px; }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 32px;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+    .back-link:hover { color: var(--text); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <nav>
+    <span class="logo">📷 Photographica</span>
+    <span class="spacer"></span>
+    <a href="index.html">ホーム / Home</a>
+    <a href="#download" onclick="window.location='index.html#download'">ダウンロード</a>
+    <a href="https://github.com/shuntilettuce/photographica" target="_blank">GitHub</a>
+  </nav>
+</header>
+
+<main style="padding-top:40px;">
+  <a class="back-link" href="index.html">← ホームへ戻る / Back to home</a>
+
+  <h2 style="font-size:26px;border:none;margin-bottom:4px;">Photographica — チュートリアル / Tutorial</h2>
+  <p style="color:var(--text-dim);margin-bottom:32px;font-size:14px;">
+    リアルなカメラ操作を Minecraft に持ち込む Mod です。<br>
+    A Minecraft mod that brings realistic camera simulation to the game.
+  </p>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h3>目次 / Contents</h3>
+    <ol>
+      <li><a href="#req">導入要件 / Requirements</a></li>
+      <li><a href="#keys">初期設定・キー / Keybindings</a></li>
+      <li><a href="#items">アイテム一覧 / Item Reference</a></li>
+      <li><a href="#viewfinder">ファインダーの使い方 / Viewfinder Controls</a></li>
+      <li><a href="#exposure">露出設定 / Exposure Settings</a></li>
+      <li><a href="#digital">デジタルカメラ / Digital Cameras</a></li>
+      <li><a href="#film">フィルムカメラ / Film Camera</a></li>
+      <li><a href="#tripod">三脚撮影 / Tripod Shooting</a></li>
+      <li><a href="#video">ビデオカメラ / Video Camera</a></li>
+      <li><a href="#display">写真の飾り方 / Displaying Photos</a></li>
+      <li><a href="#effects">撮影エフェクト / Photo Effects</a></li>
+      <li><a href="#faq">FAQ</a></li>
+    </ol>
+  </div>
+
+  <!-- ── 1. Requirements ───────────────────────────────── -->
+  <section id="req" class="section-anchor">
+    <h2>1. 導入要件 / Requirements</h2>
+    <table class="step-table">
+      <thead><tr><th></th><th>日本語</th><th>English</th></tr></thead>
+      <tbody>
+        <tr><td>Minecraft</td><td colspan="2">1.21.1 / 1.21.4 / 1.21.11 / 26.1</td></tr>
+        <tr><td>Mod ローダー</td><td>Fabric Loader ≥ 0.16.0</td><td>Fabric Loader ≥ 0.16.0</td></tr>
+        <tr><td>必須依存</td><td><a href="https://modrinth.com/mod/fabric-api">Fabric API</a></td><td><a href="https://modrinth.com/mod/fabric-api">Fabric API</a></td></tr>
+        <tr><td>インストール</td><td>クライアント・サーバー両方</td><td>Both client and server</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <strong>シェーダー対応</strong> — Iris + Photon での動作確認済み。シェーダー使用時もエフェクトが正しく合成されます。<br>
+      <strong>Shader support</strong> — Tested with Iris + Photon. Effects are correctly composited in the captured PNG even with shaders active.
+    </div>
+  </section>
+
+  <!-- ── 2. Keybindings ────────────────────────────────── -->
+  <section id="keys" class="section-anchor">
+    <h2>2. 初期設定 / Keybindings</h2>
+    <p style="font-size:14px;color:var(--text-dim);">
+      <strong>オプション → 操作設定 → Photographica</strong> からキーを割り当ててください。<br>
+      Go to <strong>Options → Controls → Photographica</strong> to assign the following keys.
+    </p>
+    <table class="step-table">
+      <thead><tr><th>操作 / Action</th><th>用途 / Notes</th></tr></thead>
+      <tbody>
+        <tr><td>カメラ設定を開く / Open camera settings</td><td>全カメラ必須 / Required for all cameras</td></tr>
+        <tr><td>フィルム巻き上げ / Wind film</td><td>フィルムカメラのみ / Film camera only</td></tr>
+        <tr><td>SDカード装填 / Load SD card</td><td>デジタルのみ / Digital cameras only</td></tr>
+        <tr><td>SDカード取り出し / Unload SD card</td><td>デジタルのみ / Digital cameras only</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── 3. Items ──────────────────────────────────────── -->
+  <section id="items" class="section-anchor">
+    <h2>3. アイテム一覧 / Item Reference</h2>
+
+    <h3>カメラ / Cameras</h3>
+    <table class="step-table">
+      <thead><tr><th>アイテム / Item</th><th>日本語</th><th>English</th></tr></thead>
+      <tbody>
+        <tr><td><strong>デジタルSLR</strong></td><td>デジタル撮影。SDカード保存。光学ファインダー（EVFなし）</td><td>Digital shooting, SD card storage. Optical viewfinder (no EVF)</td></tr>
+        <tr><td><strong>ミラーレスカメラ</strong></td><td>デジタル撮影。SDカード保存。EVFでリアルタイム露出・ボケプレビュー</td><td>Digital shooting, SD card storage. EVF with live exposure and DoF preview</td></tr>
+        <tr><td><strong>フィルムカメラ</strong></td><td>フィルムを装填して撮影。暗室で現像が必要</td><td>Film rolls required. Development needed before viewing</td></tr>
+        <tr><td><strong>ビデオカメラ</strong></td><td>動画撮影（FFmpeg 必要）</td><td>Video recording (requires FFmpeg)</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <strong>デジタルSLR vs ミラーレス</strong> — 操作は同じ。EVF（リアルタイム露出・DoFプレビュー）はミラーレスのみ。<br>
+      <strong>Digital SLR vs Mirrorless</strong> — Identical controls. Only the Mirrorless shows a live EVF preview of exposure and depth-of-field.
+    </div>
+
+    <h3>レンズ / Lenses</h3>
+    <table class="step-table">
+      <thead><tr><th>レンズ</th><th>焦点距離</th><th>日本語</th><th>English</th></tr></thead>
+      <tbody>
+        <tr><td>単焦点 14mm</td><td>14mm</td><td>超広角。建築・風景</td><td>Ultra-wide. Architecture, landscapes</td></tr>
+        <tr><td>単焦点 35mm</td><td>35mm</td><td>広角スナップ</td><td>Wide-angle snapshots</td></tr>
+        <tr><td>単焦点 50mm</td><td>50mm</td><td>標準。自然な画角</td><td>Standard. Most natural field of view</td></tr>
+        <tr><td>単焦点 85mm</td><td>85mm</td><td>ポートレート。背景ボケ美しい</td><td>Portraits. Beautiful background blur</td></tr>
+        <tr><td>マクロ 100mm</td><td>100mm</td><td>近距離撮影特化</td><td>Close-up / detail shots</td></tr>
+        <tr><td>ズーム 24-70mm</td><td>24〜70mm</td><td>汎用ズーム</td><td>General-purpose zoom</td></tr>
+        <tr><td>ズーム 70-200mm</td><td>70〜200mm</td><td>望遠。遠景・野生動物</td><td>Telephoto. Distant subjects, wildlife</td></tr>
+      </tbody>
+    </table>
+
+    <h3>フィルム / Film</h3>
+    <table class="step-table">
+      <thead><tr><th>フィルム</th><th>ISO</th><th>コマ数</th><th>特徴 / Notes</th></tr></thead>
+      <tbody>
+        <tr><td>カラー 400</td><td>400</td><td>36</td><td>汎用。暖かみのある発色 / All-purpose. Warm tones</td></tr>
+        <tr><td>カラー 100</td><td>100</td><td>36</td><td>低感度・低ノイズ / Fine grain, low noise. Clean colour</td></tr>
+        <tr><td>カラー 1600</td><td>1600</td><td>36</td><td>高感度。粒状感が強い / High grain. Push-processed look</td></tr>
+        <tr><td>モノクロ 400</td><td>400</td><td>36</td><td>白黒。コントラスト強め / Monochrome. High contrast</td></tr>
+        <tr><td>カラー 400（24枚）</td><td>400</td><td>24</td><td>コマ数少なめ版 / Shorter roll</td></tr>
+      </tbody>
+    </table>
+
+    <h3>その他アイテム・ブロック / Other Items & Blocks</h3>
+    <table class="step-table">
+      <thead><tr><th>名称</th><th>日本語</th><th>English</th></tr></thead>
+      <tbody>
+        <tr><td><strong>SDカード</strong></td><td>デジタルカメラ用ストレージ。最大 64枚</td><td>Storage for digital cameras — 64 photos default</td></tr>
+        <tr><td><strong>現像液タンク</strong></td><td>暗室で使用。32本分</td><td>Darkroom chemistry. Develops 32 rolls</td></tr>
+        <tr><td><strong>写真用紙</strong></td><td>引き伸ばし機でプリントに必要</td><td>Required for printing in the enlarger</td></tr>
+        <tr><td><strong>写真</strong></td><td>完成プリント。フレーム・立てに飾れる</td><td>Finished print — displayable in frames/stands</td></tr>
+        <tr><td><strong>露出済みフィルム</strong></td><td>撮影済み・未現像のフィルム</td><td>Shot but undeveloped film</td></tr>
+        <tr><td><strong>現像済みネガ</strong></td><td>現像後のネガ。引き伸ばし機でプリントへ</td><td>After darkroom — ready to print</td></tr>
+        <tr><td><strong>暗室</strong>（ブロック）</td><td>フィルムを現像する</td><td>Develops exposed film</td></tr>
+        <tr><td><strong>引き伸ばし機</strong>（ブロック）</td><td>ネガからプリント作成</td><td>Prints negatives onto photo paper</td></tr>
+        <tr><td><strong>写真フレーム</strong>（ブロック）</td><td>壁に設置して飾る</td><td>Wall-mounted photo display</td></tr>
+        <tr><td><strong>写真立て</strong>（ブロック）</td><td>床に置いて飾る</td><td>Floor-standing photo display</td></tr>
+        <tr><td><strong>プリンター</strong>（ブロック）</td><td>SDカードから直接プリント</td><td>Prints directly from an SD card</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── 4. Viewfinder ─────────────────────────────────── -->
+  <section id="viewfinder" class="section-anchor">
+    <h2>4. ファインダーの使い方 / Viewfinder Controls</h2>
+    <p style="font-size:14px;">
+      カメラを持った状態で <strong>Shift（スニーク）を押し続ける</strong>とファインダーモードになります。<br>
+      <strong>Hold Shift (sneak)</strong> while holding a camera to enter viewfinder mode.
+    </p>
+    <pre>
+┌─────────────────────────────────┐
+│ 35mm          EVF MAIN          │
+│ Av | AF                         │
+│                                 │
+│          [  ＋  ]               │   ← フォーカスレティクル / Focus reticle
+│                                 │
+│ F5.6 · 1/60 · ISO400 · 50mm     │
+│         ─┬─┬─┬─│─┬─┬─┬─        │   ← 露出計 / Exposure meter
+│          -3  -1  0  +1  +3      │
+└─────────────────────────────────┘</pre>
+
+    <h3>スクロール操作 / Scroll Controls</h3>
+    <table class="step-table">
+      <thead><tr><th>キー / Key</th><th>操作 / Action</th></tr></thead>
+      <tbody>
+        <tr><td>スクロール / Scroll</td><td>ズーム（ズームレンズのみ）/ Zoom (zoom lenses only)</td></tr>
+        <tr><td>Ctrl + スクロール</td><td>絞り（F値）/ Aperture</td></tr>
+        <tr><td>Alt + スクロール</td><td>シャッタースピード / Shutter speed</td></tr>
+        <tr><td>Ctrl + Alt + スクロール</td><td>MF ピント距離 / Manual focus distance</td></tr>
+      </tbody>
+    </table>
+
+    <h3>フォーカスレティクル / Focus Reticle</h3>
+    <table class="step-table">
+      <thead><tr><th>色 / Colour</th><th>意味 / Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><span class="color-green">■ 緑 / Green</span></td><td>合焦 / In focus</td></tr>
+        <tr><td><span style="color:#c8c830;">■ 黄 / Yellow</span></td><td>やや外れ / Slightly off</td></tr>
+        <tr><td><span style="color:#c85050;">■ 赤 / Red</span></td><td>大幅ずれ / Out of focus</td></tr>
+        <tr><td>■ 白 / White</td><td>レンズ未装着 / No lens attached</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── 5. Exposure ───────────────────────────────────── -->
+  <section id="exposure" class="section-anchor">
+    <h2>5. 露出設定 / Exposure Settings</h2>
+
+    <h3>露出モード / Exposure Modes</h3>
+    <table class="step-table">
+      <thead><tr><th>モード</th><th>日本語</th><th>English</th></tr></thead>
+      <tbody>
+        <tr><td><strong>M</strong></td><td>絞り・SS すべて手動</td><td>Fully manual</td></tr>
+        <tr><td><strong>Av</strong></td><td>絞り固定、SS をオート</td><td>Lock aperture, auto shutter</td></tr>
+        <tr><td><strong>Tv</strong></td><td>SS 固定、絞りをオート</td><td>Lock shutter, auto aperture</td></tr>
+        <tr><td><strong>P</strong></td><td>絞り・SS 両方オート（F5.6基準）</td><td>Full auto. Defaults to F5.6</td></tr>
+      </tbody>
+    </table>
+
+    <h3>フォーカスモード / Focus Modes</h3>
+    <table class="step-table">
+      <thead><tr><th>モード</th><th>日本語</th><th>English</th></tr></thead>
+      <tbody>
+        <tr><td><strong>MF</strong></td><td>Ctrl+Alt+スクロールで手動</td><td>Manual — Ctrl+Alt+Scroll</td></tr>
+        <tr><td><strong>AF</strong></td><td>画面中央の距離に自動スナップ</td><td>Snaps to scene depth at frame centre</td></tr>
+        <tr><td><strong>MOB</strong></td><td>前方5°コーン内の最近エンティティに追尾</td><td>Tracks nearest entity in a 5° forward cone</td></tr>
+      </tbody>
+    </table>
+
+    <h3>絞りと被写界深度 / Aperture and Depth of Field</h3>
+    <pre>
+f/1.4  ←  背景ボケ強い / Strong bokeh (shallow DoF)
+f/5.6  ←  バランス点 / Balanced
+f/16   ←  回折ソフトネス開始 / Diffraction softening begins
+f/22   ←  全体にピント / Deep DoF (everything sharp)</pre>
+    <div class="note">
+      DoF ブラーは <strong>F5.6 以下</strong>でのみ発生。F8 以上では出ません。<br>
+      Depth-of-field blur only fires at <strong>f/5.6 or wider</strong>. No bokeh at f/8+.
+    </div>
+
+    <h3>シャッタースピードとブレ / Shutter Speed and Motion Blur</h3>
+    <table class="step-table">
+      <thead><tr><th>SS</th><th>日本語</th><th>English</th></tr></thead>
+      <tbody>
+        <tr><td>1/250 以上</td><td>動体も止まる</td><td>Freezes motion</td></tr>
+        <tr><td>1/60</td><td>基準。手ブレしない</td><td>Reference. Safe handheld</td></tr>
+        <tr><td>1/30 以下</td><td>手ブレシミュレーション発生</td><td>Hand-shake blur simulation</td></tr>
+        <tr><td>1s 以上</td><td>長時間露光。光跡が写る</td><td>Long-exposure blend. Light trails visible</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      三脚（防具立て）撮影では長時間露光でも手ブレは発生しません。<br>
+      Tripod (armor stand) shots are always shake-free, even at slow shutters.
+    </div>
+  </section>
+
+  <!-- ── 6. Digital ────────────────────────────────────── -->
+  <section id="digital" class="section-anchor">
+    <h2>6. デジタルカメラ / Digital Cameras</h2>
+
+    <h3>撮影手順 / Shooting Workflow</h3>
+    <pre>
+カメラを持つ / Hold camera
+  ↓
+設定キー → レンズ装着・露出設定 / Settings key → attach lens, set exposure
+  ↓
+SDカード装填 / Load SD card
+  ↓
+Shift長押し → ファインダーモード / Hold Shift → viewfinder
+  ↓
+右クリック → 撮影 / Right-click → shoot
+  ↓
+.minecraft/photographica/photos/ に PNG 保存 / PNG saved</pre>
+
+    <h3>SDカードブラウザ / SD Card Browser</h3>
+    <p style="font-size:14px;">設定画面の <strong>SDカード（n枚）</strong> ボタンで開きます。Press <strong>SD Card (n)</strong> in the settings screen.</p>
+    <ul>
+      <li>サムネイル表示・全画面表示 / Thumbnail and full-screen view</li>
+      <li>撮影メタデータ確認（F値・SS・ISO・焦点距離・座標）/ Metadata display</li>
+      <li>1枚ずつ削除（ディスクのファイルも削除）/ Per-photo deletion (removes PNG from disk)</li>
+    </ul>
+    <div class="note">
+      SDカードはデフォルト <strong>64枚</strong>まで。満杯になると撮影できなくなります。こまめにプリントするか不要な写真を削除してください。<br>
+      SD card holds up to <strong>64 photos</strong> by default. Shooting is blocked when full. Print or delete photos regularly.
+    </div>
+  </section>
+
+  <!-- ── 7. Film ────────────────────────────────────────── -->
+  <section id="film" class="section-anchor">
+    <h2>7. フィルムカメラ / Film Camera</h2>
+
+    <h3>撮影〜プリントまでの流れ / Complete Workflow</h3>
+    <pre>
+フィルム装填 / Load film
+  ↓
+撮影 → 巻き上げ → … × 36コマ / Shoot → Wind → repeat × 36
+  ↓
+フィルム取り出し（露出済みフィルム）/ Unload (Exposed Film item)
+  ↓
+暗室 + 現像液タンク / Darkroom block + Developer Tank
+  ↓
+現像済みネガ / Developed Negative  ← 右クリックでプレビュー / right-click to preview
+  ↓
+引き伸ばし機 + 写真用紙 / Enlarger + Photo Paper
+  ↓
+写真アイテム（飾れる）/ Photo item (displayable)</pre>
+
+    <div class="warn">
+      <strong>⚠ 光被り / Light Fogging</strong><br>
+      フィルムの<strong>取り出し・装填操作</strong>を<strong>明るさ8以上</strong>の場所で行うと、撮影済みコマすべてが白く飛びます。<br>
+      フィルムの着脱は必ず <strong>明るさ7以下の暗所</strong> か <strong>ポータブル暗室</strong> 内で行ってください。<br><br>
+      Loading or unloading film at <strong>light level ≥ 8</strong> fogs every exposed frame white.
+      Always do film changes at <strong>light level ≤ 7</strong> or inside a <strong>portable darkroom</strong>.
+    </div>
+  </section>
+
+  <!-- ── 8. Tripod ──────────────────────────────────────── -->
+  <section id="tripod" class="section-anchor">
+    <h2>8. 三脚撮影 / Tripod Shooting</h2>
+    <p style="font-size:14px;">
+      <strong>防具立て（アーマースタンド）にカメラを持たせ</strong>、右クリックすることで三脚撮影ができます。<br>
+      Place a camera in an <strong>armor stand's hand</strong> and right-click it to shoot from its perspective.
+    </p>
+    <pre>
+1. 防具立てを設置・向きを決める / Place armor stand, aim it at your subject
+2. カメラ（＋レンズ）を防具立てに持たせる / Give camera + lens to the armor stand
+3. 防具立てを右クリック → 設定画面 / Right-click armor stand → settings open
+4. 露出・フォーカス設定 → シャッター / Set exposure &amp; focus → press shutter
+5. 防具立ての視点から撮影される / Photo taken from the stand's exact position</pre>
+
+    <table class="step-table">
+      <thead><tr><th></th><th>日本語</th><th>English</th></tr></thead>
+      <tbody>
+        <tr><td>視点</td><td>プレイヤーではなく防具立ての位置・向き</td><td>Stand's exact position and orientation</td></tr>
+        <tr><td>手ブレ</td><td>なし（どんな SS でも）</td><td>None — stable at any shutter speed</td></tr>
+        <tr><td>長時間露光</td><td>夜景・光跡撮影に最適</td><td>Ideal for night scenes and light trails</td></tr>
+        <tr><td>AF</td><td>防具立ての向きから自動でピント合わせ</td><td>Auto-focuses from the stand's eye position</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── 9. Video ───────────────────────────────────────── -->
+  <section id="video" class="section-anchor">
+    <h2>9. ビデオカメラ / Video Camera</h2>
+    <div class="note">
+      <strong>FFmpeg</strong> がシステム PATH にインストールされている必要があります。<br>
+      <strong>FFmpeg</strong> must be installed and available on your system PATH.
+      Download: <a href="https://ffmpeg.org/" target="_blank">ffmpeg.org</a>
+    </div>
+    <table class="step-table">
+      <thead><tr><th>キー / Key</th><th>操作 / Action</th></tr></thead>
+      <tbody>
+        <tr><td>右クリック / Right-click</td><td>録画開始・停止 / Start / stop recording</td></tr>
+        <tr><td>スクロール / Scroll</td><td>ズーム / Zoom</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:14px;">
+      録画中は画面右上に赤い録画インジケーターが表示されます。<br>
+      A red recording indicator appears in the top-right corner while recording.<br><br>
+      保存先 / Saved to: <code style="font-size:12px;background:var(--code-bg);padding:2px 6px;border-radius:3px;">.minecraft/photographica/videos/</code>
+    </p>
+  </section>
+
+  <!-- ── 10. Displaying ─────────────────────────────────── -->
+  <section id="display" class="section-anchor">
+    <h2>10. 写真の飾り方 / Displaying Photos</h2>
+    <h3>写真フレーム（壁掛け）/ Photo Frame (wall)</h3>
+    <p style="font-size:14px;">壁ブロックに向かって設置。写真アイテムを右クリックで入れると画像が表示されます。<br>
+      Place against a wall, then right-click with a Photo item to display it.</p>
+    <h3>写真立て（床置き）/ Photo Stand (floor)</h3>
+    <p style="font-size:14px;">床に向かって設置。右クリックで写真を入れます。<br>
+      Place on the floor, right-click with a Photo item.</p>
+    <div class="note">
+      右クリック → 写真を設置 / スニーク + 右クリック → 取り出し<br>
+      Right-click to insert · Sneak + right-click to remove<br><br>
+      マルチプレイでは各プレイヤーの <code style="font-size:12px;">photographica/photos/</code> フォルダに PNG が必要です。<br>
+      In multiplayer each player needs the PNG in their own <code style="font-size:12px;">photographica/photos/</code> folder.
+    </div>
+  </section>
+
+  <!-- ── 11. Effects ───────────────────────────────────── -->
+  <section id="effects" class="section-anchor">
+    <h2>11. 撮影エフェクト / Photo Effects</h2>
+    <p style="font-size:13px;color:var(--text-dim);">以下のエフェクトは<strong>撮影時に PNG に焼き込まれます</strong>（リアルタイム表示とは独立）。<br>
+      All effects are <strong>baked into the PNG at capture time</strong>, independent of real-time rendering.</p>
+    <table class="step-table">
+      <thead><tr><th>エフェクト / Effect</th><th>条件 / Condition</th><th>内容 / Description</th></tr></thead>
+      <tbody>
+        <tr><td>露出スケーリング</td><td>常時</td><td>F値・SS・ISO から明るさ計算。ハイライトロールオフ付き<br><em>Brightness from f/SS/ISO. Highlight roll-off.</em></td></tr>
+        <tr><td>ビネット</td><td>常時</td><td>絞りに応じて周辺減光。F1.4 で最大<br><em>Corner darkening. Strongest at f/1.4.</em></td></tr>
+        <tr><td>ISO ノイズ</td><td>常時</td><td>輝度ノイズ + 高ISO時カラーノイズ<br><em>Luminance + chroma noise at high ISO.</em></td></tr>
+        <tr><td>フィルムグレイン</td><td>フィルム時</td><td>フィルム種別ごとの粒状感<br><em>Per-stock grain texture.</em></td></tr>
+        <tr><td>フィルムトーン</td><td>フィルム時</td><td>カラー暖色・カラー100クール・モノクロ高コントラスト<br><em>Warm/cool/high-contrast per stock.</em></td></tr>
+        <tr><td>被写界深度ブラー</td><td>F5.6 以下 &amp; レンズあり</td><td>深度バッファ使用。境界ブリードなし<br><em>Depth-buffer bokeh, no colour bleed.</em></td></tr>
+        <tr><td>手ブレブラー</td><td>SS ≥ 1/30 &amp; 手持ち</td><td>カメラシェイク。三脚撮影では無効<br><em>Camera shake. Disabled for tripod shots.</em></td></tr>
+        <tr><td>長時間露光合成</td><td>SS &gt; 1/30</td><td>複数フレーム加算平均。光跡<br><em>Multi-frame blend. Light trails.</em></td></tr>
+        <tr><td>回折ソフトネス</td><td>F16 以上</td><td>全体に軽いボックスブラー<br><em>Gentle box blur across the frame.</em></td></tr>
+        <tr><td>相反則不軌</td><td>フィルム &amp; SS ≥ 1s</td><td>長時間露光での感度低下<br><em>Film sensitivity loss at long exposures.</em></td></tr>
+        <tr><td>光被り</td><td>明るさ≥8 でフィルム着脱</td><td>全コマ白く飛ぶ<br><em>All frames washed out.</em></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── 12. FAQ ────────────────────────────────────────── -->
+  <section id="faq" class="section-anchor">
+    <h2>12. FAQ</h2>
+
+    <h3>写真が黒すぎる / 白すぎる — Photo too dark or bright</h3>
+    <p style="font-size:14px;">
+      露出計を確認。Av/Tv/P ならファインダーを開いたまま少し待つとオート収束します。M モードは Ctrl/Alt スクロールで調整。<br>
+      Check the exposure meter. In Av/Tv/P, open the viewfinder and wait a moment for auto-exposure to converge. In M, use Ctrl/Alt+Scroll.
+    </p>
+
+    <h3>被写界深度ブラーが出ない — No depth-of-field blur</h3>
+    <p style="font-size:14px;">
+      DoF ブラーは F5.6 以下でのみ発生します。F8 以上には出ません。<br>
+      DoF blur only fires at f/5.6 or wider. No bokeh at f/8+.
+    </p>
+
+    <h3>現像したのに写真が全部白い — Developed film all white</h3>
+    <p style="font-size:14px;">
+      フィルムの取り出し・装填を<strong>明るさ8以上</strong>の場所で行うと光被りが発生します。<strong>明るさ7以下の暗所</strong>か<strong>ポータブル暗室</strong>内で着脱してください。<br>
+      Fogging occurs when loading/unloading film at <strong>light level ≥ 8</strong>. Always do film changes at <strong>light level ≤ 7</strong> or inside a <strong>portable darkroom</strong>.
+    </p>
+
+    <h3>動画撮影で「FFmpeg が見つかりません」 — "FFmpeg not found"</h3>
+    <p style="font-size:14px;">
+      <a href="https://ffmpeg.org/" target="_blank">ffmpeg.org</a> からダウンロードしてシステムの PATH に追加してください。<br>
+      Download from <a href="https://ffmpeg.org/" target="_blank">ffmpeg.org</a> and add it to your system PATH.
+    </p>
+
+    <h3>ファイルの保存場所 / File Locations</h3>
+    <pre>
+.minecraft/
+└── photographica/
+    ├── photos/     ← 写真 PNG / Photo PNGs  (yyyy-MM-dd_HH-mm-ss_&lt;uuid&gt;.png)
+    └── videos/     ← 動画 mp4 / Video MP4s</pre>
+  </section>
+
+  <div style="margin-top:48px;padding-top:24px;border-top:1px solid var(--border);font-size:13px;color:var(--text-dim);">
+    <em>Photographica v0.2.1 — Fabric / Minecraft 1.21.1, 1.21.4, 1.21.11, 26.1</em>
+  </div>
+
+</main>
+
+<footer>
+  <p>Photographica &amp; Snapmatica — Fabric Minecraft Mod</p>
+  <p style="margin-top:6px;">
+    <a href="index.html">Home</a> ·
+    <a href="https://github.com/shuntilettuce/photographica" target="_blank">GitHub</a> ·
+    <a href="https://github.com/shuntilettuce/photographica/releases" target="_blank">Releases</a>
+  </p>
+</footer>
+
+</body>
+</html>

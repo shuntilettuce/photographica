@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Photographica — Minecraft Camera Mod</title>
+  <meta name="description" content="Realistic camera simulation for Minecraft. Film SLR, digital mirrorless, lenses, depth-of-field, and darkroom workflow.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <nav>
+    <span class="logo">📷 Photographica</span>
+    <span class="spacer"></span>
+    <a href="tutorial.html">チュートリアル / Tutorial</a>
+    <a href="https://github.com/shuntilettuce/photographica" target="_blank">GitHub</a>
+  </nav>
+</header>
+
+<div class="hero">
+  <h1>Photographica</h1>
+  <p class="sub">Realistic Camera Simulation for Minecraft</p>
+  <p class="sub-ja">フィルム・デジタルカメラを Minecraft に</p>
+  <div class="hero-btns">
+    <a class="btn btn-primary" href="tutorial.html">チュートリアル / Tutorial</a>
+    <a class="btn btn-secondary" href="#download">ダウンロード / Download</a>
+    <a class="btn btn-secondary" href="https://github.com/shuntilettuce/photographica" target="_blank">GitHub</a>
+  </div>
+  <div class="badge-row">
+    <span class="badge">Fabric</span>
+    <span class="badge">1.21.1</span>
+    <span class="badge">1.21.4</span>
+    <span class="badge">1.21.11</span>
+    <span class="badge">26.1</span>
+  </div>
+</div>
+
+<main>
+
+  <!-- ── Features ─────────────────────────────────────── -->
+  <section id="features">
+    <h2>機能 / Features</h2>
+    <div class="feat-grid">
+
+      <div class="feat-card">
+        <div class="icon">🎞</div>
+        <h3>フィルム SLR / Film SLR</h3>
+        <p>フィルムを装填、36コマ撮影後に暗室で現像、引き伸ばし機でプリント。<br>
+           Load film, shoot 36 frames, develop in the darkroom, print in the enlarger.</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="icon">📱</div>
+        <h3>ミラーレスデジタル / Mirrorless Digital</h3>
+        <p>SDカードに保存、EVFでリアルタイム露出・ボケプレビュー。<br>
+           SD card storage with live EVF exposure &amp; depth-of-field preview.</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="icon">🔭</div>
+        <h3>交換レンズ / Interchangeable Lenses</h3>
+        <p>14mm〜200mm の単焦点・ズームレンズ7本。焦点距離で画角が変わる。<br>
+           7 primes and zooms, 14–200 mm. True field-of-view per focal length.</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="icon">⚙️</div>
+        <h3>フル露出コントロール / Full Exposure Control</h3>
+        <p>絞り F1.4〜F22、SS 30s〜1/4000、ISO 100〜25600。M/Av/Tv/P モード対応。<br>
+           f/1.4–f/22, 30 s–1/4000 s, ISO 100–25600. M, Av, Tv, P modes.</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="icon">🌀</div>
+        <h3>被写界深度 / Depth of Field</h3>
+        <p>深度バッファを使ったリアルタイム・キャプチャ両対応のボケ。色ブリードなし。<br>
+           Physics-based bokeh in EVF &amp; photos. Depth-buffer driven, no colour bleed.</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="icon">🎬</div>
+        <h3>動体ブラー / Motion Blur</h3>
+        <p>低速シャッターで手ブレ・被写体ブレをシミュレーション。三脚撮影では無効。<br>
+           Shake and subject blur at slow shutters. Disabled for tripod shots.</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="icon">🕹</div>
+        <h3>フォーカスモード / Focus Modes</h3>
+        <p>MF（手動）・AF（画面中央追従）・MOB（エンティティ自動追尾）の3モード。<br>
+           Manual, centre-weighted AF, and entity-tracking MOB focus modes.</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="icon">🦺</div>
+        <h3>三脚撮影 / Tripod Shooting</h3>
+        <p>防具立てにカメラを持たせて遠隔シャッター。長時間露光でも手ブレなし。<br>
+           Equip an armor stand and shoot from its viewpoint. Always shake-free.</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="icon">🎥</div>
+        <h3>ビデオカメラ / Video Camera</h3>
+        <p>FFmpeg を使った動画撮影。DoF ブラーが動画にも乗る。<br>
+           Video recording via FFmpeg. DoF blur carries through to video.</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="icon">🖼</div>
+        <h3>写真の飾り方 / Displaying Photos</h3>
+        <p>フォトフレーム（壁掛け）・写真立て（床置き）でワールドを飾れる。<br>
+           Wall frames and floor stands to display prints in your world.</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="icon">✨</div>
+        <h3>撮影エフェクト / Photo Effects</h3>
+        <p>ビネット・ISOノイズ・フィルムグレイン・トーンカーブ・回折ソフトネス。<br>
+           Vignetting, ISO noise, grain, tone curves, diffraction softening.</p>
+      </div>
+
+      <div class="feat-card">
+        <div class="icon">🌈</div>
+        <h3>シェーダー対応 / Shader Compatible</h3>
+        <p>Iris + Photon での動作確認済み。シェーダー使用時も正しく合成される。<br>
+           Tested with Iris + Photon. Effects composite correctly with shaders.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Requirements ──────────────────────────────────── -->
+  <section id="requirements">
+    <h2>動作要件 / Requirements</h2>
+    <table>
+      <thead>
+        <tr><th>項目 / Item</th><th>内容 / Details</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Minecraft</td><td>1.21.1 / 1.21.4 / 1.21.11 / 26.1</td></tr>
+        <tr><td>Mod ローダー / Loader</td><td>Fabric Loader ≥ 0.16.0</td></tr>
+        <tr><td>必須依存 / Required</td><td><a href="https://modrinth.com/mod/fabric-api">Fabric API</a></td></tr>
+        <tr><td>インストール / Install</td><td>クライアント・サーバー両方 / Both client and server</td></tr>
+        <tr><td>ビデオ録画 / Video</td><td>FFmpeg (PATH に追加が必要 / must be on system PATH)</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      Snapmatica はアイテム不要のクライアント専用 Mod です。バニラサーバーや他の Mod 環境でもそのまま使えます。<br>
+      <em>Snapmatica is a client-only mod — no items required. Works on any vanilla or modded server.</em>
+    </div>
+  </section>
+
+  <!-- ── Mod variants ───────────────────────────────────── -->
+  <section id="variants">
+    <h2>Mod バリアント / Mod Variants</h2>
+    <div class="note">
+      <strong>Photographica</strong> — サーバー対応。カメラ・フィルム・暗室など完全なアイテムシステム付き。<br>
+      <strong>Snapmatica</strong> — クライアント専用。アイテムなしで EVF ファインダー・撮影機能のみ利用可能。
+      <br><br>
+      <strong>Photographica</strong> — Server-compatible. Full item system: cameras, film, darkroom, enlarger.<br>
+      <strong>Snapmatica</strong> — Client-only. No items — just sneak to open the EVF viewfinder and take photos.
+    </div>
+  </section>
+
+  <!-- ── Download ──────────────────────────────────────── -->
+  <section id="download">
+    <h2>ダウンロード / Download</h2>
+    <p style="color:var(--text-dim);font-size:14px;margin-bottom:16px;">
+      最新リリースは GitHub Releases からダウンロードできます。<br>
+      Latest release available on GitHub Releases.
+    </p>
+    <div class="dl-row">
+
+      <div class="dl-card">
+        <h3>Photographica</h3>
+        <p class="tagline">フル機能 / Full item system · Client + Server</p>
+        <div class="dl-links">
+          <a class="dl-link" href="https://github.com/shuntilettuce/photographica/releases/latest" target="_blank">
+            <span>v0.2.1 — Latest</span>
+            <span class="ver">GitHub Releases →</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="dl-card">
+        <h3>Snapmatica</h3>
+        <p class="tagline">クライアント専用 / Client-only · No items</p>
+        <div class="dl-links">
+          <a class="dl-link" href="https://github.com/shuntilettuce/photographica/releases/latest" target="_blank">
+            <span>v0.2.0 — Latest</span>
+            <span class="ver">GitHub Releases →</span>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Quick start ───────────────────────────────────── -->
+  <section id="quickstart">
+    <h2>クイックスタート / Quick Start</h2>
+    <h3>Photographica</h3>
+    <ol style="padding-left:20px;line-height:2.2;font-size:14px;">
+      <li>Fabric Loader と Fabric API を導入する。 <em>Install Fabric Loader &amp; Fabric API.</em></li>
+      <li>photographica-*.jar を mods フォルダに入れる。 <em>Drop the JAR into your mods folder.</em></li>
+      <li>オプション → 操作設定 → Photographica でキーを割り当てる。 <em>Bind keys under Options → Controls → Photographica.</em></li>
+      <li>カメラアイテムを持ち、Shift長押しでファインダーを開く。 <em>Hold the camera, hold Shift for the viewfinder.</em></li>
+    </ol>
+    <h3>Snapmatica</h3>
+    <ol style="padding-left:20px;line-height:2.2;font-size:14px;">
+      <li>snapmatica-*.jar を mods フォルダに入れる（サーバー導入不要）。 <em>Drop the JAR in your mods folder — no server install needed.</em></li>
+      <li>Shift長押し → EVF ファインダーが起動する。 <em>Hold Shift → EVF viewfinder opens immediately.</em></li>
+    </ol>
+    <p style="margin-top:16px;">
+      <a href="tutorial.html">→ 詳細チュートリアル / Full tutorial</a>
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <p>Photographica &amp; Snapmatica — Fabric Minecraft Mod</p>
+  <p style="margin-top:6px;">
+    <a href="https://github.com/shuntilettuce/photographica" target="_blank">GitHub</a> ·
+    <a href="tutorial.html">Tutorial</a> ·
+    <a href="https://github.com/shuntilettuce/photographica/releases" target="_blank">Releases</a>
+  </p>
+</footer>
+
+</body>
+</html>
