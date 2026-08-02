@@ -156,6 +156,25 @@ public final class PhotoCapture {
     }
 
     /**
+     * The projection matrix the world was ACTUALLY rendered with — the one that produced
+     * the depth buffer we are about to linearise.
+     *
+     * <p>On 1.21.11 this must be {@code getProjectionMatrix}, not {@code getBasicProjection-
+     * Matrix}: the latter builds a fresh matrix out of vanilla parameters, so a LOD mod
+     * (Voxy, DH) that extends the far plane elsewhere in the pipeline is invisible to it and
+     * distant terrain gets linearised against a far plane that is far too small. Older
+     * versions have no separate accessor — there {@code getBasicProjectionMatrix} IS what
+     * {@code renderWorld} uses, so it is the correct source.
+     *
+     * <p>Far/near are fov-independent, so the 70° argument is irrelevant to what we read.
+     * The per-version target selection lives in the invoker, so there is none here.
+     */
+    private static org.joml.Matrix4f worldProjection(MinecraftClient mc) {
+        return ((dev.shunti.snapmatica.client.mixin.GameRendererInvoker) mc.gameRenderer)
+                .snapmatica$worldProjection(70.0f);
+    }
+
+    /**
      * Samples the centre pixel of the currently bound depth buffer and stores the
      * linear depth in {@link #lastSceneDepthBlocks} for the viewfinder focus reticle.
      * Called from WorldRenderEvents.LAST (fires inside renderWorld).
@@ -182,10 +201,8 @@ public final class PhotoCapture {
         int vpH = viewport[3];
         if (vpW > 0 && vpH > 0) {
             int rd = mc.options.getViewDistance().getValue();
-            // getBasicProjectionMatrix() reflects any far-plane extension a LOD mod
-            // (Voxy, DH) applies; far/near are fov-independent so the 70° arg is irrelevant.
-            EvfBlurRenderer.updateDepthFar(mc.gameRenderer.getBasicProjectionMatrix(70.0f),
-                    Math.max(rd * 64f, 256f));
+            EvfBlurRenderer.updateDepthFar(worldProjection(mc),
+                    mc.gameRenderer.getFarPlaneDistance(), Math.max(rd * 64f, 256f));
             EvfBlurRenderer.captureDepth(vpW, vpH);
         }
 
@@ -245,10 +262,8 @@ public final class PhotoCapture {
 
         // GPU-side depth copy for the EVF DoF blur (sampled by the shader every frame).
         int rd = mc.options.getViewDistance().getValue();
-        // getBasicProjectionMatrix() reflects any far-plane extension a LOD mod
-        // (Voxy, DH) applies; far/near are fov-independent so the 70° arg is irrelevant.
-        EvfBlurRenderer.updateDepthFar(mc.gameRenderer.getBasicProjectionMatrix(70.0f),
-                Math.max(rd * 64f, 256f));
+        EvfBlurRenderer.updateDepthFar(worldProjection(mc),
+                mc.gameRenderer.getFarPlaneDistance(), Math.max(rd * 64f, 256f));
         EvfBlurRenderer.captureDepth(vpW, vpH);
 
         // AF subject distance — THROTTLED. The world raycast is the PRIMARY focus

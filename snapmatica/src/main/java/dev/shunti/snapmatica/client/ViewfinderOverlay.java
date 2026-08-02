@@ -50,7 +50,7 @@ public final class ViewfinderOverlay {
             // Schedule for applyScheduledBlur() in GameRendererMixin (fires before HUD each
             // frame), so both the live EVF and captured photos receive GPU bokeh.
             EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2,
-                    SnapmaticaClient.focusDistance, SnapmaticaClient.aperture,
+                    AutoFocus.shaderFocusDistance(), SnapmaticaClient.aperture,
                     SnapmaticaClient.focalLengthMm);
         }
 
@@ -92,11 +92,9 @@ public final class ViewfinderOverlay {
                 fmt(dispAp),SHUTTERS[si],SnapmaticaClient.iso,fp),
                 fx+6,fy2-tr.fontHeight-14,0xFFE8DCC4);
         if (SnapmaticaClient.lensType != 0) {
-            // "inf" when focus is at infinity: either an explicit MF ∞ stop, or AF/MOB
-            // resolving to sky / no subject (focusDistance only eases to the far anchor,
-            // so AutoFocus.afAtInfinity tells us the AF intent was infinity).
-            boolean atInf = SnapmaticaClient.focusDistance >= SnapmaticaClient.FOCUS_INFINITY
-                    || (SnapmaticaClient.focusMode != 0 && AutoFocus.afAtInfinity);
+            // Same predicate the DoF shader is driven from, so the readout cannot claim
+            // infinity while the blur is still working off a finite focus distance.
+            boolean atInf = AutoFocus.atInfinity();
             String fd = atInf ? "inf" : fmtFocusDist(SnapmaticaClient.focusDistance);
             ctx.drawTextWithShadow(tr, fd, fx2 - tr.getWidth(fd) - 6, fy + 4, rc);
         }
@@ -215,7 +213,11 @@ public final class ViewfinderOverlay {
     private static int focusReticleColor() {
         if (SnapmaticaClient.lensType == 0 || SnapmaticaClient.aperture >= 8f)
             return 0xFFFFFFFF;
-        if (SnapmaticaClient.focusDistance >= SnapmaticaClient.FOCUS_INFINITY)
+        // Infinity focus — the same predicate the label and the DoF shader use. Testing
+        // focusDistance directly (as this did) never fires in AF: AutoFocus clamps the
+        // value to its finite far anchor, so the reticle fell through to the next test,
+        // saw the scene depth reading infinity, and went red on a correctly focused sky.
+        if (AutoFocus.atInfinity())
             return 0xFFFFFFFF;
         if (PhotoCapture.lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY)
             return 0xFFE04040;

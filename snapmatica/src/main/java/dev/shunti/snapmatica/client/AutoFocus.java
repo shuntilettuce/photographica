@@ -40,6 +40,26 @@ public final class AutoFocus {
     private static final float PULL_SNAP_EPS = 0.01f;  // lock onto target below this log-distance
     private static final float FAR_ANCHOR    = 1000.0f; // refocus from ∞ starts here (raycast range)
 
+    /**
+     * True when the camera is optically at infinity — either an explicit MF ∞ stop, or AF/MOB
+     * having resolved to sky / no subject.
+     *
+     * <p>The viewfinder label and the DoF shader MUST agree on this, and they used to decide
+     * it independently: the HUD consulted {@link #afAtInfinity} and printed "inf", while the
+     * blur was handed the raw {@code focusDistance}, which {@link #pullFocus} had clamped to
+     * the finite {@link #FAR_ANCHOR}. So in AF mode the shader took its FINITE branch at
+     * 1000 blocks and went on blurring the horizon under an "inf" readout.
+     */
+    public static boolean atInfinity() {
+        return SnapmaticaClient.focusDistance >= SnapmaticaClient.FOCUS_INFINITY
+                || (SnapmaticaClient.focusMode != FOCUS_MF && afAtInfinity);
+    }
+
+    /** Focus distance to hand the DoF shader — the sentinel whenever {@link #atInfinity()}. */
+    public static float shaderFocusDistance() {
+        return atInfinity() ? SnapmaticaClient.FOCUS_INFINITY : SnapmaticaClient.focusDistance;
+    }
+
     public static void tick(MinecraftClient mc) {
         if (mc.player == null || mc.world == null) return;
         // Track while the sneak viewfinder is up OR while recording (so the baked-in

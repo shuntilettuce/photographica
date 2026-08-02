@@ -87,12 +87,19 @@ public final class VideoRecorder {
     // to display write-phase progress (0–10%).
     private static final AtomicInteger writtenFrames = new AtomicInteger(0);
 
+    // Frame scaling and PNG encoding are pure CPU work on independent frames, and each
+    // output file carries its own index, so they parallelise freely. A single thread could
+    // not keep up with the capture rate: the queue grew all recording long, holding a
+    // full-resolution NativeImage per pending frame. Capped low to leave cores for the game.
     private static final ExecutorService ioExecutor =
-            Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "snapmatica-video-io");
-                t.setDaemon(true);
-                return t;
-            });
+            Executors.newFixedThreadPool(
+                    Math.max(2, Math.min(4, Runtime.getRuntime().availableProcessors() / 4)),
+                    r -> {
+                        Thread t = new Thread(r, "snapmatica-video-io");
+                        t.setDaemon(true);
+                        t.setPriority(Thread.MIN_PRIORITY);
+                        return t;
+                    });
 
     // ── Public accessors ─────────────────────────────────────────────────────────
     public static boolean isRecording()      { return recording; }
@@ -234,23 +241,12 @@ public final class VideoRecorder {
             mc.player.sendMessage(Text.literal("⚠ 残り 1:00"), true);
 
         // The framebuffer is already DoF-blurred (applyPreviewBlur ran above). Screenshot it.
+        // Nothing but the read-back itself happens here — scaling and encoding are handed
+        // straight to the I/O pool so the render thread is freed as early as possible.
         //? if >=1.21.11 {
-        /*ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), raw -> {
-            // crop+downsample happen in the callback (already off render thread in 1.21.11)
-            NativeImage cropped = cropTo16x9(raw);
-            NativeImage frame   = boxDownsample(cropped, 1280);
-            if (cropped != raw) cropped.close();
-            raw.close();
-            ioExecutor.submit(() -> {
-                try { frame.writeTo(outFile); }
-                catch (IOException e) {
-                    System.err.println("[VideoRecorder] Frame write failed: " + outFile);
-                } finally { frame.close(); }
-            });
-        });
+        /*ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), raw -> submitFrame(raw, outFile));
         *///?} else {
         // takeScreenshot does the glReadPixels on the render thread — unavoidable.
-        // Offload crop+downsample+write to the I/O thread so the render thread frees ASAP.
         NativeImage raw;
         try {
             raw = ScreenshotRecorder.takeScreenshot(mc.getFramebuffer());
@@ -258,24 +254,29 @@ public final class VideoRecorder {
             System.err.println("[VideoRecorder] Screenshot failed frame " + idx);
             return;
         }
+        submitFrame(raw, outFile);
+        //?}
+    }
+
+    /**
+     * Takes ownership of a freshly read-back frame and does the whole scale-and-encode on
+     * the I/O pool. {@code raw} is closed here exactly once, on every path.
+     */
+    private static void submitFrame(NativeImage raw, File outFile) {
         ioExecutor.submit(() -> {
             try {
-                NativeImage cropped = cropTo16x9(raw);
-                NativeImage frame   = boxDownsample(cropped, 1280);
-                if (cropped != raw) cropped.close();
-                raw.close();
+                NativeImage frame = cropAndDownsample(raw, 1280);
                 try { frame.writeTo(outFile); }
                 catch (IOException e) {
                     System.err.println("[VideoRecorder] Frame write failed: " + outFile);
                 } finally { frame.close(); }
             } catch (Exception e) {
-                raw.close();
                 System.err.println("[VideoRecorder] Frame process failed: " + outFile);
             } finally {
+                raw.close();
                 writtenFrames.incrementAndGet();
             }
         });
-        //?}
     }
 
     /**
@@ -427,6 +428,11 @@ public final class VideoRecorder {
         }
     }
 
+    /** Cores to hand ffmpeg: half the machine, at least 2, never more than 8. */
+    private static int encodeThreads() {
+        return Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors() / 2));
+    }
+
     private static boolean runFfmpeg(File concatFile, String outPath) {
         String[] candidates = {"ffmpeg", "/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"};
         String vf = motionBlurFilter();
@@ -439,8 +445,16 @@ public final class VideoRecorder {
                         "-f", "concat", "-safe", "0",
                         "-i", concatFile.getAbsolutePath()));
                 if (vf != null) { cmd.add("-vf"); cmd.add(vf); }
+                // Leave the machine usable while encoding. Unconstrained, libx264 defaults
+                // to preset=medium across every core and — being a separate process — is
+                // beyond the reach of the I/O pool's thread priorities, so it starved the
+                // game right as recording stopped. Half the cores at veryfast encodes far
+                // faster than realtime for 1280x720 anyway; at the same CRF the only cost
+                // is a somewhat larger file.
                 cmd.addAll(List.of(
-                        "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
+                        "-threads", Integer.toString(encodeThreads()),
+                        "-c:v", "libx264", "-preset", "veryfast",
+                        "-crf", "18", "-pix_fmt", "yuv420p",
                         outPath));
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
@@ -466,40 +480,50 @@ public final class VideoRecorder {
 
     // ── Image utilities ───────────────────────────────────────────────────────────
 
-    private static NativeImage cropTo16x9(NativeImage src) {
+    /**
+     * Crops to 16:9 and box-downsamples to {@code maxWidth} in ONE pass.
+     *
+     * <p>This replaced a {@code cropTo16x9()} then {@code boxDownsample()} pair. That pair
+     * allocated a full-resolution intermediate image per frame and walked every source pixel
+     * twice — a read+write to crop, then a read to average — which at recording rates was the
+     * single largest cost in the capture path and the reason frames were being dropped. Going
+     * straight from the source rect to the destination halves the pixel traffic and removes
+     * the per-frame full-resolution allocation entirely.
+     */
+    private static NativeImage cropAndDownsample(NativeImage src, int maxWidth) {
         int w = src.getWidth(), h = src.getHeight();
         float aspect = 16f / 9f;
-        int tW, tH;
-        if ((float) w / h > aspect) { tH = h; tW = Math.round(h * aspect); }
-        else                         { tW = w; tH = Math.round(w / aspect); }
-        if (tW == w && tH == h) return src;
-        int offX = (w - tW) / 2, offY = (h - tH) / 2;
-        NativeImage dst = new NativeImage(tW, tH, false);
-        for (int y = 0; y < tH; y++)
-            for (int x = 0; x < tW; x++)
-                setPixel(dst, x, y, getPixel(src, x + offX, y + offY));
-        return dst;
-    }
+        int cW, cH;
+        if ((float) w / h > aspect) { cH = h; cW = Math.round(h * aspect); }
+        else                        { cW = w; cH = Math.round(w / aspect); }
+        int offX = (w - cW) / 2, offY = (h - cH) / 2;
 
-    private static NativeImage boxDownsample(NativeImage src, int maxWidth) {
-        int sw = src.getWidth(), sh = src.getHeight();
-        if (sw <= maxWidth) return src;
-        int dw = maxWidth, dh = Math.max(1, Math.round((float) sh * dw / sw));
+        int dw = Math.min(maxWidth, cW);
+        int dh = Math.max(1, Math.round((float) cH * dw / cW));
         NativeImage dst = new NativeImage(dw, dh, false);
-        float xS = (float) sw / dw, yS = (float) sh / dh;
+
+        // Whole-pixel copy when no scaling is needed — avoids the averaging arithmetic.
+        if (dw == cW && dh == cH) {
+            for (int y = 0; y < dh; y++)
+                for (int x = 0; x < dw; x++)
+                    setPixel(dst, x, y, getPixel(src, x + offX, y + offY));
+            return dst;
+        }
+
+        float xS = (float) cW / dw, yS = (float) cH / dh;
         for (int y = 0; y < dh; y++) {
             int sy0 = (int) Math.floor(y * yS);
-            int sy1 = Math.min(sh, (int) Math.ceil((y + 1) * yS));
+            int sy1 = Math.min(cH, (int) Math.ceil((y + 1) * yS));
             if (sy1 <= sy0) sy1 = sy0 + 1;
             for (int x = 0; x < dw; x++) {
                 int sx0 = (int) Math.floor(x * xS);
-                int sx1 = Math.min(sw, (int) Math.ceil((x + 1) * xS));
+                int sx1 = Math.min(cW, (int) Math.ceil((x + 1) * xS));
                 if (sx1 <= sx0) sx1 = sx0 + 1;
                 long ra = 0, ga = 0, ba = 0, aa = 0;
                 int  n  = 0;
                 for (int sy = sy0; sy < sy1; sy++)
                     for (int sx = sx0; sx < sx1; sx++) {
-                        int c = getPixel(src, sx, sy);
+                        int c = getPixel(src, sx + offX, sy + offY);
                         aa += (c >>> 24) & 0xFF; ba += (c >>> 16) & 0xFF;
                         ga += (c >>>  8) & 0xFF; ra +=  c         & 0xFF;
                         n++;
@@ -511,6 +535,7 @@ public final class VideoRecorder {
         }
         return dst;
     }
+
 
     // ── Pixel access (NativeImage format changed in 1.21.4) ──────────────────────
 

@@ -37,6 +37,31 @@ float linearDepth(float d) {
     return 2.0 * Near * Far / (Far + Near - ndc * (Far - Near));
 }
 
+// At infinity focus, everything past this many blocks is forced sharp; the blur ramps
+// out between the two. The physical CoC formula below is correct, but it can only be as
+// correct as the depth it is fed — and LOD terrain drawn by Voxy does not report a
+// trustworthy distance through the vanilla depth buffer (a known, unfixed limitation).
+// Rather than blur distant geometry on the strength of a bogus depth, treat "far" as what
+// infinity focus means it is: in focus. Costs some telephoto far-field softness that a
+// real lens would show — deliberate, since a sharp horizon is the point of infinity focus.
+const float INF_SHARP_BEGIN = 48.0;   // blocks — blur starts fading out here
+const float INF_SHARP_FULL  = 128.0;  // blocks — dead sharp beyond here
+
+/**
+ * Minimum blur applied to distant geometry regardless of the thin-lens result — an
+ * atmospheric-haze floor that also hides LOD popping.
+ *
+ * It used to be an unconditional `max(c, smoothstep(200, 600, d) * 5.0)` at two sites, which
+ * meant ANY geometry past 200 blocks was forced to at least 5 px of blur even with the lens
+ * focused at infinity. That, not the depth values, is why the horizon stayed soft at inf:
+ * the infinity branch of computeCoc() correctly returned ~0 and this floor put the blur
+ * straight back. At infinity focus the far field IS the focal plane, so the floor is off.
+ */
+float distantHazeFloor(float depthM) {
+    if (FocusDist >= 99999.0) return 0.0;
+    return smoothstep(200.0, 600.0, depthM) * 5.0;
+}
+
 // Physically-based thin-lens circle of confusion, in framebuffer pixels.
 float computeCoc(float depthM) {
     depthM = max(depthM, 0.05);
@@ -44,6 +69,7 @@ float computeCoc(float depthM) {
     float cocMM;
     if (FocusDist >= 99999.0) {
         cocMM = (fmm * fmm) / (Aperture * depthM * DofScale);
+        cocMM *= 1.0 - smoothstep(INF_SHARP_BEGIN, INF_SHARP_FULL, depthM);
     } else {
         float s1mm = FocusDist * DofScale;
         float denom = Aperture * max(s1mm - fmm, 1.0);
@@ -133,7 +159,7 @@ void main() {
     if (BlurDir.x < 0.5) {
         float d = linearDepth(texture(DepthSampler, texCoord).r);
         float c = max(computeCoc(d) - 1.5, 0.0);
-        c = max(c, smoothstep(200.0, 600.0, d) * 5.0);
+        c = max(c, distantHazeFloor(d));
         float sc = c;
         bool soften = (c >= 2.0);
         if (!soften) {
@@ -178,7 +204,7 @@ void main() {
     vec4  centre = texture(InSampler, texCoord);
     float depthM = linearDepth(texture(DepthSampler, texCoord).r);
     float cocP   = max(computeCoc(depthM) - 1.5, 0.0);
-    cocP = max(cocP, smoothstep(200.0, 600.0, depthM) * 5.0);   // distant-haze floor
+    cocP = max(cocP, distantHazeFloor(depthM));
 
     bool hasNearFg = false;
     if (FocusDist < 99999.0) {

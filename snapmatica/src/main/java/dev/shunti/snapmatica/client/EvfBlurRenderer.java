@@ -84,30 +84,65 @@ public final class EvfBlurRenderer {
     public static final float DOF_SCALE_STILL = 200.0f;   // 1 block = 20 cm (still viewfinder)
     public static final float DOF_SCALE_VIDEO = 1000.0f;  // 1 block = 1 m  (video, realistic)
 
+    /** Vanilla's near plane; overridden from the live projection matrix when it differs. */
     private static final float NEAR = 0.05f;
+    public static float currentDepthNear = NEAR;
     public static float currentDepthFar = 512.0f;
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
 
     /**
-     * Derives the TRUE far plane from the live world projection matrix and stores it in
-     * {@link #currentDepthFar}. The old heuristic (renderDistance * 64) ignored the fact
-     * that LOD mods (Voxy, DH) push the projection far plane out to many thousands of
-     * blocks to draw distant terrain; linearising the depth buffer with the small vanilla
-     * far made every distant subject read far too close — a 300 m mountain reported 5000 m.
-     * Reading the real far plane that actually generated the depth buffer fixes both the
-     * AF distance readout and the EVF blur depth mapping. Falls back to {@code fallbackFar}
-     * when the matrix is missing or not a finite perspective (e.g. an infinite-far proj).
+     * Derives the TRUE far plane that generated the depth buffer and stores it in
+     * {@link #currentDepthFar}. The heuristic this replaced (renderDistance * 64) ignored
+     * the fact that LOD mods (Voxy, DH) push the projection far plane out to many thousands
+     * of blocks to draw distant terrain. Linearising the depth buffer with a far that is too
+     * SMALL makes distant terrain read as much CLOSER than it is, which in turn gives it a
+     * large circle of confusion — so LOD terrain stayed blurred even at infinity focus.
+     *
+     * <p>Sources are tried in descending order of trustworthiness:
+     * <ol>
+     *   <li>{@code projection} — the matrix actually used for the world render. Callers must
+     *       pass the REAL one ({@code GameRenderer.getProjectionMatrix} on 1.21.11+), not
+     *       {@code getBasicProjectionMatrix}, which merely reconstructs a matrix from vanilla
+     *       parameters and so misses a LOD mod's far-plane extension entirely.</li>
+     *   <li>{@code gameFarPlane} — {@code GameRenderer.getFarPlaneDistance()}, a direct read
+     *       of the value vanilla feeds into that matrix.</li>
+     *   <li>{@code fallbackFar} — the render-distance heuristic, last resort.</li>
+     * </ol>
      */
-    public static void updateDepthFar(org.joml.Matrix4f projection, float fallbackFar) {
-        float far = fallbackFar;
+    public static void updateDepthFar(org.joml.Matrix4f projection, float gameFarPlane,
+                                      float fallbackFar) {
+        float far = -1.0f;
         if (projection != null) {
             try {
                 float pf = projection.perspectiveFar();
-                if (Float.isFinite(pf) && pf > 16.0f && pf < 1_000_000.0f) far = pf;
+                if (isPlausibleFar(pf)) far = pf;
+                // The near plane matters more than it looks: linearisation divides by
+                // (Far + Near - ndc*(Far - Near)), so a wrong Near skews every distance in
+                // the far field. Vanilla's is 0.05, but a shader pipeline is free to change
+                // it, and we would never notice — so take it from the same matrix as Far.
+                float pn = projection.perspectiveNear();
+                if (Float.isFinite(pn) && pn > 0.0f && pn < 16.0f) currentDepthNear = pn;
             } catch (Throwable ignored) {}
+        }
+        if (far < 0.0f && isPlausibleFar(gameFarPlane)) far = gameFarPlane;
+        if (far < 0.0f) far = fallbackFar;
+
+        // Log only on a meaningful change — this runs every frame. Makes a LOD mod's
+        // far-plane extension (or the failure to see it) visible without a debug build.
+        if (lastLoggedFar < 0.0f || far < lastLoggedFar * 0.9f || far > lastLoggedFar * 1.1f) {
+            lastLoggedFar = far;
+            System.out.println("[Snapmatica] depth planes: near=" + currentDepthNear
+                    + "  far=" + far + " blocks");
         }
         currentDepthFar = far;
     }
+
+    /** An infinite-far projection yields Infinity; a stale/garbage matrix yields nonsense. */
+    private static boolean isPlausibleFar(float f) {
+        return Float.isFinite(f) && f > 16.0f && f < 1_000_000.0f;
+    }
+
+    private static float lastLoggedFar = -1.0f;
 
     /** GPU-side depth buffer copy. Call during WorldRenderEvents.LAST. */
     public static void captureDepth(int fbW, int fbH) {
@@ -289,7 +324,7 @@ public final class EvfBlurRenderer {
 
         GL20.glUniform1f(locFocusDist, focusDist);
         GL20.glUniform1f(locMaxBlurPx, maxBlurPx);
-        GL20.glUniform1f(locNear, NEAR);
+        GL20.glUniform1f(locNear, currentDepthNear);
         GL20.glUniform1f(locFar, currentDepthFar);
         GL20.glUniform1f(locFocalLen, focalLenMm);
         GL20.glUniform1f(locAperture, aperture);
@@ -453,7 +488,8 @@ public final class EvfBlurRenderer {
         }
         if (rawD >= 0.999999f) return SnapmaticaClient.FOCUS_INFINITY;  // sky / beyond far plane
         if (rawD < 0.001f) return -1.0f;
-        return NEAR * currentDepthFar / (currentDepthFar - rawD * (currentDepthFar - NEAR));
+        return currentDepthNear * currentDepthFar
+                / (currentDepthFar - rawD * (currentDepthFar - currentDepthNear));
     }
     *///?}
 
@@ -497,7 +533,7 @@ public final class EvfBlurRenderer {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
         GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex);
-        final float near = NEAR;
+        final float near = currentDepthNear;
         final float far  = currentDepthFar;
         float[] linear = new float[fbW * fbH];
         for (int i = 0; i < linear.length; i++) {
