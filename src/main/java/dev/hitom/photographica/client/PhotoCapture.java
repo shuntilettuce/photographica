@@ -334,6 +334,10 @@ public final class PhotoCapture {
 				// into the screenshot before capture, eliminating the GPU→CPU stall.
 				if (pendingId != null) {
 					FloatBuffer buf = BufferUtils.createFloatBuffer(vpW * vpH);
+					GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);
+					GL11.glPixelStorei(GL11.GL_PACK_ROW_LENGTH, 0);
+					GL11.glPixelStorei(GL11.GL_PACK_SKIP_ROWS, 0);
+					GL11.glPixelStorei(GL11.GL_PACK_SKIP_PIXELS, 0);
 					GL11.glReadPixels(0, 0, vpW, vpH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
 					float[] depth = new float[vpW * vpH];
 					final float near = 0.05f;
@@ -417,8 +421,8 @@ public final class PhotoCapture {
 		final int fFbH = fbH;
 		//? if >=1.21.11 {
 		/*ScreenshotRecorder.takeScreenshot(fb, raw ->
-				processAndSavePhoto(raw, mc, id, settings, fLinearDepth, fFbW, fFbH));*/
-		//?} else {
+				processAndSavePhoto(raw, mc, id, settings, fLinearDepth, fFbW, fFbH));
+		*///?} else {
 		NativeImage raw = ScreenshotRecorder.takeScreenshot(fb);
 		processAndSavePhoto(raw, mc, id, settings, fLinearDepth, fFbW, fFbH);
 		//?}
@@ -518,8 +522,8 @@ public final class PhotoCapture {
 		// Take a color sample if the interval has elapsed.
 		if (now >= accumNextSampleMs && accumSamples < ACCUM_MAX_SAMPLES) {
 			//? if >=1.21.11 {
-			/*ScreenshotRecorder.takeScreenshot(fb, PhotoCapture::accumulateFrame);*/
-			//?} else {
+			/*ScreenshotRecorder.takeScreenshot(fb, PhotoCapture::accumulateFrame);
+			*///?} else {
 			accumulateFrame(ScreenshotRecorder.takeScreenshot(fb));
 			//?}
 			accumNextSampleMs = now + accumSampleIntervalMs;
@@ -1252,6 +1256,10 @@ public final class PhotoCapture {
 		fb.beginWrite(false); // binds the FBO
 		//?}
 		FloatBuffer buf = BufferUtils.createFloatBuffer(fbW * fbH);
+		GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);
+		GL11.glPixelStorei(GL11.GL_PACK_ROW_LENGTH, 0);
+		GL11.glPixelStorei(GL11.GL_PACK_SKIP_ROWS, 0);
+		GL11.glPixelStorei(GL11.GL_PACK_SKIP_PIXELS, 0);
 		GL11.glReadPixels(0, 0, fbW, fbH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
 
 		final float near = 0.05f;
@@ -1293,6 +1301,13 @@ public final class PhotoCapture {
 		int x0 = Math.max(0, vpW / 2 - N / 2);
 		int y0 = Math.max(0, vpH / 2 - N / 2);
 		FloatBuffer buf = BufferUtils.createFloatBuffer(N * N);
+		// Reset pixel-pack state before reading: Voxy / Iris can leave GL_PACK_ROW_LENGTH
+		// (or alignment) non-default, which makes glReadPixels write far past this small
+		// buffer → native heap corruption (the random jvm.dll/JIT crash seen with Voxy).
+		GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);
+		GL11.glPixelStorei(GL11.GL_PACK_ROW_LENGTH, 0);
+		GL11.glPixelStorei(GL11.GL_PACK_SKIP_ROWS, 0);
+		GL11.glPixelStorei(GL11.GL_PACK_SKIP_PIXELS, 0);
 		GL11.glReadPixels(x0, y0, N, N, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
 		float rawD = 1.0f;
 		for (int i = 0; i < N * N; i++) {
@@ -1510,8 +1525,8 @@ public final class PhotoCapture {
 
     //? if >=1.21.4 {
     /*private static int niGet(net.minecraft.client.texture.NativeImage img, int x, int y) { return img.getColorArgb(x, y); }
-    private static void niSet(net.minecraft.client.texture.NativeImage img, int x, int y, int c) { img.setColorArgb(x, y, c); }*/
-    //?} else {
+    private static void niSet(net.minecraft.client.texture.NativeImage img, int x, int y, int c) { img.setColorArgb(x, y, c); }
+    *///?} else {
     private static int niGet(net.minecraft.client.texture.NativeImage img, int x, int y) { return img.getColor(x, y); }
     private static void niSet(net.minecraft.client.texture.NativeImage img, int x, int y, int c) { img.setColor(x, y, c); }
     //?}
@@ -1519,8 +1534,8 @@ public final class PhotoCapture {
     //? if >=1.21.11 {
     /*private static net.minecraft.client.sound.SoundInstance uiSound(net.minecraft.sound.SoundEvent ev, float vol, float pitch) {
         return net.minecraft.client.sound.PositionedSoundInstance.ui(ev, vol, pitch);
-    }*/
-    //?} else {
+    }
+    *///?} else {
     private static net.minecraft.client.sound.SoundInstance uiSound(net.minecraft.sound.SoundEvent ev, float vol, float pitch) {
         return net.minecraft.client.sound.PositionedSoundInstance.master(ev, vol, pitch);
     }

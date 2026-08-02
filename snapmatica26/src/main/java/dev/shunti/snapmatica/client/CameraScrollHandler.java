@@ -59,6 +59,7 @@ public final class CameraScrollHandler {
         } else {
             adjustFocalLength(dir);
         }
+        SnapmaticaConfig.save();   // persist lens / aperture / shutter / focus changes
         return true;
     }
 
@@ -83,11 +84,28 @@ public final class CameraScrollHandler {
                 Math.min(SHUTTER_COUNT - 1, SnapmaticaClient.shutterSpeedIdx + dir));
     }
 
+    // Continuous focus stepping with a DISTANCE-ADAPTIVE ratio: large ratio up close (few
+    // ticks to sweep the macro range), small ratio at telephoto (fine enough for 800 mm).
+    private static final float FOCUS_MIN = 0.3f;
+    private static final float FOCUS_MAX = 10000.0f;
+
+    private static float focusStep(float fd) {
+        double t = (Math.log(fd) - Math.log(0.3)) / (Math.log(1000.0) - Math.log(0.3));
+        t = Math.max(0.0, Math.min(1.0, t));
+        return (float) (1.18 - 0.145 * t);   // 1.18 (near) … 1.035 (far)
+    }
+
     private static void adjustFocusDistance(int dir) {
         if (SnapmaticaClient.focusMode != FOCUS_MF) return;
-        int idx = nearestIdx(FOCUS_VALUES, SnapmaticaClient.focusDistance);
-        int newIdx = Math.max(0, Math.min(FOCUS_VALUES.size() - 1, idx + dir));
-        SnapmaticaClient.focusDistance = FOCUS_VALUES.get(newIdx);
+        float fd = SnapmaticaClient.focusDistance;
+        if (dir > 0) {
+            if (fd >= SnapmaticaClient.FOCUS_INFINITY) return;
+            if (fd >= FOCUS_MAX) { SnapmaticaClient.focusDistance = SnapmaticaClient.FOCUS_INFINITY; return; }
+            SnapmaticaClient.focusDistance = Math.min(FOCUS_MAX, fd * focusStep(fd));
+        } else {
+            if (fd >= SnapmaticaClient.FOCUS_INFINITY) { SnapmaticaClient.focusDistance = FOCUS_MAX; return; }
+            SnapmaticaClient.focusDistance = Math.max(FOCUS_MIN, fd / focusStep(fd));
+        }
     }
 
     private static int nearestIdx(List<Float> list, float v) {

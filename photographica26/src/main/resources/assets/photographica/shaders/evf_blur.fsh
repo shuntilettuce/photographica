@@ -2,10 +2,11 @@
 
 uniform sampler2D InSampler;
 uniform sampler2D DepthSampler;  // non-linear depth [0,1] from scene framebuffer
-uniform vec2 BlurDir;            // (1,0) for H pass, (0,1) for V pass
+uniform sampler2D NoiseSampler;  // 64x64 blue-noise dither (void-and-cluster), GL_REPEAT
+uniform vec2 BlurDir;            // .x >= 0.5 : gather pass; .x < 0.5 : copy pass
 uniform vec2 PixelSize;          // (1/fbW, 1/fbH)
-uniform float FocusDist;         // focus distance in blocks
-uniform float MaxBlurPx;         // max blur radius in framebuffer pixels
+uniform float FocusDist;         // focus distance in blocks (metres)
+uniform float MaxBlurPx;         // max blur radius in framebuffer pixels (perf clamp)
 uniform float Near;              // near clip plane in blocks
 uniform float Far;               // far clip plane in blocks
 uniform float FocalLenMm;        // lens focal length in mm
@@ -16,16 +17,23 @@ uniform float DofScale;          // mm of subject distance per Minecraft block
 in vec2 texCoord;
 out vec4 fragColor;
 
+// Three-layer depth of field. Each pixel is sorted into NEAR (out-of-focus foreground),
+// FOCUS (the sharp in-focus band — its width follows the circle of confusion, so it
+// tracks aperture & focal length automatically), or FAR (out-of-focus background). The
+// near and far layers are scattered as bokeh discs; the focus layer stays sharp. The
+// layers are then composited far -> focus -> near with occlusion weighting, so an
+// out-of-focus foreground feathers softly OVER the sharp subject behind it (instead of
+// leaving a hard outline) while the subject itself stays crisp.
+const int   SAMPLES      = 80;
+const float GOLDEN_ANGLE = 2.39996323;
+const float TWO_PI       = 6.28318531;
+
 float linearDepth(float d) {
     float ndc = 2.0 * d - 1.0;
     return 2.0 * Near * Far / (Far + Near - ndc * (Far - Near));
 }
 
-// Physically-based thin-lens circle of confusion, projected onto the sensor and
-// converted to framebuffer pixels. Unlike a normalized model, this keeps deep
-// depth-of-field for wide/normal lenses (distant terrain stays sharp) and only
-// produces strong bokeh for long lenses / wide apertures / close focus.
-//   coc_mm = f^2 / (N * (S1 - f)) * |S2 - S1| / S2
+// Physically-based thin-lens circle of confusion, in framebuffer pixels.
 float computeCoc(float depthM) {
     depthM = max(depthM, 0.05);
     float fmm = FocalLenMm;
@@ -40,93 +48,149 @@ float computeCoc(float depthM) {
     return clamp(cocMM * PxPerMm, 0.0, MaxBlurPx);
 }
 
+// Per-pixel sample rotation comes from a precomputed 128x128 blue-noise texture (generated
+// offline with the void-and-cluster algorithm). Blue noise spreads its energy into the
+// high frequencies, so neighbouring pixels get well-separated rotations with no dense/
+// sparse clumping — the gather's residual grain becomes a fine, even dither the denoise
+// pass removes cleanly, instead of the clumpy "fibres" a white-noise hash produces.
+#define NOISE_SIZE 128.0
+
+// 2-D hash, used to give each 128px tile its own toroidal offset so the texture doesn't
+// visibly repeat on a grid. A toroidally-shifted blue-noise tile is still valid blue
+// noise, so each tile looks different while keeping the good spectral properties.
+vec2 hash22(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.xx + p3.yz) * p3.zy);
+}
+
+vec3 hash32(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yxz + 33.33);
+    return fract((p3.xxy + p3.yzz) * p3.zyx);
+}
+
 void main() {
-    float rawD   = texture(DepthSampler, texCoord).r;
-    float depthM = linearDepth(rawD);
-    float coc    = max(computeCoc(depthM) - 1.5, 0.0);
+    // Copy / denoise pass. The disc gather leaves fine sampling grain on blurred regions;
+    // since those are already low-frequency a small 3x3 average wipes the grain without
+    // losing any real detail, while in-focus pixels are copied through untouched so the
+    // sharp subject stays crisp.
+    if (BlurDir.x < 0.5) {
+        float d = linearDepth(texture(DepthSampler, texCoord).r);
+        float c = max(computeCoc(d) - 1.5, 0.0);
+        c = max(c, smoothstep(200.0, 600.0, d) * 5.0);
+        if (c < 2.0) { fragColor = texture(InSampler, texCoord); return; }
+        vec3 sum = vec3(0.0);
+        for (int dy = -2; dy <= 2; dy++)
+            for (int dx = -2; dx <= 2; dx++)
+                sum += texture(InSampler, texCoord + vec2(float(dx), float(dy)) * PixelSize).rgb;
+        fragColor = vec4(sum / 25.0, 1.0);
+        return;
+    }
 
-    bool isForeground = (FocusDist < 99999.0) && (depthM < FocusDist);
+    vec4  centre = texture(InSampler, texCoord);
+    float depthM = linearDepth(texture(DepthSampler, texCoord).r);
+    float cocP   = max(computeCoc(depthM) - 1.5, 0.0);
 
-    // Foreground-bleed prescan (scatter-as-gather):
-    // A real lens spreads a foreground bokeh disc over background pixels at the
-    // object edge.  We detect nearby foreground pixels whose disc (radius = CoC)
-    // covers this background pixel, then expand the gather radius accordingly so
-    // those foreground pixels can contribute — giving the edge a soft, blurry halo
-    // instead of the hard outline that gather-only DoF would otherwise produce.
-    float fgBleedCoc = 0.0;
-    if (!isForeground && FocusDist < 99999.0) {
-        int psRad = min(int(ceil(MaxBlurPx)), 36);
-        for (int i = -psRad; i <= psRad; i += 2) {
-            vec2  sc = texCoord + BlurDir * float(i) * PixelSize;
-            float sd = linearDepth(texture(DepthSampler, sc).r);
-            if (sd < FocusDist) {
-                float fc = max(computeCoc(sd) - 1.5, 0.0);
-                // Only count if the foreground bokeh disc actually reaches this pixel.
-                if (fc >= abs(float(i))) {
-                    fgBleedCoc = max(fgBleedCoc, fc);
+    // Atmospheric softness floor: the most distant LOD terrain is low-detail and, left
+    // razor-sharp (e.g. when the focus is racked all the way out), aliases into harsh
+    // blocky chunks. A gentle minimum blur that grows with distance keeps far terrain
+    // soft even when it is the focus subject. Near / mid subjects are untouched. This
+    // pushes hazed pixels out of the sharp FOCUS layer into FAR, so they get blurred.
+    cocP = max(cocP, smoothstep(200.0, 600.0, depthM) * 5.0);
+
+    // Does a closer, out-of-focus pixel bloom over this one? (Run for every pixel: the
+    // in-focus subject sits right at the focus distance, so some of its pixels read as
+    // depth < focus and must still be allowed to receive a foreground bloom.)
+    bool hasNearFg = false;
+    if (FocusDist < 99999.0) {
+        for (int k = 0; k < 16 && !hasNearFg; k++) {
+            float a = float(k) * (TWO_PI / 16.0);
+            vec2 dir = vec2(cos(a), sin(a));
+            for (int s = 1; s <= 5; s++) {
+                float rr = MaxBlurPx * float(s) / 5.0;
+                float sd = linearDepth(texture(DepthSampler, texCoord + dir * rr * PixelSize).r);
+                if (sd < depthM - 0.5 && sd < FocusDist && max(computeCoc(sd) - 1.5, 0.0) >= rr - 1.0) {
+                    hasNearFg = true; break;
                 }
             }
         }
     }
 
-    float effectiveCoc = max(coc, fgBleedCoc);
-    if (effectiveCoc < 0.3) {
-        fragColor = texture(InSampler, texCoord);
+    if (cocP < 0.5 && !hasNearFg) {    // sharp, nothing blooming over it → leave crisp
+        fragColor = centre;
         return;
     }
 
-    // Deadband: keeps a band around the focus plane fully sharp. A larger value
-    // widens the depth of field so close / wide-open shots still hold a usable
-    // sharp subject (optical DoF alone is paper-thin there), and removes the
-    // high-frequency shimmer of depth jitter at the focus plane.
-    float sigma = max(coc * 0.85, 0.1);
-    int   rad   = min(int(ceil(effectiveCoc * 1.7)), 36);
+    float gatherR       = MaxBlurPx;
+    float areaPerSample = gatherR * gatherR / float(SAMPLES);
+    // Per-128px tile: apply one of the 8 square symmetries (90 deg rotations + flips, the
+    // only ones that keep the tile seamless & still blue noise) PLUS a toroidal offset,
+    // all chosen from the tile hash. Each tile becomes a different — but still valid —
+    // blue-noise patch, so the texture's grid repetition vanishes entirely.
+    vec2 ntile = floor(gl_FragCoord.xy / NOISE_SIZE);
+    vec2 lc    = fract(gl_FragCoord.xy / NOISE_SIZE);
+    vec3 th    = hash32(ntile);
+    if (th.x > 0.5) lc.x = 1.0 - lc.x;        // flip X
+    if (th.y > 0.5) lc.y = 1.0 - lc.y;        // flip Y
+    if (th.z > 0.5) lc = lc.yx;               // transpose → gives the 90 deg rotations
+    lc = fract(lc + hash22(ntile + 19.7));    // toroidal shift
+    float rot  = texture(NoiseSampler, lc).r * TWO_PI;
 
-    vec4  col    = vec4(0.0);
-    float totalW = 0.0;
+    // Premultiplied layer accumulators.
+    vec3 nearC = vec3(0.0); float nearA = 0.0;
+    vec3 focC  = vec3(0.0); float focA  = 0.0;
+    vec3 farC  = vec3(0.0); float farA  = 0.0;
 
-    for (int i = -rad; i <= rad; i++) {
-        vec2  sc   = texCoord + BlurDir * float(i) * PixelSize;
-        float fi   = float(i);
-
-        float sDepthM = linearDepth(texture(DepthSampler, sc).r);
-        bool  sFg     = (FocusDist < 99999.0) && (sDepthM < FocusDist);
-        float sCoc    = max(computeCoc(sDepthM) - 1.5, 0.0);
-
-        float gaussW;
-        float cocWeight;
-
-        if (isForeground) {
-            // Foreground pixel: accept all contributions — bokeh disc extends into
-            // background, producing the soft halo a real lens gives at near edges.
-            gaussW    = exp(-fi * fi / (2.0 * sigma * sigma));
-            cocWeight = 1.0;
-        } else if (sFg && sCoc > coc) {
-            // Foreground sample scattering onto this background pixel (scatter-as-gather).
-            // Model the foreground pixel as a bokeh disc of radius sCoc and take the
-            // separable (1-D) slice through it: the chord length falls SMOOTHLY to zero
-            // at the disc edge (fi = sCoc). A gaussian + radius clamp instead leaves the
-            // halo with weight ~0.5 right up to the cutoff, then drops to 0 the next
-            // pixel out — that discontinuity is the hard near-object outline. The chord
-            // profile removes it, so a foreground object's edge dissolves softly over
-            // whatever is behind it (while background-behind-subject edges, handled in
-            // the branch below, stay crisp).
-            float t = fi / max(sCoc, 0.01);
-            if (abs(t) >= 1.0) continue;            // outside this fg pixel's bokeh disc
-            gaussW    = sqrt(1.0 - t * t) / max(sCoc, 0.01);
-            cocWeight = 1.0;
-        } else {
-            // Background pixel sampling background: suppress sharp/closer samples so
-            // a sharp in-focus subject doesn't bleed into soft background.
-            gaussW    = exp(-fi * fi / (2.0 * sigma * sigma));
-            cocWeight = (coc > 2.0)
-                        ? clamp(sqrt(sCoc / max(coc, 0.01)), 0.12, 1.0)
-                        : 1.0;
+    // Centre deposits into its own layer. Blend smoothly between the sharp FOCUS layer and
+    // the blurred NEAR/FAR layer across the in-focus boundary: a hard cutoff here made a
+    // region snap from sharp to blurred (with a 4x weight jump and a change of occlusion
+    // priority) the instant its CoC crossed the threshold, so racking focus produced a
+    // visible "click" in the boundary blur. The smoothstep + continuous weight remove it.
+    {
+        float w  = areaPerSample / max(cocP * cocP, 0.25);
+        float fw = smoothstep(3.0, 0.5, cocP);          // 1 = sharp (focus), 0 = clearly blurred
+        focC += centre.rgb * w * fw; focA += w * fw;
+        float bw = w * (1.0 - fw);
+        if (bw > 0.0) {
+            if (depthM < FocusDist) { nearC += centre.rgb * bw; nearA += bw; }
+            else                    { farC  += centre.rgb * bw; farA  += bw; }
         }
-
-        col    += texture(InSampler, sc) * gaussW * cocWeight;
-        totalW += gaussW * cocWeight;
     }
 
-    fragColor = col / totalW;
+    for (int i = 0; i < SAMPLES; i++) {
+        float fi  = float(i) + 0.5;
+        float r   = sqrt(fi / float(SAMPLES)) * gatherR;
+        float ang = fi * GOLDEN_ANGLE + rot;
+        vec2  sc  = texCoord + vec2(cos(ang), sin(ang)) * r * PixelSize;
+
+        float sDepthM = linearDepth(texture(DepthSampler, sc).r);
+        float sCoc    = max(computeCoc(sDepthM) - 1.5, 0.0);
+        if (sCoc < 0.5) continue;          // sharp samples don't scatter (handled at centre only)
+        if (r > sCoc)   continue;          // this sample's bokeh disc doesn't reach P
+
+        vec3  sCol = texture(InSampler, sc).rgb;
+        float w    = areaPerSample / max(sCoc * sCoc, 1.0);
+        if (sDepthM < FocusDist) { nearC += sCol * w; nearA += w; }
+        else                     { farC  += sCol * w; farA  += w; }
+    }
+
+    // Composite far -> focus -> near with occlusion weighting (a nearer layer hides the
+    // ones behind it; normalising by present coverage keeps holes from going black).
+    vec3 nearCol = (nearA > 0.0) ? nearC / nearA : vec3(0.0);
+    vec3 focCol  = (focA  > 0.0) ? focC  / focA  : vec3(0.0);
+    vec3 farCol  = (farA  > 0.0) ? farC  / farA  : vec3(0.0);
+
+    float na = clamp(nearA, 0.0, 1.0);
+    float fo = clamp(focA,  0.0, 1.0);
+    float fr = clamp(farA,  0.0, 1.0);
+
+    float wNear  = na;
+    float wFocus = fo * (1.0 - na);
+    float wFar   = fr * (1.0 - na) * (1.0 - fo);
+    float wsum   = wNear + wFocus + wFar;
+
+    fragColor = (wsum > 0.001)
+        ? vec4((nearCol * wNear + focCol * wFocus + farCol * wFar) / wsum, 1.0)
+        : centre;
 }

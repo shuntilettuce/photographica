@@ -218,22 +218,15 @@ public final class PhotoCapture {
                 if (eDist < bestDist) bestDist = eDist;
             }
             lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : SnapmaticaClient.FOCUS_INFINITY;
-            // Only when the raycast missed (sky / beyond loaded range) fall back: GPU
-            // centre depth first (rejecting saturated far-plane readings), then DH LOD.
+            // Raycast missed (sky / beyond loaded range). The old GPU centre-depth readback
+            // (readCenterLinearDepthBlocks -> glReadPixels on a depth FBO) crashed the NVIDIA
+            // driver on hybrid-GPU laptops whenever a LOD mod (Voxy / Distant Horizons) was
+            // drawing the distance — a hard EXCEPTION_ACCESS_VIOLATION inside nvoglv64.dll —
+            // so it is removed. Fall back to the DH LOD raycast; without it the focus simply
+            // stays at infinity, which reads distant terrain as far (sharp) — correct anyway.
             if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY && vpW > 0 && vpH > 0) {
-                float farPlane = EvfBlurRenderer.currentDepthFar;
-                float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
-                // readCenterLinearDepthBlocks() already returns FOCUS_INFINITY for sky
-                // (rawD >= 0.999999), so compare against FOCUS_INFINITY rather than
-                // farPlane*0.95. The 0.95 cutoff rejected valid terrain near the far plane
-                // (e.g. 974m with farPlane=1024 linearises to ~975m > 972.8 → wrongly INF).
-                if (gpuDepth > 0.0f && gpuDepth < SnapmaticaClient.FOCUS_INFINITY) {
-                    lastSceneDepthBlocks = gpuDepth;
-                }
-                if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY) {
-                    float dhDist = DhIntegration.queryLookDistance(mc);
-                    if (dhDist > 0f) lastSceneDepthBlocks = dhDist;
-                }
+                float dhDist = DhIntegration.queryLookDistance(mc);
+                if (dhDist > 0f) lastSceneDepthBlocks = dhDist;
             }
         }
 

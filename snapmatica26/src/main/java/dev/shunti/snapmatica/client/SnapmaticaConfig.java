@@ -12,12 +12,9 @@ import java.nio.file.Path;
 import java.util.Properties;
 
 /**
- * Persists client-side camera settings that should survive leaving a world / restarting
- * the game. Stored as a plain {@code config/snapmatica.properties} file.
- *
- * Covers the full camera state — exposure mode (M/Av/Tv/P), focus mode (MF/AF/MOB),
- * aperture, shutter, ISO, focal length, lens, orientation, motion blur — plus the
- * sneak-to-viewfinder toggle.
+ * Persists client-side camera settings across sessions in {@code config/snapmatica.properties}.
+ * Covers exposure mode (M/Av/Tv/P), focus mode (MF/AF/MOB), aperture, shutter, ISO, focal
+ * length, lens, orientation, motion blur, and the sneak-to-viewfinder toggle.
  */
 @Environment(EnvType.CLIENT)
 public final class SnapmaticaConfig {
@@ -26,7 +23,6 @@ public final class SnapmaticaConfig {
     private static final Path FILE =
             FabricLoader.getInstance().getConfigDir().resolve("snapmatica.properties");
 
-    /** Load saved settings into {@link SnapmaticaClient}. Called once at client init. */
     public static void load() {
         if (!Files.exists(FILE)) return;
         Properties p = new Properties();
@@ -49,7 +45,6 @@ public final class SnapmaticaConfig {
         SnapmaticaClient.focusDistance          = getFloat(p, "focusDistance",         SnapmaticaClient.focusDistance);
     }
 
-    /** Write current settings to disk. Cheap enough to call on each change. */
     public static void save() {
         Properties p = new Properties();
         p.setProperty("viewfinderSneakEnabled", Boolean.toString(SnapmaticaClient.viewfinderSneakEnabled));

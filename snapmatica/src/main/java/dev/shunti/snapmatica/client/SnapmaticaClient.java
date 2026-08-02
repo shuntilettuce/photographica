@@ -111,6 +111,7 @@ public class SnapmaticaClient implements ClientModInitializer {
             // Toggle portrait / landscape framing
             while (orientationKey.wasPressed()) {
                 portraitOrientation = !portraitOrientation;
+                SnapmaticaConfig.save();
             }
 
             // Recording key: open settings screen when idle, stop directly when recording

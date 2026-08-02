@@ -218,7 +218,7 @@ public final class ViewfinderOverlay {
 
     private static String fmtFocusDist(float v) {
         if (v >= SnapmaticaClient.FOCUS_INFINITY) return "∞";
-        if (v < 1.0f) return String.format("%.1fm", v);
-        return v == (int)v ? ((int)v + "m") : String.format("%.1fm", v);
+        if (v < 10.0f) return String.format("%.1fm", v);
+        return Math.round(v) + "m";
     }
 }

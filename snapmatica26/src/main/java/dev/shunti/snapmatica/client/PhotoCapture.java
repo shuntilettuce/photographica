@@ -164,17 +164,11 @@ public final class PhotoCapture {
                     camSt != null ? camSt.projectionMatrix : null,
                     Math.max(rd * 64f, 256f));
             EvfBlurRenderer.captureDepth(vpW, vpH);
-            // The world raycast above is the PRIMARY focus distance. The GPU depth
-            // reconstruction saturates at currentDepthFar (≈ rd*64), so only consult it
-            // when the raycast missed (sky / beyond loaded range), and reject saturated
-            // readings near the far plane.
-            if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY) {
-                float farPlane = EvfBlurRenderer.currentDepthFar;
-                float gpuDepth = EvfBlurRenderer.readCenterLinearDepthBlocks();
-                if (gpuDepth > 0.0f && gpuDepth < farPlane * 0.95f) {
-                    lastSceneDepthBlocks = gpuDepth;
-                }
-            }
+            // The world raycast above is the PRIMARY focus distance. When it misses (sky /
+            // beyond loaded range) the focus simply stays at infinity. The old GPU centre-
+            // depth readback (readCenterLinearDepthBlocks -> glReadPixels on a depth FBO)
+            // crashed the NVIDIA driver on hybrid-GPU laptops whenever a LOD mod (Voxy /
+            // Distant Horizons) was drawing the distance, so it is no longer used here.
         }
     }
 

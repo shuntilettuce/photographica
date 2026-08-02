@@ -358,7 +358,7 @@ public final class PhotoCapture {
 	public static void applyEvfBlur() {
 		Minecraft mc = Minecraft.getInstance();
 		if (!isEvfActive(mc)) return;
-		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur();
+		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur(isCapturePending());
 	}
 
 	private static boolean isEvfActive(Minecraft mc) {
@@ -1173,6 +1173,12 @@ public final class PhotoCapture {
 	 */
 	private static float[] readLinearDepth(RenderTarget fb, int fbW, int fbH) {
 		FloatBuffer buf = BufferUtils.createFloatBuffer(fbW * fbH);
+		// Reset pixel-pack state: Voxy / Iris can leave GL_PACK_ROW_LENGTH non-default,
+		// making glReadPixels overrun the buffer → native heap corruption.
+		GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);
+		GL11.glPixelStorei(GL11.GL_PACK_ROW_LENGTH, 0);
+		GL11.glPixelStorei(GL11.GL_PACK_SKIP_ROWS, 0);
+		GL11.glPixelStorei(GL11.GL_PACK_SKIP_PIXELS, 0);
 		GL11.glReadPixels(0, 0, fbW, fbH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
 
 		final float near = 0.05f;

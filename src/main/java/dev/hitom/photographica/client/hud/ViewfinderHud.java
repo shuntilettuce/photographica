@@ -455,7 +455,7 @@ public final class ViewfinderHud {
 
 	private static String fmtFocusDist(float v) {
 		if (v >= CameraSettings.FOCUS_INFINITY) return "∞";
-		if (v < 1.0f) return String.format("%.1fm", v);
-		return v == (int) v ? ((int) v + "m") : String.format("%.1fm", v);
+		if (v < 10.0f) return String.format("%.1fm", v);   // sub-10 m: one decimal
+		return Math.round(v) + "m";                         // 10 m+: whole metres
 	}
 }

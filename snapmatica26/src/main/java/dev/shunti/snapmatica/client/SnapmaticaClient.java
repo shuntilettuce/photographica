@@ -56,6 +56,9 @@ public class SnapmaticaClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        // Load persisted camera settings (exposure/focus mode, aperture, ISO, …).
+        SnapmaticaConfig.load();
+
         KeyMapping.Category category = KeyMapping.Category.register(
                 Identifier.fromNamespaceAndPath("snapmatica", "category"));
 
@@ -99,9 +102,11 @@ public class SnapmaticaClient implements ClientModInitializer {
 
             while (viewfinderSneakKey.consumeClick()) {
                 viewfinderSneakEnabled = !viewfinderSneakEnabled;
+                SnapmaticaConfig.save();
             }
             while (orientationKey.consumeClick()) {
                 portraitOrientation = !portraitOrientation;
+                SnapmaticaConfig.save();
             }
             while (recordKey.consumeClick()) {
                 if (VideoRecorder.isRecording()) VideoRecorder.stopRecording();

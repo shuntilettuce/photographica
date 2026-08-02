@@ -43,11 +43,12 @@ public class FilmCameraScreen extends Screen {
 			"1/125", "1/250", "1/500", "1/1000", "1/2000", "1/4000"
 	};
 	private static final List<Float> FOCUS_VALUES = List.of(
-			0.3f, 0.5f, 0.7f, 1.0f, 1.2f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f,
-			5.0f, 6.0f, 7.0f, 8.0f, 10.0f, 12.0f, 15.0f, 20.0f, 25.0f, 30.0f,
-			40.0f, 50.0f, 70.0f, 100.0f, 150.0f, 200.0f,
-			300.0f, 350.0f, 400.0f, 450.0f, 500.0f, 550.0f, 600.0f, 650.0f, 700.0f,
-			1000.0f, 1500.0f, 2000.0f, CameraSettings.FOCUS_INFINITY);
+			0.3f, 0.5f, 0.7f, 1.0f, 1.2f, 1.5f, 1.8f, 2.0f, 2.5f, 3.0f, 3.5f, 4.0f, 4.5f, 5.0f,
+			6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 12.0f, 14.0f, 16.0f, 18.0f, 20.0f, 24.0f, 28.0f, 32.0f,
+			36.0f, 40.0f, 45.0f, 50.0f, 60.0f, 70.0f, 80.0f, 90.0f, 100.0f, 115.0f, 130.0f, 150.0f,
+			170.0f, 200.0f, 230.0f, 270.0f, 300.0f, 350.0f, 400.0f, 450.0f, 500.0f, 600.0f, 700.0f,
+			850.0f, 1000.0f, 1200.0f, 1500.0f, 2000.0f, 3000.0f, 5000.0f, 8000.0f, 10000.0f,
+			CameraSettings.FOCUS_INFINITY);
 
 	private static final String[] EXP_MODE_LABELS  = {"M", "Av", "Tv", "P"};
 	private static final String[] FOCUS_MODE_LABELS = {"MF", "AF", "MOB"};
@@ -328,8 +329,8 @@ public class FilmCameraScreen extends Screen {
 		}
 		{ ItemStack s = mc.player.getInventory().getStack(40);
 		  if (s.getItem() instanceof FilmRollItem fr)
-		      result.merge(fr.filmType(), s.getCount(), Integer::sum); }*/
-		//?} else {
+		      result.merge(fr.filmType(), s.getCount(), Integer::sum); }
+		*///?} else {
 		for (ItemStack s : mc.player.getInventory().main) {
 			if (s.getItem() instanceof FilmRollItem fr)
 				result.merge(fr.filmType(), s.getCount(), Integer::sum);
@@ -355,8 +356,8 @@ public class FilmCameraScreen extends Screen {
 				if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
 			}
 			{ ItemStack s = mc.player.getInventory().getStack(40);
-			  if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind); }*/
-			//?} else {
+			  if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind); }
+			*///?} else {
 			for (ItemStack s : mc.player.getInventory().main) {
 				if (s.getItem() instanceof LensItem lens) kinds.add(lens.lensKind);
 			}

@@ -158,12 +158,28 @@ public final class CameraScrollHandler {
 				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds(), s.motionBlur());
 	}
 
+	// Continuous focus stepping with a DISTANCE-ADAPTIVE ratio: large ratio up close (few
+	// ticks to sweep the macro range), small ratio at telephoto (fine enough for 800 mm).
+	private static final float FOCUS_MIN = 0.3f;
+	private static final float FOCUS_MAX = 10000.0f;
+
+	private static float focusStep(float fd) {
+		double t = (Math.log(fd) - Math.log(0.3)) / (Math.log(1000.0) - Math.log(0.3));
+		t = Math.max(0.0, Math.min(1.0, t));
+		return (float) (1.18 - 0.145 * t);   // 1.18 (near) … 1.035 (far)
+	}
+
 	private static CameraSettings adjustFocusDistance(CameraSettings s, int dir) {
 		if (s.focusMode() != CameraSettings.FOCUS_MF) return s; // manual focus only
-		int idx = nearestIdxFloat(FOCUS_VALUES, s.focusDistance());
-		int newIdx = Math.max(0, Math.min(FOCUS_VALUES.size() - 1, idx + dir));
-		if (FOCUS_VALUES.get(newIdx).equals(s.focusDistance())) return s;
-		return s.withFocusDistance(FOCUS_VALUES.get(newIdx));
+		float fd = s.focusDistance();
+		float next;
+		if (dir > 0) {
+			if (fd >= CameraSettings.FOCUS_INFINITY) return s;
+			next = (fd >= FOCUS_MAX) ? CameraSettings.FOCUS_INFINITY : Math.min(FOCUS_MAX, fd * focusStep(fd));
+		} else {
+			next = (fd >= CameraSettings.FOCUS_INFINITY) ? FOCUS_MAX : Math.max(FOCUS_MIN, fd / focusStep(fd));
+		}
+		return s.withFocusDistance(next);
 	}
 
 	// -------------------------------------------------------------------------

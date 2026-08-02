@@ -37,6 +37,12 @@ public class CameraScreen extends Screen {
     }
 
     @Override
+    public void removed() {
+        SnapmaticaConfig.save();   // persist camera state when the settings screen closes
+        super.removed();
+    }
+
+    @Override
     protected void init() {
         int cx  = width / 2;
         int rowHeight = 22;

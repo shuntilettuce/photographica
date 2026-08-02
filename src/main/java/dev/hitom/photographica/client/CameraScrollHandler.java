@@ -35,9 +35,12 @@ public final class CameraScrollHandler {
 	private static final List<Float>   APERTURES    = List.of(1.4f, 2.0f, 2.8f, 4.0f, 5.6f, 8.0f, 11.0f, 16.0f, 22.0f);
 	private static final List<Integer> ISOS         = List.of(100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600);
 	private static final List<Float>   FOCUS_VALUES = List.of(
-			0.3f, 0.5f, 0.7f, 1.0f, 1.2f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f,
-			5.0f, 6.0f, 7.0f, 8.0f, 10.0f, 12.0f, 15.0f, 20.0f, 25.0f, 30.0f,
-			40.0f, 50.0f, 70.0f, 100.0f, 1000.0f, 1500.0f, 2000.0f, CameraSettings.FOCUS_INFINITY);
+			0.3f, 0.5f, 0.7f, 1.0f, 1.2f, 1.5f, 1.8f, 2.0f, 2.5f, 3.0f, 3.5f, 4.0f, 4.5f, 5.0f,
+			6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 12.0f, 14.0f, 16.0f, 18.0f, 20.0f, 24.0f, 28.0f, 32.0f,
+			36.0f, 40.0f, 45.0f, 50.0f, 60.0f, 70.0f, 80.0f, 90.0f, 100.0f, 115.0f, 130.0f, 150.0f,
+			170.0f, 200.0f, 230.0f, 270.0f, 300.0f, 350.0f, 400.0f, 450.0f, 500.0f, 600.0f, 700.0f,
+			850.0f, 1000.0f, 1200.0f, 1500.0f, 2000.0f, 3000.0f, 5000.0f, 8000.0f, 10000.0f,
+			CameraSettings.FOCUS_INFINITY);
 	private static final int           SHUTTER_COUNT = 18;
 
 	/** FOV step in degrees per scroll tick for the video camera zoom. */
@@ -54,8 +57,8 @@ public final class CameraScrollHandler {
 
 		//? if >=1.21.11 {
 		/*boolean alt = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
-				|| InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);*/
-		//?} else {
+				|| InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
+		*///?} else {
 		long win = mc.getWindow().getHandle();
 		boolean alt = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_ALT)
 				|| InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_ALT);
@@ -90,8 +93,8 @@ public final class CameraScrollHandler {
 
 		//? if >=1.21.11 {
 		/*boolean ctrl = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
-				|| InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);*/
-		//?} else {
+				|| InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
+		*///?} else {
 		boolean ctrl = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_CONTROL)
 				|| InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_CONTROL);
 		//?}
@@ -169,12 +172,30 @@ public final class CameraScrollHandler {
 				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds(), s.motionBlur());
 	}
 
+	// Continuous focus stepping with a DISTANCE-ADAPTIVE ratio (no fixed table):
+	//   • up close  → large ratio  → few ticks to sweep the macro range (0.3–5 m is 16×)
+	//   • telephoto → small ratio  → fine enough to nail focus at 800 mm
+	// Past the top the focus snaps to infinity; scrolling back returns from it.
+	private static final float FOCUS_MIN = 0.3f;
+	private static final float FOCUS_MAX = 10000.0f;
+
+	private static float focusStep(float fd) {
+		double t = (Math.log(fd) - Math.log(0.3)) / (Math.log(1000.0) - Math.log(0.3));
+		t = Math.max(0.0, Math.min(1.0, t));
+		return (float) (1.18 - 0.145 * t);   // 1.18 (near) … 1.035 (far)
+	}
+
 	private static CameraSettings adjustFocusDistance(CameraSettings s, int dir) {
 		if (s.focusMode() != CameraSettings.FOCUS_MF) return s; // manual focus only
-		int idx = nearestIdxFloat(FOCUS_VALUES, s.focusDistance());
-		int newIdx = Math.max(0, Math.min(FOCUS_VALUES.size() - 1, idx + dir));
-		if (FOCUS_VALUES.get(newIdx).equals(s.focusDistance())) return s;
-		return s.withFocusDistance(FOCUS_VALUES.get(newIdx));
+		float fd = s.focusDistance();
+		float next;
+		if (dir > 0) {
+			if (fd >= CameraSettings.FOCUS_INFINITY) return s;
+			next = (fd >= FOCUS_MAX) ? CameraSettings.FOCUS_INFINITY : Math.min(FOCUS_MAX, fd * focusStep(fd));
+		} else {
+			next = (fd >= CameraSettings.FOCUS_INFINITY) ? FOCUS_MAX : Math.max(FOCUS_MIN, fd / focusStep(fd));
+		}
+		return s.withFocusDistance(next);
 	}
 
 	// -------------------------------------------------------------------------

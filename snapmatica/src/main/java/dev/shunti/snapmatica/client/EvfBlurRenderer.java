@@ -40,6 +40,17 @@ public final class EvfBlurRenderer {
     private static int vao      = -1;
     private static int vbo      = -1;
 
+    // Low-res near-field buffers at 1/NEAR_DOWNSCALE resolution. The scene is split into a
+    // FOREGROUND layer (A) and a BACKGROUND layer (B), each blurred with a huge cheap
+    // Gaussian (C is the separable ping-pong temp). The background blur fills the holes the
+    // foreground left, so when the blurred foreground is composited its translucent edge
+    // dissolves into the scene behind it — no defined silhouette.
+    private static int nearFboA = -1, nearTexA = -1;   // foreground
+    private static int nearFboB = -1, nearTexB = -1;   // background (holes filled)
+    private static int nearFboC = -1, nearTexC = -1;   // separable-blur temp
+    private static int nearW = 0, nearH = 0;
+    private static final int NEAR_DOWNSCALE = 4;
+
     private static int depthTex  = -1;
     static int depthTexW = 0;
     static int depthTexH = 0;
@@ -52,8 +63,10 @@ public final class EvfBlurRenderer {
     private static int     schedFx, schedFy, schedFx2, schedFy2;
     private static float   schedFocusDist, schedAperture, schedFocalLen;
 
+    private static int noiseTex      = -1;
     private static int locInSampler  = -1;
     private static int locDepthSamp  = -1;
+    private static int locNoiseSamp  = -1;
     private static int locBlurDir    = -1;
     private static int locPixelSize  = -1;
     private static int locFocusDist  = -1;
@@ -64,6 +77,9 @@ public final class EvfBlurRenderer {
     private static int locAperture   = -1;
     private static int locPxPerMm    = -1;
     private static int locDofScale   = -1;
+    private static int locPass       = -1;
+    private static int locNearSamp   = -1;
+    private static int locBgSamp     = -1;
 
     public static final float DOF_SCALE_STILL = 200.0f;   // 1 block = 20 cm (still viewfinder)
     public static final float DOF_SCALE_VIDEO = 1000.0f;  // 1 block = 1 m  (video, realistic)
@@ -180,7 +196,9 @@ public final class EvfBlurRenderer {
                                   float focusDist, float aperture, float focalLenMm,
                                   float dofScaleMm) {
         if (depthTex == -1) return;
-        float maxBlurPx = Math.min(50.0f / aperture, 24.0f);
+        // Bokeh disc ceiling. Kept moderate so the direct (non-mip) disc gather stays
+        // smooth at this sample budget; a much larger radius would undersample into grain.
+        float maxBlurPx = Math.min(240.0f / aperture, 120.0f);
         if (maxBlurPx < 0.5f) return;
 
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -201,8 +219,14 @@ public final class EvfBlurRenderer {
         ensureInit(fbW, fbH);
         if (program == -1) return;
 
+        // Drain any GL errors left by Iris / DH / Voxy before we touch the context, so a
+        // pre-existing error flag can't be (mis)attributed to our draws and, conversely,
+        // so our own work starts from a clean slate.
+        for (int e = 0; e < 32 && GL11.glGetError() != GL11.GL_NO_ERROR; e++) { /* drain */ }
+
         int prevProgram  = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
         int prevFbo      = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int prevArrayBuf = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
         int prevVao      = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
         int prevActiveTU = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
@@ -220,6 +244,24 @@ public final class EvfBlurRenderer {
         /*int prevSampler1 = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
         GL33.glBindSampler(1, 0);
         *///?}
+        GL13.glActiveTexture(GL13.GL_TEXTURE2);
+        int prevTex2 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        //? if >=1.21.11 {
+        /*int prevSampler2 = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
+        GL33.glBindSampler(2, 0);
+        *///?}
+        GL13.glActiveTexture(GL13.GL_TEXTURE3);
+        int prevTex3 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        //? if >=1.21.11 {
+        /*int prevSampler3 = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
+        GL33.glBindSampler(3, 0);
+        *///?}
+        GL13.glActiveTexture(GL13.GL_TEXTURE4);
+        int prevTex4 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        //? if >=1.21.11 {
+        /*int prevSampler4 = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
+        GL33.glBindSampler(4, 0);
+        *///?}
         int[] prevViewport   = new int[4];
         int[] prevScissorBox = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT,    prevViewport);
@@ -235,13 +277,16 @@ public final class EvfBlurRenderer {
         GL20.glUseProgram(program);
         GL30.glBindVertexArray(vao);
 
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
         GL20.glUniform1i(locInSampler, 0);
         GL13.glActiveTexture(GL13.GL_TEXTURE1);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
         GL20.glUniform1i(locDepthSamp, 1);
+        GL13.glActiveTexture(GL13.GL_TEXTURE2);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, noiseTex);
+        GL20.glUniform1i(locNoiseSamp, 2);
+        GL20.glUniform1i(locNearSamp, 3);   // foreground bound to unit 3 before composite
+        GL20.glUniform1i(locBgSamp, 4);     // background bound to unit 4 before composite
 
-        GL20.glUniform2f(locPixelSize, 1.0f / fbW, 1.0f / fbH);
         GL20.glUniform1f(locFocusDist, focusDist);
         GL20.glUniform1f(locMaxBlurPx, maxBlurPx);
         GL20.glUniform1f(locNear, NEAR);
@@ -251,7 +296,69 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locPxPerMm, fbH / 24.0f);  // 24mm sensor height maps to fbH px
         GL20.glUniform1f(locDofScale, dofScaleMm);
 
-        // Pass 1: Horizontal blur, main → aux
+        // ── Near-field passes (scissor still disabled; whole low-res buffer) ──────────
+        // These run over the entire 1/4-res near texture so the foreground blur isn't
+        // clipped at the viewfinder edge; the composite below is what scissors to frame.
+        GL20.glUniform2f(locPixelSize, 1.0f / nearW, 1.0f / nearH);
+
+        GL11.glViewport(0, 0, nearW, nearH);
+
+        // Extract FOREGROUND (premultiplied) at low res: main → A.
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, nearFboA);
+        GL20.glUniform1i(locPass, 1);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, mainTex);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+
+        // Huge cheap separable Gaussian on the foreground: A →(H)→ C →(V)→ A.
+        GL20.glUniform1i(locPass, 2);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, nearFboC);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexA);
+        GL20.glUniform2f(locBlurDir, 1.0f, 0.0f);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, nearFboA);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexC);
+        GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+
+        // Extract BACKGROUND (complement, premultiplied): main → B.
+        GL20.glUniform1i(locPass, 3);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, nearFboB);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, mainTex);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+
+        // Fixed wide Gaussian on the background — it bleeds into the foreground holes (fill):
+        // B →(H)→ C →(V)→ B.
+        GL20.glUniform1i(locPass, 4);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, nearFboC);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexB);
+        GL20.glUniform2f(locBlurDir, 1.0f, 0.0f);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, nearFboB);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexC);
+        GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+
+        // ── Full-res passes (scissored to viewfinder + bleed) ────────────────────────
+        GL20.glUniform2f(locPixelSize, 1.0f / fbW, 1.0f / fbH);
+
+        double scale = mc.getWindow().getScaleFactor();
+        int scX = (int)(fx  * scale);
+        int scY = fbH - (int)(fy2 * scale);
+        int scW = (int)((fx2 - fx) * scale);
+        int scH = (int)((fy2 - fy) * scale);
+        int bleed = (int) maxBlurPx;
+        int expX = Math.max(0, scX - bleed);
+        int expY = Math.max(0, scY - bleed);
+        int expW = Math.min(fbW - expX, scW + 2 * bleed);
+        int expH = Math.min(fbH - expY, scH + 2 * bleed);
+
+        GL11.glEnable(GL11.GL_SCISSOR_TEST);
+        GL11.glScissor(expX, expY, expW, expH);
+
+        // Gather: 3-layer disc bokeh, main → aux. (Pass 0, BlurDir.x = 1 → gather.)
+        GL20.glUniform1i(locPass, 0);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, auxFbo);
         GL11.glViewport(0, 0, fbW, fbH);
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
@@ -259,29 +366,20 @@ public final class EvfBlurRenderer {
         GL20.glUniform2f(locBlurDir, 1.0f, 0.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
-        // Pass 2: Vertical blur, aux → main (scissored to viewfinder + bleed margin)
-        double scale = mc.getWindow().getScaleFactor();
-        int scX = (int)(fx  * scale);
-        int scY = fbH - (int)(fy2 * scale);
-        int scW = (int)((fx2 - fx) * scale);
-        int scH = (int)((fy2 - fy) * scale);
-        // Expand scissor by maxBlurPx so foreground bokeh bleeds past the viewfinder edge.
-        int bleed = (int) maxBlurPx;
-        int expX = Math.max(0, scX - bleed);
-        int expY = Math.max(0, scY - bleed);
-        int expW = Math.min(fbW - expX, scW + 2 * bleed);
-        int expH = Math.min(fbH - expY, scH + 2 * bleed);
-
+        // Composite: denoise(aux) with the near-field over it, → main. (BlurDir.x = 0.)
         if (writeBackFbo == -1) writeBackFbo = GL30.glGenFramebuffers();
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
         GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
                 GL11.GL_TEXTURE_2D, mainTex, 0);
         GL11.glViewport(0, 0, fbW, fbH);
-        GL11.glEnable(GL11.GL_SCISSOR_TEST);
         GL11.glScissor(expX, expY, expW, expH);
+        GL13.glActiveTexture(GL13.GL_TEXTURE3);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexA);   // foreground
+        GL13.glActiveTexture(GL13.GL_TEXTURE4);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexB);   // filled background
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
-        GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
+        GL20.glUniform2f(locBlurDir, 0.0f, 0.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
         GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
@@ -293,6 +391,21 @@ public final class EvfBlurRenderer {
         GL11.glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
         if (depthWasEnabled) GL11.glEnable(GL11.GL_DEPTH_TEST);
         if (blendWasEnabled) GL11.glEnable(GL11.GL_BLEND);
+        GL13.glActiveTexture(GL13.GL_TEXTURE4);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex4);
+        //? if >=1.21.11 {
+        /*GL33.glBindSampler(4, prevSampler4);
+        *///?}
+        GL13.glActiveTexture(GL13.GL_TEXTURE3);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex3);
+        //? if >=1.21.11 {
+        /*GL33.glBindSampler(3, prevSampler3);
+        *///?}
+        GL13.glActiveTexture(GL13.GL_TEXTURE2);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex2);
+        //? if >=1.21.11 {
+        /*GL33.glBindSampler(2, prevSampler2);
+        *///?}
         GL13.glActiveTexture(GL13.GL_TEXTURE1);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex1);
         //? if >=1.21.11 {
@@ -305,8 +418,14 @@ public final class EvfBlurRenderer {
         *///?}
         GL13.glActiveTexture(prevActiveTU);
         GL30.glBindVertexArray(prevVao);
+        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, prevArrayBuf);
         GL20.glUseProgram(prevProgram);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
+
+        // Drain any error WE produced so it can't surface inside a later DH / Voxy GL call
+        // (their async LOD buffer churn runs on this same render thread; a lingering error
+        // flag can push the NVIDIA driver into the glDeleteBuffers crash seen in reports).
+        for (int e = 0; e < 32 && GL11.glGetError() != GL11.GL_NO_ERROR; e++) { /* drain */ }
     }
 
     //? if >=1.21.11 {
@@ -392,6 +511,74 @@ public final class EvfBlurRenderer {
     private static void ensureInit(int fbW, int fbH) {
         if (program == -1) initProgram();
         if (auxFbo == -1 || auxW != fbW || auxH != fbH) initAux(fbW, fbH);
+        int nw = Math.max(1, fbW / NEAR_DOWNSCALE);
+        int nh = Math.max(1, fbH / NEAR_DOWNSCALE);
+        if (nearFboA == -1 || nearW != nw || nearH != nh) initNear(nw, nh);
+        if (noiseTex == -1) initNoise();
+    }
+
+    /** Low-res RGBA8 ping-pong pair for the near-field foreground (LINEAR so the composite
+     *  upsamples it smoothly). */
+    private static void initNear(int w, int h) {
+        if (nearFboA != -1) {
+            GL30.glDeleteFramebuffers(nearFboA); GL11.glDeleteTextures(nearTexA);
+            GL30.glDeleteFramebuffers(nearFboB); GL11.glDeleteTextures(nearTexB);
+            GL30.glDeleteFramebuffers(nearFboC); GL11.glDeleteTextures(nearTexC);
+        }
+        int[] tex = new int[3];
+        int[] fbo = new int[3];
+        for (int i = 0; i < 3; i++) {
+            int t = GL11.glGenTextures();
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, t);
+            GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, w, h, 0,
+                    GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, (java.nio.ByteBuffer) null);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+            int f = GL30.glGenFramebuffers();
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, f);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                    GL11.GL_TEXTURE_2D, t, 0);
+            tex[i] = t; fbo[i] = f;
+        }
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+        nearTexA = tex[0]; nearFboA = fbo[0];
+        nearTexB = tex[1]; nearFboB = fbo[1];
+        nearTexC = tex[2]; nearFboC = fbo[2];
+        nearW = w; nearH = h;
+    }
+
+    /** Upload the bundled 64x64 blue-noise dither (raw single-channel bytes) as a GL_R8
+     *  texture used to rotate each pixel's gather samples. */
+    private static void initNoise() {
+        byte[] data;
+        try (InputStream is = EvfBlurRenderer.class.getResourceAsStream(
+                "/assets/snapmatica/textures/evf_bluenoise.bin")) {
+            if (is == null) { System.err.println("[Snapmatica] blue-noise texture missing"); return; }
+            data = is.readAllBytes();
+        } catch (Exception e) {
+            System.err.println("[Snapmatica] blue-noise load failed: " + e);
+            return;
+        }
+        if (data.length < 128 * 128) return;
+        java.nio.ByteBuffer buf = BufferUtils.createByteBuffer(128 * 128);
+        buf.put(data, 0, 128 * 128).flip();
+
+        int prevTex = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        int prevUnpack = GL11.glGetInteger(GL11.GL_UNPACK_ALIGNMENT);
+        noiseTex = GL11.glGenTextures();
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, noiseTex);
+        GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 1);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_R8, 128, 128, 0,
+                GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, buf);
+        GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, prevUnpack);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_REPEAT);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex);
     }
 
     private static void initProgram() {
@@ -421,6 +608,7 @@ public final class EvfBlurRenderer {
             program      = prog;
             locInSampler = GL20.glGetUniformLocation(program, "InSampler");
             locDepthSamp = GL20.glGetUniformLocation(program, "DepthSampler");
+            locNoiseSamp = GL20.glGetUniformLocation(program, "NoiseSampler");
             locBlurDir   = GL20.glGetUniformLocation(program, "BlurDir");
             locPixelSize = GL20.glGetUniformLocation(program, "PixelSize");
             locFocusDist = GL20.glGetUniformLocation(program, "FocusDist");
@@ -431,6 +619,9 @@ public final class EvfBlurRenderer {
             locAperture  = GL20.glGetUniformLocation(program, "Aperture");
             locPxPerMm   = GL20.glGetUniformLocation(program, "PxPerMm");
             locDofScale  = GL20.glGetUniformLocation(program, "DofScale");
+            locPass      = GL20.glGetUniformLocation(program, "Pass");
+            locNearSamp  = GL20.glGetUniformLocation(program, "NearSampler");
+            locBgSamp    = GL20.glGetUniformLocation(program, "BgSampler");
 
             float[] verts = {
                 -1f, -1f,  0f, 0f,

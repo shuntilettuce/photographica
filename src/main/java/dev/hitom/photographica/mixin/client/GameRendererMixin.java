@@ -311,7 +311,8 @@ public class GameRendererMixin {
 		boolean wasArmorStand = PhotoCapture.armorStandCapturePending;
 		// Apply EVF blur BEFORE capture so the screenshot contains GPU bokeh (1.21.11).
 		// No-op on <1.21.11 (blurScheduled is never set; blur is drawn directly from HUD).
-		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur();
+		// forCapture=true → blur the full framebuffer so the photo's edges are covered.
+		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur(PhotoCapture.isCapturePending());
 		PhotoCapture.captureIfPending();
 		VideoRecorder.captureFrameIfRecording();
 		// Restore renderHand for the vanilla renderHand() call that follows
