@@ -60,6 +60,50 @@ public final class AutoFocus {
         return atInfinity() ? SnapmaticaClient.FOCUS_INFINITY : SnapmaticaClient.focusDistance;
     }
 
+    /** Blocks a photographer focuses THROUGH rather than ON: glass of every kind, panes, bars. */
+    private static boolean isSeeThrough(net.minecraft.block.Block b) {
+        return b instanceof net.minecraft.block.TransparentBlock   // glass, stained, tinted
+                || b instanceof net.minecraft.block.PaneBlock;     // panes, iron bars
+    }
+
+    /**
+     * Raycast for autofocus that does not stop on glass.
+     *
+     * <p>The plain world raycast reports the pane, because a pane is solid as far as collision
+     * is concerned — so aiming the reticle at a window focused on the window. A camera pointed
+     * through glass focuses on what is beyond it, so this steps past each see-through block it
+     * meets and carries on, up to a few layers, and returns the first thing that is genuinely
+     * opaque. (The DoF depth buffer is sampled before the translucent pass for the same
+     * reason; this is the CPU-side half of the same idea.)
+     *
+     * @return the first opaque hit, or the last result if only glass was found
+     */
+    public static net.minecraft.util.hit.BlockHitResult raycastThroughGlass(
+            MinecraftClient mc, Vec3d eye, Vec3d look, double maxDist) {
+        Vec3d start = eye;
+        Vec3d end   = eye.add(look.multiply(maxDist));
+        net.minecraft.util.hit.BlockHitResult hit = null;
+        for (int layer = 0; layer < 8; layer++) {
+            hit = mc.world.raycast(new net.minecraft.world.RaycastContext(start, end,
+                    net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
+                    net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+            if (hit == null || hit.getType() == net.minecraft.util.hit.HitResult.Type.MISS) return hit;
+            if (!isSeeThrough(mc.world.getBlockState(hit.getBlockPos()).getBlock())) return hit;
+
+            // Walk out of the block we just hit before resuming, otherwise the next cast
+            // starts inside it and reports the very same block again.
+            net.minecraft.util.math.BlockPos hitPos = hit.getBlockPos();
+            Vec3d p = hit.getPos();
+            for (int k = 0; k < 40
+                    && net.minecraft.util.math.BlockPos.ofFloored(p.x, p.y, p.z).equals(hitPos); k++) {
+                p = p.add(look.multiply(0.05));
+            }
+            start = p.add(look.multiply(0.01));
+            if (start.squaredDistanceTo(eye) >= maxDist * maxDist) return hit;
+        }
+        return hit;
+    }
+
     public static void tick(MinecraftClient mc) {
         if (mc.player == null || mc.world == null) return;
         // Track while the sneak viewfinder is up OR while recording (so the baked-in

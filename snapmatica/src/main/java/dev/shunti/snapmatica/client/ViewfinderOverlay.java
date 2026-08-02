@@ -49,9 +49,16 @@ public final class ViewfinderOverlay {
         if (hasLensForBlur && SnapmaticaClient.aperture < 8.0f) {
             // Schedule for applyScheduledBlur() in GameRendererMixin (fires before HUD each
             // frame), so both the live EVF and captured photos receive GPU bokeh.
+            // GPU autofocus (AfMode) reads the focus distance from the reticle's own depth
+            // instead of the CPU's world raycast. It is wired up but left OFF: tested against
+            // Voxy, focus still only reached vanilla-loaded chunks, which settles the open
+            // question — Voxy's LOD terrain leaves no usable depth in the vanilla depth
+            // buffer, so no amount of sampling it will focus on the distance. Flip to true to
+            // re-test on another LOD mod; the shader path is intact.
+            boolean gpuAf = false;
             EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2,
                     AutoFocus.shaderFocusDistance(), SnapmaticaClient.aperture,
-                    SnapmaticaClient.focalLengthMm);
+                    SnapmaticaClient.focalLengthMm, gpuAf);
         }
 
         // Bezels

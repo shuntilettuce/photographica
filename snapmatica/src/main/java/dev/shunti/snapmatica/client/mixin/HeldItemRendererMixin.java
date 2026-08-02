@@ -2,6 +2,7 @@ package dev.shunti.snapmatica.client.mixin;
 
 import dev.shunti.snapmatica.client.PhotoCapture;
 import dev.shunti.snapmatica.client.SnapmaticaClient;
+import dev.shunti.snapmatica.client.VideoRecorder;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.item.HeldItemRenderer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -24,7 +25,11 @@ public class HeldItemRendererMixin {
                                           OrderedRenderCommandQueue queue,
                                           ClientPlayerEntity player, int light, CallbackInfo ci) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (PhotoCapture.isCapturePending() ||
+        // Recording is covered here as well as at GameRenderer.renderHand. Cancelling the
+        // outer call alone was not enough with Iris installed — the held item still reached
+        // the footage — so it is stopped at the item renderer too, which every path goes
+        // through. Belt and braces on purpose: a hand in one frame ruins the take.
+        if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording() ||
                 (SnapmaticaClient.viewfinderSneakEnabled && mc.player != null && mc.player.isSneaking())) {
             ci.cancel();
         }

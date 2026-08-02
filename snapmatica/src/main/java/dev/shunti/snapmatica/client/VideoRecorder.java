@@ -49,17 +49,29 @@ public final class VideoRecorder {
     // same look at zero in-game cost. 0 = off, 1 = light (2-frame), 2 = strong (4-frame).
     private static volatile int motionBlur = 1;
 
-    // ── Smooth camera state ──────────────────────────────────────────────────────
+    // ── Camera state saved for the duration of a take ────────────────────────────
     private static boolean prevSmoothCamera = false;
+    private static boolean prevBobView      = true;
 
     // ── Autofocus constants (identical to AutoFocus.java — same feel as photo viewfinder) ──
-    private static final float AF_PULL_RATE  = 0.50f;
-    private static final float AF_PULL_MAX   = 0.22f;
+    // Focus easing is TIME-based, not per-tick. Stepping a fixed fraction on a fixed 20 Hz
+    // schedule while frames are captured at 24 fps means consecutive frames advance the focus
+    // by different amounts — two steps, then one, then two — and that beat is visible in the
+    // footage as the focus stuttering even though the frame pacing is even. Deriving the step
+    // from elapsed wall-clock time makes the motion identical regardless of when frames land.
+    //
+    // The time constant also has to be LONGER than the interval at which the target itself
+    // is refreshed. The scene raycast is throttled to 10 Hz, so the target arrives as a
+    // staircase; with the old 72 ms constant the focus reached each new step almost at once
+    // and then waited, reproducing that staircase in the footage. At 24 fps its ~2.4-frame
+    // period is exactly the alternation measured frame to frame. Easing over 180 ms instead
+    // means the focus is always still travelling when the next target lands, so it glides
+    // through the steps rather than landing on each one.
+    private static final float AF_TAU_SEC        = 0.18f;   // e-folding time of the rack
+    private static final float AF_MAX_LOG_PER_S  = 4.4f;    // rack speed ceiling
     private static final float AF_SNAP_EPS   = 0.01f;
     // Throttle scene raycast to 10 Hz to avoid stalling on long-range/DH raycasts.
     private static final long  AF_QUERY_INTERVAL_MS = 100L;
-    // Step focus at 20 Hz to match AutoFocus.tick() rate.
-    private static final long  AF_STEP_INTERVAL_MS  =  50L;
 
     // ── Autofocus state ──────────────────────────────────────────────────────────
     private static float currentFocusDepth = 5.0f;
@@ -156,6 +168,13 @@ public final class VideoRecorder {
         // Enable cinematic (smooth) camera for steadier panning footage.
         prevSmoothCamera = mc.options.smoothCameraEnabled;
         mc.options.smoothCameraEnabled = true;
+        // Stabilisation: view bobbing is the walking shake, and it is worse on video than it
+        // looks in play because the DoF blur is baked per frame — the bob swings the whole
+        // frame while the defocus stays put, so the two disagree and the image reads as
+        // smeared rather than moved. Cinematic (smooth) camera above already damps the mouse;
+        // this damps the gait.
+        prevBobView = mc.options.getBobView().getValue();
+        mc.options.getBobView().setValue(false);
 
         recording = true;
         mc.player.sendMessage(Text.literal("● REC 開始"), true);
@@ -167,6 +186,7 @@ public final class VideoRecorder {
 
         MinecraftClient mc = MinecraftClient.getInstance();
         mc.options.smoothCameraEnabled = prevSmoothCamera;
+        mc.options.getBobView().setValue(prevBobView);
 
         if (mc.player != null)
             mc.player.sendMessage(Text.literal("■ 録画停止 — エンコード中..."), true);
@@ -295,9 +315,11 @@ public final class VideoRecorder {
         // at the same lens (F5.6 video = F5.6 stills). No boost: the DoF is exactly what a
         // still photo through this lens would show. Changing the lens focal length zooms
         // both the framing and the bokeh together, like a real lens.
+        // Recording keeps its own CPU autofocus (currentFocusDepth) for now — its rack easing
+        // is part of the footage's look, and GPU AF would snap instantly.
         EvfBlurRenderer.renderBlur(0, 0, sw, sh,
                 currentFocusDepth, SnapmaticaClient.aperture,
-                SnapmaticaClient.focalLengthMm, EvfBlurRenderer.DOF_SCALE_STILL);
+                SnapmaticaClient.focalLengthMm, EvfBlurRenderer.DOF_SCALE_STILL, false);
     }
 
     // ── Autofocus ────────────────────────────────────────────────────────────────
@@ -309,19 +331,23 @@ public final class VideoRecorder {
             float sceneDepth = computeSceneFocusDepth(mc);
             focusTargetDepth = Math.max(sceneDepth, 0.3f);
         }
-        if (nowMs - lastAfStepMs >= AF_STEP_INTERVAL_MS) {
-            lastAfStepMs = nowMs;
-            stepFocusLerp();
-        }
+        // Every frame, by elapsed time — no fixed-rate gate to beat against the capture rate.
+        float dt = (nowMs - lastAfStepMs) / 1000.0f;
+        lastAfStepMs = nowMs;
+        if (dt > 0.0f) stepFocusLerp(Math.min(dt, 0.25f));
     }
 
-    private static void stepFocusLerp() {
+    private static void stepFocusLerp(float dt) {
         float logCur = (float) Math.log(Math.max(0.1f, currentFocusDepth));
         float logTar = (float) Math.log(Math.max(0.1f, focusTargetDepth));
         float diff   = logTar - logCur;
         if (Math.abs(diff) < AF_SNAP_EPS) { currentFocusDepth = focusTargetDepth; return; }
-        float step = diff * AF_PULL_RATE;
-        if (Math.abs(step) > AF_PULL_MAX) step = Math.signum(step) * AF_PULL_MAX;
+        // Exponential approach over dt — the frame-rate-independent form of "move a fixed
+        // fraction of what remains", so the same wall-clock interval always covers the same
+        // ground however the frames happen to be spaced.
+        float step    = diff * (1.0f - (float) Math.exp(-dt / AF_TAU_SEC));
+        float ceiling = AF_MAX_LOG_PER_S * dt;
+        if (Math.abs(step) > ceiling) step = Math.signum(step) * ceiling;
         currentFocusDepth = (float) Math.exp(logCur + step);
     }
 
@@ -331,10 +357,8 @@ public final class VideoRecorder {
         net.minecraft.util.math.Vec3d eye = mc.player.getCameraPosVec(1.0f);
         net.minecraft.util.math.Vec3d look = mc.player.getRotationVec(1.0f);
         net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
-        net.minecraft.util.hit.BlockHitResult blockHit = mc.world.raycast(
-                new net.minecraft.world.RaycastContext(eye, end,
-                        net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
-                        net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+        net.minecraft.util.hit.BlockHitResult blockHit =
+                AutoFocus.raycastThroughGlass(mc, eye, look, maxDist);
         double bestDist = (blockHit != null
                 && blockHit.getType() != net.minecraft.util.hit.HitResult.Type.MISS)
                 ? eye.distanceTo(blockHit.getPos()) : maxDist;

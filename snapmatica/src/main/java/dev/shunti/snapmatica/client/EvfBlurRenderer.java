@@ -49,7 +49,27 @@ public final class EvfBlurRenderer {
     private static int nearFboB = -1, nearTexB = -1;   // background (holes filled)
     private static int nearFboC = -1, nearTexC = -1;   // separable-blur temp
     private static int nearW = 0, nearH = 0;
-    private static final int NEAR_DOWNSCALE = 4;
+    // 1/2 rather than 1/4. At quarter resolution the wide Gaussian below had so few texels to
+    // work with that a defocused foreground read as smeared paint rather than as bokeh — the
+    // "ネットリ" look. Half resolution keeps the layer cheap (it is a separable blur over a
+    // quarter of the pixels of the full-res gather) while giving the smear enough detail to
+    // stay recognisable as an out-of-focus object.
+    private static final int NEAR_DOWNSCALE = 2;
+
+    /**
+     * Whether the low-res near-field layer runs at all.
+     *
+     * <p>Off. It selects foreground by thresholding CoC, and that threshold draws a contour
+     * across any surface whose CoC sweeps through it — a straight line in screen space
+     * following nothing in the scene. A wide threshold band traded that line for washed-out
+     * colour; a narrow one traded it back for a sharper line. The seam IS the mechanism, so
+     * no setting removes it. The full-res gather now sizes its radius to the local blur,
+     * feathers its disc edge and reports its own sampling confidence, so it stands alone.
+     *
+     * <p>What is lost is the "very close foreground dissolves with no defined edge" look the
+     * layer existed to produce. Set true to bring it, and its seam, back.
+     */
+    private static final boolean NEAR_FIELD_LAYER = false;
 
     private static int depthTex  = -1;
     static int depthTexW = 0;
@@ -62,6 +82,7 @@ public final class EvfBlurRenderer {
     private static boolean blurScheduled = false;
     private static int     schedFx, schedFy, schedFx2, schedFy2;
     private static float   schedFocusDist, schedAperture, schedFocalLen;
+    private static boolean schedGpuAf;
 
     private static int noiseTex      = -1;
     private static int locInSampler  = -1;
@@ -70,6 +91,9 @@ public final class EvfBlurRenderer {
     private static int locBlurDir    = -1;
     private static int locPixelSize  = -1;
     private static int locFocusDist  = -1;
+    private static int locAfMode     = -1;
+    private static int locNearDownscale = -1;
+    private static int locNearLayer  = -1;
     private static int locMaxBlurPx  = -1;
     private static int locNear       = -1;
     private static int locFar        = -1;
@@ -81,8 +105,20 @@ public final class EvfBlurRenderer {
     private static int locNearSamp   = -1;
     private static int locBgSamp     = -1;
 
-    public static final float DOF_SCALE_STILL = 200.0f;   // 1 block = 20 cm (still viewfinder)
-    public static final float DOF_SCALE_VIDEO = 1000.0f;  // 1 block = 1 m  (video, realistic)
+    /**
+     * Millimetres of subject distance per Minecraft block — the scale the thin-lens maths
+     * treats the world at, and the single strongest control over how much everything blurs.
+     *
+     * <p>Smaller means the world is a smaller model, so subjects are optically nearer, so the
+     * depth of field is shallower. At the original 200 (1 block = 20 cm) a subject 5 blocks
+     * off sat 1 m from the lens and a fast prime obliterated everything around it — the
+     * tabletop-miniature look, not a camera's. 500 (1 block = 50 cm) is the compromise: a
+     * block still reads as smaller than a real metre, which is how a Minecraft city is
+     * actually built, without the world collapsing to a diorama. Raise toward 1000 for
+     * literal real-world scale and correspondingly deeper focus.
+     */
+    public static final float DOF_SCALE_STILL = 375.0f;   // 1 block = 37.5 cm
+    public static final float DOF_SCALE_VIDEO = 1000.0f;  // 1 block = 1 m  (unused; see above)
 
     /** Vanilla's near plane; overridden from the live projection matrix when it differs. */
     private static final float NEAR = 0.05f;
@@ -229,7 +265,7 @@ public final class EvfBlurRenderer {
      */
     public static void renderBlur(int fx, int fy, int fx2, int fy2,
                                   float focusDist, float aperture, float focalLenMm,
-                                  float dofScaleMm) {
+                                  float dofScaleMm, boolean gpuAutoFocus) {
         if (depthTex == -1) return;
         // Bokeh disc ceiling. Kept moderate so the direct (non-mip) disc gather stays
         // smooth at this sample budget; a much larger radius would undersample into grain.
@@ -323,6 +359,9 @@ public final class EvfBlurRenderer {
         GL20.glUniform1i(locBgSamp, 4);     // background bound to unit 4 before composite
 
         GL20.glUniform1f(locFocusDist, focusDist);
+        GL20.glUniform1i(locAfMode, gpuAutoFocus ? 1 : 0);
+        GL20.glUniform1i(locNearDownscale, NEAR_DOWNSCALE);
+        GL20.glUniform1i(locNearLayer, NEAR_FIELD_LAYER ? 1 : 0);
         GL20.glUniform1f(locMaxBlurPx, maxBlurPx);
         GL20.glUniform1f(locNear, currentDepthNear);
         GL20.glUniform1f(locFar, currentDepthFar);
@@ -332,6 +371,7 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locDofScale, dofScaleMm);
 
         // ── Near-field passes (scissor still disabled; whole low-res buffer) ──────────
+        if (NEAR_FIELD_LAYER) {
         // These run over the entire 1/4-res near texture so the foreground blur isn't
         // clipped at the viewfinder edge; the composite below is what scissors to frame.
         GL20.glUniform2f(locPixelSize, 1.0f / nearW, 1.0f / nearH);
@@ -345,16 +385,14 @@ public final class EvfBlurRenderer {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, mainTex);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
-        // Huge cheap separable Gaussian on the foreground: A →(H)→ C →(V)→ A.
+        // Disc convolution on the foreground — the aperture's own shape, so a defocused
+        // silhouette rounds off instead of merely softening. A disc is not separable, so this
+        // is a single 2-D pass (A → C) rather than the H/V pair a Gaussian allows. It runs at
+        // 1/NEAR_DOWNSCALE resolution, which is what keeps 64 taps affordable.
         GL20.glUniform1i(locPass, 2);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, nearFboC);
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexA);
-        GL20.glUniform2f(locBlurDir, 1.0f, 0.0f);
-        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, nearFboA);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexC);
-        GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
         // Extract BACKGROUND (complement, premultiplied): main → B.
@@ -364,16 +402,20 @@ public final class EvfBlurRenderer {
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
         // Fixed wide Gaussian on the background — it bleeds into the foreground holes (fill):
-        // B →(H)→ C →(V)→ B.
+        // B →(H)→ A →(V)→ B. A is free to be the scratch buffer now: the disc pass above
+        // consumed the raw foreground extract out of it and left its result in C, which must
+        // survive until the composite reads it as NearSampler.
         GL20.glUniform1i(locPass, 4);
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, nearFboC);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, nearFboA);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexB);
         GL20.glUniform2f(locBlurDir, 1.0f, 0.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, nearFboB);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexC);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexA);
         GL20.glUniform2f(locBlurDir, 0.0f, 1.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+
+        }   // end near-field passes
 
         // ── Full-res passes (scissored to viewfinder + bleed) ────────────────────────
         GL20.glUniform2f(locPixelSize, 1.0f / fbW, 1.0f / fbH);
@@ -409,7 +451,7 @@ public final class EvfBlurRenderer {
         GL11.glViewport(0, 0, fbW, fbH);
         GL11.glScissor(expX, expY, expW, expH);
         GL13.glActiveTexture(GL13.GL_TEXTURE3);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexA);   // foreground
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexC);   // foreground (disc-blurred)
         GL13.glActiveTexture(GL13.GL_TEXTURE4);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, nearTexB);   // filled background
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
@@ -495,9 +537,11 @@ public final class EvfBlurRenderer {
 
     // Records EVF blur parameters; actual rendering runs in applyScheduledBlur().
     public static void scheduleBlur(int fx, int fy, int fx2, int fy2,
-                                    float focusDist, float aperture, float focalLenMm) {
+                                    float focusDist, float aperture, float focalLenMm,
+                                    boolean gpuAutoFocus) {
         schedFx = fx; schedFy = fy; schedFx2 = fx2; schedFy2 = fy2;
         schedFocusDist = focusDist; schedAperture = aperture; schedFocalLen = focalLenMm;
+        schedGpuAf = gpuAutoFocus;
         blurScheduled = true;
     }
 
@@ -513,10 +557,12 @@ public final class EvfBlurRenderer {
             MinecraftClient mc = MinecraftClient.getInstance();
             int sw = mc.getWindow().getScaledWidth();
             int sh = mc.getWindow().getScaledHeight();
-            renderBlur(0, 0, sw, sh, schedFocusDist, schedAperture, schedFocalLen, DOF_SCALE_STILL);
+            renderBlur(0, 0, sw, sh, schedFocusDist, schedAperture, schedFocalLen,
+                    DOF_SCALE_STILL, schedGpuAf);
         } else {
             renderBlur(schedFx, schedFy, schedFx2, schedFy2,
-                       schedFocusDist, schedAperture, schedFocalLen, DOF_SCALE_STILL);
+                       schedFocusDist, schedAperture, schedFocalLen,
+                       DOF_SCALE_STILL, schedGpuAf);
         }
     }
 
@@ -648,6 +694,9 @@ public final class EvfBlurRenderer {
             locBlurDir   = GL20.glGetUniformLocation(program, "BlurDir");
             locPixelSize = GL20.glGetUniformLocation(program, "PixelSize");
             locFocusDist = GL20.glGetUniformLocation(program, "FocusDist");
+            locAfMode    = GL20.glGetUniformLocation(program, "AfMode");
+            locNearDownscale = GL20.glGetUniformLocation(program, "NearDownscale");
+            locNearLayer = GL20.glGetUniformLocation(program, "NearLayer");
             locMaxBlurPx = GL20.glGetUniformLocation(program, "MaxBlurPx");
             locNear      = GL20.glGetUniformLocation(program, "Near");
             locFar       = GL20.glGetUniformLocation(program, "Far");

@@ -175,6 +175,39 @@ public final class PhotoCapture {
     }
 
     /**
+     * Copies the scene depth for the EVF blur, BEFORE translucent geometry is drawn.
+     *
+     * <p>Glass writes depth at its own surface while the pixel shows what is behind it. Taken
+     * at the end of the world render, the buffer therefore said "glass pane, two blocks away"
+     * for a pixel displaying a building far beyond it — so the blur treated the view through
+     * a window as near-field, and the pane's own rectangle appeared as a hard-edged shape in
+     * the defocus however heavily blurred it was. Every translucent surface has the problem;
+     * glass is only the one you notice.
+     *
+     * <p>Sampling before the translucent pass leaves the depth of whatever is actually behind
+     * the glass, which is what the camera is looking at. Solid geometry and entities are
+     * already drawn by this point, so nothing that should be focusable is missed.
+     */
+    public static void onBeforeTranslucent() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null) return;
+        boolean sneakViewfinder = mc.player.isSneaking()
+                && (SnapmaticaClient.viewfinderSneakEnabled || capturePending);
+        if (!sneakViewfinder && !capturePending && !VideoRecorder.isRecording()) return;
+
+        int[] viewport = new int[4];
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
+        int vpW = viewport[2];
+        int vpH = viewport[3];
+        if (vpW <= 0 || vpH <= 0) return;
+
+        int rd = mc.options.getViewDistance().getValue();
+        EvfBlurRenderer.updateDepthFar(worldProjection(mc),
+                mc.gameRenderer.getFarPlaneDistance(), Math.max(rd * 64f, 256f));
+        EvfBlurRenderer.captureDepth(vpW, vpH);
+    }
+
+    /**
      * Samples the centre pixel of the currently bound depth buffer and stores the
      * linear depth in {@link #lastSceneDepthBlocks} for the viewfinder focus reticle.
      * Called from WorldRenderEvents.LAST (fires inside renderWorld).
@@ -192,19 +225,7 @@ public final class PhotoCapture {
         if (!sneakViewfinder && !capturePending && !VideoRecorder.isRecording()) return;
 
         //? if >=1.21.11 {
-        /*// Capture the depth texture every frame — cheap GPU copy that the EVF blur
-        // shader samples. (glReadPixels(GL_DEPTH_COMPONENT) can't read scene depth in
-        // 1.21.11 since depth lives in a GpuTexture, not the legacy default FBO.)
-        int[] viewport = new int[4];
-        GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
-        int vpW = viewport[2];
-        int vpH = viewport[3];
-        if (vpW > 0 && vpH > 0) {
-            int rd = mc.options.getViewDistance().getValue();
-            EvfBlurRenderer.updateDepthFar(worldProjection(mc),
-                    mc.gameRenderer.getFarPlaneDistance(), Math.max(rd * 64f, 256f));
-            EvfBlurRenderer.captureDepth(vpW, vpH);
-        }
+        /*// Depth is captured earlier now — see onBeforeTranslucent().
 
         // AF subject distance — THROTTLED. The 1000-block vanilla raycast plus the
         // Distant Horizons LOD raycast are far too costly to run every frame; focusing
@@ -218,10 +239,8 @@ public final class PhotoCapture {
             net.minecraft.util.math.Vec3d eye = mc.player.getCameraPosVec(1.0f);
             net.minecraft.util.math.Vec3d look = mc.player.getRotationVec(1.0f);
             net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
-            net.minecraft.util.hit.BlockHitResult blockHit = mc.world.raycast(
-                    new net.minecraft.world.RaycastContext(eye, end,
-                            net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
-                            net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+            net.minecraft.util.hit.BlockHitResult blockHit =
+                    AutoFocus.raycastThroughGlass(mc, eye, look, maxDist);
             double bestDist = (blockHit != null
                     && blockHit.getType() != net.minecraft.util.hit.HitResult.Type.MISS)
                     ? eye.distanceTo(blockHit.getPos()) : maxDist;
@@ -241,7 +260,7 @@ public final class PhotoCapture {
             // drawing the distance — a hard EXCEPTION_ACCESS_VIOLATION inside nvoglv64.dll —
             // so it is removed. Fall back to the DH LOD raycast; without it the focus simply
             // stays at infinity, which reads distant terrain as far (sharp) — correct anyway.
-            if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY && vpW > 0 && vpH > 0) {
+            if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY) {
                 float dhDist = DhIntegration.queryLookDistance(mc);
                 if (dhDist > 0f) lastSceneDepthBlocks = dhDist;
             }
@@ -279,10 +298,8 @@ public final class PhotoCapture {
             net.minecraft.util.math.Vec3d eye = mc.player.getCameraPosVec(1.0f);
             net.minecraft.util.math.Vec3d look = mc.player.getRotationVec(1.0f);
             net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
-            net.minecraft.util.hit.BlockHitResult blockHit = mc.world.raycast(
-                    new net.minecraft.world.RaycastContext(eye, end,
-                            net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
-                            net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+            net.minecraft.util.hit.BlockHitResult blockHit =
+                    AutoFocus.raycastThroughGlass(mc, eye, look, maxDist);
             double bestDist = (blockHit != null
                     && blockHit.getType() != net.minecraft.util.hit.HitResult.Type.MISS)
                     ? eye.distanceTo(blockHit.getPos()) : maxDist;

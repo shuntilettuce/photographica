@@ -141,16 +141,19 @@ public class SnapmaticaClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register(VideoRecorderHud::render);
 
         // ── World render end (depth capture, etc.) ──────────────────────────────
+        // The depth copy happens BEFORE the translucent pass so glass cannot stamp its own
+        // surface distance over the view through it — see PhotoCapture.onBeforeTranslucent().
+        // The AF raycast stays at the end of the pass; it is a world query and does not care
+        // where in the render it runs. VideoRecorder.onWorldRenderEnd() is no longer needed:
+        // it only copied depth, which onBeforeTranslucent() now does for recording too.
         //? if >=1.21.11 {
-        /*WorldRenderEvents.END_MAIN.register(ctx -> {
-            PhotoCapture.onWorldRenderEnd();
-            VideoRecorder.onWorldRenderEnd();
-        });
+        /*WorldRenderEvents.BEFORE_TRANSLUCENT.register(ctx -> PhotoCapture.onBeforeTranslucent());
+        WorldRenderEvents.END_MAIN.register(ctx -> PhotoCapture.onWorldRenderEnd());
         *///?} else {
-        WorldRenderEvents.LAST.register(ctx -> {
-            PhotoCapture.onWorldRenderEnd();
-            VideoRecorder.onWorldRenderEnd();
-        });
+        // The pre-1.21.11 API has no BEFORE_TRANSLUCENT; BEFORE_DEBUG_RENDER sits at the
+        // same point — after entities and the opaque terrain, before anything translucent.
+        WorldRenderEvents.BEFORE_DEBUG_RENDER.register(ctx -> PhotoCapture.onBeforeTranslucent());
+        WorldRenderEvents.LAST.register(ctx -> PhotoCapture.onWorldRenderEnd());
         //?}
 
         System.out.println("[Snapmatica] Initialized.");
