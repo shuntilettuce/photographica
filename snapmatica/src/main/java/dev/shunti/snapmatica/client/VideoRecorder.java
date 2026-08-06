@@ -83,7 +83,7 @@ public final class VideoRecorder {
     private static volatile boolean recording      = false;
     private static volatile boolean postProcessing = false;
     private static volatile int     ppProgress     = 0;
-    private static volatile String  ppMessage      = "";
+    private static volatile Text    ppMessage      = Text.empty();
     public  static volatile long    doneAtMs       = 0L;
 
     private static String          sessionId;
@@ -117,7 +117,7 @@ public final class VideoRecorder {
     public static boolean isRecording()      { return recording; }
     public static boolean isPostProcessing() { return postProcessing; }
     public static int     getPpProgress()    { return ppProgress; }
-    public static String  getPpMessage()     { return ppMessage; }
+    public static Text    getPpMessage()     { return ppMessage; }
     public static long    getDoneAtMs()      { return doneAtMs; }
     public static int     getFrameCount()    { return frameCount; }
     public static long    getRecordStartMs() { return recordStartMs; }
@@ -177,7 +177,7 @@ public final class VideoRecorder {
         mc.options.getBobView().setValue(false);
 
         recording = true;
-        mc.player.sendMessage(Text.literal("● REC 開始"), true);
+        mc.player.sendMessage(Text.translatable("snapmatica.rec.started"), true);
     }
 
     public static void stopRecording() {
@@ -189,7 +189,7 @@ public final class VideoRecorder {
         mc.options.getBobView().setValue(prevBobView);
 
         if (mc.player != null)
-            mc.player.sendMessage(Text.literal("■ 録画停止 — エンコード中..."), true);
+            mc.player.sendMessage(Text.translatable("snapmatica.rec.stopped"), true);
 
         final List<FrameMeta> metas   = new ArrayList<>(frameMetas);
         final File            rawSnap = rawDir;
@@ -197,7 +197,7 @@ public final class VideoRecorder {
 
         postProcessing = true;
         ppProgress     = 0;
-        ppMessage      = "エンコード中...";
+        ppMessage      = Text.translatable("snapmatica.pp.encoding");
 
         Thread t = new Thread(() -> doPostProcess(metas, rawSnap, vidDir),
                 "snapmatica-video-pp");
@@ -258,7 +258,7 @@ public final class VideoRecorder {
 
         if (virtualFrameCount >= currentFps * 60 && virtualFrameCount - slotsConsumed < currentFps * 60
                 && mc.player != null)
-            mc.player.sendMessage(Text.literal("⚠ 残り 1:00"), true);
+            mc.player.sendMessage(Text.translatable("snapmatica.rec.one_minute"), true);
 
         // The framebuffer is already DoF-blurred (applyPreviewBlur ran above). Screenshot it.
         // Nothing but the read-back itself happens here — scaling and encoding are handed
@@ -307,7 +307,7 @@ public final class VideoRecorder {
      */
     private static void applyPreviewBlur(MinecraftClient mc) {
         if (SnapmaticaClient.lensType == 0) return;
-        if (SnapmaticaClient.aperture >= 8.0f) return;
+        // No f-number gate — EvfBlurRenderer decides from the actual circle of confusion.
         int sw = mc.getWindow().getScaledWidth();
         int sh = mc.getWindow().getScaledHeight();
         // Video renders at the lens FOV (focalLengthMm) and uses that same focal length
@@ -382,14 +382,14 @@ public final class VideoRecorder {
         int total = metas.size();
         if (total == 0) {
             postProcessing = false;
-            ppMessage      = "フレームなし";
+            ppMessage      = Text.translatable("snapmatica.pp.no_frames");
             doneAtMs       = System.currentTimeMillis();
             return;
         }
 
         // Wait for the I/O thread to finish writing all frame PNGs,
         // updating the progress bar (0–10%) while we wait.
-        ppMessage = "フレーム書き込み中...";
+        ppMessage = Text.translatable("snapmatica.pp.writing");
         Future<?> sentinel = ioExecutor.submit(() -> {});
         while (!sentinel.isDone()) {
             ppProgress = writtenFrames.get() * 10 / total;
@@ -399,7 +399,7 @@ public final class VideoRecorder {
         }
         try { sentinel.get(); } catch (Exception ignored) {}
 
-        ppMessage  = "MP4 エンコード中...";
+        ppMessage  = Text.translatable("snapmatica.pp.encoding_mp4");
         ppProgress = 10;
 
         // Per-frame duration file → ffmpeg concat demuxer holds each PNG for exactly
@@ -421,14 +421,16 @@ public final class VideoRecorder {
 
         ppProgress = 100;
         if (ffmpegOk) {
-            ppMessage = "✓ 保存&コピー: snapmatica/videos/" + sessionId + ".mp4";
+            ppMessage = Text.translatable("snapmatica.pp.saved",
+                    "snapmatica/videos/" + sessionId + ".mp4");
             System.out.println("[VideoRecorder] Video saved: " + outMp4);
             ClipboardUtil.copyFileAsync(new File(outMp4));
             deleteDir(rawDirIn);
         } else {
             File pngDir = new File(vidDir, sessionId);
             rawDirIn.renameTo(pngDir);
-            ppMessage = "ffmpeg なし — PNG 保存: snapmatica/videos/" + sessionId + "/";
+            ppMessage = Text.translatable("snapmatica.pp.no_ffmpeg",
+                    "snapmatica/videos/" + sessionId + "/");
             System.out.println("[VideoRecorder] ffmpeg not found; PNGs at " + pngDir);
         }
 

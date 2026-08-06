@@ -23,7 +23,7 @@ public final class CameraScrollHandler {
     private CameraScrollHandler() {}
 
     private static final List<Float>   APERTURES    = List.of(1.4f, 2.0f, 2.8f, 4.0f, 5.6f, 8.0f, 11.0f, 16.0f, 22.0f);
-    private static final List<Integer> ISOS         = List.of(100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600);
+    private static final List<Integer> ISOS         = List.of(25, 50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600);
     private static final List<Integer> FOCAL_STOPS  = List.of(
             8, 10, 12, 14, 17, 20, 24, 28, 35, 50, 70, 85, 100, 135, 200, 300, 400, 500, 600, 800);
     private static final List<Float>   FOCUS_VALUES = List.of(
@@ -89,6 +89,8 @@ public final class CameraScrollHandler {
         int idx = nearestIntIdx(FOCAL_STOPS, SnapmaticaClient.focalLengthMm);
         SnapmaticaClient.focalLengthMm = FOCAL_STOPS.get(
                 Math.max(0, Math.min(FOCAL_STOPS.size() - 1, idx + dir)));
+        // Zooming does not move the blades, so the f-number follows the focal length.
+        SnapmaticaClient.applyFocalLengthToAperture();
     }
 
     private static void adjustAperture(int dir) {
@@ -96,6 +98,9 @@ public final class CameraScrollHandler {
         // Scroll up → open aperture → lower f-number
         int newIdx = Math.max(0, Math.min(APERTURES.size() - 1, idx - dir));
         SnapmaticaClient.aperture = APERTURES.get(newIdx);
+        // The ring is the only thing that actually moves the blades — record the opening it
+        // implies, so a later zoom can carry it forward.
+        SnapmaticaClient.syncApertureDiameter();
         SnapmaticaClient.updateAutoValues();
     }
 
@@ -123,14 +128,23 @@ public final class CameraScrollHandler {
 
     private static void adjustFocusDistance(int dir) {
         if (SnapmaticaClient.focusMode != FOCUS_MF) return; // manual focus only
-        float fd = SnapmaticaClient.focusDistance;
+        // Autofocus moves the lens without touching the ring, so on the first manual nudge
+        // after AF the ring has to be picked up from where the lens actually is — otherwise
+        // it would rack back to a stale setting before starting to move.
+        if (Math.abs(SnapmaticaClient.focusTarget - SnapmaticaClient.focusDistance) > 0.01f
+                && !AutoFocus.atInfinity()) {
+            SnapmaticaClient.focusTarget = SnapmaticaClient.focusDistance;
+        }
+        // Moves the RING. The lens follows under AutoFocus.tick's rack, so the last step out
+        // to infinity glides there instead of teleporting.
+        float fd = SnapmaticaClient.focusTarget;
         if (dir > 0) {
             if (fd >= SnapmaticaClient.FOCUS_INFINITY) return;          // already at infinity
-            if (fd >= FOCUS_MAX) { SnapmaticaClient.focusDistance = SnapmaticaClient.FOCUS_INFINITY; return; }
-            SnapmaticaClient.focusDistance = Math.min(FOCUS_MAX, fd * focusStep(fd));
+            if (fd >= FOCUS_MAX) { SnapmaticaClient.focusTarget = SnapmaticaClient.FOCUS_INFINITY; return; }
+            SnapmaticaClient.focusTarget = Math.min(FOCUS_MAX, fd * focusStep(fd));
         } else {
-            if (fd >= SnapmaticaClient.FOCUS_INFINITY) { SnapmaticaClient.focusDistance = FOCUS_MAX; return; }
-            SnapmaticaClient.focusDistance = Math.max(FOCUS_MIN, fd / focusStep(fd));
+            if (fd >= SnapmaticaClient.FOCUS_INFINITY) { SnapmaticaClient.focusTarget = FOCUS_MAX; return; }
+            SnapmaticaClient.focusTarget = Math.max(FOCUS_MIN, fd / focusStep(fd));
         }
     }
 

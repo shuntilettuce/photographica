@@ -6,6 +6,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
+import net.minecraft.text.Text;
 
 /**
  * HUD overlay for video recording.
@@ -79,7 +80,7 @@ public final class VideoRecorderHud {
         int sw = ctx.getScaledWindowWidth();
 
         int progress = VideoRecorder.getPpProgress();
-        String msg   = VideoRecorder.getPpMessage();
+        Text msg   = VideoRecorder.getPpMessage();
 
         int barW   = 160;
         int barH   = 4;
@@ -89,7 +90,7 @@ public final class VideoRecorderHud {
         int panelY = 10;
 
         ctx.fill(panelX, panelY, panelX + panelW, panelY + panelH, BG_DARK);
-        ctx.drawCenteredTextWithShadow(tr, "⚙ " + msg, sw / 2, panelY + 4, CREAM);
+        ctx.drawCenteredTextWithShadow(tr, Text.literal("⚙ ").append(msg), sw / 2, panelY + 4, CREAM);
 
         int barX = panelX + 10;
         int barY = panelY + 17;
@@ -119,7 +120,7 @@ public final class VideoRecorderHud {
 
         TextRenderer tr = mc.textRenderer;
         int sw  = ctx.getScaledWindowWidth();
-        String msg = VideoRecorder.getPpMessage();
+        Text msg = VideoRecorder.getPpMessage();
 
         int col = ((alpha << 24) & 0xFF000000) | (GREEN_SOFT & 0x00FFFFFF);
         ctx.drawCenteredTextWithShadow(tr, msg, sw / 2, 12, col);

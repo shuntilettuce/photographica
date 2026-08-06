@@ -32,11 +32,62 @@ public class SnapmaticaClient implements ClientModInitializer {
     private static KeyBinding viewfinderSneakKey;  // toggle sneak-to-viewfinder mode
     private static KeyBinding orientationKey;       // toggle portrait/landscape framing
     private static KeyBinding recordKey;            // start/stop video recording
+    private static KeyBinding galleryKey;           // open the camera roll
     // ── Camera state (client-side only, no server sync needed) ───────────────────
     public static float aperture = 5.6f;
+
+    /**
+     * Narrowest and widest f-number the barrel can physically reach, regardless of zoom.
+     * The blades cannot open wider than the barrel, nor close past their own limit, so the
+     * derived f-number below is clamped to this.
+     */
+    public static final float APERTURE_WIDEST   = 1.4f;
+    public static final float APERTURE_NARROWEST = 32.0f;
+
+    /**
+     * Diameter of the entrance pupil in mm — the physical opening the blades form.
+     *
+     * <p>This, not the f-number, is what the aperture ring actually sets. An f-number is only
+     * the ratio N = f / D, so it is not independent of focal length: hold the blades still and
+     * zoom in, and N climbs on its own. That is why a kit zoom is "f/3.5-5.6" — same blades,
+     * different focal length. Treating N as a free-standing knob (as this did) made the lens
+     * behave like nothing that exists.
+     *
+     * <p>Set whenever the aperture is adjusted, consumed whenever the focal length changes.
+     */
+    public static float apertureDiameterMm = 50.0f / 5.6f;
+
+    /** Records the blade opening implied by the current f-number and focal length. */
+    public static void syncApertureDiameter() {
+        if (focalLengthMm > 0 && aperture > 0f) apertureDiameterMm = focalLengthMm / aperture;
+    }
+
+    /**
+     * Re-derives the f-number after a focal-length change, with the blades left where they are.
+     * Clamped to what the barrel can do — at the wide end the blades would have to open past
+     * the barrel, so N floors out and the diameter is re-synced to the truth.
+     */
+    public static void applyFocalLengthToAperture() {
+        if (apertureDiameterMm <= 0f || focalLengthMm <= 0) return;
+        float n = focalLengthMm / apertureDiameterMm;
+        aperture = Math.max(APERTURE_WIDEST, Math.min(APERTURE_NARROWEST, n));
+        if (aperture != n) syncApertureDiameter();   // hit a stop; blades really did move
+        updateAutoValues();
+    }
     public static int shutterSpeedIdx = 10;      // index into SHUTTER_SECONDS[] (1/30)
     public static int iso = 400;
+    /** Where the image is ACTUALLY focused. Eased toward {@link #focusTarget}. */
     public static float focusDistance = 5.0f;
+
+    /**
+     * Where the focus ring is set — the destination, not the current state.
+     *
+     * <p>Manual focus used to write straight to {@link #focusDistance}, so every scroll click
+     * was an instant jump. Small clicks hid it, but the last step to infinity multiplies the
+     * distance tenfold in one go and the image snapped. Splitting ring position from lens
+     * position lets the same rack that autofocus uses carry manual focus too.
+     */
+    public static float focusTarget = 5.0f;
     /**
      * Focus-distance sentinel meaning "optical infinity" (no finite subject). Set far
      * above any real Minecraft raycast (≤1000) or Distant Horizons (km-scale) distance so
@@ -85,6 +136,8 @@ public class SnapmaticaClient implements ClientModInitializer {
                 "key.snapmatica.orientation", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, SNAPMATICA_CATEGORY));
         recordKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.record", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, SNAPMATICA_CATEGORY));
+        galleryKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.snapmatica.gallery", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_B, SNAPMATICA_CATEGORY));
         *///?} else {
         shootKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.shoot", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_ENTER, "category.snapmatica"));
@@ -96,6 +149,8 @@ public class SnapmaticaClient implements ClientModInitializer {
                 "key.snapmatica.orientation", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, "category.snapmatica"));
         recordKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.record", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.snapmatica"));
+        galleryKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.snapmatica.gallery", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_B, "category.snapmatica"));
         //?}
 
         // ── Tick handler ─────────────────────────────────────────────────────────
@@ -128,6 +183,11 @@ public class SnapmaticaClient implements ClientModInitializer {
             // Settings key
             if (settingsKey.wasPressed()) {
                 client.setScreen(new CameraScreen());
+            }
+
+            // Camera roll
+            while (galleryKey.wasPressed()) {
+                client.setScreen(new GalleryScreen());
             }
 
             // Auto-focus (AF / MOB) drives focusDistance while the viewfinder is active

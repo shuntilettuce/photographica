@@ -32,7 +32,7 @@ public class VideoRecorderScreen extends Screen {
     private static final int BTN_W   = 100;
 
     public VideoRecorderScreen() {
-        super(Text.literal("動画設定"));
+        super(Text.translatable("snapmatica.video.title"));
     }
 
     @Override
@@ -44,7 +44,7 @@ public class VideoRecorderScreen extends Screen {
         int row    = 0;
 
         // Aperture (F-value)
-        addSettingRow(rowX, top + row++ * ROW_H, "絞り",
+        addSettingRow(rowX, top + row++ * ROW_H, Text.translatable("snapmatica.video.aperture"),
                 () -> "F" + fmt(SnapmaticaClient.aperture),
                 step -> {
                     int idx = nearestIdx(APERTURES, SnapmaticaClient.aperture) + step;
@@ -52,7 +52,7 @@ public class VideoRecorderScreen extends Screen {
                 }, true);
 
         // Zoom (focal length / angle of view)
-        addSettingRow(rowX, top + row++ * ROW_H, "画角",
+        addSettingRow(rowX, top + row++ * ROW_H, Text.translatable("snapmatica.video.fov"),
                 () -> SnapmaticaClient.focalLengthMm + "mm",
                 step -> {
                     int idx = nearestIntIdx(FOCAL_LIST, SnapmaticaClient.focalLengthMm) + step;
@@ -60,7 +60,7 @@ public class VideoRecorderScreen extends Screen {
                 }, true);
 
         // FPS — locked once recording
-        addSettingRow(rowX, top + row++ * ROW_H, "FPS",
+        addSettingRow(rowX, top + row++ * ROW_H, Text.literal("FPS"),
                 () -> VideoRecorder.getCurrentFps() + " fps",
                 step -> {
                     int idx = FPS_LIST.indexOf(VideoRecorder.getCurrentFps()) + step;
@@ -68,21 +68,22 @@ public class VideoRecorderScreen extends Screen {
                 }, !VideoRecorder.isRecording());
 
         // Motion blur (applied by ffmpeg frame-blending at encode time, no in-game cost)
-        addSettingRow(rowX, top + row++ * ROW_H, "モーションブラー",
+        addSettingRow(rowX, top + row++ * ROW_H, Text.translatable("snapmatica.video.motion_blur"),
                 () -> motionBlurLabel(VideoRecorder.getMotionBlur()),
                 step -> VideoRecorder.setMotionBlur(VideoRecorder.getMotionBlur() + step), true);
 
         // Action buttons
         int btnY = top + row * ROW_H + 12;
-        String recLabel = VideoRecorder.isRecording() ? "■ 停止" : "● REC";
+        Text recLabel = Text.translatable(VideoRecorder.isRecording()
+                ? "snapmatica.video.stop" : "snapmatica.video.rec");
 
-        addDrawableChild(ButtonWidget.builder(Text.literal(recLabel), b -> {
+        addDrawableChild(ButtonWidget.builder(recLabel, b -> {
                     if (VideoRecorder.isRecording()) VideoRecorder.stopRecording();
                     else VideoRecorder.startRecording();
                     close();
                 }).dimensions(cx - BTN_W - 2, btnY, BTN_W, 20).build());
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("閉じる"), b -> close())
+        addDrawableChild(ButtonWidget.builder(Text.translatable("snapmatica.common.close"), b -> close())
                 .dimensions(cx + 2, btnY, BTN_W, 20).build());
     }
 
@@ -94,7 +95,7 @@ public class VideoRecorderScreen extends Screen {
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
         renderBackground(ctx, mouseX, mouseY, delta);
-        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("動画設定"),
+        ctx.drawCenteredTextWithShadow(textRenderer, Text.translatable("snapmatica.video.title"),
                 width / 2, height / 2 - 80, 0xFFFFFFFF);
         super.render(ctx, mouseX, mouseY, delta);
     }
@@ -104,7 +105,7 @@ public class VideoRecorderScreen extends Screen {
 
     // ── Row builder ───────────────────────────────────────────────────────────────
 
-    private void addSettingRow(int rowX, int y, String label,
+    private void addSettingRow(int rowX, int y, Text label,
                                Supplier<String> value, IntConsumer step, boolean editable) {
         ButtonWidget left = ButtonWidget.builder(Text.literal("◀"),
                         b -> { step.accept(-1); clearAndInit(); })
@@ -113,7 +114,7 @@ public class VideoRecorderScreen extends Screen {
         addDrawableChild(left);
 
         ButtonWidget centre = ButtonWidget.builder(
-                        Text.literal(label + ": " + value.get()), b -> {})
+                        label.copy().append(": " + value.get()), b -> {})
                 .dimensions(rowX + ARROW_W + GAP, y, LABEL_W, 20).build();
         centre.active = false;
         addDrawableChild(centre);
@@ -133,9 +134,9 @@ public class VideoRecorderScreen extends Screen {
 
     private static String motionBlurLabel(int v) {
         switch (v) {
-            case 1:  return "弱";
-            case 2:  return "強";
-            default: return "オフ";
+            case 1:  return Text.translatable("snapmatica.video.mb.light").getString();
+            case 2:  return Text.translatable("snapmatica.video.mb.strong").getString();
+            default: return Text.translatable("snapmatica.video.mb.off").getString();
         }
     }
 

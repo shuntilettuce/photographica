@@ -79,10 +79,6 @@ public final class EvfBlurRenderer {
     //? if >=1.21.11 {
     /*private static int centerReadFbo  = -1;
     *///?}
-    private static boolean blurScheduled = false;
-    private static int     schedFx, schedFy, schedFx2, schedFy2;
-    private static float   schedFocusDist, schedAperture, schedFocalLen;
-    private static boolean schedGpuAf;
 
     private static int noiseTex      = -1;
     private static int locInSampler  = -1;
@@ -101,6 +97,12 @@ public final class EvfBlurRenderer {
     private static int locAperture   = -1;
     private static int locPxPerMm    = -1;
     private static int locDofScale   = -1;
+    private static int locDistortK   = -1;
+    private static int locAspect     = -1;
+    private static int locDoGather   = -1;
+    private static int locMotionRot  = -1;
+    private static int locMotionVel  = -1;
+    private static int locFocalPx    = -1;
     private static int locPass       = -1;
     private static int locNearSamp   = -1;
     private static int locBgSamp     = -1;
@@ -119,6 +121,119 @@ public final class EvfBlurRenderer {
      */
     public static final float DOF_SCALE_STILL = 375.0f;   // 1 block = 37.5 cm
     public static final float DOF_SCALE_VIDEO = 1000.0f;  // 1 block = 1 m  (unused; see above)
+
+    /**
+     * Largest circle of confusion the current optics can produce anywhere in the scene, in
+     * framebuffer pixels. Serves two purposes: it decides whether there is any defocus worth
+     * rendering at all, and it sizes the gather.
+     *
+     * <p>This replaced a flat "no blur at f/8 or narrower" rule, which is not how a lens works.
+     * The circle of confusion goes as f squared over N, so stopping down is only half the
+     * story — a 400 mm at f/8 throws a background far further out of focus than a 24 mm at
+     * f/1.4 ever could. Cutting the blur off by f-number alone meant every long lens went
+     * uniformly, unnaturally sharp the moment it passed f/8.
+     *
+     * <p>Evaluated at the two extremes of the depth range, since the worst defocus is always
+     * at one end or the other.
+     */
+    public static float maxCocPx(float focusDist, float aperture, float focalLenMm,
+                                 float dofScaleMm, float pxPerMm) {
+        float a = cocPxAt(0.3f,  focusDist, aperture, focalLenMm, dofScaleMm, pxPerMm);
+        float b = cocPxAt(Math.max(currentDepthFar, 64.0f),
+                                 focusDist, aperture, focalLenMm, dofScaleMm, pxPerMm);
+        return Math.max(a, b);
+    }
+
+    /** Thin-lens CoC in pixels for one subject distance — the shader's formula, on the CPU. */
+    private static float cocPxAt(float depthBlocks, float focusDist, float aperture,
+                                 float focalLenMm, float dofScaleMm, float pxPerMm) {
+        float depthM = Math.max(depthBlocks, 0.05f);
+        float cocMM;
+        if (focusDist >= 99999.0f) {
+            cocMM = (focalLenMm * focalLenMm) / (aperture * depthM * dofScaleMm);
+        } else {
+            float s1mm  = focusDist * dofScaleMm;
+            float denom = aperture * Math.max(s1mm - focalLenMm, 1.0f);
+            cocMM = (focalLenMm * focalLenMm) * Math.abs(depthM - focusDist) / (depthM * denom);
+        }
+        // Diffraction floor, added in quadrature exactly as the shader does — otherwise the
+        // CPU-side ceiling would fall below the blur the shader actually produces at narrow
+        // apertures, and clamp away the softening that is the whole point of modelling it.
+        float airyMM = 2.44f * 0.00055f * aperture;
+        return (float) Math.sqrt(cocMM * cocMM + airyMM * airyMM) * pxPerMm;
+    }
+
+    /**
+     * Radial distortion coefficient for a focal length. Positive is barrel, negative pincushion.
+     *
+     * <p>Scaled by (1/f - 1/f0) rather than linearly in f, because distortion is a property of
+     * how wide the field is, and field angle goes with the reciprocal of focal length. A linear
+     * curve made 8 mm barely worse than 14 mm, when in reality the two are nothing alike.
+     *
+     * <p>Rough corner displacement it produces: 8 mm ~20%, 14 mm ~11%, 24 mm ~5%, 35 mm ~2%,
+     * nothing at 50 mm, and a couple of percent of pincushion by 200 mm. Real rectilinear
+     * lenses are corrected below these figures; this is deliberately toward the visible end,
+     * since the bow is the whole point of putting an ultra-wide on.
+     */
+    private static final float DISTORT_BARREL = 2.33f;   // wide end
+    private static final float DISTORT_PIN    = 1.5f;    // long end, far weaker
+    private static final float DISTORT_NEUTRAL_MM = 50.0f;
+
+    public static float distortionK(float focalLenMm) {
+        if (focalLenMm <= 0f) return 0f;
+        float inv  = 1.0f / focalLenMm;
+        float inv0 = 1.0f / DISTORT_NEUTRAL_MM;
+        return (inv > inv0) ? DISTORT_BARREL * (inv - inv0)   // wider than neutral -> barrel
+                            : -DISTORT_PIN   * (inv0 - inv);  // longer -> mild pincushion
+    }
+
+    // ── Per-sample camera motion, for long-exposure smearing ─────────────────────
+    private static double prevYaw, prevPitch, prevX, prevY, prevZ;
+    private static boolean haveMotionRef = false;
+
+    /**
+     * How far the camera moved since the previous frame, expressed for the shader.
+     *
+     * <p>Result is written into {@code outRotPx} (screen shift from turning) and
+     * {@code outVelCam} (translation in camera space), both covering ONE sample interval.
+     * Rotation shifts the whole frame equally; translation shifts near things more than far
+     * ones, which is why the shader divides its contribution by depth.
+     */
+    private static void updateCameraMotion(MinecraftClient mc, int fbW, int fbH,
+                                           float focalPx, float[] outRotPx, float[] outVelCam) {
+        outRotPx[0] = 0f; outRotPx[1] = 0f;
+        outVelCam[0] = 0f; outVelCam[1] = 0f; outVelCam[2] = 0f;
+        if (mc.player == null) { haveMotionRef = false; return; }
+
+        double yaw = mc.player.getYaw(), pitch = mc.player.getPitch();
+        double x = mc.player.getX(), y = mc.player.getY(), z = mc.player.getZ();
+
+        if (haveMotionRef) {
+            // Yaw wraps at +-180; take the short way round or a single turn past the seam
+            // would smear the entire frame.
+            double dYaw = ((yaw - prevYaw + 540.0) % 360.0) - 180.0;
+            double dPitch = pitch - prevPitch;
+            // Degrees to pixels, through the projection this frame was drawn with.
+            double vFovDeg = 2.0 * Math.toDegrees(Math.atan((fbH * 0.5) / focalPx));
+            double pxPerDeg = fbH / Math.max(vFovDeg, 1e-3);
+            outRotPx[0] = (float) (-dYaw * pxPerDeg);
+            outRotPx[1] = (float) (dPitch * pxPerDeg);
+
+            double dx = x - prevX, dy = y - prevY, dz = z - prevZ;
+            // World delta into camera space: forward is where the player is looking.
+            double yawRad = Math.toRadians(yaw);
+            double sin = Math.sin(yawRad), cos = Math.cos(yawRad);
+            double right   =  dx * cos - dz * sin;
+            double forward =  dx * sin + dz * cos;
+            // Scene shifts opposite to the camera.
+            outVelCam[0] = (float) -right;
+            outVelCam[1] = (float)  dy;
+            outVelCam[2] = (float)  forward;
+        }
+
+        prevYaw = yaw; prevPitch = pitch; prevX = x; prevY = y; prevZ = z;
+        haveMotionRef = true;
+    }
 
     /** Vanilla's near plane; overridden from the live projection matrix when it differs. */
     private static final float NEAR = 0.05f;
@@ -267,10 +382,6 @@ public final class EvfBlurRenderer {
                                   float focusDist, float aperture, float focalLenMm,
                                   float dofScaleMm, boolean gpuAutoFocus) {
         if (depthTex == -1) return;
-        // Bokeh disc ceiling. Kept moderate so the direct (non-mip) disc gather stays
-        // smooth at this sample budget; a much larger radius would undersample into grain.
-        float maxBlurPx = Math.min(240.0f / aperture, 120.0f);
-        if (maxBlurPx < 0.5f) return;
 
         MinecraftClient mc = MinecraftClient.getInstance();
         Framebuffer mainFb = mc.getFramebuffer();
@@ -286,6 +397,27 @@ public final class EvfBlurRenderer {
         int fbW = mainFb.textureWidth;
         int fbH = mainFb.textureHeight;
         if (fbW <= 0 || fbH <= 0) return;
+
+        // Kernel ceiling derived from the optics rather than from the f-number. It was
+        // min(240 / aperture, 120), which truncated a telephoto's bokeh for no physical
+        // reason — at f/22 it capped the disc at 11 px however long the lens was. Taking the
+        // largest CoC the current focal length, aperture and focus distance can actually
+        // produce lets a long lens spread as far as it should, and keeps the gather tight
+        // when the optics genuinely cannot blur much. 120 px remains as a perf ceiling: the
+        // direct (non-mip) disc gather undersamples into grain beyond it.
+        float pxPerMm   = fbH / 24.0f;   // 24 mm sensor height maps to fbH px
+        float maxBlurPx = Math.min(
+                maxCocPx(focusDist, aperture, focalLenMm, dofScaleMm, pxPerMm), 120.0f);
+        // Sub-pixel defocus is not worth a full gather — and this, not an f-number rule, is
+        // the only reason to skip the blur.
+        boolean anyBlur    = maxBlurPx >= 1.0f;
+        // Distortion is applied by the same pass, so the pass has to run even when there is no
+        // defocus at all. Bailing out on blur alone would have made an ultra-wide's barrel
+        // vanish the moment it was stopped down — losing the one thing that identifies it.
+        float   distortK   = distortionK(focalLenMm);
+        boolean anyDistort = Math.abs(distortK) >= 1e-4f;
+        if (!anyBlur && !anyDistort) return;
+        if (!anyBlur) maxBlurPx = 1.0f;   // keep the gather's radii trivial
 
         ensureInit(fbW, fbH);
         if (program == -1) return;
@@ -369,6 +501,25 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locAperture, aperture);
         GL20.glUniform1f(locPxPerMm, fbH / 24.0f);  // 24mm sensor height maps to fbH px
         GL20.glUniform1f(locDofScale, dofScaleMm);
+        GL20.glUniform1f(locDistortK, distortK);
+        GL20.glUniform1i(locDoGather, anyBlur ? 1 : 0);
+
+        // Motion smear only during a long exposure. A fast shutter IS one instant, so freezing
+        // the action is the correct answer there, not blurring it.
+        // Focal length in PIXELS: half the frame height over the tangent of the half vertical
+        // field. The 35 mm frame is 24 mm tall, so its half-height is 12 mm — the same anchor
+        // GameRendererMixin uses to set the field of view, which is what makes these agree.
+        float focalPx = (fbH * 0.5f) / (float) (12.0 / Math.max(focalLenMm, 1));
+        float[] rotPx = new float[2], velCam = new float[3];
+        if (PhotoCapture.isLongExposing()) {
+            updateCameraMotion(mc, fbW, fbH, focalPx, rotPx, velCam);
+        } else {
+            haveMotionRef = false;
+        }
+        GL20.glUniform2f(locMotionRot, rotPx[0], rotPx[1]);
+        GL20.glUniform3f(locMotionVel, velCam[0], velCam[1], velCam[2]);
+        GL20.glUniform1f(locFocalPx, focalPx);
+        GL20.glUniform1f(locAspect, (float) fbW / (float) fbH);
 
         // ── Near-field passes (scissor still disabled; whole low-res buffer) ──────────
         if (NEAR_FIELD_LAYER) {
@@ -425,7 +576,11 @@ public final class EvfBlurRenderer {
         int scY = fbH - (int)(fy2 * scale);
         int scW = (int)((fx2 - fx) * scale);
         int scH = (int)((fy2 - fy) * scale);
-        int bleed = (int) maxBlurPx;
+        // The distorting copy pass reads from displaced coordinates, which for a wide lens
+        // reach well outside the viewfinder rectangle — and outside the scissor the aux buffer
+        // holds nothing this frame. Widen to the whole framebuffer rather than try to predict
+        // the reach; the gather's own per-pixel early-out keeps the extra area cheap.
+        int bleed = anyDistort ? Math.max(fbW, fbH) : (int) maxBlurPx;
         int expX = Math.max(0, scX - bleed);
         int expY = Math.max(0, scY - bleed);
         int expW = Math.min(fbW - expX, scW + 2 * bleed);
@@ -535,35 +690,44 @@ public final class EvfBlurRenderer {
     }
     *///?}
 
-    // Records EVF blur parameters; actual rendering runs in applyScheduledBlur().
-    public static void scheduleBlur(int fx, int fy, int fx2, int fy2,
-                                    float focusDist, float aperture, float focalLenMm,
-                                    boolean gpuAutoFocus) {
-        schedFx = fx; schedFy = fy; schedFx2 = fx2; schedFy2 = fy2;
-        schedFocusDist = focusDist; schedAperture = aperture; schedFocalLen = focalLenMm;
-        schedGpuAf = gpuAutoFocus;
-        blurScheduled = true;
-    }
+    /**
+     * Applies the depth-of-field and distortion pass, deciding for itself whether it should.
+     *
+     * <p>There is no longer a schedule. Parameters used to be recorded during the HUD pass and
+     * applied on the NEXT frame, because the HUD cannot issue raw GL — but the rectangle is the
+     * only thing the HUD ever knew, and it is just a function of the window size, so the whole
+     * detour was avoidable. The lag it introduced was visible: the field of view changes on the
+     * frame the viewfinder opens or the zoom moves, while the distortion arrived a frame later,
+     * so the image snapped to the new angle undistorted and bowed immediately after.
+     *
+     * <p>Called from GameRendererMixin straight after renderWorld, so the optics it reads are
+     * the same ones that frame was rendered with.
+     *
+     * @param forCapture blur the FULL framebuffer, because the photo crop reaches past the
+     *                   viewfinder frame and a scissored pass would leave its edges sharp
+     */
+    public static void applyBlur(boolean forCapture) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null || SnapmaticaClient.lensType == 0) return;
 
-    // Applies the scheduled EVF blur (if any) to mainTex and clears the schedule.
-    // forCapture=true: blur the full framebuffer so the photo crop is covered.
-    //   The photo crop (3:2) extends beyond the viewfinder frame (86% height × 3:2),
-    //   so the viewfinder scissor would leave ~90px unblurred on each side in the photo.
-    // forCapture=false: blur only the viewfinder area (live EVF, bezels cover the rest).
-    public static void applyScheduledBlur(boolean forCapture) {
-        if (!blurScheduled) return;
-        blurScheduled = false;
-        if (forCapture) {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            int sw = mc.getWindow().getScaledWidth();
-            int sh = mc.getWindow().getScaledHeight();
-            renderBlur(0, 0, sw, sh, schedFocusDist, schedAperture, schedFocalLen,
-                    DOF_SCALE_STILL, schedGpuAf);
-        } else {
-            renderBlur(schedFx, schedFy, schedFx2, schedFy2,
-                       schedFocusDist, schedAperture, schedFocalLen,
-                       DOF_SCALE_STILL, schedGpuAf);
+        // Same predicate the viewfinder draws itself by, so the two cannot disagree about
+        // whether the camera is up.
+        boolean viewfinderUp = SnapmaticaClient.viewfinderSneakEnabled
+                && mc.player.isSneaking() && mc.currentScreen == null;
+        if (!viewfinderUp && !PhotoCapture.isCapturePending()) return;
+
+        int sw = mc.getWindow().getScaledWidth();
+        int sh = mc.getWindow().getScaledHeight();
+        int x0 = 0, y0 = 0, x1 = sw, y1 = sh;
+        if (!forCapture) {
+            int[] fr = PhotoCapture.frameRect(sw, sh, SnapmaticaClient.portraitOrientation);
+            x0 = fr[0]; y0 = fr[1]; x1 = fr[0] + fr[2]; y1 = fr[1] + fr[3];
         }
+        // GPU autofocus is wired but off — Voxy's LOD terrain leaves no usable depth in the
+        // vanilla buffer, so sampling it changes nothing. Flip to test another LOD mod.
+        renderBlur(x0, y0, x1, y1, AutoFocus.shaderFocusDistance(),
+                SnapmaticaClient.aperture, SnapmaticaClient.focalLengthMm,
+                DOF_SCALE_STILL, false);
     }
 
     /**
@@ -704,6 +868,12 @@ public final class EvfBlurRenderer {
             locAperture  = GL20.glGetUniformLocation(program, "Aperture");
             locPxPerMm   = GL20.glGetUniformLocation(program, "PxPerMm");
             locDofScale  = GL20.glGetUniformLocation(program, "DofScale");
+            locDistortK  = GL20.glGetUniformLocation(program, "DistortK");
+            locAspect    = GL20.glGetUniformLocation(program, "Aspect");
+            locDoGather  = GL20.glGetUniformLocation(program, "DoGather");
+            locMotionRot = GL20.glGetUniformLocation(program, "MotionRotPx");
+            locMotionVel = GL20.glGetUniformLocation(program, "MotionVelCam");
+            locFocalPx   = GL20.glGetUniformLocation(program, "FocalPx");
             locPass      = GL20.glGetUniformLocation(program, "Pass");
             locNearSamp  = GL20.glGetUniformLocation(program, "NearSampler");
             locBgSamp    = GL20.glGetUniformLocation(program, "BgSampler");

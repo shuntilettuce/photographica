@@ -21,7 +21,7 @@ public class CameraScreen extends Screen {
             "1/2", "1/4", "1/8", "1/15", "1/30", "1/60",
             "1/125", "1/250", "1/500", "1/1000", "1/2000", "1/4000"
     };
-    private static final List<Integer> ISOS = List.of(100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600);
+    private static final List<Integer> ISOS = List.of(25, 50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600);
     private static final List<Float> FOCUS_VALUES = List.of(
             0.3f, 0.5f, 0.7f, 1.0f, 1.2f, 1.5f, 1.8f, 2.0f, 2.5f, 3.0f, 3.5f, 4.0f, 4.5f, 5.0f,
             6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 12.0f, 14.0f, 16.0f, 18.0f, 20.0f, 24.0f, 28.0f, 32.0f,
@@ -67,7 +67,8 @@ public class CameraScreen extends Screen {
                 () -> apAuto ? "AUTO" : "F" + fmt(SnapmaticaClient.aperture),
                 btnWidth,
                 step -> { int idx = findClosest(APERTURES, SnapmaticaClient.aperture);
-                    idx = clampStep(idx, step, APERTURES.size()); SnapmaticaClient.aperture = APERTURES.get(idx); SnapmaticaClient.updateAutoValues(); },
+                    idx = clampStep(idx, step, APERTURES.size()); SnapmaticaClient.aperture = APERTURES.get(idx);
+                    SnapmaticaClient.syncApertureDiameter(); SnapmaticaClient.updateAutoValues(); },
                 !apAuto);
 
         // Shutter
@@ -90,10 +91,10 @@ public class CameraScreen extends Screen {
         boolean focusAuto = SnapmaticaClient.focusMode != FOCUS_MF;
         String focusAutoLabel = SnapmaticaClient.focusMode == FOCUS_MOB ? "MOB" : "AF";
         addRow2(cx, top + row++ * rowHeight, "Focus",
-                () -> focusAuto ? focusAutoLabel : fmtFocus(SnapmaticaClient.focusDistance),
+                () -> focusAuto ? focusAutoLabel : fmtFocus(SnapmaticaClient.focusTarget),
                 btnWidth,
-                step -> { int idx = findClosest(FOCUS_VALUES, SnapmaticaClient.focusDistance);
-                    idx = clampStep(idx, step, FOCUS_VALUES.size()); SnapmaticaClient.focusDistance = FOCUS_VALUES.get(idx); },
+                step -> { int idx = findClosest(FOCUS_VALUES, SnapmaticaClient.focusTarget);
+                    idx = clampStep(idx, step, FOCUS_VALUES.size()); SnapmaticaClient.focusTarget = FOCUS_VALUES.get(idx); },
                 !focusAuto);
 
         // Exposure mode

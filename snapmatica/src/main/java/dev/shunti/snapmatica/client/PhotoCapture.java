@@ -49,11 +49,53 @@ public final class PhotoCapture {
     private static final long AF_QUERY_INTERVAL_MS = 100L;
     private static long lastAfQueryMs = 0L;
 
+    // ── Long exposure ───────────────────────────────────────────────────────────
+    /**
+     * Shutter speed used to change nothing but the brightness and the length of the mirror
+     * blackout: 1/4000 and 1/15 produced an identical image. A real camera integrates light
+     * for the whole time the shutter is open, so anything that moves — the subject, or the
+     * camera in your hands — smears. The "WARN Blur" indicator has been pointing at an effect
+     * that did not exist.
+     *
+     * <p>Ported from photographica, which does this by sampling the framebuffer repeatedly
+     * across the exposure and averaging. The trails are therefore genuine: whatever actually
+     * moved on screen during those milliseconds is what smears, camera shake included.
+     *
+     * <p>Only armed at 1/30 s or slower. Faster than that, a single frame IS the exposure.
+     */
+    private static final double ACCUM_MIN_SHUTTER_SEC = 1.0 / 30.0;
+    /** Ceiling on samples, so a 30 s exposure costs the same as a 1 s one. */
+    private static final int  ACCUM_MAX_SAMPLES = 120;
+    /** Floor on the gap between samples, so a short exposure cannot spin the readback. */
+    private static final long ACCUM_MIN_INTERVAL_MS = 8L;
+
+    private static volatile boolean accumArmed   = false;
+    private static volatile long    accumEndMs   = 0L;
+    private static volatile long    accumNextMs  = 0L;
+    private static volatile long    accumIntervalMs = ACCUM_MIN_INTERVAL_MS;
+    private static volatile int     accumSamples = 0;
+    private static volatile int     accumW = 0, accumH = 0;
+    private static volatile float[] accumR = null, accumG = null, accumB = null;
+    private static volatile float[] accumDepth = null;
+    private static volatile int     accumDepthFbW = 0, accumDepthFbH = 0;
+
     // ── Public API ──────────────────────────────────────────────────────────────
 
+    /**
+     * True while a photo is being taken — including for the whole duration of a long exposure.
+     *
+     * <p>Callers use this to suppress the hand, the player model and block outlines, and to ask
+     * EvfBlurRenderer for a FULL-frame blur rather than one scissored to the viewfinder. All of
+     * those have to hold for every frame the shutter is open, not just the instant it opens, or
+     * a long exposure would average one correctly-prepared frame together with a hundred that
+     * still had the hand in them and only the viewfinder rectangle defocused.
+     */
     public static boolean isCapturePending() {
-        return capturePending;
+        return capturePending || accumArmed;
     }
+
+    /** True while a long exposure is integrating — used to decide whether to smear samples. */
+    public static boolean isLongExposing() { return accumArmed; }
 
     public static boolean isBusy() {
         return System.currentTimeMillis() < mirrorEndMs;
@@ -72,15 +114,35 @@ public final class PhotoCapture {
                 Math.max(0, Math.min(SnapmaticaClient.SHUTTER_SECONDS.length - 1, shutterIdx))];
         long shutterMs = Math.min(1500, (long)(shutterSec * 1000));
 
-        mirrorEndMs = now + 100 + shutterMs + 100;
-        flashEndMs = mirrorEndMs + Math.min(200, 20 + shutterMs / 2);
-        secondClickAtMs = now + 100 + shutterMs;
+        // Electronic shutter — no mirror, so no blackout. The blackout was modelling an SLR's
+        // mirror swinging up, which is exactly the thing a mirrorless body does not have; it
+        // also hid the live view for the whole of a long exposure, when watching the trails
+        // build is the point. A brief exposure flash is all that marks the frame.
+        mirrorEndMs = now;
+        secondClickAtMs = 0L;
+        flashEndMs = now + Math.min(200, 20 + shutterMs / 2);
 
-        capturePending = true;
+        // Arm the long exposure for slow shutters. capturePending stays false in that case:
+        // the accumulator owns the capture from here, and finalises it when the shutter closes.
+        if (shutterSec >= ACCUM_MIN_SHUTTER_SEC) {
+            long durationMs = Math.max((long) (shutterSec * 1000), 1L);
+            accumArmed   = true;
+            accumEndMs   = now + durationMs;
+            accumIntervalMs = Math.max(ACCUM_MIN_INTERVAL_MS, durationMs / ACCUM_MAX_SAMPLES);
+            accumNextMs  = now;
+            accumSamples = 0;
+            accumR = null; accumG = null; accumB = null;
+            accumDepth = null;
+            capturePending = false;
+        } else {
+            capturePending = true;
+        }
         lastShotMs = now;
     }
 
     public static void captureIfPending() {
+        // A long exposure in progress owns the capture path until the shutter closes.
+        if (accumArmed) { tickAccumulation(); return; }
         if (!capturePending) return;
         capturePending = false;
 
@@ -109,21 +171,132 @@ public final class PhotoCapture {
         //?}
     }
 
+    /** Samples the framebuffer across the open shutter, then hands the average to the normal
+     *  photo pipeline. Runs once per rendered frame while a long exposure is armed. */
+    private static void tickAccumulation() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc == null || mc.player == null) { resetAccumulation(); return; }
+        long now = System.currentTimeMillis();
+
+        // First tick: take over the depth pre-read the viewfinder left for us. The depth is
+        // sampled once, at the start of the exposure — a moving scene has no single depth, and
+        // the subject you focused on is the one that should drive the defocus.
+        if (accumSamples == 0 && accumDepth == null) {
+            accumDepth    = pendingLinearDepth;
+            accumDepthFbW = pendingDepthFbW;
+            accumDepthFbH = pendingDepthFbH;
+            pendingLinearDepth = null;
+            pendingDepthFbW = 0;
+            pendingDepthFbH = 0;
+        }
+
+        if (now >= accumNextMs && accumSamples < ACCUM_MAX_SAMPLES) {
+            //? if >=1.21.11 {
+            /*ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), PhotoCapture::accumulateFrame);
+            *///?} else {
+            try {
+                accumulateFrame(ScreenshotRecorder.takeScreenshot(mc.getFramebuffer()));
+            } catch (Exception e) {
+                System.err.println("[Snapmatica] Long-exposure sample failed: " + e.getMessage());
+            }
+            //?}
+            accumNextMs = now + accumIntervalMs;
+        }
+
+        if (now >= accumEndMs || accumSamples >= ACCUM_MAX_SAMPLES) finalizeAccumulation(mc);
+    }
+
+    /** Adds one framebuffer sample to the running per-channel sums, and closes {@code frame}. */
+    private static void accumulateFrame(NativeImage frame) {
+        if (frame == null) return;
+        try {
+            int w = frame.getWidth(), h = frame.getHeight();
+            if (accumR == null) {
+                accumW = w; accumH = h;
+                accumR = new float[w * h];
+                accumG = new float[w * h];
+                accumB = new float[w * h];
+            }
+            // A resize mid-exposure changes the buffer dimensions; drop the odd frame rather
+            // than corrupt the sums.
+            if (w != accumW || h != accumH) return;
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int c   = getPixelAbgr(frame, x, y);
+                    int idx = y * w + x;
+                    accumR[idx] +=  c        & 0xFF;
+                    accumG[idx] += (c >>> 8) & 0xFF;
+                    accumB[idx] += (c >>> 16) & 0xFF;
+                }
+            }
+            accumSamples++;
+        } finally {
+            frame.close();
+        }
+    }
+
+    /** Averages the exposure and pushes it through the normal crop / effects / save path. */
+    private static void finalizeAccumulation(MinecraftClient mc) {
+        int w = accumW, h = accumH, n = accumSamples;
+        float[] r = accumR, g = accumG, b = accumB;
+        float[] depth = accumDepth;
+        int dFbW = accumDepthFbW, dFbH = accumDepthFbH;
+        resetAccumulation();
+
+        if (n == 0 || r == null) {
+            System.err.println("[Snapmatica] Long exposure: no frames accumulated, discarding");
+            return;
+        }
+
+        NativeImage averaged = new NativeImage(w, h, false);
+        float inv = 1.0f / n;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int idx = y * w + x;
+                int rr = Math.min(255, (int) (r[idx] * inv + 0.5f));
+                int gg = Math.min(255, (int) (g[idx] * inv + 0.5f));
+                int bb = Math.min(255, (int) (b[idx] * inv + 0.5f));
+                setPixelAbgr(averaged, x, y, 0xFF000000 | (bb << 16) | (gg << 8) | rr);
+            }
+        }
+        processScreenshot(mc, averaged, depth, dFbW, dFbH);
+    }
+
+    private static void resetAccumulation() {
+        accumArmed   = false;
+        accumEndMs   = 0L;
+        accumSamples = 0;
+        accumR = null; accumG = null; accumB = null;
+        accumDepth = null;
+        accumDepthFbW = 0; accumDepthFbH = 0;
+    }
+
+    /**
+     * The photo's frame: the largest centred rectangle of the current aspect that fits.
+     * Returned as {x, y, w, h}.
+     *
+     * <p>The single definition of what the camera sees, used both to crop the capture and to
+     * lay out the viewfinder. They used to compute it separately, and disagreed: the viewfinder
+     * drew a box 86% of the screen height while the capture kept the FULL height, so roughly
+     * 16% more scene ended up in the photo than was ever framed. Beyond breaking
+     * what-you-see-is-what-you-get, it made every focal length read about a stop longer than it
+     * was — a 24 mm framed like a 35 mm, because the box was showing 46 degrees of a 53 degree
+     * field.
+     */
+    public static int[] frameRect(int w, int h, boolean portrait) {
+        float target = portrait ? 2f / 3f : 3f / 2f;
+        int fw, fh;
+        if ((float) w / h > target) { fh = h; fw = Math.round(h * target); }
+        else                        { fw = w; fh = Math.round(w / target); }
+        return new int[]{ (w - fw) / 2, (h - fh) / 2, fw, fh };
+    }
+
     private static void processScreenshot(MinecraftClient mc, NativeImage raw, float[] linearDepth, int fbW, int fbH) {
         // ── Crop to 3:2 (landscape) or 2:3 (portrait) aspect ratio ──────────────
         int w = raw.getWidth();
         int h = raw.getHeight();
-        float targetAspect = SnapmaticaClient.portraitOrientation ? 2f / 3f : 3f / 2f;
-        int cropW, cropH;
-        if ((float) w / h > targetAspect) {
-            cropH = h;
-            cropW = Math.round(h * targetAspect);
-        } else {
-            cropW = w;
-            cropH = Math.round(w / targetAspect);
-        }
-        int offX = (w - cropW) / 2;
-        int offY = (h - cropH) / 2;
+        int[] fr = frameRect(w, h, SnapmaticaClient.portraitOrientation);
+        int offX = fr[0], offY = fr[1], cropW = fr[2], cropH = fr[3];
         NativeImage cropped = new NativeImage(cropW, cropH, false);
         for (int y = 0; y < cropH; y++) {
             for (int x = 0; x < cropW; x++) {
@@ -412,7 +585,7 @@ public final class PhotoCapture {
 
         // Pass 2: Depth-of-field blur
         NativeImage pass2;
-        if (linearDepth != null && SnapmaticaClient.aperture < 8.0f) {
+        if (linearDepth != null) {
             pass2 = applyDepthOfField(dst, SnapmaticaClient.aperture, focusDist,
                                        linearDepth, w, h, fbW, fbH);
             dst.close();
@@ -426,7 +599,13 @@ public final class PhotoCapture {
                                                   float aperture, float focusDist,
                                                   float[] linearDepth,
                                                   int iw, int ih, int fbW, int fbH) {
-        float maxBlurPx = Math.min(32.0f, 80.0f / (aperture * aperture));
+        // Ceiling for the CPU photo path. The old 80 / N^2 collapsed to 1.25 px at f/8 and
+        // essentially nothing beyond, which is where the "no bokeh past f/8" behaviour came
+        // from on this path. The per-pixel CoC below is already physical; this only bounds the
+        // kernel, so bound it by what the optics can produce rather than by the f-number.
+        float maxBlurPx = Math.min(32.0f,
+                EvfBlurRenderer.maxCocPx(focusDist, aperture, SnapmaticaClient.focalLengthMm,
+                        EvfBlurRenderer.DOF_SCALE_STILL, ih / 24.0f));
         int   maxR      = Math.max(1, (int) Math.ceil(maxBlurPx));
 
         // Match the depth-buffer crop to the output image aspect (iw/ih), so the same

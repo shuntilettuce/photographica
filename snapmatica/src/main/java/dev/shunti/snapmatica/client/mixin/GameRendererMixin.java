@@ -44,9 +44,10 @@ public class GameRendererMixin {
         }
         int f = SnapmaticaClient.focalLengthMm;
         if (f <= 0) return;
-        // Vertical sensor half-height: 12mm (24mm tall) landscape, 18mm (36mm tall) portrait
-        double halfSensorMm = SnapmaticaClient.portraitOrientation ? 18.0 : 12.0;
-        cir.setReturnValue((float) Math.toDegrees(2.0 * Math.atan(halfSensorMm / f)));
+        MinecraftClient mcw = MinecraftClient.getInstance();
+        double aspect = (double) mcw.getWindow().getFramebufferWidth()
+                / Math.max(1, mcw.getWindow().getFramebufferHeight());
+        cir.setReturnValue((float) snapmatica$frameFov(f, aspect));
     }
     *///?} else {
     @Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D",
@@ -72,9 +73,10 @@ public class GameRendererMixin {
         // portrait, the short (24mm) side in landscape, so the focal-length number stays
         // physically accurate in both orientations.
         //   landscape: 2 * atan(12 / f)   portrait: 2 * atan(18 / f)
-        double halfSensorMm = SnapmaticaClient.portraitOrientation ? 18.0 : 12.0;
-        double vFovDegrees = Math.toDegrees(2.0 * Math.atan(halfSensorMm / f));
-        cir.setReturnValue(vFovDegrees);
+        MinecraftClient mcw = MinecraftClient.getInstance();
+        double aspect = (double) mcw.getWindow().getFramebufferWidth()
+                / Math.max(1, mcw.getWindow().getFramebufferHeight());
+        cir.setReturnValue(snapmatica$frameFov(f, aspect));
     }
     //?}
 
@@ -124,7 +126,7 @@ public class GameRendererMixin {
         // capturing, so the screenshot includes GPU bokeh on all versions.
         // Pass forCapture=true when a screenshot is about to be taken so the blur covers
         // the full photo crop area (not just the scissored viewfinder frame).
-        dev.shunti.snapmatica.client.EvfBlurRenderer.applyScheduledBlur(wasCapturePending);
+        dev.shunti.snapmatica.client.EvfBlurRenderer.applyBlur(wasCapturePending);
         PhotoCapture.captureIfPending();
         VideoRecorder.captureFrameIfRecording();
         //? if <1.21.11 {
@@ -136,4 +138,27 @@ public class GameRendererMixin {
         }
         //?}
     }
+
+    /**
+     * Vertical FOV that makes the PHOTO FRAME span the focal length's true field.
+     *
+     * <p>Minecraft's fov is the vertical angle of the whole window, but the photo is the largest
+     * centred 3:2 (or 2:3) rectangle inside it — see PhotoCapture.frameRect. Those coincide only
+     * when the window is at least as wide as the frame. On anything narrower the frame is limited
+     * by WIDTH, its height falls short of the window's, and anchoring on the window's vertical
+     * angle quietly narrows the picture: a 24 mm delivered about 45 degrees instead of 53.
+     *
+     * <p>So anchor on whichever edge actually constrains the frame — height when the window is
+     * wide enough, width otherwise — and let the other follow from the 3:2 shape.
+     */
+    @Unique
+    private static double snapmatica$frameFov(int focalMm, double windowAspect) {
+        boolean portrait = SnapmaticaClient.portraitOrientation;
+        double halfH = portrait ? 18.0 : 12.0;   // 36x24 frame, half-extents in mm
+        double halfW = portrait ? 12.0 : 18.0;
+        double frameAspect = halfW / halfH;
+        double vHalfMm = (windowAspect >= frameAspect) ? halfH : halfW / windowAspect;
+        return Math.toDegrees(2.0 * Math.atan(vHalfMm / focalMm));
+    }
+
 }

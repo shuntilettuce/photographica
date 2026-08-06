@@ -33,7 +33,7 @@ public final class SnapmaticaConfig {
         try (InputStream in = Files.newInputStream(FILE)) {
             p.load(in);
         } catch (IOException e) {
-            System.err.println("[Snapmatica] 設定の読み込みに失敗: " + e);
+            System.err.println("[Snapmatica] Failed to load settings: " + e);
             return;
         }
         SnapmaticaClient.viewfinderSneakEnabled = getBool(p, "viewfinderSneakEnabled", SnapmaticaClient.viewfinderSneakEnabled);
@@ -46,7 +46,13 @@ public final class SnapmaticaConfig {
         SnapmaticaClient.focalLengthMm          = getInt (p, "focalLengthMm",          SnapmaticaClient.focalLengthMm);
         SnapmaticaClient.lensType               = getInt (p, "lensType",               SnapmaticaClient.lensType);
         SnapmaticaClient.aperture               = getFloat(p, "aperture",              SnapmaticaClient.aperture);
+        // The blade opening is the physical state; the f-number is only its ratio to the
+        // focal length. Restore it explicitly, or reloading would leave the two inconsistent
+        // and the first zoom would jump the aperture to whatever the default diameter implied.
+        SnapmaticaClient.apertureDiameterMm     = getFloat(p, "apertureDiameterMm",    SnapmaticaClient.apertureDiameterMm);
         SnapmaticaClient.focusDistance          = getFloat(p, "focusDistance",         SnapmaticaClient.focusDistance);
+        // The ring starts wherever the lens was left, so nothing racks on world join.
+        SnapmaticaClient.focusTarget            = SnapmaticaClient.focusDistance;
     }
 
     /** Write current settings to disk. Cheap enough to call on each change. */
@@ -62,6 +68,7 @@ public final class SnapmaticaConfig {
         p.setProperty("focalLengthMm",          Integer.toString(SnapmaticaClient.focalLengthMm));
         p.setProperty("lensType",               Integer.toString(SnapmaticaClient.lensType));
         p.setProperty("aperture",               Float.toString(SnapmaticaClient.aperture));
+        p.setProperty("apertureDiameterMm",     Float.toString(SnapmaticaClient.apertureDiameterMm));
         p.setProperty("focusDistance",          Float.toString(SnapmaticaClient.focusDistance));
         try {
             Files.createDirectories(FILE.getParent());
@@ -69,7 +76,7 @@ public final class SnapmaticaConfig {
                 p.store(out, "Snapmatica client settings");
             }
         } catch (IOException e) {
-            System.err.println("[Snapmatica] 設定の保存に失敗: " + e);
+            System.err.println("[Snapmatica] Failed to save settings: " + e);
         }
     }
 

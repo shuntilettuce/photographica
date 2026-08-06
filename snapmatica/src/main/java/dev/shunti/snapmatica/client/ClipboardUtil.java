@@ -62,7 +62,7 @@ public final class ClipboardUtil {
                     "$img.Dispose()");
             } else {
                 BufferedImage src = ImageIO.read(pngFile);
-                if (src == null) throw new IllegalStateException("画像デコード失敗: " + pngFile.getName());
+                if (src == null) throw new IllegalStateException("Image decode failed: " + pngFile.getName());
                 // Flatten alpha: AWT's imageFlavor with alpha causes CF_DIB corruption on Windows.
                 BufferedImage rgb = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_RGB);
                 Graphics2D g = rgb.createGraphics();
@@ -70,7 +70,7 @@ public final class ClipboardUtil {
                 g.dispose();
                 clipboard().setContents(new ImageTransferable(rgb), null);
             }
-        }, "📋 写真をクリップボードにコピーしました");
+        }, Text.translatable("snapmatica.clip.photo"));
     }
 
     /** Copy a saved file (e.g. an MP4) to the clipboard as a file reference (async). */
@@ -86,22 +86,22 @@ public final class ClipboardUtil {
             } else {
                 clipboard().setContents(new FileTransferable(List.of(file)), null);
             }
-        }, "📋 動画をクリップボードにコピーしました");
+        }, Text.translatable("snapmatica.clip.video"));
     }
 
     // ── internals ─────────────────────────────────────────────────────────────────
 
     private interface ClipboardTask { void run() throws Exception; }
 
-    private static void run(String name, ClipboardTask task, String successMsg) {
+    private static void run(String name, ClipboardTask task, Text successMsg) {
         Thread t = new Thread(() -> {
             try {
                 task.run();
                 actionBar(successMsg);
             } catch (Throwable e) {
-                System.err.println("[Snapmatica] クリップボードへのコピーに失敗:");
+                System.err.println("[Snapmatica] Clipboard copy failed:");
                 e.printStackTrace();
-                actionBar("⚠ クリップボードへのコピーに失敗 (" + e.getClass().getSimpleName() + ")");
+                actionBar(Text.translatable("snapmatica.clip.failed", e.getClass().getSimpleName()));
             }
         }, name);
         t.setDaemon(true);
@@ -123,10 +123,10 @@ public final class ClipboardUtil {
         if (exit != 0) throw new IOException("PowerShell exit " + exit + (out.isEmpty() ? "" : ": " + out));
     }
 
-    private static void actionBar(String msg) {
+    private static void actionBar(Text msg) {
         MinecraftClient mc = MinecraftClient.getInstance();
         mc.execute(() -> {
-            if (mc.player != null) mc.player.sendMessage(Text.literal(msg), true);
+            if (mc.player != null) mc.player.sendMessage(msg, true);
         });
     }
 

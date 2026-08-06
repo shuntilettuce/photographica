@@ -29,6 +29,17 @@ public final class ViewfinderOverlay {
         long now = System.currentTimeMillis();
         int sw = ctx.getScaledWindowWidth(), sh = ctx.getScaledWindowHeight();
 
+        // Exactly the region the capture will crop to — see PhotoCapture.frameRect. The frame
+        // is deliberately not inset any further: an inset box would be showing less than the
+        // photo records, which is both a lie about the framing and a lie about the focal
+        // length, since the angle you judge is the angle the box spans.
+        int[] fr = PhotoCapture.frameRect(sw, sh, SnapmaticaClient.portraitOrientation);
+        int fx = fr[0], fy = fr[1], fw = fr[2], fh = fr[3];
+        int fx2 = fx + fw, fy2 = fy + fh;
+
+        // The depth-of-field pass is not driven from here at all — EvfBlurRenderer.applyBlur()
+        // decides for itself, straight after renderWorld, so its optics match the frame they
+        // are applied to. Queuing it from the HUD put it one frame behind the field of view.
         if (now < PhotoCapture.mirrorEndMs) { ctx.fill(0,0,sw,sh,0xFF000000); return; }
         if (now < PhotoCapture.flashEndMs) {
             long d = PhotoCapture.flashEndMs - PhotoCapture.mirrorEndMs;
@@ -37,29 +48,6 @@ public final class ViewfinderOverlay {
         }
         if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isSneaking()) return;
         if (mc.currentScreen != null) return;
-
-        float aspect = SnapmaticaClient.portraitOrientation ? 2f/3f : 3f/2f;
-        int fh = (int)(sh*0.86f), fw = (int)(fh*aspect);
-        if (fw > sw*0.94f) { fw = (int)(sw*0.94f); fh = (int)(fw/aspect); }
-        int fx = (sw-fw)/2, fy = (sh-fh)/2, fx2 = fx+fw, fy2 = fy+fh;
-
-        // EVF real-time DoF blur (GPU shader, depth-aware) — rendered before bezels
-        // so it only affects the scene inside the viewfinder frame.
-        boolean hasLensForBlur = SnapmaticaClient.lensType != 0;
-        if (hasLensForBlur && SnapmaticaClient.aperture < 8.0f) {
-            // Schedule for applyScheduledBlur() in GameRendererMixin (fires before HUD each
-            // frame), so both the live EVF and captured photos receive GPU bokeh.
-            // GPU autofocus (AfMode) reads the focus distance from the reticle's own depth
-            // instead of the CPU's world raycast. It is wired up but left OFF: tested against
-            // Voxy, focus still only reached vanilla-loaded chunks, which settles the open
-            // question — Voxy's LOD terrain leaves no usable depth in the vanilla depth
-            // buffer, so no amount of sampling it will focus on the distance. Flip to true to
-            // re-test on another LOD mod; the shader path is intact.
-            boolean gpuAf = false;
-            EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2,
-                    AutoFocus.shaderFocusDistance(), SnapmaticaClient.aperture,
-                    SnapmaticaClient.focalLengthMm, gpuAf);
-        }
 
         // Bezels
         ctx.fill(0,0,sw,fy,0xB8000000); ctx.fill(0,fy2,sw,sh,0xB8000000);
@@ -91,7 +79,8 @@ public final class ViewfinderOverlay {
         // Info text
         TextRenderer tr=mc.textRenderer;
         boolean hasLens=SnapmaticaClient.lensType!=0;
-        String fp=hasLens?(SnapmaticaClient.focalLengthMm+"mm"):"No Lens";
+        String fp=hasLens?(SnapmaticaClient.focalLengthMm+"mm")
+                :Text.translatable("snapmatica.vf.no_lens").getString();
         int em = SnapmaticaClient.exposureMode;
         int si = clampIdx((em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx, SHUTTERS.length);
         float dispAp = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
@@ -118,7 +107,7 @@ public final class ViewfinderOverlay {
         if (hasLens) {
             double safe=1.0/SnapmaticaClient.focalLengthMm;
             if (SnapmaticaClient.SHUTTER_SECONDS[si]>safe*1.5)
-                ctx.drawTextWithShadow(tr,Text.literal("WARN Blur"),
+                ctx.drawTextWithShadow(tr,Text.translatable("snapmatica.vf.warn_blur"),
                         fx+6,fy+4+tr.fontHeight+2,0xFFFF5555);
         }
 
@@ -218,7 +207,7 @@ public final class ViewfinderOverlay {
     // ── Focus reticle ───────────────────────────────────────────────────────────
 
     private static int focusReticleColor() {
-        if (SnapmaticaClient.lensType == 0 || SnapmaticaClient.aperture >= 8f)
+        if (SnapmaticaClient.lensType == 0)
             return 0xFFFFFFFF;
         // Infinity focus — the same predicate the label and the DoF shader use. Testing
         // focusDistance directly (as this did) never fires in AF: AutoFocus clamps the

@@ -19,6 +19,12 @@ uniform float FocalLenMm;        // lens focal length in mm
 uniform float Aperture;          // f-number (N)
 uniform float PxPerMm;           // framebuffer pixels per mm of sensor height
 uniform float DofScale;          // mm of subject distance per Minecraft block
+uniform float DistortK;          // radial distortion: >0 barrel, <0 pincushion, 0 off
+uniform float Aspect;            // fbW/fbH, so the distortion stays radially round
+uniform int   DoGather;          // 0 = no defocus to compute; pass the scene straight through
+uniform vec2  MotionRotPx;       // screen shift from camera ROTATION over one sample, in px
+uniform vec3  MotionVelCam;      // camera TRANSLATION over one sample, camera space, in blocks
+uniform float FocalPx;           // focal length in pixels, for projecting that translation
 
 in vec2 texCoord;
 out vec4 fragColor;
@@ -54,6 +60,28 @@ float linearDepth(float d) {
 const float INF_SHARP_BEGIN = 48.0;   // blocks — blur starts fading out here
 const float INF_SHARP_FULL  = 128.0;  // blocks — dead sharp beyond here
 
+// How far the FOCUS has to be for the far-stop behaviour to be fully in effect.
+//
+// The infinity-only rules used to switch on the instant the focus reached its sentinel value,
+// which made racking out to the far stop end in a visible jolt: the sharpening ramp appeared
+// and the haze floor vanished between one frame and the next, however smoothly the focus
+// itself had travelled. Blending them in across the last part of the range makes the arrival
+// continuous. The thin-lens term needs no such treatment — its finite form already converges
+// on the infinity form as the focus distance grows.
+const float INF_BLEND_BEGIN = 300.0;   // blocks
+const float INF_BLEND_FULL  = 3000.0;  // blocks
+
+/** 0 while focused on anything near, 1 once the lens is effectively at its far stop. */
+float infinityBlend(float focusBlocks) {
+    return smoothstep(INF_BLEND_BEGIN, INF_BLEND_FULL, focusBlocks);
+}
+
+// Bokeh character. RIM > 0 brightens the edge of the disc (under-corrected spherical
+// aberration, "nervous"); 0 is a flat disc; negative brightens the centre instead.
+const float BOKEH_RIM = 0.55;
+// Strength of the cat's-eye clipping at the frame corners. 0 = perfectly round everywhere.
+const float CATS_EYE  = 0.65;
+
 /**
  * The focus distance every function below works from — {@code FocusDist}, or the depth under
  * the reticle when AfMode is on. Resolved once per fragment in main(), never read directly.
@@ -88,8 +116,91 @@ float resolveFocus() {
  * straight back. At infinity focus the far field IS the focal plane, so the floor is off.
  */
 float distantHazeFloor(float depthM) {
-    if (gFocus >= 99999.0) return 0.0;
-    return smoothstep(200.0, 600.0, depthM) * 5.0;
+    // Faded out as the focus approaches the far stop rather than switched off at it.
+    return (1.0 - infinityBlend(gFocus)) * smoothstep(200.0, 600.0, depthM) * 5.0;
+}
+
+/**
+ * Diameter of the Airy disc, in mm — the blur a perfect lens cannot avoid.
+ *
+ * <p>Stopping down trades defocus for diffraction. Light passing a small opening spreads, by
+ * 2.44 * lambda * N for the first dark ring, so a narrow aperture softens the WHOLE frame,
+ * in focus or not. It is why no real lens is at its sharpest wide open OR fully stopped down;
+ * the peak sits a few stops in, and past roughly f/11 on this sensor size the image visibly
+ * degrades. Without it, f/22 was simply the sharpest setting available, which is not a
+ * trade-off any photographer would recognise.
+ *
+ * <p>550 nm, the middle of the visible band.
+ */
+float airyDiscMM() {
+    return 2.44 * 0.00055 * Aperture;
+}
+
+/**
+ * Radial lens distortion — the reason a 14 mm looks like a 14 mm.
+ *
+ * <p>A rectilinear lens cannot hold straight lines straight across a very wide field, so wide
+ * angles bow them outward (barrel) and long lenses pinch them inward (pincushion, far weaker).
+ * It is the most recognisable signature an ultra-wide has, and without it every focal length
+ * differed only in how much of the scene fitted in the frame.
+ *
+ * <p>Inverse mapping: given the pixel being written, this returns where to read from. The
+ * (1 + K) divisor renormalises so the frame corner maps to the frame corner — otherwise a
+ * barrel would read from beyond the source and leave the corners black, exactly the crop a
+ * real body hides by making the sensor smaller than the image circle.
+ *
+ * <p>Aspect correction keeps the field round: without it the distortion would be an ellipse
+ * stretched with the window.
+ */
+/**
+ * Screen-space smear for one sample of a long exposure, in pixels.
+ *
+ * <p>A frame is an instant, but the sample it provides has to stand for the whole slice of time
+ * until the next one. The accumulator can take at most one sample per rendered frame, so a
+ * 1/15 s exposure at 60 fps is built from four instants — and four instants averaged is a
+ * multiple exposure, not motion blur. Worse, the number of them depends on frame rate, so the
+ * same pan looks different on a different machine.
+ *
+ * <p>Smearing each sample across the gap it represents fills the space between the ghosts. Two
+ * contributions: turning the camera moves the whole frame uniformly, while moving it sideways
+ * moves near things faster than far ones — hence the division by depth, which is the parallax
+ * that makes translation read as speed rather than as a pan.
+ */
+vec2 motionSmearPx(vec2 uv, float depthM) {
+    vec2 m = MotionRotPx;
+    if (dot(MotionVelCam, MotionVelCam) > 1e-9) {
+        // Pixel offset from the frame centre, needed for the forward-motion term: moving
+        // ahead pushes everything radially outward, and the rate grows with distance from
+        // the centre of expansion.
+        vec2 p = (uv - 0.5) / PixelSize;
+        float z = max(depthM, 0.25);
+        m += (FocalPx * MotionVelCam.xy + p * MotionVelCam.z) / z;
+    }
+    return m;
+}
+
+vec2 lensDistort(vec2 uv) {
+    if (abs(DistortK) < 1e-4) return uv;
+    vec2 p = (uv - 0.5) * 2.0;          // -1..1
+    p.x *= Aspect;                       // work in a square space
+    float r2 = dot(p, p);
+    // Normalised so r = 1 is the frame corner, whatever the aspect.
+    float corner = 1.0 + Aspect * Aspect;
+    float k = DistortK / corner;         // scale K into this r2 range
+    p *= (1.0 + k * r2) / (1.0 + k * corner);
+    p.x /= Aspect;
+    return p * 0.5 + 0.5;
+}
+
+/** Averages along the smear vector, centred, so the sample spreads both ways in time. */
+vec3 smearSample(vec2 uv, vec2 smearPx) {
+    const int TAPS = 7;
+    vec3 sum = vec3(0.0);
+    for (int i = 0; i < TAPS; i++) {
+        float t = (float(i) / float(TAPS - 1)) - 0.5;   // -0.5 .. +0.5
+        sum += texture(InSampler, uv + smearPx * t * PixelSize).rgb;
+    }
+    return sum / float(TAPS);
 }
 
 // Physically-based thin-lens circle of confusion, in framebuffer pixels.
@@ -99,12 +210,20 @@ float computeCoc(float depthM) {
     float cocMM;
     if (gFocus >= 99999.0) {
         cocMM = (fmm * fmm) / (Aperture * depthM * DofScale);
-        cocMM *= 1.0 - smoothstep(INF_SHARP_BEGIN, INF_SHARP_FULL, depthM);
     } else {
         float s1mm = gFocus * DofScale;
         float denom = Aperture * max(s1mm - fmm, 1.0);
         cocMM = (fmm * fmm) * abs(depthM - gFocus) / (depthM * denom);
     }
+    // Distant-subject sharpening, faded in with the focus rather than tied to the sentinel.
+    cocMM *= 1.0 - infinityBlend(gFocus)
+                 * smoothstep(INF_SHARP_BEGIN, INF_SHARP_FULL, depthM);
+    // Defocus and diffraction add in quadrature — they are independent blurs, so the spot is
+    // the root of the sum of squares rather than of the sum. At a wide aperture the defocus
+    // term swamps the other; stopped right down, diffraction is all that is left and sets a
+    // floor nothing can be sharper than.
+    float airy = airyDiscMM();
+    cocMM = sqrt(cocMM * cocMM + airy * airy);
     return clamp(cocMM * PxPerMm, 0.0, MaxBlurPx);
 }
 
@@ -231,7 +350,16 @@ void main() {
 
     // ── Copy / denoise + composite the near-field ────────────────────────────────────
     if (BlurDir.x < 0.5) {
-        float d = linearDepth(texture(DepthSampler, texCoord).r);
+        // Distortion is applied HERE, as the last thing that touches the image, and by moving
+        // where this pass READS from. The gather before it works in undistorted space, which is
+        // right: the depth buffer is undistorted, so computing defocus against a warped colour
+        // would mismatch the two.
+        //
+        // Every read in this block goes through srcUV — colour, depth and the denoise taps
+        // alike. Distorting only some of them would tear the image along the boundary between
+        // the paths, since the sharp and blurred branches would be sampling different geometry.
+        vec2 srcUV = lensDistort(texCoord);
+        float d = linearDepth(texture(DepthSampler, srcUV).r);
         float c = max(computeCoc(d) - 1.5, 0.0);
         c = max(c, distantHazeFloor(d));
         float sc = c;
@@ -245,9 +373,19 @@ void main() {
         // unnatural boundary. Spreading is the near-field layer's job, and it composites with
         // a real coverage alpha further down; doing it here as well was double-dipping.
         bool soften = (c >= 2.0);
+        // Motion smear applies whether or not the pixel is defocused: a subject held sharp by
+        // depth of field still moved during the slice this sample stands for.
+        vec2  smear    = motionSmearPx(srcUV, d);
+        float smearLen = length(smear);
+
         vec3 dofCol;
-        if (!soften) {
-            dofCol = texture(InSampler, texCoord).rgb;
+        if (smearLen > 0.75) {
+            // Smearing IS a denoise — it averages along a line, which is what the residual
+            // grain needed anyway. Running the Gaussian on top would cost seven times the taps
+            // to redo work the motion has already done.
+            dofCol = smearSample(srcUV, smear);
+        } else if (!soften) {
+            dofCol = texture(InSampler, srcUV).rgb;
         } else {
             // Gaussian-weighted, not a flat box. An unweighted square kernel gives every
             // sample in a 21x21 block the same say, so a bright or dark neighbour lands at
@@ -264,10 +402,14 @@ void main() {
             // Sizing this off CoC alone smoothed every defocused pixel equally, including the
             // ones the gather had resolved perfectly well — which is bokeh thrown away for
             // nothing. Where confidence is high this collapses to no denoise at all.
-            float starved = 1.0 - texture(InSampler, texCoord).a;
+            float starved = 1.0 - texture(InSampler, srcUV).a;
             float rad   = clamp(sc * 0.16, 1.0, 8.0) * starved;
             float sigma = max(rad * 0.5, 0.5);
-            if (rad < 0.75) { fragColor = vec4(texture(InSampler, texCoord).rgb, 1.0); return; }
+            if (rad < 0.75) {
+                fragColor = vec4(smearLen > 0.75 ? smearSample(srcUV, smear)
+                                                 : texture(InSampler, srcUV).rgb, 1.0);
+                return;
+            }
             int   irad  = int(rad);
             vec3  sum   = vec3(0.0);
             float wsum  = 0.0;
@@ -275,7 +417,7 @@ void main() {
                 for (int dx = -irad; dx <= irad; dx++) {
                     vec2  o = vec2(float(dx), float(dy));
                     float w = exp(-dot(o, o) / (2.0 * sigma * sigma));
-                    sum  += texture(InSampler, texCoord + o * PixelSize).rgb * w;
+                    sum  += texture(InSampler, srcUV + o * PixelSize).rgb * w;
                     wsum += w;
                 }
             dofCol = sum / wsum;
@@ -301,8 +443,8 @@ void main() {
             return;
         }
 
-        vec4  fgv = texture(NearSampler, texCoord);
-        vec4  bgv = texture(BgSampler,  texCoord);
+        vec4  fgv = texture(NearSampler, srcUV);
+        vec4  bgv = texture(BgSampler,  srcUV);
         float fga = clamp(fgv.a, 0.0, 1.0);
         float bga = clamp(bgv.a, 0.0, 1.0);
 
@@ -326,6 +468,11 @@ void main() {
 
     // ── Gather pass (3-layer disc bokeh): main → aux ─────────────────────────────────
     vec4  centre = texture(InSampler, texCoord);
+    // Nothing to defocus — but the copy pass still has to run, because it is what applies the
+    // distortion. Hand it the scene unchanged rather than walk 96 depth taps per pixel to
+    // rediscover that every circle of confusion is sub-pixel.
+    if (DoGather == 0) { fragColor = vec4(centre.rgb, 1.0); return; }
+
     float depthM = linearDepth(texture(DepthSampler, texCoord).r);
     float cocP   = max(computeCoc(depthM) - 1.5, 0.0);
     cocP = max(cocP, distantHazeFloor(depthM));
@@ -422,9 +569,32 @@ void main() {
         float edge = smoothstep(sCoc + 0.5, sCoc - 0.5, r);
         if (edge <= 0.0) continue;
 
+        // Brightness across the disc, not a flat fill.
+        //
+        // A real bokeh ball is not evenly lit. Residual spherical aberration piles light up at
+        // one end of the disc: uncorrected, the rim goes bright and the centre hollow (the
+        // "nervous", outlined bokeh of a cheap lens); over-corrected, the centre is bright and
+        // the edge falls away softly. Which one a lens does is most of what people mean by the
+        // character of its bokeh, and a flat disc reads as neither — just a smear of the mean.
+        //
+        // Weighted toward the rim, mildly, and lifted at the very edge so the disc still has a
+        // defined boundary. In a blocky scene this gradation is what the shape reads as, far
+        // more than the polygon the blades would cut.
+        float rn   = clamp(r / max(sCoc, 1e-3), 0.0, 1.0);
+        float prof = 1.0 + BOKEH_RIM * rn * rn;
+        // Mechanical vignetting — "cat's eye". Off-axis, the disc is no longer a full circle:
+        // the barrel clips it into a lemon, progressively as it approaches the frame edge.
+        // Clipping the sample on the side facing away from centre reproduces it.
+        vec2  toEdge = (texCoord - vec2(0.5)) * 2.0;
+        float offAxis = clamp(length(toEdge), 0.0, 1.0);
+        vec2  radialDir = (offAxis > 1e-4) ? toEdge / max(length(toEdge), 1e-4) : vec2(0.0);
+        vec2  sampDir   = vec2(cos(ang), sin(ang));
+        float outward   = dot(sampDir, radialDir);          // +1 = away from frame centre
+        float catsEye   = 1.0 - CATS_EYE * offAxis * offAxis * max(outward, 0.0) * rn;
+
         contrib   += edge;
         vec3  sCol = texture(InSampler, sc).rgb;
-        float w    = areaPerSample / max(sCoc * sCoc, 1.0) * edge;
+        float w    = areaPerSample / max(sCoc * sCoc, 1.0) * edge * prof * max(catsEye, 0.0);
         if (sDepthM < gFocus) { nearC += sCol * w; nearA += w; }
         else                     { farC  += sCol * w; farA  += w; }
     }

@@ -40,6 +40,12 @@ public final class AutoFocus {
     private static final float PULL_SNAP_EPS = 0.01f;  // lock onto target below this log-distance
     private static final float FAR_ANCHOR    = 1000.0f; // refocus from ∞ starts here (raycast range)
 
+    // Manual-focus rack, in dioptres per client tick (20 Hz). RATE is the fraction of the
+    // remaining travel covered each tick; MAX caps how fast the barrel can physically turn, so
+    // a jump from close focus to infinity takes a visible moment instead of teleporting.
+    private static final float RACK_RATE        = 0.28f;
+    private static final float RACK_MAX_DIOPTRE = 0.35f;
+
     /**
      * True when the camera is optically at infinity — either an explicit MF ∞ stop, or AF/MOB
      * having resolved to sky / no subject.
@@ -111,7 +117,13 @@ public final class AutoFocus {
         boolean active = (SnapmaticaClient.viewfinderSneakEnabled && mc.player.isSneaking())
                 || VideoRecorder.isRecording();
         if (!active) return;
-        if (SnapmaticaClient.focusMode == FOCUS_MF) return;
+
+        // Manual focus racks too. The ring sets the destination; the lens travels there.
+        if (SnapmaticaClient.focusMode == FOCUS_MF) {
+            SnapmaticaClient.focusDistance =
+                    rackDioptric(SnapmaticaClient.focusDistance, SnapmaticaClient.focusTarget);
+            return;
+        }
 
         float targetDepth;
         if (SnapmaticaClient.focusMode == FOCUS_AF) {
@@ -127,6 +139,41 @@ public final class AutoFocus {
         float target = snapFocus(targetDepth);
         afAtInfinity = (target >= SnapmaticaClient.FOCUS_INFINITY);
         SnapmaticaClient.focusDistance = pullFocus(SnapmaticaClient.focusDistance, target);
+    }
+
+    /** Distance to refractive power. Infinity is simply zero, which is why this space works. */
+    private static float toDiopters(float d) {
+        return (d >= SnapmaticaClient.FOCUS_INFINITY) ? 0f : 1f / Math.max(d, 0.01f);
+    }
+
+    private static float fromDiopters(float dio) {
+        // Below this the remaining travel is a few metres out of infinity; call it arrived,
+        // so the readout and the shader's infinity branch actually engage.
+        return (dio <= 1f / SnapmaticaClient.FOCUS_INFINITY * 10f) ? SnapmaticaClient.FOCUS_INFINITY
+                                                                   : 1f / dio;
+    }
+
+    /**
+     * Moves the focus one tick toward its target, interpolating in DIOPTRES rather than in
+     * distance or log-distance.
+     *
+     * <p>Distance runs to infinity and log-distance runs to negative infinity, so neither can
+     * represent the far stop — which is why the old manual path just assigned it and the image
+     * snapped. Refractive power puts infinity at exactly 0, a finite value the rack can travel
+     * to like any other, and it is roughly how a helicoid moves anyway: the far half of the
+     * scale is a sliver of the ring's travel.
+     */
+    private static float rackDioptric(float current, float target) {
+        float cur = toDiopters(current);
+        float tar = toDiopters(target);
+        float diff = tar - cur;
+        // Full scale is FOCUS_MIN's power; a proportional epsilon lands cleanly at either stop.
+        if (Math.abs(diff) <= 1e-4f) return target;
+        float step = diff * RACK_RATE;
+        float ceil = RACK_MAX_DIOPTRE;
+        if (step >  ceil) step =  ceil;
+        if (step < -ceil) step = -ceil;
+        return fromDiopters(cur + step);
     }
 
     /** Eases the current focus distance one tick toward the target stop in log space. */
