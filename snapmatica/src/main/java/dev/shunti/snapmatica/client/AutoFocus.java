@@ -25,24 +25,19 @@ public final class AutoFocus {
     // cos(5°) — entities must be within this cone of the look direction
     private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
 
-    // True when AF/MOB resolved its target to the infinity sentinel (sky / no subject).
-    // The focus value itself only eases to FAR_ANCHOR (to avoid the foreground-blur
-    // flicker that snapping to ∞ caused), so this flag lets the viewfinder still label
-    // the distance "inf" instead of showing the far-anchor metres.
+    /**
+     * Whether autofocus most recently RESOLVED to sky / no subject. Records intent only —
+     * where the lens actually is comes from {@link #atInfinity()}, and the two differ for as
+     * long as the rack takes to travel.
+     */
     public static volatile boolean afAtInfinity = false;
 
-    // Focus-pull (rack) easing. AF does not snap instantly: focusDistance is eased
-    // toward the target in log space, so the lens "pulls" focus like a real motor.
-    // Per client tick (20 Hz): move a fraction of the remaining log-distance, capped
-    // so a big focus change racks over a visible ~0.6–1.0 s instead of jumping.
-    private static final float PULL_RATE     = 0.50f;  // fraction of remaining log-distance / tick
-    private static final float PULL_MAX_STEP = 0.22f;  // max log units / tick (caps rack speed)
-    private static final float PULL_SNAP_EPS = 0.01f;  // lock onto target below this log-distance
-    private static final float FAR_ANCHOR    = 1000.0f; // refocus from ∞ starts here (raycast range)
 
     // Manual-focus rack, in dioptres per client tick (20 Hz). RATE is the fraction of the
     // remaining travel covered each tick; MAX caps how fast the barrel can physically turn, so
     // a jump from close focus to infinity takes a visible moment instead of teleporting.
+    private static int prevFocusMode = -1;
+
     private static final float RACK_RATE        = 0.28f;
     private static final float RACK_MAX_DIOPTRE = 0.35f;
 
@@ -50,15 +45,17 @@ public final class AutoFocus {
      * True when the camera is optically at infinity — either an explicit MF ∞ stop, or AF/MOB
      * having resolved to sky / no subject.
      *
-     * <p>The viewfinder label and the DoF shader MUST agree on this, and they used to decide
-     * it independently: the HUD consulted {@link #afAtInfinity} and printed "inf", while the
-     * blur was handed the raw {@code focusDistance}, which {@link #pullFocus} had clamped to
-     * the finite {@link #FAR_ANCHOR}. So in AF mode the shader took its FINITE branch at
-     * 1000 blocks and went on blurring the horizon under an "inf" readout.
+     * <p>The viewfinder label, the reticle and the DoF shader all have to agree on this, and
+     * they once decided it independently — the HUD printing "inf" off the AF intent while the
+     * blur worked from a finite distance, so the horizon stayed soft under an "inf" readout.
      */
     public static boolean atInfinity() {
-        return SnapmaticaClient.focusDistance >= SnapmaticaClient.FOCUS_INFINITY
-                || (SnapmaticaClient.focusMode != FOCUS_MF && afAtInfinity);
+        // Where the LENS is, never where autofocus intends to go. Consulting the intent made
+        // the shader jump to the infinity sentinel the instant AF resolved to sky, while the
+        // focus itself was still setting off from five metres — so the picture snapped to
+        // infinity in one frame however smoothly the rack then travelled. The readout, the
+        // reticle and the optics all read the same thing now, which is the image.
+        return SnapmaticaClient.focusDistance >= SnapmaticaClient.FOCUS_INFINITY;
     }
 
     /** Focus distance to hand the DoF shader — the sentinel whenever {@link #atInfinity()}. */
@@ -118,6 +115,16 @@ public final class AutoFocus {
                 || VideoRecorder.isRecording();
         if (!active) return;
 
+        // Handover: autofocus moves the lens without touching the ring, so the moment manual
+        // focus takes over, the ring has to be picked up from wherever the lens was left.
+        // Otherwise the first manual click would rack back to a stale setting before moving.
+        if (SnapmaticaClient.focusMode != prevFocusMode) {
+            if (SnapmaticaClient.focusMode == FOCUS_MF) {
+                SnapmaticaClient.focusTarget = SnapmaticaClient.focusDistance;
+            }
+            prevFocusMode = SnapmaticaClient.focusMode;
+        }
+
         // Manual focus racks too. The ring sets the destination; the lens travels there.
         if (SnapmaticaClient.focusMode == FOCUS_MF) {
             SnapmaticaClient.focusDistance =
@@ -138,7 +145,15 @@ public final class AutoFocus {
 
         float target = snapFocus(targetDepth);
         afAtInfinity = (target >= SnapmaticaClient.FOCUS_INFINITY);
-        SnapmaticaClient.focusDistance = pullFocus(SnapmaticaClient.focusDistance, target);
+        // Same dioptric rack manual focus uses, and aimed at the REAL target including the far
+        // stop. It used to ease toward a finite FAR_ANCHOR instead, on the grounds that
+        // snapping to infinity flickered whenever the centre pixel swept across sky — but that
+        // was a property of snapping, not of arriving. A rack with a time constant damps the
+        // sweep on its own, and stopping short of the stop meant AF could never actually reach
+        // infinity: the far field stayed partly blurred with the camera pointed at the sky.
+        SnapmaticaClient.focusDistance = rackDioptric(SnapmaticaClient.focusDistance, target);
+        // Keep the ring in step, so switching to manual does not rack back to a stale setting.
+        SnapmaticaClient.focusTarget = SnapmaticaClient.focusDistance;
     }
 
     /** Distance to refractive power. Infinity is simply zero, which is why this space works. */
@@ -167,36 +182,17 @@ public final class AutoFocus {
         float cur = toDiopters(current);
         float tar = toDiopters(target);
         float diff = tar - cur;
-        // Full scale is FOCUS_MIN's power; a proportional epsilon lands cleanly at either stop.
-        if (Math.abs(diff) <= 1e-4f) return target;
+        // One part in a hundred thousand of a dioptre — the refractive power of the infinity
+        // sentinel itself, so "arrived" means arrived at the far stop and nothing sooner. At
+        // the previous 1e-4 this equalled the power of FOCUS_MAX exactly, so the final step of
+        // a rack out to infinity always completed in a single tick: the one step anyone would
+        // notice. Tighter than this only adds an invisible tail and delays the readout.
+        if (Math.abs(diff) <= 1e-5f) return target;
         float step = diff * RACK_RATE;
         float ceil = RACK_MAX_DIOPTRE;
         if (step >  ceil) step =  ceil;
         if (step < -ceil) step = -ceil;
         return fromDiopters(cur + step);
-    }
-
-    /** Eases the current focus distance one tick toward the target stop in log space. */
-    private static float pullFocus(float current, float target) {
-        // When AF has no subject (ray missed / sky), ease toward FAR_ANCHOR rather than
-        // snapping to FOCUS_INFINITY. FOCUS_INFINITY as a raw sensor reading means "nothing
-        // to focus on" — not "set infinity focus" (that's an explicit MF scroll action).
-        // Snapping instantly to ∞ would activate the infinity foreground-blur mode every
-        // time the centre pixel sweeps across sky, causing visible flicker and a permanent
-        // light bokeh that can't be cleared. Easing to FAR_ANCHOR instead keeps focus
-        // smooth; ∞ readout and foreground blur remain available in MF mode.
-        if (target >= SnapmaticaClient.FOCUS_INFINITY) target = FAR_ANCHOR;
-        // Refocusing back from ∞ (manually set via MF) starts the rack at FAR_ANCHOR.
-        if (current >= SnapmaticaClient.FOCUS_INFINITY) current = FAR_ANCHOR;
-        current = Math.max(0.01f, current);
-        float logCur = (float) Math.log(current);
-        float logTar = (float) Math.log(target);
-        float diff   = logTar - logCur;
-        if (Math.abs(diff) <= PULL_SNAP_EPS) return target;  // lock onto the stop
-        float step = diff * PULL_RATE;
-        if (step >  PULL_MAX_STEP) step =  PULL_MAX_STEP;
-        if (step < -PULL_MAX_STEP) step = -PULL_MAX_STEP;
-        return (float) Math.exp(logCur + step);
     }
 
     /**

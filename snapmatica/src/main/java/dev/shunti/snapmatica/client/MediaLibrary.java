@@ -49,6 +49,13 @@ public final class MediaLibrary {
     private static final Set<String> failed = new HashSet<>();
     private static final Map<String, boolean[]> pending = new HashMap<>();
 
+    /**
+     * Aspect ratio per source file, learned when the image is decoded. The gallery needs it to
+     * letterbox rather than stretch, and a portrait shot is not merely a rotated landscape one.
+     * Kept outside the texture cache so an eviction does not cost a re-measure.
+     */
+    private static final Map<String, Float> aspects = new HashMap<>();
+
     /** Poster-frame extraction shells out to ffmpeg, so it must not run on the render thread. */
     private static final ExecutorService thumbExecutor =
             Executors.newSingleThreadExecutor(r -> {
@@ -108,6 +115,7 @@ public final class MediaLibrary {
     private static Identifier upload(String key, File src) {
         try (InputStream is = new FileInputStream(src)) {
             NativeImage image = NativeImage.read(is);
+            aspects.put(key, (float) image.getWidth() / Math.max(1, image.getHeight()));
             // Identifier paths allow only [a-z0-9_./-]; a timestamped filename has none of the
             // rest, but lowercase it and strip anything else to be safe.
             String path = "gallery/" + key.toLowerCase().replaceAll("[^a-z0-9_/.-]", "_");
@@ -139,6 +147,15 @@ public final class MediaLibrary {
             it.remove();
             mc.getTextureManager().destroyTexture(oldest.getValue());
         }
+    }
+
+    /**
+     * Width over height for an entry, or 3:2 until the image has actually been decoded — the
+     * grid draws a placeholder in that frame anyway, so the guess is never seen stretched.
+     */
+    public static float aspect(Entry e) {
+        Float a = aspects.get((e.video() ? posterFile(e.file()) : e.file()).getAbsolutePath());
+        return a != null ? a : 3f / 2f;
     }
 
     /** Poster frames live next to the video, so they survive restarts and cost one extraction. */
@@ -180,15 +197,63 @@ public final class MediaLibrary {
         });
     }
 
-    /** Hands a file to the desktop — the system video player, or the file manager. */
+    /**
+     * Reveals a file in the desktop's file manager, selected rather than merely opening the
+     * folder — Explorer and Finder both take a flag for it, and elsewhere opening the parent
+     * directory is the closest equivalent.
+     */
+    public static void revealInFolder(File f) {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        String[] cmd;
+        if (os.contains("win")) {
+            cmd = new String[]{"explorer.exe", "/select," + f.getAbsolutePath()};
+        } else if (os.contains("mac")) {
+            cmd = new String[]{"open", "-R", f.getAbsolutePath()};
+        } else {
+            // Freedesktop has no universal "select"; the containing folder is honest.
+            cmd = new String[]{"xdg-open", f.getParentFile().getAbsolutePath()};
+        }
+        run(cmd, "reveal " + f);
+    }
+
+    /** Copies an entry to the clipboard: the image itself for a photo, the file for a video. */
+    public static void copyToClipboard(Entry e) {
+        if (e.video()) ClipboardUtil.copyFileAsync(e.file());
+        else           ClipboardUtil.copyImageAsync(e.file());
+    }
+
+    /**
+     * Hands a file to whatever the desktop opens it with — the system video player for a clip,
+     * the image viewer for a still.
+     *
+     * <p>Deliberately not {@code java.awt.Desktop}: Minecraft runs with {@code
+     * java.awt.headless=true}, so every call there throws {@link java.awt.HeadlessException}.
+     * The shell handlers below are what the game itself uses and need no AWT at all.
+     */
     public static void openExternally(File f) {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        String p = f.getAbsolutePath();
+        String[] cmd;
+        if (os.contains("win")) {
+            // FileProtocolHandler takes the path as one argument, spaces and all.
+            cmd = new String[]{"rundll32", "url.dll,FileProtocolHandler", p};
+        } else if (os.contains("mac")) {
+            cmd = new String[]{"open", p};
+        } else {
+            cmd = new String[]{"xdg-open", p};
+        }
+        run(cmd, "open " + f);
+    }
+
+    /** Fires a desktop command off the render thread; a failure is logged, never thrown. */
+    private static void run(String[] cmd, String what) {
         new Thread(() -> {
             try {
-                java.awt.Desktop.getDesktop().open(f);
+                new ProcessBuilder(cmd).start();
             } catch (Exception e) {
-                System.err.println("[Snapmatica] Could not open " + f + " — " + e);
+                System.err.println("[Snapmatica] Could not " + what + " — " + e);
             }
-        }, "snapmatica-open").start();
+        }, "snapmatica-shell").start();
     }
 
     /** Drops every uploaded texture. Called on world exit so a session cannot leak VRAM. */

@@ -194,10 +194,16 @@ public final class EvfBlurRenderer {
     /**
      * How far the camera moved since the previous frame, expressed for the shader.
      *
+     * <p>Measured from the last SAMPLE, not the last frame, and the reference only moves when
+     * {@link #markMotionSampled()} says a sample was taken. The accumulator's interval can be
+     * many frames long — a 30 s exposure samples every 250 ms — and smearing one frame's worth
+     * of motion across a fifteen-frame gap leaves most of it uncovered, which is the multiple
+     * exposure all over again.
+     *
      * <p>Result is written into {@code outRotPx} (screen shift from turning) and
-     * {@code outVelCam} (translation in camera space), both covering ONE sample interval.
-     * Rotation shifts the whole frame equally; translation shifts near things more than far
-     * ones, which is why the shader divides its contribution by depth.
+     * {@code outVelCam} (translation in camera space). Rotation shifts the whole frame
+     * equally; translation shifts near things more than far ones, which is why the shader
+     * divides its contribution by depth.
      */
     private static void updateCameraMotion(MinecraftClient mc, int fbW, int fbH,
                                            float focalPx, float[] outRotPx, float[] outVelCam) {
@@ -231,7 +237,21 @@ public final class EvfBlurRenderer {
             outVelCam[2] = (float)  forward;
         }
 
-        prevYaw = yaw; prevPitch = pitch; prevX = x; prevY = y; prevZ = z;
+        if (!haveMotionRef) {
+            prevYaw = yaw; prevPitch = pitch; prevX = x; prevY = y; prevZ = z;
+            haveMotionRef = true;
+        }
+    }
+
+    /**
+     * Moves the motion reference to now. Called by the accumulator immediately after it takes
+     * a sample, so the next smear covers exactly the gap that sample opened.
+     */
+    public static void markMotionSampled() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null) { haveMotionRef = false; return; }
+        prevYaw = mc.player.getYaw();   prevPitch = mc.player.getPitch();
+        prevX   = mc.player.getX();     prevY = mc.player.getY(); prevZ = mc.player.getZ();
         haveMotionRef = true;
     }
 

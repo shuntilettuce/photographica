@@ -84,6 +84,10 @@ public final class CameraScrollHandler {
 
     // ── Adjusters ───────────────────────────────────────────────────────────────
 
+    /** The lens's range, so the viewfinder can name it without hard-coding a second copy. */
+    public static int focalMinMm() { return FOCAL_STOPS.get(0); }
+    public static int focalMaxMm() { return FOCAL_STOPS.get(FOCAL_STOPS.size() - 1); }
+
     private static void adjustFocalLength(int dir) {
         if (SnapmaticaClient.lensType == NONE) return;
         int idx = nearestIntIdx(FOCAL_STOPS, SnapmaticaClient.focalLengthMm);
@@ -128,13 +132,11 @@ public final class CameraScrollHandler {
 
     private static void adjustFocusDistance(int dir) {
         if (SnapmaticaClient.focusMode != FOCUS_MF) return; // manual focus only
-        // Autofocus moves the lens without touching the ring, so on the first manual nudge
-        // after AF the ring has to be picked up from where the lens actually is — otherwise
-        // it would rack back to a stale setting before starting to move.
-        if (Math.abs(SnapmaticaClient.focusTarget - SnapmaticaClient.focusDistance) > 0.01f
-                && !AutoFocus.atInfinity()) {
-            SnapmaticaClient.focusTarget = SnapmaticaClient.focusDistance;
-        }
+        // The ring is free to run ahead of the lens — that is what turning it quickly means,
+        // and the rack catching up is the point. Picking the ring up from the lens belongs to
+        // the AF -> MF handover only (AutoFocus.tick); doing it here, on every click, threw
+        // away the destination each time and left the lens tracking the wheel one step at a
+        // time. Fast scrolling then looked instant, which is exactly what the rack was for.
         // Moves the RING. The lens follows under AutoFocus.tick's rack, so the last step out
         // to infinity glides there instead of teleporting.
         float fd = SnapmaticaClient.focusTarget;

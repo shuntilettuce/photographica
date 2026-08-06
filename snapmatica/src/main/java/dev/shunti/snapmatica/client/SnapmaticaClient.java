@@ -32,7 +32,6 @@ public class SnapmaticaClient implements ClientModInitializer {
     private static KeyBinding viewfinderSneakKey;  // toggle sneak-to-viewfinder mode
     private static KeyBinding orientationKey;       // toggle portrait/landscape framing
     private static KeyBinding recordKey;            // start/stop video recording
-    private static KeyBinding galleryKey;           // open the camera roll
     // ── Camera state (client-side only, no server sync needed) ───────────────────
     public static float aperture = 5.6f;
 
@@ -136,8 +135,6 @@ public class SnapmaticaClient implements ClientModInitializer {
                 "key.snapmatica.orientation", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, SNAPMATICA_CATEGORY));
         recordKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.record", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, SNAPMATICA_CATEGORY));
-        galleryKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.gallery", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_B, SNAPMATICA_CATEGORY));
         *///?} else {
         shootKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.shoot", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_ENTER, "category.snapmatica"));
@@ -149,8 +146,6 @@ public class SnapmaticaClient implements ClientModInitializer {
                 "key.snapmatica.orientation", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, "category.snapmatica"));
         recordKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.record", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.snapmatica"));
-        galleryKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.gallery", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_B, "category.snapmatica"));
         //?}
 
         // ── Tick handler ─────────────────────────────────────────────────────────
@@ -185,10 +180,6 @@ public class SnapmaticaClient implements ClientModInitializer {
                 client.setScreen(new CameraScreen());
             }
 
-            // Camera roll
-            while (galleryKey.wasPressed()) {
-                client.setScreen(new GalleryScreen());
-            }
 
             // Auto-focus (AF / MOB) drives focusDistance while the viewfinder is active
             AutoFocus.tick(client);
@@ -204,8 +195,8 @@ public class SnapmaticaClient implements ClientModInitializer {
         // The depth copy happens BEFORE the translucent pass so glass cannot stamp its own
         // surface distance over the view through it — see PhotoCapture.onBeforeTranslucent().
         // The AF raycast stays at the end of the pass; it is a world query and does not care
-        // where in the render it runs. VideoRecorder.onWorldRenderEnd() is no longer needed:
-        // it only copied depth, which onBeforeTranslucent() now does for recording too.
+        // where in the render it runs. Recording needs no hook of its own — the guard in
+        // onBeforeTranslucent() already covers it.
         //? if >=1.21.11 {
         /*WorldRenderEvents.BEFORE_TRANSLUCENT.register(ctx -> PhotoCapture.onBeforeTranslucent());
         WorldRenderEvents.END_MAIN.register(ctx -> PhotoCapture.onWorldRenderEnd());

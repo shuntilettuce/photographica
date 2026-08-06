@@ -201,6 +201,8 @@ public final class PhotoCapture {
             }
             //?}
             accumNextMs = now + accumIntervalMs;
+            // Reset the smear reference so the next one spans this gap, not one frame of it.
+            EvfBlurRenderer.markMotionSampled();
         }
 
         if (now >= accumEndMs || accumSamples >= ACCUM_MAX_SAMPLES) finalizeAccumulation(mc);
@@ -452,11 +454,11 @@ public final class PhotoCapture {
         int vpH = viewport[3];
         if (vpW <= 0 || vpH <= 0) return;
 
-        // GPU-side depth copy for the EVF DoF blur (sampled by the shader every frame).
-        int rd = mc.options.getViewDistance().getValue();
-        EvfBlurRenderer.updateDepthFar(worldProjection(mc),
-                mc.gameRenderer.getFarPlaneDistance(), Math.max(rd * 64f, 256f));
-        EvfBlurRenderer.captureDepth(vpW, vpH);
+        // NO depth copy here. This hook fires after the translucent pass, so the buffer now
+        // holds the glass surface rather than what is behind it; copying it would overwrite
+        // the good pre-translucent copy onBeforeTranslucent() just made and blur every scene
+        // seen through a window. The viewport query above is kept — the centre-depth fallback
+        // further down still needs it.
 
         // AF subject distance — THROTTLED. The world raycast is the PRIMARY focus
         // distance (good to 1000 m, covers all vanilla render distances). The GPU

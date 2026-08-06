@@ -65,6 +65,7 @@ public class VideoRecorderScreen extends Screen {
                 step -> {
                     int idx = FPS_LIST.indexOf(VideoRecorder.getCurrentFps()) + step;
                     VideoRecorder.setFps(FPS_LIST.get(clamp(idx, FPS_LIST.size())));
+                    SnapmaticaConfig.save();
                 }, !VideoRecorder.isRecording());
 
         // Motion blur (applied by ffmpeg frame-blending at encode time, no in-game cost)
@@ -87,14 +88,23 @@ public class VideoRecorderScreen extends Screen {
                 .dimensions(cx + 2, btnY, BTN_W, 20).build());
     }
 
+    /**
+     * Deliberately empty. Before 1.21.11, {@code Screen.render} opens by calling this, which
+     * lands *after* this screen has drawn its own content — a second coat of the backdrop that
+     * buried everything under it. The backdrop is painted from {@link #render} instead, where
+     * the order is ours to control on every version.
+     */
     @Override
-    public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {}
+
+    /** The dimmed backdrop this screen sits on. */
+    private void drawBackdrop(DrawContext ctx) {
         ctx.fill(0, 0, width, height, 0xC0101010);
     }
 
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-        renderBackground(ctx, mouseX, mouseY, delta);
+        drawBackdrop(ctx);
         ctx.drawCenteredTextWithShadow(textRenderer, Text.translatable("snapmatica.video.title"),
                 width / 2, height / 2 - 80, 0xFFFFFFFF);
         super.render(ctx, mouseX, mouseY, delta);

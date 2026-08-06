@@ -192,15 +192,26 @@ vec2 lensDistort(vec2 uv) {
     return p * 0.5 + 0.5;
 }
 
-/** Averages along the smear vector, centred, so the sample spreads both ways in time. */
+/**
+ * Averages along the smear vector, centred, so the sample spreads both ways in time.
+ *
+ * <p>The tap count follows the LENGTH. At a fixed seven, a long smear left its taps far apart
+ * and each one became a ghost of its own — so the very case the smear exists for, a low frame
+ * rate during a long exposure moving the camera a long way between samples, was the case it
+ * failed at. Reproducing the multiple exposure it was meant to remove, at finer spacing.
+ *
+ * <p>Roughly one tap per pixel and a half of travel, which is dense enough that neighbouring
+ * taps overlap.
+ */
 vec3 smearSample(vec2 uv, vec2 smearPx) {
-    const int TAPS = 7;
-    vec3 sum = vec3(0.0);
-    for (int i = 0; i < TAPS; i++) {
-        float t = (float(i) / float(TAPS - 1)) - 0.5;   // -0.5 .. +0.5
+    float len  = length(smearPx);
+    int   taps = int(clamp(len / 1.5, 4.0, 48.0));
+    vec3  sum  = vec3(0.0);
+    for (int i = 0; i < taps; i++) {
+        float t = (float(i) + 0.5) / float(taps) - 0.5;   // -0.5 .. +0.5, evenly spread
         sum += texture(InSampler, uv + smearPx * t * PixelSize).rgb;
     }
-    return sum / float(TAPS);
+    return sum / float(taps);
 }
 
 // Physically-based thin-lens circle of confusion, in framebuffer pixels.

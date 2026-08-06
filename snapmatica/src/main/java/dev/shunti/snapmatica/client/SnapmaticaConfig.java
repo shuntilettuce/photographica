@@ -53,6 +53,7 @@ public final class SnapmaticaConfig {
         SnapmaticaClient.focusDistance          = getFloat(p, "focusDistance",         SnapmaticaClient.focusDistance);
         // The ring starts wherever the lens was left, so nothing racks on world join.
         SnapmaticaClient.focusTarget            = SnapmaticaClient.focusDistance;
+        VideoRecorder.setFps(getInt(p, "videoFps", VideoRecorder.getCurrentFps()));
     }
 
     /** Write current settings to disk. Cheap enough to call on each change. */
@@ -70,6 +71,7 @@ public final class SnapmaticaConfig {
         p.setProperty("aperture",               Float.toString(SnapmaticaClient.aperture));
         p.setProperty("apertureDiameterMm",     Float.toString(SnapmaticaClient.apertureDiameterMm));
         p.setProperty("focusDistance",          Float.toString(SnapmaticaClient.focusDistance));
+        p.setProperty("videoFps",               Integer.toString(VideoRecorder.getCurrentFps()));
         try {
             Files.createDirectories(FILE.getParent());
             try (OutputStream out = Files.newOutputStream(FILE)) {

@@ -144,7 +144,8 @@ public final class VideoRecorder {
         String ts = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
         sessionId = ts;
 
-        currentFps        = FPS;
+        // currentFps is deliberately left alone — it holds whatever the recorder screen was
+        // set to, and resetting it here silently threw that choice away on every take.
         frameCount        = 0;
         virtualFrameCount = 0;
         writtenFrames.set(0);
@@ -206,19 +207,6 @@ public final class VideoRecorder {
     }
 
     // ── Render-thread hooks ───────────────────────────────────────────────────────
-
-    /**
-     * Called every frame at WorldRenderEvents.LAST while the scene depth buffer is still
-     * valid — copies it into the GPU texture EvfBlurRenderer uses for DoF.
-     */
-    public static void onWorldRenderEnd() {
-        if (!recording) return;
-        MinecraftClient mc = MinecraftClient.getInstance();
-        net.minecraft.client.gl.Framebuffer mainFb = mc.getFramebuffer();
-        if (mainFb == null) return;
-        int fbW = mainFb.textureWidth, fbH = mainFb.textureHeight;
-        if (fbW > 0 && fbH > 0) EvfBlurRenderer.captureDepth(fbW, fbH);
-    }
 
     // ── Frame capture (render thread) ─────────────────────────────────────────────
     /**

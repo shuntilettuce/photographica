@@ -25,12 +25,23 @@ public class GalleryScreen extends Screen {
     private static final int COLS_TARGET_CELL = 116;  // px; column count follows the window
     private static final int PAD              = 8;
     private static final int HEADER_H         = 30;
-    private static final int FOOTER_H         = 22;
+    private static final int HINT_H           = 14;   // the one-line hint under the grid
+    private static final int BUTTON_H         = 20;
+    private static final int FOOTER_H         = HINT_H + BUTTON_H + 10;
 
     private List<MediaLibrary.Entry> entries = List.of();
     private int scroll = 0;
     /** -1 = grid, otherwise the index being viewed full-screen. */
     private int viewing = -1;
+
+    /**
+     * The action row. These are real widgets rather than painted rectangles so they narrate,
+     * highlight and click like every other button in the game; they are simply hidden while
+     * the grid is up, since they act on the item being viewed.
+     */
+    private CameraUi.Button copyBtn, revealBtn, openBtn, backBtn;
+    /** Back sits at the end of the action row in the viewer, but alone it belongs centred. */
+    private int backViewerX, backGridX;
 
     private static final SimpleDateFormat STAMP = new SimpleDateFormat("yyyy/MM/dd HH:mm");
 
@@ -43,6 +54,49 @@ public class GalleryScreen extends Screen {
         entries = MediaLibrary.scan();
         if (viewing >= entries.size()) viewing = entries.isEmpty() ? -1 : entries.size() - 1;
         clampScroll();
+
+        int by = height - BUTTON_H - 6;
+        int gap = 4;
+        int wCopy = 84, wReveal = 116, wOpen = 84, wBack = 64;
+        int total = wCopy + wReveal + wOpen + wBack + gap * 3;
+        int x = (width - total) / 2;
+
+        copyBtn = CameraUi.Button.of(x, by, wCopy,
+                Text.translatable("snapmatica.gallery.copy"),
+                b -> { if (viewing >= 0) MediaLibrary.copyToClipboard(entries.get(viewing)); });
+        x += wCopy + gap;
+        revealBtn = CameraUi.Button.of(x, by, wReveal,
+                Text.translatable("snapmatica.gallery.reveal"),
+                b -> { if (viewing >= 0) MediaLibrary.revealInFolder(entries.get(viewing).file()); });
+        x += wReveal + gap;
+        openBtn = CameraUi.Button.primary(x, by, wOpen,
+                Text.translatable("snapmatica.gallery.open"),
+                b -> { if (viewing >= 0) open(entries.get(viewing)); });
+        x += wOpen + gap;
+        backViewerX = x;
+        backGridX = (width - wBack) / 2;
+        backBtn = CameraUi.Button.ghost(x, by, wBack,
+                Text.translatable("snapmatica.common.close"),
+                b -> { if (viewing >= 0) { viewing = -1; refreshActions(); } else close(); });
+
+        addDrawableChild(copyBtn);
+        addDrawableChild(revealBtn);
+        addDrawableChild(openBtn);
+        addDrawableChild(backBtn);
+        refreshActions();
+    }
+
+    /** Keeps the action row in step with what is on screen. */
+    private void refreshActions() {
+        boolean viewer = viewing >= 0;
+        copyBtn.visible = revealBtn.visible = openBtn.visible = viewer;
+        backBtn.setX(viewer ? backViewerX : backGridX);
+        backBtn.setMessage(Text.translatable(viewer ? "snapmatica.common.back"
+                                                    : "snapmatica.common.close"));
+        if (viewer) {
+            openBtn.setMessage(Text.translatable(entries.get(viewing).video()
+                    ? "snapmatica.gallery.play" : "snapmatica.gallery.open"));
+        }
     }
 
     @Override
@@ -64,14 +118,23 @@ public class GalleryScreen extends Screen {
 
     // ── Render ──────────────────────────────────────────────────────────────────
 
+    /**
+     * Deliberately empty. Before 1.21.11, {@code Screen.render} opens by calling this, which
+     * lands *after* this screen has drawn its own content — a second coat of the backdrop that
+     * buried everything under it. The backdrop is painted from {@link #render} instead, where
+     * the order is ours to control on every version.
+     */
     @Override
-    public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {}
+
+    /** The dimmed backdrop this screen sits on. */
+    private void drawBackdrop(DrawContext ctx) {
         ctx.fill(0, 0, width, height, 0xF00E0E10);
     }
 
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-        renderBackground(ctx, mouseX, mouseY, delta);
+        drawBackdrop(ctx);
         if (viewing >= 0) renderViewer(ctx);
         else              renderGrid(ctx, mouseX, mouseY);
         super.render(ctx, mouseX, mouseY, delta);
@@ -110,7 +173,7 @@ public class GalleryScreen extends Screen {
 
         ctx.drawCenteredTextWithShadow(textRenderer,
                 Text.translatable("snapmatica.gallery.help_grid"),
-                width / 2, height - FOOTER_H + 6, 0xFF6A6A75);
+                width / 2, height - FOOTER_H + 3, CameraUi.CREAM_DIM);
     }
 
     private void drawCell(DrawContext ctx, MediaLibrary.Entry e, int x, int y, int w, int h, boolean hover) {
@@ -119,7 +182,7 @@ public class GalleryScreen extends Screen {
 
         Identifier tex = MediaLibrary.texture(e);
         if (tex != null) {
-            drawFitted(ctx, tex, x, y, w, thumbH);
+            drawFitted(ctx, tex, x, y, w, thumbH, MediaLibrary.aspect(e));
         } else {
             ctx.drawCenteredTextWithShadow(textRenderer,
                     e.video() ? Text.translatable("snapmatica.gallery.video") : Text.literal("..."),
@@ -150,7 +213,7 @@ public class GalleryScreen extends Screen {
 
         int top = HEADER_H, bottom = height - FOOTER_H;
         if (tex != null) {
-            drawFitted(ctx, tex, PAD, top, width - PAD * 2, bottom - top);
+            drawFitted(ctx, tex, PAD, top, width - PAD * 2, bottom - top, MediaLibrary.aspect(e));
         } else {
             ctx.drawCenteredTextWithShadow(textRenderer,
                     Text.translatable(e.video() ? "snapmatica.gallery.preparing"
@@ -164,16 +227,12 @@ public class GalleryScreen extends Screen {
                 width - PAD - textRenderer.getWidth(pos) - 2, 10, 0xFF7A7A85);
 
         ctx.drawCenteredTextWithShadow(textRenderer,
-                Text.translatable(e.video() ? "snapmatica.gallery.help_video"
-                                            : "snapmatica.gallery.help_photo"),
-                width / 2, height - FOOTER_H + 6, 0xFF6A6A75);
+                Text.translatable("snapmatica.gallery.help_viewer"),
+                width / 2, height - FOOTER_H + 3, CameraUi.CREAM_DIM);
     }
 
     /** Draws the texture centred and letterboxed inside the box, never stretched. */
-    private void drawFitted(DrawContext ctx, Identifier tex, int bx, int by, int bw, int bh) {
-        // The mod's own output is 3:2 or 2:3; video posters are 16:9. Assume 3:2 unless the
-        // entry is a video, which is close enough for a thumbnail and avoids a size query.
-        float ar = 3f / 2f;
+    private void drawFitted(DrawContext ctx, Identifier tex, int bx, int by, int bw, int bh, float ar) {
         int dw = bw, dh = Math.round(bw / ar);
         if (dh > bh) { dh = bh; dw = Math.round(bh * ar); }
         int dx = bx + (bw - dw) / 2, dy = by + (bh - dh) / 2;
@@ -199,7 +258,7 @@ public class GalleryScreen extends Screen {
     //? if >=1.21.11 {
     /*@Override
     public boolean mouseClicked(net.minecraft.client.gui.Click click, boolean doubled) {
-        return onClick(click.x(), click.y(), click.button()) || super.mouseClicked(click, doubled);
+        return super.mouseClicked(click, doubled) || onClick(click.x(), click.y(), click.button());
     }
 
     @Override
@@ -214,7 +273,7 @@ public class GalleryScreen extends Screen {
     *///?} else {
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
-        return onClick(mx, my, button) || super.mouseClicked(mx, my, button);
+        return super.mouseClicked(mx, my, button) || onClick(mx, my, button);
     }
 
     @Override
@@ -229,17 +288,19 @@ public class GalleryScreen extends Screen {
     //?}
 
     private boolean onClick(double mx, double my, int button) {
-        if (viewing >= 0) {
-            if (button == 0) { open(entries.get(viewing)); return true; }
-            return false;
-        }
+        // In the viewer everything worth doing is on a button, so a stray click does nothing.
+        if (viewing >= 0) return false;
         if (my < HEADER_H || my >= height - FOOTER_H) return false;
 
         int c = cols(), cw = cellW(), ch = cellH();
         for (int i = 0; i < entries.size(); i++) {
             int x = PAD + (i % c) * (cw + PAD);
             int y = HEADER_H + (i / c) * (ch + PAD) - scroll;
-            if (mx >= x && mx < x + cw && my >= y && my < y + ch) { viewing = i; return true; }
+            if (mx >= x && mx < x + cw && my >= y && my < y + ch) {
+                viewing = i;
+                refreshActions();
+                return true;
+            }
         }
         return false;
     }
@@ -257,7 +318,7 @@ public class GalleryScreen extends Screen {
             case 263 -> { step(-1); return true; }                        // left
             case 262 -> { step(1);  return true; }                        // right
             case 257, 335 -> { open(entries.get(viewing)); return true; } // enter
-            case 256 -> { viewing = -1; return true; }                    // esc: back to grid
+            case 256 -> { viewing = -1; refreshActions(); return true; }  // esc: back to grid
             default -> { return false; }
         }
     }
@@ -265,6 +326,7 @@ public class GalleryScreen extends Screen {
     private void step(int d) {
         if (entries.isEmpty()) return;
         viewing = Math.floorMod(viewing + d, entries.size());
+        refreshActions();
     }
 
     private void open(MediaLibrary.Entry e) {

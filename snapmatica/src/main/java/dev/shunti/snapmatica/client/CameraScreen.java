@@ -112,9 +112,14 @@ public class CameraScreen extends Screen {
                 true);
 
 
-        // Close button
-        addDrawableChild(ButtonWidget.builder(Text.literal("Close"), b -> close())
-                .dimensions(cx - 40, top + row * rowHeight + 16, 80, 20).build());
+        // Camera roll and close, side by side. The roll has no key of its own — a photography
+        // mod already asks for enough of the keyboard, and this is where you would look for it.
+        int by = top + row * rowHeight + 16;
+        addDrawableChild(CameraUi.Button.primary(cx - 84, by, 80,
+                Text.translatable("snapmatica.gallery.open_roll"),
+                b -> { if (client != null) client.setScreen(new GalleryScreen()); }));
+        addDrawableChild(CameraUi.Button.ghost(cx + 4, by, 80,
+                Text.translatable("snapmatica.common.close"), b -> close()));
     }
 
     private void addRow2(int cx, int y, String label, java.util.function.Supplier<String> value,
@@ -142,15 +147,25 @@ public class CameraScreen extends Screen {
         addDrawableChild(right);
     }
 
+    /**
+     * Deliberately empty. Before 1.21.11, {@code Screen.render} opens by calling this, which
+     * lands *after* this screen has drawn its own content — a second coat of the backdrop that
+     * buried everything under it. The backdrop is painted from {@link #render} instead, where
+     * the order is ours to control on every version.
+     */
     @Override
-    public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {}
+
+    /** The dimmed backdrop this screen sits on. */
+    private void drawBackdrop(DrawContext ctx) {
         ctx.fill(0, 0, this.width, this.height, 0xC0101010);
     }
 
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-        renderBackground(ctx, mouseX, mouseY, delta);
-        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("SNAPMATICA CAMERA"), width / 2, 10, 0xFFE8DCC4);
+        drawBackdrop(ctx);
+        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("SNAPMATICA CAMERA"),
+                width / 2, 10, CameraUi.CREAM);
         super.render(ctx, mouseX, mouseY, delta);
     }
 
