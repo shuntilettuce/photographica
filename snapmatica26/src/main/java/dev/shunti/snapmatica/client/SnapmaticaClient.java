@@ -133,6 +133,11 @@ public class SnapmaticaClient implements ClientModInitializer {
                 VideoRecorderHud::render
         );
 
+        // The depth copy happens BEFORE translucent terrain so glass cannot stamp its own
+        // surface distance over the view through it — see PhotoCapture.onBeforeTranslucent().
+        // The AF raycast stays at the end of the pass; it is a world query and does not care
+        // where in the render it runs.
+        LevelRenderEvents.BEFORE_TRANSLUCENT_TERRAIN.register(ctx -> PhotoCapture.onBeforeTranslucent());
         LevelRenderEvents.END_MAIN.register(ctx -> {
             PhotoCapture.onWorldRenderEnd();
             VideoRecorder.onWorldRenderEnd();

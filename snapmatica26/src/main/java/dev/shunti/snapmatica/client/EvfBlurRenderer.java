@@ -58,10 +58,19 @@ public final class EvfBlurRenderer {
     /** mm of subject distance per block. 200 = miniature (strong bokeh, used to keep
      *  the still viewfinder preview matching the CPU photo). 1000 = realistic 1 block
      *  = 1 m, used for video so depth of field behaves like a real camera. */
-    public static final float DOF_SCALE_STILL = 200.0f;
+    /**
+     * Millimetres of subject distance per Minecraft block — the strongest control over how
+     * much everything blurs. Smaller means a smaller model, so subjects are optically nearer
+     * and the depth of field is shallower. At 200 (1 block = 20 cm) a subject five blocks off
+     * sat 1 m from the lens and a fast prime obliterated everything around it: a tabletop
+     * miniature, not a camera. Raise toward 1000 for literal real-world scale.
+     */
+    public static final float DOF_SCALE_STILL = 375.0f;   // 1 block = 37.5 cm
     public static final float DOF_SCALE_VIDEO = 1000.0f;
 
+    /** Vanilla's near plane; overridden from the live projection matrix when it differs. */
     private static final float NEAR = 0.05f;
+    public static float currentDepthNear = NEAR;
     public static float currentDepthFar = 512.0f;
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
 
@@ -76,10 +85,23 @@ public final class EvfBlurRenderer {
             try {
                 float pf = projection.perspectiveFar();
                 if (Float.isFinite(pf) && pf > 16.0f && pf < 1_000_000.0f) far = pf;
+                // The near plane matters more than it looks: linearisation divides by
+                // (Far + Near - ndc*(Far - Near)), so a wrong Near skews every distance in the
+                // far field. Vanilla's is 0.05, but a shader pipeline is free to change it and
+                // we would never notice — so take it from the same matrix as Far.
+                float pn = projection.perspectiveNear();
+                if (Float.isFinite(pn) && pn > 0.0f && pn < 16.0f) currentDepthNear = pn;
             } catch (Throwable ignored) {}
+        }
+        if (lastLoggedFar < 0.0f || far < lastLoggedFar * 0.9f || far > lastLoggedFar * 1.1f) {
+            lastLoggedFar = far;
+            System.out.println("[Snapmatica] depth planes: near=" + currentDepthNear
+                    + "  far=" + far + " blocks");
         }
         currentDepthFar = far;
     }
+
+    private static float lastLoggedFar = -1.0f;
 
     // Scheduled blur parameters (set in HUD extractRenderState, applied after renderLevel).
     private static boolean blurScheduled      = false;
@@ -225,7 +247,7 @@ public final class EvfBlurRenderer {
         GL20.glUniform2f(locPixelSize, 1.0f / fbW, 1.0f / fbH);
         GL20.glUniform1f(locFocusDist, focusDist);
         GL20.glUniform1f(locMaxBlurPx, maxBlurPx);
-        GL20.glUniform1f(locNear, NEAR);
+        GL20.glUniform1f(locNear, currentDepthNear);
         GL20.glUniform1f(locFar, currentDepthFar);
         GL20.glUniform1f(locFocalLen, focalLenMm);
         GL20.glUniform1f(locAperture, aperture);
@@ -299,11 +321,11 @@ public final class EvfBlurRenderer {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
         GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex);
-        final float near = NEAR;
+        final float near = currentDepthNear;
         final float far  = currentDepthFar;
         float[] linear = new float[fbW * fbH];
         for (int i = 0; i < linear.length; i++) {
-            float d   = buf.get(i);
+            float d = buf.get(i);
             float ndc = 2.0f * d - 1.0f;
             linear[i] = 2.0f * near * far / (far + near - ndc * (far - near));
         }
@@ -474,7 +496,8 @@ public final class EvfBlurRenderer {
 
         if (rawD >= 0.999999f) return SnapmaticaClient.FOCUS_INFINITY;
         if (rawD < 0.001f) return -1.0f;
-        return NEAR * currentDepthFar / (currentDepthFar - rawD * (currentDepthFar - NEAR));
+        return currentDepthNear * currentDepthFar
+                / (currentDepthFar - rawD * (currentDepthFar - currentDepthNear));
     }
 
     private static String readResource(String path) throws Exception {

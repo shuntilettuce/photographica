@@ -132,10 +132,7 @@ public final class PhotoCapture {
         Vec3 look = mc.player.getViewVector(1.0f);
         Vec3 end  = eye.add(look.scale(maxDist));
 
-        BlockHitResult blockHit = mc.level.clip(
-                new ClipContext(eye, end,
-                        ClipContext.Block.OUTLINE,
-                        ClipContext.Fluid.NONE, mc.player));
+        BlockHitResult blockHit = AutoFocus.raycastThroughGlass(mc, eye, look, maxDist);
         double bestDist = (blockHit != null
                 && blockHit.getType() != HitResult.Type.MISS)
                 ? eye.distanceTo(blockHit.getLocation()) : maxDist;
@@ -152,24 +149,48 @@ public final class PhotoCapture {
 
         lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : SnapmaticaClient.FOCUS_INFINITY;
 
+        // The world raycast above is the PRIMARY focus distance. When it misses (sky / beyond
+        // loaded range) the focus simply stays at infinity. The old GPU centre-depth readback
+        // (readCenterLinearDepthBlocks -> glReadPixels on a depth FBO) crashed the NVIDIA
+        // driver on hybrid-GPU laptops whenever a LOD mod (Voxy / Distant Horizons) was drawing
+        // the distance, so it is no longer used. Depth for the blur is copied separately, in
+        // onBeforeTranslucent().
+    }
+
+    /**
+     * Copies the scene depth for the EVF blur, BEFORE translucent terrain is drawn.
+     *
+     * <p>Glass writes depth at its own surface while the pixel shows what is behind it. Taken
+     * at the end of the level render, the buffer therefore said "glass pane, two blocks away"
+     * for a pixel displaying a building far beyond it — so the view through a window blurred
+     * as near-field, and the pane's own rectangle stayed a hard-edged shape in the defocus
+     * however heavily blurred it was. Every translucent surface has the problem; glass is
+     * only the one you notice.
+     *
+     * <p>Sampling before the translucent pass leaves the depth of whatever is actually behind
+     * the glass, which is what the camera is looking at. Solid terrain and entities are drawn
+     * by this point, so nothing that should be focusable is missed.
+     */
+    public static void onBeforeTranslucent() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
+        boolean sneakViewfinder = mc.player.isShiftKeyDown()
+                && (SnapmaticaClient.viewfinderSneakEnabled || capturePending);
+        if (!sneakViewfinder && !capturePending && !VideoRecorder.isRecording()) return;
+
         int[] viewport = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
         int vpW = viewport[2];
         int vpH = viewport[3];
-        if (vpW > 0 && vpH > 0) {
-            int rd = mc.options.renderDistance().get();
-            net.minecraft.client.renderer.state.level.CameraRenderState camSt =
-                    mc.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState;
-            EvfBlurRenderer.updateDepthFar(
-                    camSt != null ? camSt.projectionMatrix : null,
-                    Math.max(rd * 64f, 256f));
-            EvfBlurRenderer.captureDepth(vpW, vpH);
-            // The world raycast above is the PRIMARY focus distance. When it misses (sky /
-            // beyond loaded range) the focus simply stays at infinity. The old GPU centre-
-            // depth readback (readCenterLinearDepthBlocks -> glReadPixels on a depth FBO)
-            // crashed the NVIDIA driver on hybrid-GPU laptops whenever a LOD mod (Voxy /
-            // Distant Horizons) was drawing the distance, so it is no longer used here.
-        }
+        if (vpW <= 0 || vpH <= 0) return;
+
+        int rd = mc.options.renderDistance().get();
+        net.minecraft.client.renderer.state.level.CameraRenderState camSt =
+                mc.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState;
+        EvfBlurRenderer.updateDepthFar(
+                camSt != null ? camSt.projectionMatrix : null,
+                Math.max(rd * 64f, 256f));
+        EvfBlurRenderer.captureDepth(vpW, vpH);
     }
 
     private static NativeImage applyPhotoEffects(NativeImage src, float[] linearDepth, int fbW, int fbH) {

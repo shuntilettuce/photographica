@@ -70,11 +70,19 @@ public final class VideoRecorder {
     private static long  lastAfQueryMs     = 0L;
     private static long  lastAfStepMs      = 0L;
 
+    private static boolean prevBobView = true;
+
     /** smoothCamera state saved at record start, restored on stop. */
     private static boolean prevSmoothCamera = false;
 
     private static final ExecutorService ioExecutor =
-            Executors.newSingleThreadExecutor(r -> {
+            // Frame scaling and PNG encoding are pure CPU work on independent frames, and
+            // each output carries its own index, so they parallelise freely. One thread could
+            // not keep up with the capture rate: the queue grew all recording long, holding a
+            // full-resolution NativeImage per pending frame. Capped low to leave cores free.
+            Executors.newFixedThreadPool(
+                    Math.max(2, Math.min(4, Runtime.getRuntime().availableProcessors() / 4)),
+                    r -> {
                 Thread t = new Thread(r, "snapmatica-video-io");
                 t.setDaemon(true);
                 return t;
@@ -131,6 +139,11 @@ public final class VideoRecorder {
         // Enable cinematic (smooth) camera for steadier handheld panning footage.
         prevSmoothCamera = mc.options.smoothCamera;
         mc.options.smoothCamera = true;
+        // Stabilisation: view bobbing is the walking shake, and it is worse on video than in
+        // play because the DoF is baked per frame - the bob swings the whole image while the
+        // defocus stays put, so the two disagree and it reads as smearing, not as motion.
+        prevBobView = mc.options.bobView().get();
+        mc.options.bobView().set(false);
 
         recording = true;
         mc.gui.setOverlayMessage(Component.literal("● REC 開始"), true);
@@ -142,6 +155,7 @@ public final class VideoRecorder {
 
         Minecraft mc = Minecraft.getInstance();
         mc.options.smoothCamera = prevSmoothCamera;
+        mc.options.bobView().set(prevBobView);
         if (mc.player != null)
             mc.gui.setOverlayMessage(Component.literal("■ 録画停止 — エンコード中..."), true);
 
@@ -171,15 +185,11 @@ public final class VideoRecorder {
         RenderTarget mainFb = mc.getMainRenderTarget();
         if (mainFb == null) return;
         int fbW = mainFb.width, fbH = mainFb.height;
-        if (fbW > 0 && fbH > 0) {
-            int rd = mc.options.renderDistance().get();
-            net.minecraft.client.renderer.state.level.CameraRenderState camSt =
-                    mc.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState;
-            EvfBlurRenderer.updateDepthFar(
-                    camSt != null ? camSt.projectionMatrix : null,
-                    Math.max(rd * 64f, 256f));
-            EvfBlurRenderer.captureDepth(fbW, fbH);
-        }
+        // Depth is copied in PhotoCapture.onBeforeTranslucent(), which runs before the
+        // translucent pass (so glass does not stamp its surface over the view through it) and
+        // whose guard already covers recording. Copying again here would only overwrite it
+        // with a buffer that has the glass in it.
+        if (fbW <= 0 || fbH <= 0) return;
     }
 
     /**
@@ -222,16 +232,14 @@ public final class VideoRecorder {
         Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> {
             if (raw == null) { writtenFrames.incrementAndGet(); return; }
             ioExecutor.submit(() -> {
-                NativeImage cropped = null, frame = null;
+                NativeImage frame = null;
                 try {
-                    cropped = cropTo16x9(raw);
-                    frame   = boxDownsample(cropped, 1280);
+                    frame = cropAndDownsample(raw, 1280);
                     frame.writeToFile(outFile.toPath());
                 } catch (IOException e) {
                     System.err.println("[VideoRecorder] Frame write failed: " + outFile);
                 } finally {
-                    if (frame != null && frame != cropped) frame.close();
-                    if (cropped != null && cropped != raw) cropped.close();
+                    if (frame != null) frame.close();
                     raw.close();
                     writtenFrames.incrementAndGet();
                 }
@@ -268,19 +276,31 @@ public final class VideoRecorder {
             float sceneDepth = computeSceneFocusDepth(mc);
             focusTargetDepth = Math.max(sceneDepth, 0.3f);
         }
-        if (nowMs - lastAfStepMs >= AF_STEP_INTERVAL_MS) {
-            lastAfStepMs = nowMs;
-            stepFocusLerp();
-        }
+        // Every frame, by elapsed time - no fixed-rate gate to beat against the capture rate.
+        float dt = (nowMs - lastAfStepMs) / 1000.0f;
+        lastAfStepMs = nowMs;
+        if (dt > 0.0f) stepFocusLerp(Math.min(dt, 0.25f));
     }
 
-    private static void stepFocusLerp() {
+    /**
+     * Time-based, not per-tick. Stepping a fixed fraction on a fixed 20 Hz schedule while
+     * frames are captured at 24 fps means consecutive frames advance the focus by different
+     * amounts - two steps, then one - and that beat is visible as the focus stuttering even
+     * though the frame pacing is even. The time constant must also be LONGER than the 10 Hz
+     * interval at which the target itself is refreshed, or the focus reaches each new step
+     * and then waits, reproducing that staircase in the footage.
+     */
+    private static final float AF_TAU_SEC       = 0.18f;  // e-folding time of the rack
+    private static final float AF_MAX_LOG_PER_S = 4.4f;   // rack speed ceiling
+
+    private static void stepFocusLerp(float dt) {
         float logCur = (float) Math.log(Math.max(0.1f, currentFocusDepth));
         float logTar = (float) Math.log(Math.max(0.1f, focusTargetDepth));
         float diff   = logTar - logCur;
         if (Math.abs(diff) < AF_SNAP_EPS) { currentFocusDepth = focusTargetDepth; return; }
-        float step = diff * AF_PULL_RATE;
-        if (Math.abs(step) > AF_PULL_MAX) step = Math.signum(step) * AF_PULL_MAX;
+        float step    = diff * (1.0f - (float) Math.exp(-dt / AF_TAU_SEC));
+        float ceiling = AF_MAX_LOG_PER_S * dt;
+        if (Math.abs(step) > ceiling) step = Math.signum(step) * ceiling;
         currentFocusDepth = (float) Math.exp(logCur + step);
     }
 
@@ -297,11 +317,8 @@ public final class VideoRecorder {
 
         final double maxBlockDist  = 1000.0;
         final double maxEntityDist = 60.0;
-        net.minecraft.world.phys.BlockHitResult blockHit = mc.level.clip(
-                new net.minecraft.world.level.ClipContext(
-                        eye, eye.add(look.scale(maxBlockDist)),
-                        net.minecraft.world.level.ClipContext.Block.OUTLINE,
-                        net.minecraft.world.level.ClipContext.Fluid.NONE, mc.player));
+        net.minecraft.world.phys.BlockHitResult blockHit =
+                AutoFocus.raycastThroughGlass(mc, eye, look, maxBlockDist);
         double bestDist = (blockHit != null
                 && blockHit.getType() != net.minecraft.world.phys.HitResult.Type.MISS)
                 ? eye.distanceTo(blockHit.getLocation()) : maxBlockDist;
@@ -396,7 +413,13 @@ public final class VideoRecorder {
                         "-i", concatFile.getAbsolutePath()));
                 if (vf != null) { cmd.add("-vf"); cmd.add(vf); }
                 cmd.addAll(List.of(
-                        "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
+                        // Leave the machine usable while encoding: unconstrained, libx264 defaults
+                        // to preset=medium across every core and, being a separate process, is
+                        // beyond the reach of the I/O pool's thread priorities.
+                        "-threads", Integer.toString(
+                                Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors() / 2))),
+                        "-c:v", "libx264", "-preset", "veryfast",
+                        "-crf", "18", "-pix_fmt", "yuv420p",
                         outPath));
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
@@ -420,40 +443,48 @@ public final class VideoRecorder {
         return false;
     }
 
-    private static NativeImage cropTo16x9(NativeImage src) {
+    /**
+     * Crops to 16:9 and box-downsamples to {@code maxWidth} in ONE pass.
+     *
+     * <p>This replaced a cropTo16x9() then boxDownsample() pair, which allocated a
+     * full-resolution intermediate image per frame and walked every source pixel twice - a
+     * read+write to crop, then a read to average down. At recording rates that was the single
+     * largest cost in the capture path and the reason frames were being dropped.
+     */
+    private static NativeImage cropAndDownsample(NativeImage src, int maxWidth) {
         int w = src.getWidth(), h = src.getHeight();
         float aspect = 16f / 9f;
-        int tW, tH;
-        if ((float) w / h > aspect) { tH = h; tW = Math.round(h * aspect); }
-        else                         { tW = w; tH = Math.round(w / aspect); }
-        if (tW == w && tH == h) return src;
-        int offX = (w - tW) / 2, offY = (h - tH) / 2;
-        NativeImage dst = new NativeImage(tW, tH, false);
-        for (int y = 0; y < tH; y++)
-            for (int x = 0; x < tW; x++)
-                dst.setPixel(x, y, src.getPixel(x + offX, y + offY));
-        return dst;
-    }
+        int cW, cH;
+        if ((float) w / h > aspect) { cH = h; cW = Math.round(h * aspect); }
+        else                        { cW = w; cH = Math.round(w / aspect); }
+        int offX = (w - cW) / 2, offY = (h - cH) / 2;
 
-    private static NativeImage boxDownsample(NativeImage src, int maxWidth) {
-        int sw = src.getWidth(), sh = src.getHeight();
-        if (sw <= maxWidth) return src;
-        int dw = maxWidth, dh = Math.max(1, Math.round((float) sh * dw / sw));
+        int dw = Math.min(maxWidth, cW);
+        int dh = Math.max(1, Math.round((float) cH * dw / cW));
         NativeImage dst = new NativeImage(dw, dh, false);
-        float xS = (float) sw / dw, yS = (float) sh / dh;
+
+        // Whole-pixel copy when no scaling is needed - avoids the averaging arithmetic.
+        if (dw == cW && dh == cH) {
+            for (int y = 0; y < dh; y++)
+                for (int x = 0; x < dw; x++)
+                    dst.setPixel(x, y, src.getPixel(x + offX, y + offY));
+            return dst;
+        }
+
+        float xS = (float) cW / dw, yS = (float) cH / dh;
         for (int y = 0; y < dh; y++) {
             int sy0 = (int) Math.floor(y * yS);
-            int sy1 = Math.min(sh, (int) Math.ceil((y + 1) * yS));
+            int sy1 = Math.min(cH, (int) Math.ceil((y + 1) * yS));
             if (sy1 <= sy0) sy1 = sy0 + 1;
             for (int x = 0; x < dw; x++) {
                 int sx0 = (int) Math.floor(x * xS);
-                int sx1 = Math.min(sw, (int) Math.ceil((x + 1) * xS));
+                int sx1 = Math.min(cW, (int) Math.ceil((x + 1) * xS));
                 if (sx1 <= sx0) sx1 = sx0 + 1;
                 long ra = 0, ga = 0, ba = 0, aa = 0;
                 int  n  = 0;
                 for (int sy = sy0; sy < sy1; sy++)
                     for (int sx = sx0; sx < sx1; sx++) {
-                        int c = src.getPixel(sx, sy);
+                        int c = src.getPixel(sx + offX, sy + offY);
                         aa += (c >>> 24) & 0xFF; ba += (c >>> 16) & 0xFF;
                         ga += (c >>>  8) & 0xFF; ra +=  c         & 0xFF;
                         n++;

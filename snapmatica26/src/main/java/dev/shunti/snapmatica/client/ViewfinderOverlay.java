@@ -42,10 +42,9 @@ public final class ViewfinderOverlay {
         if (fw > sw*0.94f) { fw = (int)(sw*0.94f); fh = (int)(fw/aspect); }
         int fx = (sw-fw)/2, fy = (sh-fh)/2, fx2 = fx+fw, fy2 = fy+fh;
 
-        boolean hasLensForBlur = SnapmaticaClient.lensType != 0;
-        if (hasLensForBlur && SnapmaticaClient.aperture < 8.0f) {
+        if (SnapmaticaClient.lensType != 0) {
             EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2,
-                    SnapmaticaClient.focusDistance, SnapmaticaClient.aperture,
+                    AutoFocus.shaderFocusDistance(), SnapmaticaClient.aperture,
                     SnapmaticaClient.focalLengthMm);
         }
 
@@ -80,8 +79,11 @@ public final class ViewfinderOverlay {
         ctx.text(font, String.format("F%s  %s  ISO%d  %s",
                 fmt(dispAp), SHUTTERS[si], SnapmaticaClient.iso, fp),
                 fx+6, fy2-font.lineHeight-14, 0xFFE8DCC4, true);
-        if (SnapmaticaClient.lensType != 0 && SnapmaticaClient.focusDistance < SnapmaticaClient.FOCUS_INFINITY) {
-            String fd = fmtFocusDist(SnapmaticaClient.focusDistance);
+        if (SnapmaticaClient.lensType != 0) {
+            // Same predicate the DoF shader is driven from, so the readout cannot claim
+            // infinity while the blur works off a finite focus distance.
+            boolean atInf = AutoFocus.atInfinity();
+            String fd = atInf ? "inf" : fmtFocusDist(SnapmaticaClient.focusDistance);
             ctx.text(font, fd, fx2 - font.width(fd) - 6, fy + 4, rc, true);
         }
 
@@ -179,7 +181,10 @@ public final class ViewfinderOverlay {
     private static int focusReticleColor() {
         if (SnapmaticaClient.lensType == 0 || SnapmaticaClient.aperture >= 8f)
             return 0xFFFFFFFF;
-        if (SnapmaticaClient.focusDistance >= SnapmaticaClient.FOCUS_INFINITY)
+        // Testing focusDistance directly never fires in AF: AutoFocus clamps the value to
+        // its finite far anchor, so the reticle fell through to the next test, saw the scene
+        // depth reading infinity, and went red on a correctly focused sky.
+        if (AutoFocus.atInfinity())
             return 0xFFFFFFFF;
         if (PhotoCapture.lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY)
             return 0xFFE04040;  // sky / beyond range — always out of focus

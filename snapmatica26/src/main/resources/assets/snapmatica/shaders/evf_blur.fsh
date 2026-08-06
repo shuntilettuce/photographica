@@ -24,13 +24,34 @@ out vec4 fragColor;
 // layers are then composited far -> focus -> near with occlusion weighting, so an
 // out-of-focus foreground feathers softly OVER the sharp subject behind it (instead of
 // leaving a hard outline) while the subject itself stays crisp.
-const int   SAMPLES      = 80;
+const int   SAMPLES      = 128;
 const float GOLDEN_ANGLE = 2.39996323;
 const float TWO_PI       = 6.28318531;
+
+// At infinity focus, everything past this many blocks is forced sharp, ramping out between
+// the two. The physical CoC is correct but only as correct as the depth it is fed, and LOD
+// terrain (Voxy) does not report a trustworthy distance through the vanilla depth buffer.
+// At infinity the far field IS the focal plane, so treat it as in focus.
+const float INF_SHARP_BEGIN = 48.0;   // blocks — blur starts fading out here
+const float INF_SHARP_FULL  = 128.0;  // blocks — dead sharp beyond here
 
 float linearDepth(float d) {
     float ndc = 2.0 * d - 1.0;
     return 2.0 * Near * Far / (Far + Near - ndc * (Far - Near));
+}
+
+/**
+ * Minimum blur on distant geometry regardless of the thin-lens result — an atmospheric-haze
+ * floor that also hides LOD popping.
+ *
+ * This used to be an unconditional max(c, smoothstep(200, 600, d) * 5.0) at two sites, with
+ * no reference to the focus distance: anything past 200 blocks was forced to at least 5 px
+ * of blur even with the lens at infinity, so the infinity branch of computeCoc() returned
+ * ~0 and the floor put the blur straight back. Off at infinity focus.
+ */
+float distantHazeFloor(float depthM) {
+    if (FocusDist >= 99999.0) return 0.0;
+    return smoothstep(200.0, 600.0, depthM) * 5.0;
 }
 
 // Physically-based thin-lens circle of confusion, in framebuffer pixels.
@@ -40,6 +61,7 @@ float computeCoc(float depthM) {
     float cocMM;
     if (FocusDist >= 99999.0) {
         cocMM = (fmm * fmm) / (Aperture * depthM * DofScale);
+        cocMM *= 1.0 - smoothstep(INF_SHARP_BEGIN, INF_SHARP_FULL, depthM);
     } else {
         float s1mm = FocusDist * DofScale;
         float denom = Aperture * max(s1mm - fmm, 1.0);
@@ -78,13 +100,32 @@ void main() {
     if (BlurDir.x < 0.5) {
         float d = linearDepth(texture(DepthSampler, texCoord).r);
         float c = max(computeCoc(d) - 1.5, 0.0);
-        c = max(c, smoothstep(200.0, 600.0, d) * 5.0);
-        if (c < 2.0) { fragColor = texture(InSampler, texCoord); return; }
-        vec3 sum = vec3(0.0);
-        for (int dy = -2; dy <= 2; dy++)
-            for (int dx = -2; dx <= 2; dx++)
-                sum += texture(InSampler, texCoord + vec2(float(dx), float(dy)) * PixelSize).rgb;
-        fragColor = vec4(sum / 25.0, 1.0);
+        c = max(c, distantHazeFloor(d));
+        if (c < 2.0) { fragColor = vec4(texture(InSampler, texCoord).rgb, 1.0); return; }
+
+        // Scale by how STARVED the gather was here, which it reported in alpha, not by how
+        // blurred the pixel is. Sizing this off CoC alone smoothed every defocused pixel
+        // equally — including the ones the gather resolved perfectly well, which is bokeh
+        // thrown away for nothing. Where confidence is high this collapses to no denoise.
+        float starved = 1.0 - texture(InSampler, texCoord).a;
+        float rad     = clamp(c * 0.16, 1.0, 8.0) * starved;
+        if (rad < 0.75) { fragColor = vec4(texture(InSampler, texCoord).rgb, 1.0); return; }
+
+        // Gaussian-weighted, not a flat box: an unweighted square gives a bright or dark
+        // neighbour full strength out to the corners, which reads as smudging rather than
+        // defocus. Same radius, centre dominant.
+        float sigma = max(rad * 0.5, 0.5);
+        int   irad  = int(rad);
+        vec3  sum   = vec3(0.0);
+        float wsum  = 0.0;
+        for (int dy = -irad; dy <= irad; dy++)
+            for (int dx = -irad; dx <= irad; dx++) {
+                vec2  o = vec2(float(dx), float(dy));
+                float w = exp(-dot(o, o) / (2.0 * sigma * sigma));
+                sum  += texture(InSampler, texCoord + o * PixelSize).rgb * w;
+                wsum += w;
+            }
+        fragColor = vec4(sum / wsum, 1.0);
         return;
     }
 
@@ -97,32 +138,47 @@ void main() {
     // blocky chunks. A gentle minimum blur that grows with distance keeps far terrain
     // soft even when it is the focus subject. Near / mid subjects are untouched. This
     // pushes hazed pixels out of the sharp FOCUS layer into FAR, so they get blurred.
-    cocP = max(cocP, smoothstep(200.0, 600.0, depthM) * 5.0);
+    cocP = max(cocP, distantHazeFloor(depthM));
 
-    // Does a closer, out-of-focus pixel bloom over this one? (Run for every pixel: the
-    // in-focus subject sits right at the focus distance, so some of its pixels read as
-    // depth < focus and must still be allowed to receive a foreground bloom.)
-    bool hasNearFg = false;
-    if (FocusDist < 99999.0) {
-        for (int k = 0; k < 16 && !hasNearFg; k++) {
-            float a = float(k) * (TWO_PI / 16.0);
-            vec2 dir = vec2(cos(a), sin(a));
-            for (int s = 1; s <= 5; s++) {
-                float rr = MaxBlurPx * float(s) / 5.0;
-                float sd = linearDepth(texture(DepthSampler, texCoord + dir * rr * PixelSize).r);
-                if (sd < depthM - 0.5 && sd < FocusDist && max(computeCoc(sd) - 1.5, 0.0) >= rr - 1.0) {
-                    hasNearFg = true; break;
-                }
+    // Coarse scan for neighbours whose own disc is wide enough to reach this pixel. It yields
+    // both whether a nearer, defocused neighbour blooms over us, and how far out anything
+    // that contributes actually lives. Ring radii are spaced QUADRATICALLY so they crowd near
+    // the centre: evenly spaced, the innermost sat at MaxBlurPx/5 (24 px at f/1.4) and a
+    // foreground blurred less than that was never detected at all, so the gather shrank to
+    // the background's own CoC and the foreground never scattered outward — its silhouette
+    // then kept the geometry it has in focus, corners and all.
+    bool  hasNearFg = false;
+    float reachR    = 0.0;
+    for (int k = 0; k < 16; k++) {
+        float a = float(k) * (TWO_PI / 16.0);
+        vec2 dir = vec2(cos(a), sin(a));
+        for (int s = 1; s <= 6; s++) {
+            float t   = float(s) / 6.0;
+            float rr  = MaxBlurPx * t * t;
+            float sd  = linearDepth(texture(DepthSampler, texCoord + dir * rr * PixelSize).r);
+            float sc2 = max(computeCoc(sd) - 1.5, 0.0);
+            if (sc2 >= rr - 1.0) {
+                reachR = max(reachR, min(sc2, MaxBlurPx));
+                if (sd < depthM - 0.5 && sd < FocusDist) hasNearFg = true;
             }
         }
     }
 
     if (cocP < 0.5 && !hasNearFg) {    // sharp, nothing blooming over it → leave crisp
-        fragColor = centre;
+        fragColor = vec4(centre.rgb, 1.0);   // alpha 1 = fully sampled, needs no denoise
         return;
     }
 
-    float gatherR       = MaxBlurPx;
+    // Size the gather to what can actually contribute: this pixel's own disc, or the disc of
+    // the widest neighbour reaching it.
+    //
+    // This was pinned at MaxBlurPx for every pixel, and that is why WEAKLY defocused areas
+    // were the noisiest — the opposite of what you would expect. Spreading the taps over a
+    // 120 px disc when the pixel's own CoC is 3 px puts, on average, 128 * (3/120)^2 ~ 0.08
+    // samples inside the radius that can contribute: the colour was decided by whether one
+    // random tap happened to land. Matching the radius to the content puts every tap inside
+    // the disc, and the variance collapses.
+    float gatherR       = clamp(max(cocP, reachR), 1.0, MaxBlurPx);
     float areaPerSample = gatherR * gatherR / float(SAMPLES);
     // Per-128px tile: apply one of the 8 square symmetries (90 deg rotations + flips, the
     // only ones that keep the tile seamless & still blue noise) PLUS a toroidal offset,
@@ -136,6 +192,13 @@ void main() {
     if (th.z > 0.5) lc = lc.yx;               // transpose → gives the 90 deg rotations
     lc = fract(lc + hash22(ntile + 19.7));    // toroidal shift
     float rot  = texture(NoiseSampler, lc).r * TWO_PI;
+
+    // How many taps actually landed inside a contributing disc. When the gather has to be
+    // sized for a big neighbour while this pixel's own CoC is small, most taps fall outside
+    // everything and the result rests on the few that did not — grain hugging depth
+    // discontinuities. Carried out in alpha so the copy pass denoises exactly the pixels
+    // that were starved and leaves well-sampled bokeh alone.
+    float contrib = 0.0;
 
     // Premultiplied layer accumulators.
     vec3 nearC = vec3(0.0); float nearA = 0.0;
@@ -167,10 +230,19 @@ void main() {
         float sDepthM = linearDepth(texture(DepthSampler, sc).r);
         float sCoc    = max(computeCoc(sDepthM) - 1.5, 0.0);
         if (sCoc < 0.5) continue;          // sharp samples don't scatter (handled at centre only)
-        if (r > sCoc)   continue;          // this sample's bokeh disc doesn't reach P
 
+        // Soft disc edge. This was a binary `if (r > sCoc) continue;`, so whether a neighbour
+        // contributed flipped abruptly as the gather radius crossed that neighbour's own CoC.
+        // The SET of contributing samples therefore changed discontinuously from pixel to
+        // pixel, and the boundaries between those sets showed up as flat patches — the
+        // painterly, brush-stroke look. Feathering over a one-pixel band makes the same disc
+        // with its edge antialiased instead of quantised.
+        float edge = smoothstep(sCoc + 0.5, sCoc - 0.5, r);
+        if (edge <= 0.0) continue;
+
+        contrib   += edge;
         vec3  sCol = texture(InSampler, sc).rgb;
-        float w    = areaPerSample / max(sCoc * sCoc, 1.0);
+        float w    = areaPerSample / max(sCoc * sCoc, 1.0) * edge;
         if (sDepthM < FocusDist) { nearC += sCol * w; nearA += w; }
         else                     { farC  += sCol * w; farA  += w; }
     }
@@ -190,7 +262,8 @@ void main() {
     float wFar   = fr * (1.0 - na) * (1.0 - fo);
     float wsum   = wNear + wFocus + wFar;
 
+    float confidence = clamp(contrib / 40.0, 0.0, 1.0);
     fragColor = (wsum > 0.001)
-        ? vec4((nearCol * wNear + focCol * wFocus + farCol * wFar) / wsum, 1.0)
-        : centre;
+        ? vec4((nearCol * wNear + focCol * wFocus + farCol * wFar) / wsum, confidence)
+        : vec4(centre.rgb, 1.0);
 }
