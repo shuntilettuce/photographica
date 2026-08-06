@@ -16,8 +16,6 @@ public final class ViewfinderOverlay {
             "30\"","15\"","8\"","4\"","2\"","1\"",
             "1/2","1/4","1/8","1/15","1/30","1/60",
             "1/125","1/250","1/500","1/1000","1/2000","1/4000"};
-    private static final String[] LENS_NAMES =
-            {"No Lens","50mm Prime","24-70mm Zoom","35mm Prime","85mm Prime","14mm UWA","70-200mm Zoom","100mm Macro"};
 
     public static void extractRenderState(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
         Minecraft mc = Minecraft.getInstance();
@@ -37,16 +35,15 @@ public final class ViewfinderOverlay {
         if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isShiftKeyDown()) return;
         if (mc.screen != null) return;
 
-        float aspect = SnapmaticaClient.portraitOrientation ? 2f/3f : 3f/2f;
-        int fh = (int)(sh*0.86f), fw = (int)(fh*aspect);
-        if (fw > sw*0.94f) { fw = (int)(sw*0.94f); fh = (int)(fw/aspect); }
-        int fx = (sw-fw)/2, fy = (sh-fh)/2, fx2 = fx+fw, fy2 = fy+fh;
-
-        if (SnapmaticaClient.lensType != 0) {
-            EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2,
-                    AutoFocus.shaderFocusDistance(), SnapmaticaClient.aperture,
-                    SnapmaticaClient.focalLengthMm);
-        }
+        // Exactly the region the capture will crop to — see PhotoCapture.frameRect. The frame
+        // is deliberately not inset any further: an inset box would be showing less than the
+        // photo records, which is both a lie about the framing and a lie about the focal
+        // length, since the angle you judge is the angle the box spans. It also has to match
+        // what EvfBlurRenderer.applyBlur() blurs, or the strip between the two reads as a
+        // hazy band along the edge of the screen — blurred, but outside the bezel.
+        int[] fr = PhotoCapture.frameRect(sw, sh, SnapmaticaClient.portraitOrientation);
+        int fx = fr[0], fy = fr[1], fw = fr[2], fh = fr[3];
+        int fx2 = fx + fw, fy2 = fy + fh;
 
         ctx.fill(0,0,sw,fy,0xB8000000); ctx.fill(0,fy2,sw,sh,0xB8000000);
         ctx.fill(0,fy,fx,fy2,0xB8000000); ctx.fill(fx2,fy,sw,fy2,0xB8000000);
@@ -89,9 +86,12 @@ public final class ViewfinderOverlay {
 
         renderExposureMeter(ctx, fx, fx2, fy2);
 
-        ctx.text(font,
-                LENS_NAMES[Math.max(0, Math.min(LENS_NAMES.length-1, SnapmaticaClient.lensType))],
-                fx+6, fy+4, 0xFF9A8D72, true);
+        // Lens label. snapmatica has one lens and it zooms the whole range, so it is named
+        // after that range rather than the fixed focal lengths photographica's kit had.
+        String lens = hasLens
+                ? CameraScrollHandler.focalMinMm() + "-" + CameraScrollHandler.focalMaxMm() + "mm"
+                : Component.translatable("snapmatica.vf.no_lens").getString();
+        ctx.text(font, lens, fx+6, fy+4, 0xFF9A8D72, true);
 
         if (hasLens) {
             double safe = 1.0 / SnapmaticaClient.focalLengthMm;

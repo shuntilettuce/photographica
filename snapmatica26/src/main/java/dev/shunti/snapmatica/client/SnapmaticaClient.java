@@ -23,9 +23,61 @@ public class SnapmaticaClient implements ClientModInitializer {
     private static KeyMapping recordKey;
 
     public static float   aperture        = 5.6f;
+
+    /**
+     * Narrowest and widest f-number the barrel can physically reach, regardless of zoom.
+     * The blades cannot open wider than the barrel, nor close past their own limit, so the
+     * derived f-number below is clamped to this.
+     */
+    public static final float APERTURE_WIDEST    = 1.4f;
+    public static final float APERTURE_NARROWEST = 32.0f;
+
+    /**
+     * Diameter of the entrance pupil in mm — the physical opening the blades form.
+     *
+     * <p>This, not the f-number, is what the aperture ring actually sets. An f-number is only
+     * the ratio N = f / D, so it is not independent of focal length: hold the blades still and
+     * zoom in, and N climbs on its own. That is why a kit zoom is "f/3.5-5.6" — same blades,
+     * different focal length. Treating N as a free-standing knob (as this did) made the lens
+     * behave like nothing that exists.
+     *
+     * <p>Set whenever the aperture is adjusted, consumed whenever the focal length changes.
+     */
+    public static float apertureDiameterMm = 50.0f / 5.6f;
+
+    /** Records the blade opening implied by the current f-number and focal length. */
+    public static void syncApertureDiameter() {
+        if (focalLengthMm > 0 && aperture > 0f) apertureDiameterMm = focalLengthMm / aperture;
+    }
+
+    /**
+     * Re-derives the f-number after a focal-length change, with the blades left where they are.
+     * Clamped to what the barrel can do — at the wide end the blades would have to open past
+     * the barrel, so N floors out and the diameter is re-synced to the truth.
+     */
+    public static void applyFocalLengthToAperture() {
+        if (apertureDiameterMm <= 0f || focalLengthMm <= 0) return;
+        float n = focalLengthMm / apertureDiameterMm;
+        aperture = Math.max(APERTURE_WIDEST, Math.min(APERTURE_NARROWEST, n));
+        if (aperture != n) syncApertureDiameter();   // hit a stop; blades really did move
+        updateAutoValues();
+    }
+
     public static int     shutterSpeedIdx = 10;
     public static int     iso             = 400;
+
+    /** Where the image is ACTUALLY focused. Eased toward {@link #focusTarget}. */
     public static float   focusDistance   = 5.0f;
+
+    /**
+     * Where the focus ring is set — the destination, not the current state.
+     *
+     * <p>Manual focus used to write straight to {@link #focusDistance}, so every scroll click
+     * was an instant jump. Small clicks hid it, but the last step to infinity multiplies the
+     * distance tenfold in one go and the image snapped. Splitting ring position from lens
+     * position lets the same rack that autofocus uses carry manual focus too.
+     */
+    public static float   focusTarget     = 5.0f;
 
     /**
      * Focus-distance sentinel meaning "optical infinity". 100 km — far above any
@@ -138,10 +190,7 @@ public class SnapmaticaClient implements ClientModInitializer {
         // The AF raycast stays at the end of the pass; it is a world query and does not care
         // where in the render it runs.
         LevelRenderEvents.BEFORE_TRANSLUCENT_TERRAIN.register(ctx -> PhotoCapture.onBeforeTranslucent());
-        LevelRenderEvents.END_MAIN.register(ctx -> {
-            PhotoCapture.onWorldRenderEnd();
-            VideoRecorder.onWorldRenderEnd();
-        });
+        LevelRenderEvents.END_MAIN.register(ctx -> PhotoCapture.onWorldRenderEnd());
 
         System.out.println("[Snapmatica] Initialized.");
     }

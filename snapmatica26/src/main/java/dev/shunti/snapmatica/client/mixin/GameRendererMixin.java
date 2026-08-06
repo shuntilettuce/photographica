@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.state.GameRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -34,24 +35,20 @@ public class GameRendererMixin {
         Player player = Minecraft.getInstance().player;
         if (player == null) return;
 
-        float fovDeg;
-        if (VideoRecorder.isRecording()) {
-            // Video recording: apply the Alt+scroll zoom FOV (works without sneaking).
-            fovDeg = VideoRecorder.videoFov;
-        } else {
+        // The focal length applies while recording (any pose) or through the viewfinder.
+        if (!VideoRecorder.isRecording()) {
             if (!SnapmaticaClient.viewfinderSneakEnabled || !player.isShiftKeyDown()) return;
             if (SnapmaticaClient.lensType == 0) return;
-            int f = SnapmaticaClient.focalLengthMm;
-            if (f <= 0) return;
-            double halfSensorMm = SnapmaticaClient.portraitOrientation ? 18.0 : 12.0;
-            fovDeg = (float) Math.toDegrees(2.0 * Math.atan(halfSensorMm / f));
         }
+        int f = SnapmaticaClient.focalLengthMm;
+        if (f <= 0) return;
 
         CameraRenderState camState = gameRenderState.levelRenderState.cameraRenderState;
         if (camState == null || camState.projectionMatrix == null) return;
 
         Minecraft mc = Minecraft.getInstance();
         float aspect = (float) mc.getWindow().getWidth() / mc.getWindow().getHeight();
+        float fovDeg = (float) snapmatica$frameFov(f, aspect);
         camState.projectionMatrix.setPerspective(
                 (float) Math.toRadians(fovDeg), aspect, 0.05f, camState.depthFar);
         camState.hudFov = fovDeg;
@@ -66,9 +63,32 @@ public class GameRendererMixin {
         // framebuffer so the 3:2 photo crop is fully covered (viewfinder frame is only
         // 86% height, leaving ~90px unblurred on each edge of the photo otherwise).
         boolean wasCapturePending = PhotoCapture.isCapturePending();
-        EvfBlurRenderer.applyScheduledBlur(wasCapturePending);
+        EvfBlurRenderer.applyBlur(wasCapturePending);
         PhotoCapture.captureIfPending();
         // Video frame capture applies its own full-frame blur internally.
         VideoRecorder.captureFrameIfRecording();
+    }
+
+    /**
+     * Vertical FOV that frames the photo, not the window.
+     *
+     * <p>Minecraft's fov is the vertical angle of the whole window, but the photo is the
+     * largest centred 3:2 (or 2:3) rectangle inside it — see PhotoCapture.frameRect. Those
+     * coincide only when the window is at least as wide as the frame. On anything narrower
+     * the frame is limited by WIDTH, its height falls short of the window's, and anchoring on
+     * the window's vertical angle quietly narrows the picture: a 24 mm delivered about 45
+     * degrees instead of 53.
+     *
+     * <p>So anchor on whichever edge actually constrains the frame — height when the window
+     * is wide enough, width otherwise — and let the other follow from the 3:2 shape.
+     */
+    @Unique
+    private static double snapmatica$frameFov(int focalMm, double windowAspect) {
+        boolean portrait = SnapmaticaClient.portraitOrientation;
+        double halfH = portrait ? 18.0 : 12.0;   // 36x24 frame, half-extents in mm
+        double halfW = portrait ? 12.0 : 18.0;
+        double frameAspect = halfW / halfH;
+        double vHalfMm = (windowAspect >= frameAspect) ? halfH : halfW / windowAspect;
+        return Math.toDegrees(2.0 * Math.atan(vHalfMm / focalMm));
     }
 }

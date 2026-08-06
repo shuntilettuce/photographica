@@ -79,7 +79,7 @@ public final class VideoRecorderHud {
         int sw = ctx.guiWidth();
 
         int progress = VideoRecorder.getPpProgress();
-        String msg   = VideoRecorder.getPpMessage();
+        net.minecraft.network.chat.Component msg = VideoRecorder.getPpMessage();
 
         int barW   = 160;
         int barH   = 4;
@@ -119,10 +119,10 @@ public final class VideoRecorderHud {
 
         Font font = mc.font;
         int sw  = ctx.guiWidth();
-        String msg = VideoRecorder.getPpMessage();
+        net.minecraft.network.chat.Component msg = VideoRecorder.getPpMessage();
 
         int col = ((alpha << 24) & 0xFF000000) | (GREEN_SOFT & 0x00FFFFFF);
-        ctx.centeredText(font, Component.literal(msg), sw / 2, 12, col);
+        ctx.centeredText(font, msg, sw / 2, 12, col);
     }
 
     private static String formatDuration(long ms) {

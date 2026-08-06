@@ -63,6 +63,7 @@ public class VideoRecorderScreen extends Screen {
                 step -> {
                     int idx = FPS_LIST.indexOf(VideoRecorder.getCurrentFps()) + step;
                     VideoRecorder.setFps(FPS_LIST.get(clamp(idx, FPS_LIST.size())));
+                    SnapmaticaConfig.save();
                 }, !VideoRecorder.isRecording());
 
         // Motion blur

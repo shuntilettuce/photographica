@@ -96,8 +96,14 @@ public class CameraScreen extends Screen {
                 step -> SnapmaticaClient.focusMode = clampStep(SnapmaticaClient.focusMode, step, FOCUS_MODE_LABELS.length),
                 true);
 
-        addRenderableWidget(Button.builder(Component.literal("Close"), b -> onClose())
-                .bounds(cx - 40, top + row * rowHeight + 16, 80, 20).build());
+        // Camera roll and close, side by side. The roll has no key of its own — a photography
+        // mod already asks for enough of the keyboard, and this is where you would look for it.
+        int by = top + row * rowHeight + 16;
+        addRenderableWidget(CameraUi.SnapButton.primary(cx - 84, by, 80,
+                Component.translatable("snapmatica.gallery.open_roll"),
+                b -> { if (minecraft != null) minecraft.setScreen(new GalleryScreen()); }));
+        addRenderableWidget(CameraUi.SnapButton.ghost(cx + 4, by, 80,
+                Component.translatable("snapmatica.common.close"), b -> onClose()));
     }
 
     private void addRow2(int cx, int y, String label, java.util.function.Supplier<String> value,

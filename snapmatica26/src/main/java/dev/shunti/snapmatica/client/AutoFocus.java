@@ -22,34 +22,40 @@ public final class AutoFocus {
     private static final int FOCUS_AF  = 1;
     private static final int FOCUS_MOB = 2;
 
-    // True when AF/MOB resolved its target to the infinity sentinel (sky / no subject).
-    // The focus value only eases to FAR_ANCHOR to avoid foreground-blur flicker, so
-    // this flag lets the viewfinder label the distance "inf" instead of showing metres.
+    // cos(5°) — entities must be within this cone of the look direction
+    private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
+
+    /**
+     * Whether autofocus most recently RESOLVED to sky / no subject. Records intent only —
+     * where the lens actually is comes from {@link #atInfinity()}, and the two differ for as
+     * long as the rack takes to travel.
+     */
     public static volatile boolean afAtInfinity = false;
 
-    // Focus-pull (rack) easing. AF does not snap instantly: focusDistance is eased
-    // toward the target in log space, so the lens "pulls" focus like a real motor.
-    private static final float PULL_RATE     = 0.50f;  // fraction of remaining log-distance / tick
-    private static final float PULL_MAX_STEP = 0.22f;  // max log units / tick (caps rack speed)
-    private static final float PULL_SNAP_EPS = 0.01f;  // lock onto target below this log-distance
-    private static final float FAR_ANCHOR    = 1000.0f; // refocus from ∞ starts here (raycast range)
-    private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
+
+    // Manual-focus rack, in dioptres per client tick (20 Hz). RATE is the fraction of the
+    // remaining travel covered each tick; MAX caps how fast the barrel can physically turn, so
+    // a jump from close focus to infinity takes a visible moment instead of teleporting.
+    private static int prevFocusMode = -1;
+
+    private static final float RACK_RATE        = 0.28f;
+    private static final float RACK_MAX_DIOPTRE = 0.35f;
 
     /**
      * True when the camera is optically at infinity — either an explicit MF ∞ stop, or AF/MOB
      * having resolved to sky / no subject.
      *
-     * <p>The viewfinder label, the focus reticle and the DoF shader MUST agree on this, and
-     * they used to decide it independently: the HUD consulted {@link #afAtInfinity} and printed
-     * "inf", while the blur was handed the raw {@code focusDistance}, which {@link #pullFocus}
-     * had clamped to the finite {@link #FAR_ANCHOR}. So in AF mode the shader took its FINITE
-     * branch at 1000 blocks and went on blurring the horizon under an "inf" readout, and the
-     * reticle — testing focusDistance directly — never matched, fell through to the scene-depth
-     * test, and went red on a correctly focused sky.
+     * <p>The viewfinder label, the reticle and the DoF shader all have to agree on this, and
+     * they once decided it independently — the HUD printing "inf" off the AF intent while the
+     * blur worked from a finite distance, so the horizon stayed soft under an "inf" readout.
      */
     public static boolean atInfinity() {
-        return SnapmaticaClient.focusDistance >= SnapmaticaClient.FOCUS_INFINITY
-                || (SnapmaticaClient.focusMode != FOCUS_MF && afAtInfinity);
+        // Where the LENS is, never where autofocus intends to go. Consulting the intent made
+        // the shader jump to the infinity sentinel the instant AF resolved to sky, while the
+        // focus itself was still setting off from five metres — so the picture snapped to
+        // infinity in one frame however smoothly the rack then travelled. The readout, the
+        // reticle and the optics all read the same thing now, which is the image.
+        return SnapmaticaClient.focusDistance >= SnapmaticaClient.FOCUS_INFINITY;
     }
 
     /** Focus distance to hand the DoF shader — the sentinel whenever {@link #atInfinity()}. */
@@ -59,19 +65,21 @@ public final class AutoFocus {
 
     /** Blocks a photographer focuses THROUGH rather than ON: glass of every kind, panes, bars. */
     private static boolean isSeeThrough(net.minecraft.world.level.block.Block b) {
-        return b instanceof net.minecraft.world.level.block.TransparentBlock  // glass, stained, tinted
-                || b instanceof net.minecraft.world.level.block.IronBarsBlock; // panes, iron bars
+        return b instanceof net.minecraft.world.level.block.TransparentBlock   // glass, stained, tinted
+                || b instanceof net.minecraft.world.level.block.IronBarsBlock;     // panes, iron bars
     }
 
     /**
      * Raycast for autofocus that does not stop on glass.
      *
-     * <p>The plain clip reports the pane, because a pane is solid as far as collision is
-     * concerned — so aiming the reticle at a window focused on the window. A camera pointed
+     * <p>The plain world raycast reports the pane, because a pane is solid as far as collision
+     * is concerned — so aiming the reticle at a window focused on the window. A camera pointed
      * through glass focuses on what is beyond it, so this steps past each see-through block it
-     * meets and carries on, up to a few layers, returning the first genuinely opaque hit. (The
-     * DoF depth buffer is sampled before the translucent pass for the same reason; this is the
-     * CPU-side half of the same idea.)
+     * meets and carries on, up to a few layers, and returns the first thing that is genuinely
+     * opaque. (The DoF depth buffer is sampled before the translucent pass for the same
+     * reason; this is the CPU-side half of the same idea.)
+     *
+     * @return the first opaque hit, or the last result if only glass was found
      */
     public static net.minecraft.world.phys.BlockHitResult raycastThroughGlass(
             Minecraft mc, Vec3 eye, Vec3 look, double maxDist) {
@@ -85,8 +93,8 @@ public final class AutoFocus {
             if (hit == null || hit.getType() == net.minecraft.world.phys.HitResult.Type.MISS) return hit;
             if (!isSeeThrough(mc.level.getBlockState(hit.getBlockPos()).getBlock())) return hit;
 
-            // Walk out of the block just hit before resuming, otherwise the next cast starts
-            // inside it and reports the very same block again.
+            // Walk out of the block we just hit before resuming, otherwise the next cast
+            // starts inside it and reports the very same block again.
             net.minecraft.core.BlockPos hitPos = hit.getBlockPos();
             Vec3 p = hit.getLocation();
             for (int k = 0; k < 40
@@ -101,10 +109,28 @@ public final class AutoFocus {
 
     public static void tick(Minecraft mc) {
         if (mc.player == null || mc.level == null) return;
+        // Track while the sneak viewfinder is up OR while recording (so the baked-in
+        // preview blur keeps focus on the subject even when not sneaking).
         boolean active = (SnapmaticaClient.viewfinderSneakEnabled && mc.player.isShiftKeyDown())
                 || VideoRecorder.isRecording();
         if (!active) return;
-        if (SnapmaticaClient.focusMode == FOCUS_MF) return;
+
+        // Handover: autofocus moves the lens without touching the ring, so the moment manual
+        // focus takes over, the ring has to be picked up from wherever the lens was left.
+        // Otherwise the first manual click would rack back to a stale setting before moving.
+        if (SnapmaticaClient.focusMode != prevFocusMode) {
+            if (SnapmaticaClient.focusMode == FOCUS_MF) {
+                SnapmaticaClient.focusTarget = SnapmaticaClient.focusDistance;
+            }
+            prevFocusMode = SnapmaticaClient.focusMode;
+        }
+
+        // Manual focus racks too. The ring sets the destination; the lens travels there.
+        if (SnapmaticaClient.focusMode == FOCUS_MF) {
+            SnapmaticaClient.focusDistance =
+                    rackDioptric(SnapmaticaClient.focusDistance, SnapmaticaClient.focusTarget);
+            return;
+        }
 
         float targetDepth;
         if (SnapmaticaClient.focusMode == FOCUS_AF) {
@@ -119,26 +145,66 @@ public final class AutoFocus {
 
         float target = snapFocus(targetDepth);
         afAtInfinity = (target >= SnapmaticaClient.FOCUS_INFINITY);
-        SnapmaticaClient.focusDistance = pullFocus(SnapmaticaClient.focusDistance, target);
+        // Same dioptric rack manual focus uses, and aimed at the REAL target including the far
+        // stop. It used to ease toward a finite FAR_ANCHOR instead, on the grounds that
+        // snapping to infinity flickered whenever the centre pixel swept across sky — but that
+        // was a property of snapping, not of arriving. A rack with a time constant damps the
+        // sweep on its own, and stopping short of the stop meant AF could never actually reach
+        // infinity: the far field stayed partly blurred with the camera pointed at the sky.
+        SnapmaticaClient.focusDistance = rackDioptric(SnapmaticaClient.focusDistance, target);
+        // Keep the ring in step, so switching to manual does not rack back to a stale setting.
+        SnapmaticaClient.focusTarget = SnapmaticaClient.focusDistance;
     }
 
-    /** Eases the current focus distance one tick toward the target stop in log space. */
-    private static float pullFocus(float current, float target) {
-        // Ease toward FAR_ANCHOR instead of snapping to FOCUS_INFINITY on sky hits,
-        // to prevent bokeh flicker when the centre pixel briefly sweeps across sky.
-        if (target >= SnapmaticaClient.FOCUS_INFINITY) target = FAR_ANCHOR;
-        if (current >= SnapmaticaClient.FOCUS_INFINITY) current = FAR_ANCHOR;
-        current = Math.max(0.01f, current);
-        float logCur = (float) Math.log(current);
-        float logTar = (float) Math.log(target);
-        float diff   = logTar - logCur;
-        if (Math.abs(diff) <= PULL_SNAP_EPS) return target;
-        float step = diff * PULL_RATE;
-        if (step >  PULL_MAX_STEP) step =  PULL_MAX_STEP;
-        if (step < -PULL_MAX_STEP) step = -PULL_MAX_STEP;
-        return (float) Math.exp(logCur + step);
+    /** Distance to refractive power. Infinity is simply zero, which is why this space works. */
+    private static float toDiopters(float d) {
+        return (d >= SnapmaticaClient.FOCUS_INFINITY) ? 0f : 1f / Math.max(d, 0.01f);
     }
 
+    private static float fromDiopters(float dio) {
+        // Below this the remaining travel is a few metres out of infinity; call it arrived,
+        // so the readout and the shader's infinity branch actually engage.
+        return (dio <= 1f / SnapmaticaClient.FOCUS_INFINITY * 10f) ? SnapmaticaClient.FOCUS_INFINITY
+                                                                   : 1f / dio;
+    }
+
+    /**
+     * Moves the focus one tick toward its target, interpolating in DIOPTRES rather than in
+     * distance or log-distance.
+     *
+     * <p>Distance runs to infinity and log-distance runs to negative infinity, so neither can
+     * represent the far stop — which is why the old manual path just assigned it and the image
+     * snapped. Refractive power puts infinity at exactly 0, a finite value the rack can travel
+     * to like any other, and it is roughly how a helicoid moves anyway: the far half of the
+     * scale is a sliver of the ring's travel.
+     */
+    private static float rackDioptric(float current, float target) {
+        float cur = toDiopters(current);
+        float tar = toDiopters(target);
+        float diff = tar - cur;
+        // One part in a hundred thousand of a dioptre — the refractive power of the infinity
+        // sentinel itself, so "arrived" means arrived at the far stop and nothing sooner. At
+        // the previous 1e-4 this equalled the power of FOCUS_MAX exactly, so the final step of
+        // a rack out to infinity always completed in a single tick: the one step anyone would
+        // notice. Tighter than this only adds an invisible tail and delays the readout.
+        if (Math.abs(diff) <= 1e-5f) return target;
+        float step = diff * RACK_RATE;
+        float ceil = RACK_MAX_DIOPTRE;
+        if (step >  ceil) step =  ceil;
+        if (step < -ceil) step = -ceil;
+        return fromDiopters(cur + step);
+    }
+
+    /**
+     * Snaps a measured scene depth to an AF focus distance.
+     *   • depth &gt;= sentinel → infinity (raycast miss / sky / no subject)
+     *   • depth &lt;= 5 m      → nearest 0.1 m (macro / close-up precision)
+     *   • otherwise          → nearest 1 m, finite (super-telephoto on a 2000 m subject
+     *                          focuses at 2000 m, not collapsed to infinity)
+     * The 1 m resolution at range matters for super-telephoto, whose depth of field is
+     * so shallow that a 10–30 m focus error (the old coarse stops) left distant subjects
+     * permanently soft.
+     */
     private static float snapFocus(float depth) {
         if (depth >= SnapmaticaClient.FOCUS_INFINITY) return SnapmaticaClient.FOCUS_INFINITY;
         return Math.max(0.1f, depth);
@@ -146,13 +212,12 @@ public final class AutoFocus {
 
     private static Float nearestMobInCone(Minecraft mc) {
         if (mc.player == null || mc.level == null) return null;
-        Vec3 eye  = mc.player.getEyePosition();
+        Vec3 eye = mc.player.getEyePosition();
         Vec3 look = mc.player.getViewVector(1.0f);
 
         double best = Double.MAX_VALUE;
         for (LivingEntity e : mc.level.getEntitiesOfClass(LivingEntity.class,
-                mc.player.getBoundingBox().inflate(50.0),
-                ent -> ent != mc.player && ent.isAlive())) {
+                mc.player.getBoundingBox().inflate(50.0), ent -> ent != mc.player && ent.isAlive())) {
             Vec3 toEnt = e.position().add(0, e.getBbHeight() * 0.5, 0).subtract(eye);
             double dist = toEnt.length();
             if (dist < 0.1) continue;

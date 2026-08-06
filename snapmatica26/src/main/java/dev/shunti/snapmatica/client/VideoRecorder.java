@@ -1,9 +1,8 @@
 package dev.shunti.snapmatica.client;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Screenshot;
-import com.mojang.blaze3d.pipeline.RenderTarget;
 import net.minecraft.network.chat.Component;
 
 import java.io.File;
@@ -19,79 +18,106 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Client-side video recording engine for Snapmatica (MC 26.1.2).
+ * Client-side video recording engine for Snapmatica.
  *
- * Records the EVF-blurred framebuffer each frame (GPU DoF baked in),
- * then encodes via ffmpeg concat demuxer. Motion blur via ffmpeg tmix.
+ * Design philosophy: "record the viewfinder preview".
+ *
+ * The live EVF preview already applies a high-quality, GPU depth-of-field blur
+ * (EvfBlurRenderer, a physical thin-lens shader). Rather than re-deriving DoF on
+ * the CPU per frame — which stalled the render thread on a full-buffer depth
+ * read and then spent seconds in post-processing — we simply bake that same GPU
+ * blur into the framebuffer for each recorded frame and screenshot it. No depth
+ * read-back, no CPU DoF, no CPU motion blur. Post-processing is just the ffmpeg
+ * encode.
+ *
+ * Pipeline per recorded frame (render thread, in GameRendererMixin after renderWorld):
+ *   captureFrameIfRecording() – bake preview DoF (GPU) → screenshot → crop 16:9
+ *                               → downsample → async PNG write.
  */
 public final class VideoRecorder {
     private VideoRecorder() {}
 
+    // ── Constants ────────────────────────────────────────────────────────────────
     public static final int FPS        = 24;
-    public static final int MAX_FRAMES = 30 * 120;  // 2 minutes @ 30 fps
-
-    public static final float VIDEO_FOV_MIN   = 10.0f;  // max zoom (telephoto)
-    public static final float VIDEO_FOV_MAX   = 70.0f;  // unzoomed
-    public static final float VIDEO_ZOOM_STEP = 5.0f;   // deg per scroll tick
-    /** Vertical FOV (deg) used while recording — Alt+scroll zoom adjusts this. */
-    public static volatile float videoFov = VIDEO_FOV_MAX;
+    public static final int MAX_FRAMES = 30 * 120;   // 2 minutes @ 30 fps
 
     private static int currentFps = FPS;
 
-    // 0 = off, 1 = light (2-frame), 2 = strong (4-frame)
+    // Motion blur via ffmpeg frame-blending (tmix), applied at encode time. The
+    // per-frame CPU motion blur was removed in the "record the preview" rewrite to
+    // stop render-thread stalls; blending adjacent frames in the encoder gives the
+    // same look at zero in-game cost. 0 = off, 1 = light (2-frame), 2 = strong (4-frame).
     private static volatile int motionBlur = 1;
 
-    private static volatile boolean recording      = false;
-    private static volatile boolean postProcessing = false;
-    private static volatile int     ppProgress     = 0;
-    private static volatile String  ppMessage      = "";
-    public  static volatile long    doneAtMs       = 0L;
+    // ── Camera state saved for the duration of a take ────────────────────────────
+    private static boolean prevSmoothCamera = false;
+    private static boolean prevBobView      = true;
 
-    private static String          sessionId;
-    private static int             frameCount;
-    private static int             virtualFrameCount;
-    private static long            recordStartMs;
-    private static long            nextFrameMs;
-    private static File            rawDir;
-    private static List<FrameMeta> frameMetas;
-
-    private static final AtomicInteger writtenFrames = new AtomicInteger(0);
-
-    // Autofocus constants — identical to AutoFocus.java for same feel as photo viewfinder.
-    private static final float AF_PULL_RATE  = 0.50f;
-    private static final float AF_PULL_MAX   = 0.22f;
+    // ── Autofocus constants (identical to AutoFocus.java — same feel as photo viewfinder) ──
+    // Focus easing is TIME-based, not per-tick. Stepping a fixed fraction on a fixed 20 Hz
+    // schedule while frames are captured at 24 fps means consecutive frames advance the focus
+    // by different amounts — two steps, then one, then two — and that beat is visible in the
+    // footage as the focus stuttering even though the frame pacing is even. Deriving the step
+    // from elapsed wall-clock time makes the motion identical regardless of when frames land.
+    //
+    // The time constant also has to be LONGER than the interval at which the target itself
+    // is refreshed. The scene raycast is throttled to 10 Hz, so the target arrives as a
+    // staircase; with the old 72 ms constant the focus reached each new step almost at once
+    // and then waited, reproducing that staircase in the footage. At 24 fps its ~2.4-frame
+    // period is exactly the alternation measured frame to frame. Easing over 180 ms instead
+    // means the focus is always still travelling when the next target lands, so it glides
+    // through the steps rather than landing on each one.
+    private static final float AF_TAU_SEC        = 0.18f;   // e-folding time of the rack
+    private static final float AF_MAX_LOG_PER_S  = 4.4f;    // rack speed ceiling
     private static final float AF_SNAP_EPS   = 0.01f;
     // Throttle scene raycast to 10 Hz to avoid stalling on long-range/DH raycasts.
     private static final long  AF_QUERY_INTERVAL_MS = 100L;
-    // Step focus at 20 Hz to match AutoFocus.tick() rate.
-    private static final long  AF_STEP_INTERVAL_MS  =  50L;
+
+    // ── Autofocus state ──────────────────────────────────────────────────────────
     private static float currentFocusDepth = 5.0f;
     private static float focusTargetDepth  = 5.0f;
     private static long  lastAfQueryMs     = 0L;
     private static long  lastAfStepMs      = 0L;
 
-    private static boolean prevBobView = true;
+    // ── Recording state ──────────────────────────────────────────────────────────
+    private static volatile boolean recording      = false;
+    private static volatile boolean postProcessing = false;
+    private static volatile int     ppProgress     = 0;
+    private static volatile Component    ppMessage      = Component.empty();
+    public  static volatile long    doneAtMs       = 0L;
 
-    /** smoothCamera state saved at record start, restored on stop. */
-    private static boolean prevSmoothCamera = false;
+    private static String          sessionId;
+    private static int             frameCount;        // sequential PNG file index (0,1,2...)
+    private static int             virtualFrameCount; // timing index; skips slots when render is slow
+    private static long            recordStartMs;
+    private static long            nextFrameMs;
+    private static File            rawDir;
+    private static List<FrameMeta> frameMetas;
 
+    // Count of frames whose PNG write has completed (success or failure).
+    // Incremented by the ioExecutor thread; read by the post-processing thread
+    // to display write-phase progress (0–10%).
+    private static final AtomicInteger writtenFrames = new AtomicInteger(0);
+
+    // Frame scaling and PNG encoding are pure CPU work on independent frames, and each
+    // output file carries its own index, so they parallelise freely. A single thread could
+    // not keep up with the capture rate: the queue grew all recording long, holding a
+    // full-resolution NativeImage per pending frame. Capped low to leave cores for the game.
     private static final ExecutorService ioExecutor =
-            // Frame scaling and PNG encoding are pure CPU work on independent frames, and
-            // each output carries its own index, so they parallelise freely. One thread could
-            // not keep up with the capture rate: the queue grew all recording long, holding a
-            // full-resolution NativeImage per pending frame. Capped low to leave cores free.
             Executors.newFixedThreadPool(
                     Math.max(2, Math.min(4, Runtime.getRuntime().availableProcessors() / 4)),
                     r -> {
-                Thread t = new Thread(r, "snapmatica-video-io");
-                t.setDaemon(true);
-                return t;
-            });
+                        Thread t = new Thread(r, "snapmatica-video-io");
+                        t.setDaemon(true);
+                        t.setPriority(Thread.MIN_PRIORITY);
+                        return t;
+                    });
 
+    // ── Public accessors ─────────────────────────────────────────────────────────
     public static boolean isRecording()      { return recording; }
     public static boolean isPostProcessing() { return postProcessing; }
     public static int     getPpProgress()    { return ppProgress; }
-    public static String  getPpMessage()     { return ppMessage; }
+    public static Component    getPpMessage()     { return ppMessage; }
     public static long    getDoneAtMs()      { return doneAtMs; }
     public static int     getFrameCount()    { return frameCount; }
     public static long    getRecordStartMs() { return recordStartMs; }
@@ -100,8 +126,12 @@ public final class VideoRecorder {
     public static int     getMotionBlur()    { return motionBlur; }
     public static void    setMotionBlur(int v) { motionBlur = Math.max(0, Math.min(2, v)); }
 
+    // ── FrameMeta ────────────────────────────────────────────────────────────────
+    // durationSec lets the concat demuxer hold each frame for the right wall-clock
+    // time, so dropped frames (render slower than target FPS) don't speed the video up.
     record FrameMeta(int idx, float durationSec) {}
 
+    // ── Start / Stop ─────────────────────────────────────────────────────────────
     public static void toggleRecording() {
         if (recording) stopRecording();
         else if (!postProcessing) startRecording();
@@ -114,8 +144,8 @@ public final class VideoRecorder {
         String ts = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
         sessionId = ts;
 
-        currentFps        = FPS;
-        videoFov          = VIDEO_FOV_MAX;   // each recording starts unzoomed
+        // currentFps is deliberately left alone — it holds whatever the recorder screen was
+        // set to, and resetting it here silently threw that choice away on every take.
         frameCount        = 0;
         virtualFrameCount = 0;
         writtenFrames.set(0);
@@ -136,17 +166,19 @@ public final class VideoRecorder {
             return;
         }
 
-        // Enable cinematic (smooth) camera for steadier handheld panning footage.
+        // Enable cinematic (smooth) camera for steadier panning footage.
         prevSmoothCamera = mc.options.smoothCamera;
         mc.options.smoothCamera = true;
-        // Stabilisation: view bobbing is the walking shake, and it is worse on video than in
-        // play because the DoF is baked per frame - the bob swings the whole image while the
-        // defocus stays put, so the two disagree and it reads as smearing, not as motion.
+        // Stabilisation: view bobbing is the walking shake, and it is worse on video than it
+        // looks in play because the DoF blur is baked per frame — the bob swings the whole
+        // frame while the defocus stays put, so the two disagree and the image reads as
+        // smeared rather than moved. Cinematic (smooth) camera above already damps the mouse;
+        // this damps the gait.
         prevBobView = mc.options.bobView().get();
         mc.options.bobView().set(false);
 
         recording = true;
-        mc.gui.setOverlayMessage(Component.literal("● REC 開始"), true);
+        mc.gui.setOverlayMessage(Component.translatable("snapmatica.rec.started"), true);
     }
 
     public static void stopRecording() {
@@ -156,16 +188,17 @@ public final class VideoRecorder {
         Minecraft mc = Minecraft.getInstance();
         mc.options.smoothCamera = prevSmoothCamera;
         mc.options.bobView().set(prevBobView);
-        if (mc.player != null)
-            mc.gui.setOverlayMessage(Component.literal("■ 録画停止 — エンコード中..."), true);
 
-        final List<FrameMeta> metas  = new ArrayList<>(frameMetas);
+        if (mc.player != null)
+            mc.gui.setOverlayMessage(Component.translatable("snapmatica.rec.stopped"), true);
+
+        final List<FrameMeta> metas   = new ArrayList<>(frameMetas);
         final File            rawSnap = rawDir;
         final File            vidDir  = new File(mc.gameDirectory, "snapmatica/videos");
 
         postProcessing = true;
         ppProgress     = 0;
-        ppMessage      = "エンコード中...";
+        ppMessage      = Component.translatable("snapmatica.pp.encoding");
 
         Thread t = new Thread(() -> doPostProcess(metas, rawSnap, vidDir),
                 "snapmatica-video-pp");
@@ -173,36 +206,21 @@ public final class VideoRecorder {
         t.start();
     }
 
-    /**
-     * Called at LevelRenderEvents.END_MAIN while the depth buffer is still valid.
-     * Captures the scene depth texture needed by the EVF blur shader.
-     * PhotoCapture.onWorldRenderEnd() only does this while Shift is held (viewfinder mode),
-     * so we must do it independently here while recording.
-     */
-    public static void onWorldRenderEnd() {
-        if (!recording) return;
-        Minecraft mc = Minecraft.getInstance();
-        RenderTarget mainFb = mc.getMainRenderTarget();
-        if (mainFb == null) return;
-        int fbW = mainFb.width, fbH = mainFb.height;
-        // Depth is copied in PhotoCapture.onBeforeTranslucent(), which runs before the
-        // translucent pass (so glass does not stamp its surface over the view through it) and
-        // whose guard already covers recording. Copying again here would only overwrite it
-        // with a buffer that has the glass in it.
-        if (fbW <= 0 || fbH <= 0) return;
-    }
+    // ── Render-thread hooks ───────────────────────────────────────────────────────
 
+    // ── Frame capture (render thread) ─────────────────────────────────────────────
     /**
-     * Called from GameRendererMixin after renderLevel() (after shaders have composited).
-     * Applies preview DoF blur to the whole framebuffer, then screenshots the frame.
+     * Called from GameRendererMixin after renderWorld() (after Iris shader compositing).
+     * Bakes the preview DoF into the framebuffer, then screenshots it.
      */
     public static void captureFrameIfRecording() {
         if (!recording) return;
+
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        // Update AF and apply blur every render frame so the live preview stays
-        // consistently DoF'd — eliminates the sharp/blurred flicker.
+        // AF + DoF run every render frame so the preview stays smooth (applying only on
+        // capture frames caused sharp/blurred flickering each render cycle).
         updateAutofocus(mc);
         applyPreviewBlur(mc);
 
@@ -210,9 +228,12 @@ public final class VideoRecorder {
         if (now < nextFrameMs) return;
         if (virtualFrameCount >= MAX_FRAMES) { stopRecording(); return; }
 
-        long overdue = now - nextFrameMs;
+        // How many frame slots this single PNG covers. When the render thread is
+        // slower than the target FPS, several time slots pass between captures; the
+        // duration stamp keeps playback at correct real-world speed.
+        long overdue = now - nextFrameMs;           // ≥ 0 here
         int slotsConsumed = 1 + (int)(overdue * currentFps / 1000L);
-        slotsConsumed = Math.min(slotsConsumed, currentFps);
+        slotsConsumed = Math.min(slotsConsumed, currentFps); // cap at 1 s to absorb pauses
         float durationSec = (float) slotsConsumed / currentFps;
 
         virtualFrameCount += slotsConsumed;
@@ -225,49 +246,59 @@ public final class VideoRecorder {
 
         if (virtualFrameCount >= currentFps * 60 && virtualFrameCount - slotsConsumed < currentFps * 60
                 && mc.player != null)
-            mc.gui.setOverlayMessage(Component.literal("⚠ 残り 1:00"), true);
+            mc.gui.setOverlayMessage(Component.translatable("snapmatica.rec.one_minute"), true);
 
-        // Move crop+downsample to the IO thread so the screenshot callback (render thread)
-        // returns immediately and doesn't stall rendering during capture.
-        Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> {
-            if (raw == null) { writtenFrames.incrementAndGet(); return; }
-            ioExecutor.submit(() -> {
-                NativeImage frame = null;
-                try {
-                    frame = cropAndDownsample(raw, 1280);
-                    frame.writeToFile(outFile.toPath());
-                } catch (IOException e) {
+        // The framebuffer is already DoF-blurred (applyPreviewBlur ran above). Screenshot it.
+        // Nothing but the read-back itself happens here — scaling and encoding are handed
+        // straight to the I/O pool so the render thread is freed as early as possible.
+        Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> submitFrame(raw, outFile));
+    }
+
+    /**
+     * Takes ownership of a freshly read-back frame and does the whole scale-and-encode on
+     * the I/O pool. {@code raw} is closed here exactly once, on every path.
+     */
+    private static void submitFrame(NativeImage raw, File outFile) {
+        ioExecutor.submit(() -> {
+            try {
+                NativeImage frame = cropAndDownsample(raw, 1280);
+                try { frame.writeToFile(outFile); }
+                catch (IOException e) {
                     System.err.println("[VideoRecorder] Frame write failed: " + outFile);
-                } finally {
-                    if (frame != null) frame.close();
-                    raw.close();
-                    writtenFrames.incrementAndGet();
-                }
-            });
+                } finally { frame.close(); }
+            } catch (Exception e) {
+                System.err.println("[VideoRecorder] Frame process failed: " + outFile);
+            } finally {
+                raw.close();
+                writtenFrames.incrementAndGet();
+            }
         });
     }
 
     /**
-     * Applies full-frame GPU depth-of-field blur using the video AF focus depth.
-     * Uses currentFocusDepth (tracked via raycasts) rather than the still-camera
-     * SnapmaticaClient.focusDistance, which is only updated in sneak-viewfinder mode.
+     * Applies the viewfinder's GPU depth-of-field blur across the whole framebuffer.
+     * Uses the exact same focus / aperture / focal-length the live preview uses, so
+     * the recorded frame is literally the preview. Gated identically to the preview:
+     * a lens must be attached, the aperture wide enough, and focus finite.
      */
     private static void applyPreviewBlur(Minecraft mc) {
         if (SnapmaticaClient.lensType == 0) return;
-        if (SnapmaticaClient.aperture >= 8.0f) return;
-        double guiScale = mc.getWindow().getGuiScale();
-        int guiW = (int)(mc.getWindow().getWidth()  / guiScale);
-        int guiH = (int)(mc.getWindow().getHeight() / guiScale);
-        // Depth of field follows the video angle of view (zoom). Derive the focal length
-        // from the live video FOV (the focal that physically produces this FOV on a 24 mm
-        // sensor). No bokeh boost: the DoF is exactly what a still photo at this same angle
-        // of view would show, so wide shots have deep DoF and zooming in shallows it — like
-        // a real lens. DOF_SCALE_STILL matches the still EVF so F5.6 video = F5.6 stills.
-        float realFocalMm = (float)(12.0 / Math.tan(Math.toRadians(videoFov / 2.0)));
-        EvfBlurRenderer.renderBlur(0, 0, guiW, guiH,
+        // No f-number gate — EvfBlurRenderer decides from the actual circle of confusion.
+        int sw = mc.getWindow().getGuiScaledWidth();
+        int sh = mc.getWindow().getGuiScaledHeight();
+        // Video renders at the lens FOV (focalLengthMm) and uses that same focal length
+        // for DoF with DOF_SCALE_STILL — so the video bokeh equals the still viewfinder's
+        // at the same lens (F5.6 video = F5.6 stills). No boost: the DoF is exactly what a
+        // still photo through this lens would show. Changing the lens focal length zooms
+        // both the framing and the bokeh together, like a real lens.
+        // Recording keeps its own CPU autofocus (currentFocusDepth) for now — its rack easing
+        // is part of the footage's look, and GPU AF would snap instantly.
+        EvfBlurRenderer.renderBlur(0, 0, sw, sh,
                 currentFocusDepth, SnapmaticaClient.aperture,
-                realFocalMm, EvfBlurRenderer.DOF_SCALE_STILL);
+                SnapmaticaClient.focalLengthMm, EvfBlurRenderer.DOF_SCALE_STILL, false);
     }
+
+    // ── Autofocus ────────────────────────────────────────────────────────────────
 
     private static void updateAutofocus(Minecraft mc) {
         long nowMs = System.currentTimeMillis();
@@ -276,28 +307,20 @@ public final class VideoRecorder {
             float sceneDepth = computeSceneFocusDepth(mc);
             focusTargetDepth = Math.max(sceneDepth, 0.3f);
         }
-        // Every frame, by elapsed time - no fixed-rate gate to beat against the capture rate.
+        // Every frame, by elapsed time — no fixed-rate gate to beat against the capture rate.
         float dt = (nowMs - lastAfStepMs) / 1000.0f;
         lastAfStepMs = nowMs;
         if (dt > 0.0f) stepFocusLerp(Math.min(dt, 0.25f));
     }
-
-    /**
-     * Time-based, not per-tick. Stepping a fixed fraction on a fixed 20 Hz schedule while
-     * frames are captured at 24 fps means consecutive frames advance the focus by different
-     * amounts - two steps, then one - and that beat is visible as the focus stuttering even
-     * though the frame pacing is even. The time constant must also be LONGER than the 10 Hz
-     * interval at which the target itself is refreshed, or the focus reaches each new step
-     * and then waits, reproducing that staircase in the footage.
-     */
-    private static final float AF_TAU_SEC       = 0.18f;  // e-folding time of the rack
-    private static final float AF_MAX_LOG_PER_S = 4.4f;   // rack speed ceiling
 
     private static void stepFocusLerp(float dt) {
         float logCur = (float) Math.log(Math.max(0.1f, currentFocusDepth));
         float logTar = (float) Math.log(Math.max(0.1f, focusTargetDepth));
         float diff   = logTar - logCur;
         if (Math.abs(diff) < AF_SNAP_EPS) { currentFocusDepth = focusTargetDepth; return; }
+        // Exponential approach over dt — the frame-rate-independent form of "move a fixed
+        // fraction of what remains", so the same wall-clock interval always covers the same
+        // ground however the frames happen to be spaced.
         float step    = diff * (1.0f - (float) Math.exp(-dt / AF_TAU_SEC));
         float ceiling = AF_MAX_LOG_PER_S * dt;
         if (Math.abs(step) > ceiling) step = Math.signum(step) * ceiling;
@@ -305,32 +328,23 @@ public final class VideoRecorder {
     }
 
     private static float computeSceneFocusDepth(Minecraft mc) {
-        if (mc.level == null || mc.player == null || mc.gameRenderer == null)
-            return currentFocusDepth;
-        net.minecraft.client.Camera cam = mc.gameRenderer.getMainCamera();
-        if (cam == null || !cam.isInitialized()) return currentFocusDepth;
-
-        net.minecraft.world.phys.Vec3 eye = cam.position();
-        org.joml.Vector3fc f = cam.forwardVector();
-        net.minecraft.world.phys.Vec3 look =
-                new net.minecraft.world.phys.Vec3(f.x(), f.y(), f.z());
-
-        final double maxBlockDist  = 1000.0;
-        final double maxEntityDist = 60.0;
+        if (mc.level == null || mc.player == null) return currentFocusDepth;
+        final double maxDist = 1000.0;
+        net.minecraft.world.phys.Vec3 eye = mc.player.getEyePosition(1.0f);
+        net.minecraft.world.phys.Vec3 look = mc.player.getViewVector(1.0f);
+        net.minecraft.world.phys.Vec3 end = eye.add(look.scale(maxDist));
         net.minecraft.world.phys.BlockHitResult blockHit =
-                AutoFocus.raycastThroughGlass(mc, eye, look, maxBlockDist);
+                AutoFocus.raycastThroughGlass(mc, eye, look, maxDist);
         double bestDist = (blockHit != null
                 && blockHit.getType() != net.minecraft.world.phys.HitResult.Type.MISS)
-                ? eye.distanceTo(blockHit.getLocation()) : maxBlockDist;
-
-        net.minecraft.world.phys.Vec3 entityEnd = eye.add(look.scale(maxEntityDist));
-        net.minecraft.world.phys.AABB entityBox =
-                new net.minecraft.world.phys.AABB(eye, entityEnd).inflate(1.0);
+                ? eye.distanceTo(blockHit.getLocation()) : maxDist;
+        final double entityDist = Math.min(bestDist, 60.0);
+        net.minecraft.world.phys.Vec3 entityEnd = eye.add(look.scale(entityDist));
+        net.minecraft.world.phys.AABB searchBox =
+                mc.player.getBoundingBox().expandTowards(look.scale(entityDist)).inflate(1.0);
         net.minecraft.world.phys.EntityHitResult entityHit =
-                net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(
-                        mc.player, eye, entityEnd, entityBox,
-                        e -> !e.isSpectator() && e.isAlive() && e != mc.player,
-                        maxEntityDist * maxEntityDist);
+                net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(mc.player, eye, entityEnd,
+                        searchBox, e -> !e.isSpectator() && e.isAlive(), entityDist * entityDist);
         if (entityHit != null) {
             double eDist = eye.distanceTo(entityHit.getLocation());
             if (eDist < bestDist) bestDist = eDist;
@@ -338,16 +352,20 @@ public final class VideoRecorder {
         return (float) Math.min(bestDist, 999.0);
     }
 
+    // ── Post-processing (encode only) ─────────────────────────────────────────────
+
     private static void doPostProcess(List<FrameMeta> metas, File rawDirIn, File vidDir) {
         int total = metas.size();
         if (total == 0) {
             postProcessing = false;
-            ppMessage      = "フレームなし";
+            ppMessage      = Component.translatable("snapmatica.pp.no_frames");
             doneAtMs       = System.currentTimeMillis();
             return;
         }
 
-        ppMessage = "フレーム書き込み中...";
+        // Wait for the I/O thread to finish writing all frame PNGs,
+        // updating the progress bar (0–10%) while we wait.
+        ppMessage = Component.translatable("snapmatica.pp.writing");
         Future<?> sentinel = ioExecutor.submit(() -> {});
         while (!sentinel.isDone()) {
             ppProgress = writtenFrames.get() * 10 / total;
@@ -357,9 +375,11 @@ public final class VideoRecorder {
         }
         try { sentinel.get(); } catch (Exception ignored) {}
 
-        ppMessage  = "MP4 エンコード中...";
+        ppMessage  = Component.translatable("snapmatica.pp.encoding_mp4");
         ppProgress = 10;
 
+        // Per-frame duration file → ffmpeg concat demuxer holds each PNG for exactly
+        // the right wall-clock time, correcting for dropped frames.
         File concatFile = new File(rawDirIn, "frames.txt");
         try (PrintWriter pw = new PrintWriter(concatFile, java.nio.charset.StandardCharsets.UTF_8)) {
             for (FrameMeta meta : metas) {
@@ -377,14 +397,16 @@ public final class VideoRecorder {
 
         ppProgress = 100;
         if (ffmpegOk) {
-            ppMessage = "✓ 保存&コピー: snapmatica/videos/" + sessionId + ".mp4";
+            ppMessage = Component.translatable("snapmatica.pp.saved",
+                    "snapmatica/videos/" + sessionId + ".mp4");
             System.out.println("[VideoRecorder] Video saved: " + outMp4);
             ClipboardUtil.copyFileAsync(new File(outMp4));
             deleteDir(rawDirIn);
         } else {
             File pngDir = new File(vidDir, sessionId);
             rawDirIn.renameTo(pngDir);
-            ppMessage = "ffmpeg なし — PNG 保存: snapmatica/videos/" + sessionId + "/";
+            ppMessage = Component.translatable("snapmatica.pp.no_ffmpeg",
+                    "snapmatica/videos/" + sessionId + "/");
             System.out.println("[VideoRecorder] ffmpeg not found; PNGs at " + pngDir);
         }
 
@@ -392,14 +414,25 @@ public final class VideoRecorder {
         doneAtMs       = System.currentTimeMillis();
     }
 
+    // ── ffmpeg ────────────────────────────────────────────────────────────────────
+
+    /**
+     * ffmpeg frame-blend motion-blur filter for the current strength, or null if off.
+     * tmix slides a window of N frames and averages them, one output frame per input
+     * frame, so the framerate (and the concat duration stamps that set playback speed)
+     * are preserved — it just adds the blended motion trail.
+     */
     private static String motionBlurFilter() {
         switch (motionBlur) {
-            // Light: 75% current + 25% previous — subtle shutter-trail effect.
-            case 1:  return "tmix=frames=2:weights='3 1'";
-            // Strong: equal 50/50 blend — pronounced cinematic motion blur.
-            case 2:  return "tmix=frames=2";
-            default: return null;
+            case 1:  return "tmix=frames=2:weights='3 1'";  // light — 75/25 blend
+            case 2:  return "tmix=frames=4";   // strong — ~4-frame trail
+            default: return null;              // off
         }
+    }
+
+    /** Cores to hand ffmpeg: half the machine, at least 2, never more than 8. */
+    private static int encodeThreads() {
+        return Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors() / 2));
     }
 
     private static boolean runFfmpeg(File concatFile, String outPath) {
@@ -407,17 +440,21 @@ public final class VideoRecorder {
         String vf = motionBlurFilter();
         for (String ff : candidates) {
             try {
+                // concat demuxer: each frame carries its own duration so the video
+                // plays at correct wall-clock speed even when frames were dropped.
                 List<String> cmd = new ArrayList<>(List.of(
                         ff, "-y",
                         "-f", "concat", "-safe", "0",
                         "-i", concatFile.getAbsolutePath()));
                 if (vf != null) { cmd.add("-vf"); cmd.add(vf); }
+                // Leave the machine usable while encoding. Unconstrained, libx264 defaults
+                // to preset=medium across every core and — being a separate process — is
+                // beyond the reach of the I/O pool's thread priorities, so it starved the
+                // game right as recording stopped. Half the cores at veryfast encodes far
+                // faster than realtime for 1280x720 anyway; at the same CRF the only cost
+                // is a somewhat larger file.
                 cmd.addAll(List.of(
-                        // Leave the machine usable while encoding: unconstrained, libx264 defaults
-                        // to preset=medium across every core and, being a separate process, is
-                        // beyond the reach of the I/O pool's thread priorities.
-                        "-threads", Integer.toString(
-                                Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors() / 2))),
+                        "-threads", Integer.toString(encodeThreads()),
                         "-c:v", "libx264", "-preset", "veryfast",
                         "-crf", "18", "-pix_fmt", "yuv420p",
                         outPath));
@@ -443,13 +480,17 @@ public final class VideoRecorder {
         return false;
     }
 
+    // ── Image utilities ───────────────────────────────────────────────────────────
+
     /**
      * Crops to 16:9 and box-downsamples to {@code maxWidth} in ONE pass.
      *
-     * <p>This replaced a cropTo16x9() then boxDownsample() pair, which allocated a
-     * full-resolution intermediate image per frame and walked every source pixel twice - a
-     * read+write to crop, then a read to average down. At recording rates that was the single
-     * largest cost in the capture path and the reason frames were being dropped.
+     * <p>This replaced a {@code cropTo16x9()} then {@code boxDownsample()} pair. That pair
+     * allocated a full-resolution intermediate image per frame and walked every source pixel
+     * twice — a read+write to crop, then a read to average — which at recording rates was the
+     * single largest cost in the capture path and the reason frames were being dropped. Going
+     * straight from the source rect to the destination halves the pixel traffic and removes
+     * the per-frame full-resolution allocation entirely.
      */
     private static NativeImage cropAndDownsample(NativeImage src, int maxWidth) {
         int w = src.getWidth(), h = src.getHeight();
@@ -463,11 +504,11 @@ public final class VideoRecorder {
         int dh = Math.max(1, Math.round((float) cH * dw / cW));
         NativeImage dst = new NativeImage(dw, dh, false);
 
-        // Whole-pixel copy when no scaling is needed - avoids the averaging arithmetic.
+        // Whole-pixel copy when no scaling is needed — avoids the averaging arithmetic.
         if (dw == cW && dh == cH) {
             for (int y = 0; y < dh; y++)
                 for (int x = 0; x < dw; x++)
-                    dst.setPixel(x, y, src.getPixel(x + offX, y + offY));
+                    setPixel(dst, x, y, getPixel(src, x + offX, y + offY));
             return dst;
         }
 
@@ -484,18 +525,35 @@ public final class VideoRecorder {
                 int  n  = 0;
                 for (int sy = sy0; sy < sy1; sy++)
                     for (int sx = sx0; sx < sx1; sx++) {
-                        int c = src.getPixel(sx + offX, sy + offY);
+                        int c = getPixel(src, sx + offX, sy + offY);
                         aa += (c >>> 24) & 0xFF; ba += (c >>> 16) & 0xFF;
                         ga += (c >>>  8) & 0xFF; ra +=  c         & 0xFF;
                         n++;
                     }
-                dst.setPixel(x, y,
+                setPixel(dst, x, y,
                         ((int)(aa / n) << 24) | ((int)(ba / n) << 16)
                       | ((int)(ga / n) <<  8) |  (int)(ra / n));
             }
         }
         return dst;
     }
+
+
+    // ── Pixel access (NativeImage format changed in 1.21.4) ──────────────────────
+
+    private static int getPixel(NativeImage img, int x, int y) {
+        int argb = img.getPixel(x, y);
+        int a = (argb >>> 24) & 0xFF, r = (argb >>> 16) & 0xFF,
+            g = (argb >>>  8) & 0xFF, b =  argb         & 0xFF;
+        return (a << 24) | (b << 16) | (g << 8) | r;
+    }
+    private static void setPixel(NativeImage img, int x, int y, int abgr) {
+        int a = (abgr >>> 24) & 0xFF, b = (abgr >>> 16) & 0xFF,
+            g = (abgr >>>  8) & 0xFF, r =  abgr         & 0xFF;
+        img.setPixel(x, y, (a << 24) | (r << 16) | (g << 8) | b);
+    }
+
+    // ── Misc helpers ──────────────────────────────────────────────────────────────
 
     private static void deleteDir(File dir) {
         if (dir == null || !dir.exists()) return;
