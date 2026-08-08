@@ -423,11 +423,34 @@ public final class EvfBlurRenderer {
         // reason — at f/22 it capped the disc at 11 px however long the lens was. Taking the
         // largest CoC the current focal length, aperture and focus distance can actually
         // produce lets a long lens spread as far as it should, and keeps the gather tight
-        // when the optics genuinely cannot blur much. 120 px remains as a perf ceiling: the
-        // direct (non-mip) disc gather undersamples into grain beyond it.
+        // when the optics genuinely cannot blur much.
+        //
+        // The remaining ceiling is a FRACTION OF THE FRAME, not 120 px.
+        //
+        // It was 120 px on the grounds that the direct disc gather undersamples into grain
+        // beyond it. Measured, that is backwards: the gather spends a fixed 128 taps whatever
+        // its radius, and clamping the circle of confusion makes the noise WORSE, not better,
+        // because the clamp inflates the opacity it is estimating. Against an offline
+        // thin-lens render of a leaf whose true CoC was 303 px, a 120 px ceiling gave 0.23
+        // opacity where 0.033 was correct — seven times too dense, ending at a hard edge
+        // 160 px out — and a per-pixel spread of 0.029; lifting the ceiling past the true CoC
+        // gave 0.033, flat, out to where the real disc reaches, and a spread of 0.010. Cost
+        // was flat across the whole range at 1080p, since the tap count never changed.
+        //
+        // The clamp is also what kept a heavily defocused foreground findable at all. Once
+        // every foreground pixel is pinned to the same radius, the near field's coverage is
+        // just the silhouette dilated by that radius — a scaled copy of the shape, opaque in
+        // the middle of any mass wider than the ceiling. The outline survived the defocus
+        // because the ceiling put it back.
+        //
+        // A fraction of the frame rather than a pixel count, because the CoC is physically a
+        // fraction of the sensor: at 1080p a 120 px ceiling clamped anything past a ninth of
+        // the frame height, so the same shot got visibly worse the higher the resolution went.
+        // Three quarters of the frame height leaves the optics term in charge in every case
+        // that matters and costs 4-7% of the gather pass at 1080p.
         float pxPerMm   = fbH / 24.0f;   // 24 mm sensor height maps to fbH px
         float maxBlurPx = Math.min(
-                maxCocPx(focusDist, aperture, focalLenMm, dofScaleMm, pxPerMm), 120.0f);
+                maxCocPx(focusDist, aperture, focalLenMm, dofScaleMm, pxPerMm), fbH * 0.75f);
         // Sub-pixel defocus is not worth a full gather — and this, not an f-number rule, is
         // the only reason to skip the blur.
         boolean anyBlur    = maxBlurPx >= 1.0f;
