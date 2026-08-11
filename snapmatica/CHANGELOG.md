@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.2
+
+### Fixed
+
+- **Distant terrain is no longer blurred by a rule of its own.** Anything past a few hundred
+  blocks was given a floor of 5 px of blur, ramped in between 200 and 600 blocks. The amount
+  came from a constant rather than from the lens, so it did not move when the aperture did:
+  stopped down to f/22, where the circle of confusion is 1.4 px and the whole scene should be
+  sharp, the far field still came through as mush. It is gone. The far field now follows the
+  same thin-lens formula as everything else — sharp at f/22, softened at f/1.4 by as much as
+  the optics actually call for.
+- **Racking out to infinity no longer makes the distance snap into focus.** That floor faded
+  out as the focus approached its far stop, so it was tied to where the lens was pointed
+  rather than to the subject: the horizon changed while nothing in the scene did, which was
+  plain to see in video. Without it the far field is one continuous function of depth.
+
+This was only visible from 1.0.1 onward. The floor was applied to a pixel as itself but not
+as anybody's neighbour, so no sample ever cleared the defocus's membership test and it did
+nothing at all; making that consistent — correct in itself — switched on a feature that had
+been dormant since it was written.
+
 ## 1.0.1
 
 ### Fixed

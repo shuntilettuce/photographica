@@ -241,7 +241,7 @@ public class GalleryScreen extends Screen {
         //? if >=1.21.11 {
         /*ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED,
                 tex, dx, dy, 0f, 0f, dw, dh, dw, dh);
-        *///?} elif >=1.21.4 {
+        *///?} elif >=1.21.2 {
         /*ctx.drawTexture(net.minecraft.client.render.RenderLayer::getGuiTextured,
                 tex, dx, dy, 0f, 0f, dw, dh, dw, dh);
         *///?} else {

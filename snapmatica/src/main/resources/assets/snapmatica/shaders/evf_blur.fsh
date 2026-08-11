@@ -120,20 +120,29 @@ float resolveFocus() {
     return (d >= Far * 0.98) ? 100000.0 : d;
 }
 
-/**
- * Minimum blur applied to distant geometry regardless of the thin-lens result — an
- * atmospheric-haze floor that also hides LOD popping.
+/*
+ * There is no atmospheric haze floor any more.
  *
- * It used to be an unconditional `max(c, smoothstep(200, 600, d) * 5.0)` at two sites, which
- * meant ANY geometry past 200 blocks was forced to at least 5 px of blur even with the lens
- * focused at infinity. That, not the depth values, is why the horizon stayed soft at inf:
- * the infinity branch of computeCoc() correctly returned ~0 and this floor put the blur
- * straight back. At infinity focus the far field IS the focal plane, so the floor is off.
+ * It forced a minimum of 5 px of blur on anything past a few hundred blocks, ramped in over
+ * 200..600 blocks and faded out as the focus approached its far stop. It was written to stand
+ * in for aerial perspective and to hide LOD popping, and it is not either of those things: a
+ * lens does not defocus a mountain for being far away, and haze reduces contrast rather than
+ * resolution. Because the amount came from a constant instead of from the optics, it did not
+ * move when the aperture did — stopped down to f/22, where the circle of confusion is 1.4 px
+ * and the whole scene should be sharp, distant terrain still came through as mush.
+ *
+ * It also stayed invisible until the defocus was made self-consistent. Only the pixel being
+ * written got the floor; when that same pixel was somebody's neighbour it did not, so no tap
+ * ever cleared the disc test and the gather did nothing with it. Applying the floor everywhere
+ * a circle of confusion is asked for — correct in itself — switched on a feature that had been
+ * dormant since it was written, which is why this only appeared now.
+ *
+ * Its other half was worse. Multiplying by (1 - infinityBlend) tied the floor to the FOCUS
+ * rather than to the subject, so racking out to infinity made distant terrain snap from blurred
+ * to sharp with nothing in the scene having changed — very visible in video. Without it the far
+ * field is one continuous function of depth: 0.41 px at a 200-block focus, 0.12 px at infinity.
  */
-float distantHazeFloor(float depthM) {
-    // Faded out as the focus approaches the far stop rather than switched off at it.
-    return (1.0 - infinityBlend(gFocus)) * smoothstep(200.0, 600.0, depthM) * 5.0;
-}
+
 
 /**
  * Diameter of the Airy disc, in mm — the blur a perfect lens cannot avoid.
@@ -387,7 +396,6 @@ void main() {
         vec2 srcUV = lensDistort(texCoord);
         float d = linearDepth(texture(DepthSampler, srcUV).r);
         float c = max(computeCoc(d) - 1.5, 0.0);
-        c = max(c, distantHazeFloor(d));
         float sc = c;
         // Only pixels that are THEMSELVES defocused get softened.
         //
@@ -526,7 +534,6 @@ void main() {
 
     float depthM = linearDepth(texture(DepthSampler, texCoord).r);
     float cocP   = max(computeCoc(depthM) - 1.5, 0.0);
-    cocP = max(cocP, distantHazeFloor(depthM));
 
     // Coarse scan for neighbours whose own disc is wide enough to reach this pixel. It yields
     // two things: whether a nearer, defocused neighbour blooms over us (hasNearFg), and how
@@ -548,7 +555,7 @@ void main() {
             float t  = float(s) / float(SCAN_RINGS);
             float rr = MaxBlurPx * t * t;
             float sd = linearDepth(texture(DepthSampler, texCoord + dir * rr * PixelSize).r);
-            float sc2 = max(max(computeCoc(sd) - 1.5, 0.0), distantHazeFloor(sd));
+            float sc2 = max(computeCoc(sd) - 1.5, 0.0);
             // One sample stands for the whole annulus between its ring and the next, so a hit
             // counts when the CoC found comes within half a ring gap of reaching here: the
             // surface it belongs to almost certainly has a point that much nearer. Without
@@ -695,7 +702,7 @@ void main() {
         // over twice as opaque as the lens gives, 12 px outside its own edge, which reads as a
         // dark fringe clinging to the silhouette. Any CoC in this shader has to be the same
         // function of depth wherever it is asked for.
-        float sCoc    = max(max(computeCoc(sDepthM) - 1.5, 0.0), distantHazeFloor(sDepthM));
+        float sCoc    = max(computeCoc(sDepthM) - 1.5, 0.0);
 
         // Soft disc edge. This test used to be `if (r > sCoc) continue;` — a binary in/out.
         // Whether a neighbour contributes then flipped abruptly as the gather radius crossed

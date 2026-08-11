@@ -705,9 +705,9 @@ public final class PhotoCapture {
         return result;
     }
 
-    // ── Pixel access (NativeImage format changed in 1.21.4) ─────────────────────
+    // ── Pixel access (NativeImage stopped exposing raw pixels in 1.21.2) ────────
 
-    //? if >=1.21.4 {
+    //? if >=1.21.2 {
     /*private static int getPixelAbgr(NativeImage img, int x, int y) {
         int argb = img.getColorArgb(x, y);
         int a = (argb >>> 24) & 0xFF; int r = (argb >>> 16) & 0xFF;

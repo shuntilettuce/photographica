@@ -25,7 +25,7 @@ public interface GameRendererInvoker {
     //? if >=1.21.11 {
     /*@Invoker("getProjectionMatrix")
     Matrix4f snapmatica$worldProjection(float fovDegrees);
-    *///?} elif >=1.21.4 {
+    *///?} elif >=1.21.2 {
     /*@Invoker("getBasicProjectionMatrix")
     Matrix4f snapmatica$worldProjection(float fovDegrees);
     *///?} else {
