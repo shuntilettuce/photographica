@@ -1,0 +1,13 @@
+[
+{
+  "modid": "snapmatica",
+  "name": "Snapmatica Mini",
+  "description": "A camera with real optics: thin-lens depth of field, aperture, focal length and focus.",
+  "version": "0.1.0",
+  "mcversion": "1.12.2",
+  "authorList": ["shunti"],
+  "credits": "",
+  "logoFile": "",
+  "url": ""
+}
+]
