@@ -49,8 +49,8 @@ public final class SnapmaticaConfig {
         SnapmaticaClient.wbKelvin               = getInt (p, "wbKelvin",              SnapmaticaClient.wbKelvin);
         SnapmaticaClient.ndStops                = getInt (p, "ndStops",               SnapmaticaClient.ndStops);
         SnapmaticaClient.apertureIntegration    = getBool(p, "apertureIntegration",   SnapmaticaClient.apertureIntegration);
-        SnapmaticaClient.liveTemporalIntegration = getBool(p, "liveTemporalIntegration", SnapmaticaClient.liveTemporalIntegration);
         SnapmaticaClient.apertureSamples        = getInt(p,  "apertureSamples",       SnapmaticaClient.apertureSamples);
+        SnapmaticaClient.galleryCols = getInt(p, "galleryCols", SnapmaticaClient.galleryCols);
         SnapmaticaClient.apertureDebugSamples   = getBool(p, "apertureDebugSamples",  SnapmaticaClient.apertureDebugSamples);
         SnapmaticaClient.ambientDof             = getBool(p, "ambientDof",            SnapmaticaClient.ambientDof);
         SnapmaticaClient.ambientAperture        = getFloat(p, "ambientAperture",      SnapmaticaClient.ambientAperture);
@@ -93,8 +93,8 @@ public final class SnapmaticaConfig {
         p.setProperty("wbKelvin",               Integer.toString(SnapmaticaClient.wbKelvin));
         p.setProperty("ndStops",                Integer.toString(SnapmaticaClient.ndStops));
         p.setProperty("apertureIntegration",    Boolean.toString(SnapmaticaClient.apertureIntegration));
-        p.setProperty("liveTemporalIntegration", Boolean.toString(SnapmaticaClient.liveTemporalIntegration));
         p.setProperty("apertureSamples",        Integer.toString(SnapmaticaClient.apertureSamples));
+        p.setProperty("galleryCols", Integer.toString(SnapmaticaClient.galleryCols));
         p.setProperty("apertureDebugSamples",   Boolean.toString(SnapmaticaClient.apertureDebugSamples));
         p.setProperty("ambientDof",             Boolean.toString(SnapmaticaClient.ambientDof));
         p.setProperty("ambientAperture",        Float.toString(SnapmaticaClient.ambientAperture));

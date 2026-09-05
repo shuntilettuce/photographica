@@ -2,7 +2,6 @@ package dev.shunti.snapmatica.client.mixin;
 
 import dev.shunti.snapmatica.client.ApertureIntegration;
 import dev.shunti.snapmatica.client.Freecam;
-import dev.shunti.snapmatica.client.LiveAperture;
 import dev.shunti.snapmatica.client.PhotoCapture;
 import dev.shunti.snapmatica.client.SnapmaticaClient;
 import dev.shunti.snapmatica.client.VideoRecorder;
@@ -245,8 +244,6 @@ public class GameRendererMixin {
                     shift = At.Shift.BEFORE))
     private void snapmatica$suppressHandBeforeCapture(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
         // Once per frame, before Camera.update runs inside renderWorld: step to the next point
-        // on the entrance pupil for the live integration. See LiveAperture.
-        LiveAperture.beginFrame();
         // The FOV override above reads Freecam's own smoothed float directly, but the blur
         // pass and the video recorder both still key off this int field — sync it once per
         // frame (not once per 50 ms tick) so a path's dolly zoom stays in step with what
@@ -272,7 +269,6 @@ public class GameRendererMixin {
                     target = "Lnet/minecraft/client/render/GameRenderer;renderWorld(FJLnet/minecraft/client/util/math/MatrixStack;)V",
                     shift = At.Shift.BEFORE))
     private void snapmatica$suppressHandBeforeCapture(float tickDelta, long limitTime, boolean tick, CallbackInfo ci) {
-        LiveAperture.beginFrame();
         if (Freecam.isPathPlaying()) {
             SnapmaticaClient.focalLengthMm = Math.round(Freecam.currentFocalLengthMm(tickDelta));
         }

@@ -254,6 +254,21 @@ ISO1600相当に粒つく、2段、まさにこれが生む2倍。センサー�
   カメラの移動は一切不要**で、サンプリングパターンが変わればいい。だからライブは見ていて
   コストのかからない方の半分だけを取り、前景の裏を見ることは元通り**写真の性質**のまま——
   シャッターなら眼を動かす余裕があり、誰もそれを見ていない。
+- **写真一覧に表示数を持たせ、スクロールバーを掴めるようにした。** 一覧は窓の幅だけから
+  列数を決めていた。既定としては正しいが、**唯一の選択肢としては間違っている** — コンタクト
+  シートは撮影者が探している密度で読むもので、「一度に何枚」がその全部だからだ。左下の
+  ボタンで 自動 / 3 / 4 / 5 / 6 / 8 / 10 を巡回し、設定に残る。
+  <p>スクロールバーは飾りだった(幅3px、当たり判定なし)。掴んで動かせるようにし、溝を
+  クリックすればそこへ飛ぶ。掴む場所はつまみの中の位置を保持するので、掴んだ瞬間に絵が
+  飛ばない。幅は6px、当たり判定は14pxで、カーソルが入ると明るくなる。
+  <p>Ctrl+ホイールでの密度変更は**入れなかった**。1.21.11 が `Screen.hasControlDown()` を
+  廃止していて、修飾キーの取得が4バージョンで4通りになる。ボタン1本で足りる機能に
+  版分岐を4つ抱える価値はない。
+
+- **ファインダーの時間積分を削除した。** 走る平均は止まっている間だけ深まるので、
+  ノイズは確かに減るが**見ていて気持ちが悪い**。前の版で瞳ウォークを消したときと同じ判断で、
+  オプションにせず消した。設定項目・履歴バッファ・シェーダのPass 8・ユニフォーム2本、全部。
+  露光バーストの側は無傷で、ノイズの多い設定(明るい長玉)ではサンプル数を上げるのが手段になる。
 - **Mobにも自分のブラーを。** カメラ由来のスミアは画面全体で1本のベクトルで、静止フレームを
   横切るMobは**自分のベクトル**を必要とする。そして新しい測定は要らなかった——**露光は既に
   記録済み**なので、Mobの速度はそこにあるデータの引き算でしかない。記録した各瞬間の
@@ -623,6 +638,24 @@ untouched the one thing a bigger sensor is actually bought for.
   pattern to change. So the live view keeps the half that costs nothing to look at, and seeing
   behind a defocused foreground stays what it always was — a property of the photograph, where
   the shutter can afford to move the eye and nobody is watching it happen.
+- **The camera roll has a density, and its scrollbar is a control.** The grid sized itself from
+  the window and nothing else — the right default and the wrong only option, since a contact
+  sheet is read at whatever density the photographer is looking for and "how many at once" is the
+  whole of that. A button at the bottom left cycles Auto / 3 / 4 / 5 / 6 / 8 / 10, and the choice
+  is kept.
+  <p>The scrollbar was decoration: three pixels wide and not clickable. It can be dragged now,
+  and clicking the trough jumps there. The grab point is held inside the thumb so the roll does
+  not lurch the moment it is caught. Six pixels wide with a fourteen-pixel hit zone, and it
+  lights up under the pointer.
+  <p>Ctrl+wheel for the density was **not** added: 1.21.11 dropped `Screen.hasControlDown()`, so
+  reading a modifier is four different things across four versions. That is not worth four
+  branches for something one button already does.
+
+- **The viewfinder's temporal integration is removed.** The running average only deepens while
+  the view is held still, so it does cut the noise and it is unpleasant to watch. Same judgement
+  as the pupil walk before it: removed rather than made optional — the setting, the history
+  buffers, the shader's Pass 8 and its two uniforms, all of it. The exposure burst is untouched,
+  and more samples remains the lever where the gather is starved.
 - **Mobs get their own blur.** The camera smear is one vector for the whole picture, and a mob
   crossing a still frame is the one thing not moving at the camera's speed. No new measurement
   was needed for it: **the exposure is already recorded**, so the mob's velocity is a subtraction

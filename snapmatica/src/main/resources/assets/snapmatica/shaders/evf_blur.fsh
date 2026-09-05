@@ -34,8 +34,6 @@ uniform float DistortK;          // radial distortion: >0 barrel, <0 pincushion,
 uniform float Aspect;            // fbW/fbH, so the distortion stays radially round
 uniform int   DoGather;          // 0 = no defocus to compute; pass the scene straight through
 uniform vec2  MotionRotPx;       // screen shift from camera ROTATION over one sample, in px
-uniform sampler2D HistorySampler; // the running average of the pupil, for the live view
-uniform float HistoryWeight;     // how much of THIS frame goes into it; 1 starts a new average
 uniform vec3  MotionVelCam;      // camera TRANSLATION over one sample, camera space, in blocks
 #define MAX_MOVERS 8
 uniform int   MoveCount;         // entities moving across this sample's slice of the exposure
@@ -214,7 +212,6 @@ float resolveFocus() {
  * to sharp with nothing in the scene having changed — very visible in video. Without it the far
  * field is one continuous function of depth: 0.41 px at a 200-block focus, 0.12 px at infinity.
  */
-
 
 /**
  * Diameter of the Airy disc, in mm — the blur a perfect lens cannot avoid.
@@ -590,42 +587,6 @@ void main() {
     }
     if (Pass == 6) { fragColor = texture(InSampler, texCoord); return; }
 
-    // ── Pass 8: fold this frame into the running average of the pupil ────────────────
-    //
-    // One pupil sample per frame instead of a hundred per shutter press, which is the only
-    // budget a live view has. The average is the integral; see LiveAperture for why the
-    // excursion is a fifth of the pupil and what that buys.
-    //
-    // Clamped to the neighbourhood the CURRENT frame actually contains, which is what keeps
-    // this from being a smear. A running average has no idea that something walked through the
-    // frame, and without the clamp a mob would leave a comet behind it for as long as the
-    // average is deep. Taking the min and max of the four neighbours and pinning the history
-    // inside them means anything genuinely new overrides the average immediately, while the
-    // gather's grain — which is scattered around the same true value — is left free to average
-    // away, because it never leaves that range.
-    //
-    // The box is WIDENED before it is used. A tight clamp would also reject the very thing the
-    // pupil is being integrated for: what is behind a defocused foreground appears in some
-    // viewpoints and not others, so it is legitimately outside the current frame's local range
-    // wherever the foreground happens to cover it this time round. The margin is what lets
-    // occlusion through while still catching the gross motion the clamp exists for.
-    if (Pass == 8) {
-        vec3 cur = texture(InSampler, texCoord).rgb;
-        if (HistoryWeight >= 1.0) { fragColor = vec4(cur, 1.0); return; }
-        vec3 lo = cur, hi = cur;
-        vec3 n0 = texture(InSampler, texCoord + vec2( PixelSize.x, 0.0)).rgb;
-        vec3 n1 = texture(InSampler, texCoord + vec2(-PixelSize.x, 0.0)).rgb;
-        vec3 n2 = texture(InSampler, texCoord + vec2(0.0,  PixelSize.y)).rgb;
-        vec3 n3 = texture(InSampler, texCoord + vec2(0.0, -PixelSize.y)).rgb;
-        lo = min(lo, min(min(n0, n1), min(n2, n3)));
-        hi = max(hi, max(max(n0, n1), max(n2, n3)));
-        vec3 mid = 0.5 * (lo + hi);
-        vec3 halfSpan = 0.5 * (hi - lo) + vec3(0.08);
-        vec3 hist = clamp(texture(HistorySampler, texCoord).rgb,
-                          mid - halfSpan, mid + halfSpan);
-        fragColor = vec4(mix(hist, cur, HistoryWeight), 1.0);
-        return;
-    }
     // ── Pass 7: lateral chromatic aberration ─────────────────────────────────────────
     // Its own pass, and ordered BEFORE peaking (EvfBlurRenderer sequences the draws), because
     // it is the lens — the light is already fringed by the time it reaches the sensor, let

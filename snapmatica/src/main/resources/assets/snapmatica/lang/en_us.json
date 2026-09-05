@@ -101,7 +101,8 @@
   "snapmatica.freecam.hud_status": "Path: %s pts (+%sm from last)",
   "snapmatica.camera.sec_aperture_int": "APERTURE INTEGRATION",
   "snapmatica.camera.aperture_integration": "Integrate Aperture",
-  "snapmatica.camera.live_temporal": "Temporal Integration",
   "snapmatica.camera.aperture_samples": "Pupil Samples",
-  "snapmatica.camera.aperture_debug": "Save Every Sample"
+  "snapmatica.camera.aperture_debug": "Save Every Sample",
+  "snapmatica.gallery.cols": "Show: %s",
+  "snapmatica.gallery.cols_auto": "Auto"
 }

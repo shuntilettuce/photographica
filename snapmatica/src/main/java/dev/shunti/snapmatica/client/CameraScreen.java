@@ -377,11 +377,6 @@ public class CameraScreen extends Screen {
                     SnapmaticaConfig.save(); },
                 true));
 
-        out.add(new Item("snapmatica.camera.live_temporal",
-                () -> SnapmaticaClient.liveTemporalIntegration ? "ON" : "OFF",
-                step -> { SnapmaticaClient.liveTemporalIntegration = !SnapmaticaClient.liveTemporalIntegration;
-                          LiveAperture.reset(); SnapmaticaConfig.save(); },
-                true));
         out.add(new Item("snapmatica.camera.aperture_debug",
                 () -> SnapmaticaClient.apertureDebugSamples ? "ON" : "OFF",
                 step -> { SnapmaticaClient.apertureDebugSamples = !SnapmaticaClient.apertureDebugSamples;

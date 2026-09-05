@@ -109,13 +109,6 @@ public final class EvfBlurRenderer {
     private static int locNearLayer  = -1;
     private static int locNoiseRot   = -1;
     private static int locNoiseOffset= -1;
-    private static int locHistSamp   = -1;
-    private static int locHistWeight = -1;
-    /** Two of them: the blend reads one and writes the other, and they swap. Reading and
-     *  writing one texture in the same draw is undefined, and this is cheaper than a copy. */
-    private static int histTexA = -1, histTexB = -1, histFbo = -1;
-    private static int histW = 0, histH = 0;
-    private static boolean histParity = false;
     private static int locMaxBlurPx  = -1;
     private static int locSampleBoost = -1;
     private static int locCaptureHQ  = -1;
@@ -379,62 +372,7 @@ public final class EvfBlurRenderer {
         return n;
     }
 
-    /**
-     * One pupil sample into the running average, then back into the frame.
-     *
-     * <p>Two draws and no geometry: the blend reads the frame and the older history and writes
-     * the newer one, then a plain copy puts the result back where the rest of the pipeline
-     * expects it. The two histories exist because a draw cannot read the texture it writes.
-     */
-    private static void accumulateLive(int mainTex, int fbW, int fbH, int writeBackFbo) {
-        if (histTexA == -1 || histW != fbW || histH != fbH) {
-            if (histTexA != -1) { GL11.glDeleteTextures(histTexA); GL11.glDeleteTextures(histTexB); }
-            histTexA = makeHistoryTexture(fbW, fbH);
-            histTexB = makeHistoryTexture(fbW, fbH);
-            histW = fbW; histH = fbH;
-            LiveAperture.reset();          // the old average was a different size
-        }
-        if (histFbo == -1) histFbo = GL30.glGenFramebuffers();
-        int read  = histParity ? histTexA : histTexB;
-        int write = histParity ? histTexB : histTexA;
-        histParity = !histParity;
 
-        GL20.glUniform1i(locPass, 8);
-        GL20.glUniform1f(locHistWeight, LiveAperture.blendWeight());
-        GL13.glActiveTexture(GL13.GL_TEXTURE6);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, read);
-        GL20.glUniform1i(locHistSamp, 6);
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, mainTex);
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, histFbo);
-        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
-                GL11.GL_TEXTURE_2D, write, 0);
-        GL11.glViewport(0, 0, fbW, fbH);
-        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
-
-        GL20.glUniform1i(locPass, 6);      // plain copy, the average -> the frame
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
-        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
-                GL11.GL_TEXTURE_2D, mainTex, 0);
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, write);
-        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
-
-        LiveAperture.endFrame();
-    }
-
-    private static int makeHistoryTexture(int w, int h) {
-        int t = GL11.glGenTextures();
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, t);
-        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, w, h, 0,
-                GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, (java.nio.ByteBuffer) null);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
-        return t;
-    }
 
     /**
      * A camera displacement, expressed the way the shader wants it.
@@ -911,9 +849,8 @@ public final class EvfBlurRenderer {
         // The live average needs this every bit as much as the burst does: averaging k frames
         // divides the gather's grain by sqrt(k) only if the grain is INDEPENDENT between them,
         // and a fixed noise tile gives every frame the same pattern to average with itself.
-        int noiseIdx = ApertureIntegration.isActive() ? ApertureIntegration.sampleIndex()
-                     : LiveAperture.isActive()        ? LiveAperture.sampleIndex()
-                     : -1;
+        int noiseIdx = ApertureIntegration.isActive()
+                     ? ApertureIntegration.sampleIndex() : -1;
         GL20.glUniform1f(locNoiseRot, noiseIdx >= 0 ? noiseIdx * 2.39996323f : 0.0f);
         // And a fresh noise VALUE per pixel per sub-frame, not just a fresh angle. The R2
         // low-discrepancy sequence spreads 64 offsets over the tile far more evenly than
@@ -1086,14 +1023,6 @@ public final class EvfBlurRenderer {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
         GL20.glUniform2f(locBlurDir, 0.0f, 0.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
-
-        // Fold this frame into the running average of the pupil, before anything that is a
-        // finder aid rather than the picture. Peaking and the overlay are drawn over the
-        // result every frame and never enter the average; the sensor curve runs after it, on
-        // the finished integral, for the same reason the burst holds it back.
-        if (LiveAperture.isActive() && locHistWeight >= 0) {
-            accumulateLive(mainTex, fbW, fbH, writeBackFbo);
-        }
 
         // Lateral chromatic aberration, BEFORE peaking — it is the lens, so it happens to the
         // light on its way to the sensor, long before any finder overlay is drawn over the
@@ -1627,8 +1556,6 @@ public final class EvfBlurRenderer {
             locNearLayer = GL20.glGetUniformLocation(program, "NearLayer");
             locNoiseRot  = GL20.glGetUniformLocation(program, "NoiseRot");
             locNoiseOffset = GL20.glGetUniformLocation(program, "NoiseOffset");
-            locHistSamp   = GL20.glGetUniformLocation(program, "HistorySampler");
-            locHistWeight = GL20.glGetUniformLocation(program, "HistoryWeight");
             locMaxBlurPx = GL20.glGetUniformLocation(program, "MaxBlurPx");
             locSampleBoost = GL20.glGetUniformLocation(program, "SampleBoost");
             locCaptureHQ   = GL20.glGetUniformLocation(program, "CaptureHQ");

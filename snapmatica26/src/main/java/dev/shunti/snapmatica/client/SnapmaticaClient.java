@@ -100,15 +100,16 @@ public class SnapmaticaClient implements ClientModInitializer {
 
     public static float focusDistance = 5.0f;
 
-    /**
-     * Average the live view over successive frames, so the gather can spend more taps on it
-     * than one frame can hold.
-     *
-     * <p>One fullscreen blend, no geometry, and NOTHING MOVES — see {@link LiveAperture} for
-     * why the version of this that also walked the pupil was removed rather than made optional.
-     */
-    public static boolean liveTemporalIntegration = true;
 
+    /**
+     * Columns in the camera roll, or 0 to let the window decide.
+     *
+     * <p>The grid sized itself from the window and nothing else, which is the right default and
+     * the wrong only option: a contact sheet is read at whatever density the photographer is
+     * looking for, and "how many at once" is the whole of that. Kept here rather than in the
+     * screen so it survives closing the roll.
+     */
+    public static int galleryCols = 0;
     /**
      * Take the photograph by integrating the aperture rather than by blurring one frame.
      *

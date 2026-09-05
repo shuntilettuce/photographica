@@ -25,6 +25,11 @@ import java.util.List;
 public class GalleryScreen extends Screen {
 
     private static final int COLS_TARGET_CELL = 116;  // px; column count follows the window
+    /** Densities the roll offers. 0 is "let the window decide", which is where it starts. */
+    private static final int[] COL_CHOICES = {0, 3, 4, 5, 6, 8, 10};
+    /** The scrollbar is a control now, so it has to be wide enough to catch and to see. */
+    private static final int BAR_W  = 6;
+    private static final int BAR_HIT = 14;
     private static final int PAD              = 8;
     private static final int HEADER_H         = 30;
     private static final int HINT_H           = 14;   // the one-line hint under the grid
@@ -33,6 +38,9 @@ public class GalleryScreen extends Screen {
 
     private List<MediaLibrary.Entry> entries = List.of();
     private int scroll = 0;
+    /** Set while the scrollbar is being dragged, with the grab point inside the thumb. */
+    private boolean draggingBar = false;
+    private int dragGrab = 0;
     /** -1 = grid, otherwise the index being viewed full-screen. */
     private int viewing = -1;
 
@@ -41,7 +49,7 @@ public class GalleryScreen extends Screen {
      * highlight and click like every other button in the game; they are simply hidden while
      * the grid is up, since they act on the item being viewed.
      */
-    private CameraUi.SnapButton copyBtn, revealBtn, openBtn, deleteBtn, backBtn;
+    private CameraUi.SnapButton copyBtn, revealBtn, openBtn, deleteBtn, backBtn, colsBtn;
     /** Back sits at the end of the action row in the viewer, but alone it belongs centred. */
     private int backViewerX, backGridX;
 
@@ -95,6 +103,11 @@ public class GalleryScreen extends Screen {
                 Component.translatable("snapmatica.common.close"),
                 b -> { if (viewing >= 0) { leaveViewer(); } else onClose(); });
 
+        colsBtn = CameraUi.SnapButton.ghost(PAD, by, 78,
+                Component.translatable("snapmatica.gallery.cols", colsLabel()),
+                b -> cycleCols(1));
+
+        addRenderableWidget(colsBtn);
         addRenderableWidget(copyBtn);
         addRenderableWidget(revealBtn);
         addRenderableWidget(openBtn);
@@ -106,6 +119,10 @@ public class GalleryScreen extends Screen {
     /** Keeps the action row in step with what is on screen. */
     private void refreshActions() {
         boolean viewer = viewing >= 0;
+        if (colsBtn != null) {
+            colsBtn.visible = !viewer && !entries.isEmpty();
+            colsBtn.setMessage(Component.translatable("snapmatica.gallery.cols", colsLabel()));
+        }
         copyBtn.visible = revealBtn.visible = openBtn.visible = deleteBtn.visible = viewer;
         backBtn.setX(viewer ? backViewerX : backGridX);
         backBtn.setMessage(Component.translatable(viewer ? "snapmatica.common.back"
@@ -147,7 +164,54 @@ public class GalleryScreen extends Screen {
 
     // ── Layout ──────────────────────────────────────────────────────────────────
 
-    private int cols() { return Math.max(1, (width - PAD) / (COLS_TARGET_CELL + PAD)); }
+    private int cols() {
+        int fixed = SnapmaticaClient.galleryCols;
+        if (fixed > 0) return Math.max(1, fixed);
+        return Math.max(1, (width - PAD) / (COLS_TARGET_CELL + PAD));
+    }
+
+    /** Step the density on, wrapping. Keeps the top-left picture in view. */
+    private void cycleCols(int dir) {
+        int cur = 0;
+        for (int i = 0; i < COL_CHOICES.length; i++) {
+            if (COL_CHOICES[i] == SnapmaticaClient.galleryCols) { cur = i; break; }
+        }
+        int n = COL_CHOICES.length;
+        SnapmaticaClient.galleryCols = COL_CHOICES[((cur + dir) % n + n) % n];
+        SnapmaticaConfig.save();
+        // The row the top of the viewport was showing, kept across the change, so the roll does
+        // not jump somewhere else the moment the density changes.
+        clampScroll();
+        refreshActions();
+    }
+
+    private String colsLabel() {
+        return SnapmaticaClient.galleryCols > 0
+                ? String.valueOf(SnapmaticaClient.galleryCols)
+                : Component.translatable("snapmatica.gallery.cols_auto").getString();
+    }
+
+    // ── The scrollbar, as a control ─────────────────────────────────────────────
+    /** {trackTop, trackH, thumbY, thumbH}, or null when everything already fits. */
+    private int[] barMetrics() {
+        int content = contentH(), view = viewportH();
+        if (content <= view) return null;
+        int thumbH = Math.max(20, view * view / content);
+        int thumbY = HEADER_H + (view - thumbH) * scroll / Math.max(1, content - view);
+        return new int[] {HEADER_H, view, thumbY, thumbH};
+    }
+
+    private boolean inBarColumn(double mx) { return mx >= width - BAR_HIT; }
+
+    /** Put the thumb's top at {@code y} and read the scroll back off it. */
+    private void scrollFromThumbTop(int y) {
+        int[] b = barMetrics();
+        if (b == null) return;
+        int span = b[1] - b[3];
+        if (span <= 0) { scroll = 0; return; }
+        scroll = (int) ((long) (y - b[0]) * (contentH() - viewportH()) / span);
+        clampScroll();
+    }
     private int cellW() { return (width - PAD - cols() * PAD) / cols(); }
     private int cellH() { return cellW() * 2 / 3 + 14; }   // 3:2 thumb plus a caption strip
     private int rows()  { return (entries.size() + cols() - 1) / cols(); }
@@ -209,10 +273,14 @@ public class GalleryScreen extends Screen {
         }
         ctx.disableScissor();
 
-        if (contentH() > viewportH()) {
-            int barH = Math.max(20, viewportH() * viewportH() / contentH());
-            int barY = HEADER_H + (viewportH() - barH) * scroll / Math.max(1, contentH() - viewportH());
-            ctx.fill(width - 4, barY, width - 1, barY + barH, 0x60FFFFFF);
+        int[] bar = barMetrics();
+        if (bar != null) {
+            int bx = width - 2 - BAR_W;
+            boolean hot = draggingBar || (mouseX >= width - BAR_HIT
+                    && mouseY >= HEADER_H && mouseY < height - FOOTER_H);
+            ctx.fill(bx, bar[0], bx + BAR_W, bar[0] + bar[1], 0x30000000);
+            ctx.fill(bx, bar[2], bx + BAR_W, bar[2] + bar[3],
+                    hot ? 0xC0E8DCC4 : 0x60FFFFFF);
         }
 
         ctx.centeredText(font, Component.translatable("snapmatica.gallery.help_grid"),
@@ -297,6 +365,16 @@ public class GalleryScreen extends Screen {
     }
 
     @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+        return onDrag(event.y()) || super.mouseDragged(event, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        return onRelease() || super.mouseReleased(event);
+    }
+
+    @Override
     public boolean keyPressed(KeyEvent event) {
         return onKey(event.key()) || super.keyPressed(event);
     }
@@ -305,6 +383,20 @@ public class GalleryScreen extends Screen {
         // In the viewer everything worth doing is on a button, so a stray click does nothing.
         if (viewing >= 0) return false;
         if (my < HEADER_H || my >= height - FOOTER_H) return false;
+
+        // The bar first: it sits over the last column of cells, and a click meant for it is
+        // never meant for the picture underneath.
+        int[] bar = barMetrics();
+        if (bar != null && inBarColumn(mx)) {
+            if (my >= bar[2] && my < bar[2] + bar[3]) {
+                dragGrab = (int) my - bar[2];          // keep the grab point under the pointer
+            } else {
+                dragGrab = bar[3] / 2;                 // trough: centre the thumb where it landed
+                scrollFromThumbTop((int) my - dragGrab);
+            }
+            draggingBar = true;
+            return true;
+        }
 
         int c = cols(), cw = cellW(), ch = cellH();
         for (int i = 0; i < entries.size(); i++) {
@@ -323,6 +415,18 @@ public class GalleryScreen extends Screen {
         if (viewing >= 0) { step(dy > 0 ? -1 : 1); return true; }
         scroll -= (int) (dy * 40);
         clampScroll();
+        return true;
+    }
+
+    private boolean onDrag(double my) {
+        if (!draggingBar) return false;
+        scrollFromThumbTop((int) my - dragGrab);
+        return true;
+    }
+
+    private boolean onRelease() {
+        if (!draggingBar) return false;
+        draggingBar = false;
         return true;
     }
 
