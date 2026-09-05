@@ -303,6 +303,26 @@ float computeCoc(float depthM) {
     return clamp(cocMM * PxPerMm, 0.0, MaxBlurPx);
 }
 
+/**
+ * The circle of confusion as the GATHER uses it: the optical one, with a soft floor.
+ *
+ * <p>A disc narrower than a pixel or so cannot be drawn, so the gather subtracts a floor before
+ * using it. It did that with `max(coc - 1.5, 0)`, which is a CLIFF: defocus is exactly zero out
+ * to 1.5 px and the per-tap disc test needed another half pixel on top, so nothing happened at
+ * all until the true circle reached 2.0 px and then a half-pixel disc switched on at full
+ * weight. On a surface receding smoothly from the focal plane that threshold is a CONTOUR, and
+ * it draws a visible line across the picture where the blur starts.
+ *
+ * <p>A knee instead of a cliff: cocGather = c^2 / (c + K), which is zero at zero, has zero SLOPE
+ * at zero so blur creeps in rather than switching on, and is within 0.03 px of c - K by 50 px of
+ * blur. The floor still does its job without a depth at which the answer jumps.
+ */
+float cocGather(float depthM) {
+    const float COC_KNEE = 1.5;
+    float c = computeCoc(depthM);
+    return c * c / (c + COC_KNEE);
+}
+
 vec2 hash22(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
     p3 += dot(p3, p3.yzx + 33.33);
@@ -330,7 +350,7 @@ void main() {
     // silhouette dissolves — instead of revealing more of the sharp foreground.
     if (Pass == 1 || Pass == 3) {
         float d   = linearDepth(texture(DepthSampler, texCoord).r);
-        float coc = max(computeCoc(d) - 1.5, 0.0);
+        float coc = cocGather(d);
         // Alpha here is COVERAGE — "is this pixel heavily-defocused foreground", 0 or 1 —
         // and not, as it was, the fraction `smoothstep(30, 70, coc)` of the blur being routed
         // to this layer.
@@ -385,7 +405,7 @@ void main() {
     // about twice its sigma), so this changes the SHAPE of the defocus and not its strength.
     if (Pass == 2) {
         float d    = linearDepth(texture(DepthSampler, texCoord).r);
-        float coc  = max(computeCoc(d) - 1.5, 0.0);
+        float coc  = cocGather(d);
         // Floor so the foreground also feathers OUTWARD past its silhouette a little (holes
         // just outside still gather some foreground) — the edge dissolves on both sides.
         float radius = max(coc * 0.24, 8.0);    // low-res texels (coc is full-res px)
@@ -436,7 +456,7 @@ void main() {
         // the paths, since the sharp and blurred branches would be sampling different geometry.
         vec2 srcUV = lensDistort(texCoord);
         float d = linearDepth(texture(DepthSampler, srcUV).r);
-        float c = max(computeCoc(d) - 1.5, 0.0);
+        float c = cocGather(d);
         float sc = c;
         // Only pixels that are THEMSELVES defocused get softened.
         //
@@ -574,7 +594,7 @@ void main() {
     if (DoGather == 0) { fragColor = vec4(centre.rgb, 1.0); return; }
 
     float depthM = linearDepth(texture(DepthSampler, texCoord).r);
-    float cocP   = max(computeCoc(depthM) - 1.5, 0.0);
+    float cocP   = cocGather(depthM);
 
     // Coarse scan for neighbours whose own disc is wide enough to reach this pixel. It yields
     // two things: whether a nearer, defocused neighbour blooms over us (hasNearFg), and how
@@ -596,7 +616,7 @@ void main() {
             float t  = float(s) / float(SCAN_RINGS);
             float rr = MaxBlurPx * t * t;
             float sd = linearDepth(texture(DepthSampler, texCoord + dir * rr * PixelSize).r);
-            float sc2 = max(computeCoc(sd) - 1.5, 0.0);
+            float sc2 = cocGather(sd);
             // One sample stands for the whole annulus between its ring and the next, so a hit
             // counts when the CoC found comes within half a ring gap of reaching here: the
             // surface it belongs to almost certainly has a point that much nearer. Without
@@ -621,7 +641,11 @@ void main() {
         }
     }
 
-    if (cocP < 0.5 && !hasNearFg) {    // sharp, nothing blooming over it → leave crisp
+    // 0.07, not 0.5: near the handover the gather is at its floor of 24 taps over a radius
+    // of 1, so the innermost tap sits at sqrt(0.5/24) = 0.144 px and the feather admits out
+    // to 2*cocP -- 0.07 puts that tap at exactly zero weight, and 0.07 of gathered blur is a
+    // true circle of 0.36 px, which no pixel can show.
+    if (cocP < 0.07 && !hasNearFg) {   // sharp, nothing blooming over it → leave crisp
         fragColor = vec4(centre.rgb, 1.0);   // alpha 1 = fully sampled, needs no denoise
         return;
     }
@@ -755,7 +779,7 @@ void main() {
         // over twice as opaque as the lens gives, 12 px outside its own edge, which reads as a
         // dark fringe clinging to the silhouette. Any CoC in this shader has to be the same
         // function of depth wherever it is asked for.
-        float sCoc    = max(computeCoc(sDepthM) - 1.5, 0.0);
+        float sCoc    = cocGather(sDepthM);
 
         // Soft disc edge. This test used to be `if (r > sCoc) continue;` — a binary in/out.
         // Whether a neighbour contributes then flipped abruptly as the gather radius crossed
@@ -763,7 +787,11 @@ void main() {
         // from pixel to pixel and the boundaries between those sets showed up as flat patches
         // — the painterly, brush-stroke look. Feathering membership over a one-pixel band
         // makes the same disc, with its edge antialiased instead of quantised.
-        float edge = (sCoc >= 0.5) ? smoothstep(sCoc + 0.5, sCoc - 0.5, r) : 0.0;
+        // The feather NARROWS with the disc. A fixed half-pixel band admits taps out to
+        // sCoc + 0.5 whatever sCoc is, so the gather never became the identity as the
+        // circle closed -- and the gate that hid that was itself the cliff.
+        float feather = clamp(sCoc, 0.02, 0.5);
+        float edge = smoothstep(sCoc + feather, sCoc - feather, r);
 
         // Collect what lies behind, for the fill described above. Restricted to the inner part
         // of the disc because the weight has fallen to a tenth by three fall-off lengths and
