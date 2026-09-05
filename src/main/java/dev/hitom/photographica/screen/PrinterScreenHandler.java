@@ -64,7 +64,13 @@ public class PrinterScreenHandler extends ScreenHandler {
     public void onClosed(PlayerEntity player) {
         super.onClosed(player);
         this.inventory.onClose(player);
-        dropInventory(player, this.inventory);
+        // NOT dropInventory(): `inventory` is the block entity itself, not a scratch inventory.
+        // dropInventory() is vanilla's helper for TEMPORARY inventories (the crafting grid, the
+        // enchanting table) and empties everything into the player on close — which here meant
+        // a printer could never keep an SD card or a paper stock, made the block entity's own
+        // NBT persistence unreachable, and made the ItemScatterer call in PrinterBlock's
+        // onStateReplaced dead code. super.onClosed() still returns the cursor stack, which is
+        // the part that genuinely must not be left held.
     }
 
     @Override

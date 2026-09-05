@@ -64,6 +64,14 @@ public final class CameraScrollHandler {
 				|| InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_ALT);
 		//?}
 
+		// Piloting a drone: scroll always means the mounted camera's zoom — there's no
+		// sneaking or held-camera concept mid-flight, so this has to come before every other
+		// branch below (all of which gate on sneaking or a camera literally in-hand).
+		if (DronePilot.isActive()) {
+			DronePilot.adjustFocalLength(mc, delta > 0 ? 1 : -1);
+			return true;
+		}
+
 		// Alt + scroll = video camera zoom (works regardless of sneaking)
 		if (alt) {
 			ItemStack vstack = mc.player.getMainHandStack();
@@ -140,7 +148,7 @@ public final class CameraScrollHandler {
 		if (newIdx == idx) return s;
 		return new CameraSettings(s.aperture(), s.shutterSpeedIdx(), s.iso(),
 				s.focusDistance(), stops.get(newIdx), s.lensType(),
-				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds(), s.motionBlur());
+				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds(), s.motionBlur(), s.focusPeaking());
 	}
 
 	private static CameraSettings adjustAperture(CameraSettings s, int dir) {
@@ -150,7 +158,7 @@ public final class CameraScrollHandler {
 		if (newIdx == idx) return s;
 		return new CameraSettings(APERTURES.get(newIdx), s.shutterSpeedIdx(), s.iso(),
 				s.focusDistance(), s.focalLengthMm(), s.lensType(),
-				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds(), s.motionBlur());
+				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds(), s.motionBlur(), s.focusPeaking());
 	}
 
 	private static CameraSettings adjustShutterSpeed(CameraSettings s, int dir) {
@@ -169,7 +177,7 @@ public final class CameraScrollHandler {
 		if (ISOS.get(newIdx) == s.iso()) return s;
 		return new CameraSettings(s.aperture(), s.shutterSpeedIdx(), ISOS.get(newIdx),
 				s.focusDistance(), s.focalLengthMm(), s.lensType(),
-				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds(), s.motionBlur());
+				s.filmType(), s.remainingShots(), s.exposureMode(), s.focusMode(), s.autoWind(), s.timerSeconds(), s.motionBlur(), s.focusPeaking());
 	}
 
 	// Continuous focus stepping with a DISTANCE-ADAPTIVE ratio (no fixed table):

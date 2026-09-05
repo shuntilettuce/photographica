@@ -64,8 +64,8 @@ public class CameraScreen extends Screen {
 	protected void init() {
 		int cx = width / 2;
 		int overhead = (armorStandEntityId >= 0) ? 82 : 58;
-		rowH = Math.min(22, Math.max(20, (height - overhead - 8) / 10));
-		panelH = 10 * rowH + overhead;
+		rowH = Math.min(22, Math.max(20, (height - overhead - 8) / 11));
+		panelH = 11 * rowH + overhead;
 		panelPy = Math.max(4, (height - panelH) / 2);
 		topRow = panelPy + 16;
 		int row = 0;
@@ -171,7 +171,15 @@ public class CameraScreen extends Screen {
 					dirty = true;
 				}, true);
 
-		int btnY = topRow + 10 * rowH + 14;
+		// Focus peaking — live viewfinder-only edge highlight, never baked into the photo
+		addRow(cx, topRow + row++ * rowH, "フォーカスピーキング",
+				() -> settings.focusPeaking() ? "§aON" : "§cOFF",
+				step -> {
+					settings = settings.withFocusPeaking(!settings.focusPeaking());
+					dirty = true;
+				}, true);
+
+		int btnY = topRow + 11 * rowH + 14;
 		if (armorStandEntityId >= 0) {
 			// Armor stand mode: "Shoot" | "Remove camera" | "Close"
 			addDrawableChild(SafelightButton.primary(cx - 105, btnY, 100,
@@ -200,7 +208,7 @@ public class CameraScreen extends Screen {
 								ClientPlayNetworking.send(new UpdateCameraSettingsPayload(settings));
 								dirty = false;
 							}
-							client.setScreen(new SdCardBrowserScreen(stack, sdData, this));
+							client.setScreen(new SdCardGalleryScreen(stack, sdData, this));
 						}));
 				addDrawableChild(SafelightButton.ghost(cx + 5, btnY, 100,
 						Text.literal("閉じる"), b -> close()));
@@ -337,48 +345,48 @@ public class CameraScreen extends Screen {
 		return new CameraSettings(v, settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withShutter(int v) {
 		return new CameraSettings(settings.aperture(), v, settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withIso(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), v,
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withFocus(float v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				v, settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withFocalLength(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), v, settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withLensAndFocal(int lens, int focal) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), focal, lens,
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withExposureMode(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				v, settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				v, settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withFocusMode(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), v, settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), v, settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 }

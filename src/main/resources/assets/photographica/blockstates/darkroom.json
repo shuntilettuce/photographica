@@ -1,1 +1,6 @@
-{"variants":{"":{"model":"photographica:block/darkroom"}}}
+{"variants":{
+  "facing=south":{"model":"photographica:block/darkroom"},
+  "facing=west":{"model":"photographica:block/darkroom","y":90},
+  "facing=north":{"model":"photographica:block/darkroom","y":180},
+  "facing=east":{"model":"photographica:block/darkroom","y":270}
+}}

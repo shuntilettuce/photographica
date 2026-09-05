@@ -64,7 +64,8 @@ public class EnlargerScreenHandler extends ScreenHandler {
     public void onClosed(PlayerEntity player) {
         super.onClosed(player);
         this.inventory.onClose(player);
-        dropInventory(player, this.inventory);
+        // NOT dropInventory() — see PrinterScreenHandler#onClosed. `inventory` is the block
+        // entity, so emptying it on close defeats its own NBT persistence and its drop-on-break.
     }
 
     @Override

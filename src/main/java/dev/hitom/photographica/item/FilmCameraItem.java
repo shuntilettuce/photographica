@@ -6,6 +6,7 @@ import dev.hitom.photographica.component.FilmRollData;
 import dev.hitom.photographica.component.LensKind;
 import dev.hitom.photographica.component.ModDataComponents;
 import net.minecraft.entity.player.PlayerEntity;
+import dev.hitom.photographica.screen.CameraGearScreens;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.tooltip.TooltipType;
@@ -58,7 +59,7 @@ public class FilmCameraItem extends Item implements net.minecraft.item.Equipment
 		return s != null ? s : new CameraSettings(
 				5.6f, 10, FilmKind.isoOf(FilmKind.COLOR_400),
 				5.0f, 50, LensKind.NONE, FilmKind.COLOR_400, 0,
-				CameraSettings.EXP_M, CameraSettings.FOCUS_MF, false, 0, false);
+				CameraSettings.EXP_M, CameraSettings.FOCUS_MF, false, 0, false, false);
 	}
 
 	public static void setSettings(ItemStack stack, CameraSettings settings) {
@@ -123,6 +124,7 @@ public class FilmCameraItem extends Item implements net.minecraft.item.Equipment
 	/*@Override
 	public ActionResult use(World world, PlayerEntity user, Hand hand) {
 		ItemStack stack = user.getStackInHand(hand);
+		if (CameraGearScreens.openIfSneaking(world, user, hand)) return ActionResult.SUCCESS;
 		if (world.isClient()) clientTakePhoto.accept(stack);
 		return ActionResult.SUCCESS;
 	}*/
@@ -130,6 +132,7 @@ public class FilmCameraItem extends Item implements net.minecraft.item.Equipment
 	/*@Override
 	public ActionResult use(World world, PlayerEntity user, Hand hand) {
 		ItemStack stack = user.getStackInHand(hand);
+		if (CameraGearScreens.openIfSneaking(world, user, hand)) return ActionResult.SUCCESS;
 		if (world.isClient) clientTakePhoto.accept(stack);
 		return ActionResult.SUCCESS;
 	}*/
@@ -137,6 +140,7 @@ public class FilmCameraItem extends Item implements net.minecraft.item.Equipment
 	@Override
 	public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
 		ItemStack stack = user.getStackInHand(hand);
+		if (CameraGearScreens.openIfSneaking(world, user, hand)) return TypedActionResult.success(stack, world.isClient);
 		if (world.isClient) clientTakePhoto.accept(stack);
 		return TypedActionResult.success(stack, world.isClient);
 	}

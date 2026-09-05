@@ -3,9 +3,13 @@ package dev.hitom.photographica.registry;
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.LensKind;
+import dev.hitom.photographica.item.BatteryItem;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.DeveloperTankItem;
+import dev.hitom.photographica.item.FlashItem;
 import dev.hitom.photographica.item.DevelopedFilmItem;
+import dev.hitom.photographica.item.DroneItem;
+import dev.hitom.photographica.item.DroneRemoteItem;
 import dev.hitom.photographica.item.ExposedFilmItem;
 import dev.hitom.photographica.item.FilmCameraItem;
 import dev.hitom.photographica.item.FilmRollItem;
@@ -46,6 +50,18 @@ public final class ModItems {
 	public static final Item LENS_PRIME_14       = reg("lens_prime_14mm",      s -> new LensItem(s, LensKind.PRIME_14MM));
 	public static final Item LENS_ZOOM_70_200    = reg("lens_zoom_70_200mm",   s -> new LensItem(s, LensKind.ZOOM_70_200));
 	public static final Item LENS_MACRO_100      = reg("lens_macro_100mm",     s -> new LensItem(s, LensKind.MACRO_100));
+
+	// Batteries — tiered the way vanilla tiers tools: identical to use, differing only in how
+	// long they last. Capacities are in charge units; one photo costs 1, one tick of drone
+	// flight costs 1 (see BatteryItem), so 1200 is a minute of flight or 1200 shots.
+	public static final Item BATTERY_STANDARD    = reg("battery_standard",     s -> new BatteryItem(s, 1200));
+	public static final Item BATTERY_EXTENDED    = reg("battery_extended",     s -> new BatteryItem(s, 4800));
+	public static final Item BATTERY_PRO         = reg("battery_pro",          s -> new BatteryItem(s, 14400));
+
+	// Flashes — rated by reach rather than raw brightness, so the upgrade path is "how far can
+	// I light" instead of "how bright is the picture". Bigger units cost more per firing.
+	public static final Item FLASH_COMPACT       = reg("flash_compact",        s -> new FlashItem(s, 8, 10));
+	public static final Item FLASH_SPEEDLIGHT    = reg("flash_speedlight",     s -> new FlashItem(s, 20, 25));
 	public static final Item PHOTO               = reg("photo",                s -> new PhotoItem(s));
 	// Film rolls — one item per emulsion type
 	public static final Item FILM_ROLL_COLOR     = reg("film_roll_color",      s -> new FilmRollItem(s, FilmKind.COLOR_400));
@@ -57,8 +73,18 @@ public final class ModItems {
 	// Developer tank — 32 uses before it needs replacing
 	public static final Item DEVELOPER_TANK      = reg("developer_tank",       s -> new DeveloperTankItem(s.maxDamage(32)));
 	public static final Item DEVELOPED_FILM      = reg("developed_film",       s -> new DevelopedFilmItem(s.maxCount(1)));
-	public static final Item SD_CARD             = reg("sd_card",              s -> new SdCardItem(s.maxCount(1)));
+	// SD cards, tiered like vanilla tools — same card, more room. Capacities are photo counts;
+	// the metadata for each stored photo rides along on the card's own ItemStack, so the top
+	// tier is deliberately the point where that starts to be worth moving server-side.
+	public static final Item SD_CARD             = reg("sd_card",              s -> new SdCardItem(s.maxCount(1), 64));
+	public static final Item SD_CARD_LARGE       = reg("sd_card_large",        s -> new SdCardItem(s.maxCount(1), 256));
+	public static final Item SD_CARD_XL          = reg("sd_card_xl",           s -> new SdCardItem(s.maxCount(1), 1024));
 	public static final Item PHOTO_PAPER         = reg("photo_paper",          s -> new PhotoPaperItem(s));
+	// A physical binder for printed photos — the paper counterpart to an SD card. See AlbumData
+	// for why it holds real ItemStacks rather than flattened metadata.
+	public static final Item ALBUM               = reg("album",                s -> new dev.hitom.photographica.item.AlbumItem(s));
+	public static final Item DRONE               = reg("drone",                s -> new DroneItem(s));
+	public static final Item DRONE_CONTROLLER    = reg("drone_controller",     s -> new DroneRemoteItem(s));
 
 	// Cameras occupy the chest slot. equipOnInteract + swappable lets the camera be
 	// right-clicked onto armor stands (tripods). The EquipmentAsset key need not
@@ -116,6 +142,12 @@ public final class ModItems {
 			entries.add(LENS_PRIME_14);
 			entries.add(LENS_ZOOM_70_200);
 			entries.add(LENS_MACRO_100);
+			entries.add(BATTERY_STANDARD);
+			entries.add(BATTERY_EXTENDED);
+			entries.add(BATTERY_PRO);
+			entries.add(FLASH_COMPACT);
+			entries.add(FLASH_SPEEDLIGHT);
+			entries.add(ALBUM);
 			entries.add(FilmRollItem.stackOf(FILM_ROLL_COLOR,     FilmKind.COLOR_400));
 			entries.add(FilmRollItem.stackOf(FILM_ROLL_COLOR_100, FilmKind.COLOR_100));
 			entries.add(FilmRollItem.stackOf(FILM_ROLL_COLOR_1600,FilmKind.COLOR_1600));
@@ -125,8 +157,12 @@ public final class ModItems {
 			entries.add(DEVELOPER_TANK);
 			entries.add(DEVELOPED_FILM);
 			entries.add(SD_CARD);
+			entries.add(SD_CARD_LARGE);
+			entries.add(SD_CARD_XL);
 			entries.add(PHOTO_PAPER);
 			entries.add(PHOTO);
+			entries.add(DRONE);
+			entries.add(DRONE_CONTROLLER);
 		});
 	}
 }

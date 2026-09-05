@@ -54,6 +54,48 @@ public final class ModDataComponents {
 					.build()
 	);
 
+	/** The drone frequency a {@code DroneRemoteItem} has been paired to — absent entirely
+	 *  (rather than some sentinel like -1) means "never paired to anything yet". */
+	public static final ComponentType<Integer> DRONE_FREQUENCY = Registry.register(
+			Registries.DATA_COMPONENT_TYPE,
+			Identifier.of(Photographica.MOD_ID, "drone_frequency"),
+			ComponentType.<Integer>builder()
+					.codec(com.mojang.serialization.Codec.INT)
+					.packetCodec(net.minecraft.network.codec.PacketCodecs.INTEGER)
+					.build()
+	);
+
+	/** Battery and flash installed in a camera body — see {@link CameraGear}. */
+	public static final ComponentType<CameraGear> CAMERA_GEAR = Registry.register(
+			Registries.DATA_COMPONENT_TYPE,
+			Identifier.of(Photographica.MOD_ID, "camera_gear"),
+			ComponentType.<CameraGear>builder()
+					.codec(CameraGear.CODEC)
+					.packetCodec(CameraGear.PACKET_CODEC)
+					.build()
+	);
+
+	/** Remaining charge of a {@code BatteryItem} stack. Absent means "never used yet", which
+	 *  {@code BatteryItem#getCharge} reads as a full cell rather than an empty one. */
+	public static final ComponentType<Integer> BATTERY_CHARGE = Registry.register(
+			Registries.DATA_COMPONENT_TYPE,
+			Identifier.of(Photographica.MOD_ID, "battery_charge"),
+			ComponentType.<Integer>builder()
+					.codec(com.mojang.serialization.Codec.INT)
+					.packetCodec(net.minecraft.network.codec.PacketCodecs.INTEGER)
+					.build()
+	);
+
+	/** A physical album's contents — see {@link AlbumData}. */
+	public static final ComponentType<AlbumData> ALBUM = Registry.register(
+			Registries.DATA_COMPONENT_TYPE,
+			Identifier.of(Photographica.MOD_ID, "album"),
+			ComponentType.<AlbumData>builder()
+					.codec(AlbumData.CODEC)
+					.packetCodec(AlbumData.PACKET_CODEC)
+					.build()
+	);
+
 	public static void register() {
 		// Class init is enough; this method just forces it.
 	}

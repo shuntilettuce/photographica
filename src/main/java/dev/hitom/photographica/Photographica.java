@@ -14,11 +14,15 @@ import dev.hitom.photographica.item.SdCardItem;
 import dev.hitom.photographica.item.VideoCameraItem;
 import dev.hitom.photographica.network.CreatePhotoFromArmorStandPayload;
 import dev.hitom.photographica.network.CreatePhotoPayload;
+import dev.hitom.photographica.network.DownloadPhotoChunkPayload;
 import dev.hitom.photographica.network.EquipCameraToArmorStandPayload;
 import dev.hitom.photographica.network.DeleteSdPhotoPayload;
 import dev.hitom.photographica.network.DevelopFilmPayload;
 import dev.hitom.photographica.network.LoadFilmPayload;
 import dev.hitom.photographica.network.LoadSdCardPayload;
+import dev.hitom.photographica.network.PhotoChunkAssembler;
+import dev.hitom.photographica.network.PhotoNotFoundPayload;
+import dev.hitom.photographica.network.RequestPhotoPayload;
 import dev.hitom.photographica.network.TakeFilmPhotoFromArmorStandPayload;
 import dev.hitom.photographica.network.TakeFilmPhotoPayload;
 import dev.hitom.photographica.network.UnequipCameraFromArmorStandPayload;
@@ -26,6 +30,7 @@ import dev.hitom.photographica.network.UnloadFilmPayload;
 import dev.hitom.photographica.network.UnloadSdCardPayload;
 import dev.hitom.photographica.network.UpdateArmorStandCameraPayload;
 import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
+import dev.hitom.photographica.network.UploadPhotoChunkPayload;
 import dev.hitom.photographica.network.WindFilmPayload;
 import dev.hitom.photographica.registry.ModBlockEntities;
 import dev.hitom.photographica.registry.ModBlocks;
@@ -44,15 +49,35 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.GameMode;
+import net.minecraft.util.WorldSavePath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.UUID;
 
 public class Photographica implements ModInitializer {
 	public static final String MOD_ID = "photographica";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+
+	/** Reassembles chunked photo uploads (see {@link UploadPhotoChunkPayload}) — one entry per
+	 *  in-progress upload, keyed by photo UUID, cleared as soon as the last chunk lands. */
+	private static final PhotoChunkAssembler uploadAssembler = new PhotoChunkAssembler();
+
+	/** The world-save-relative directory canonical photo copies live in server-side — distinct
+	 *  from each client's own {@code <runDirectory>/photographica/photos/}, and the reason a
+	 *  photo survives for other players even after the photographer disconnects. */
+	private static File photosDir(MinecraftServer server) {
+		Path root = server.getSavePath(WorldSavePath.ROOT);
+		return root.resolve("photographica").resolve("photos").toFile();
+	}
 
 	@Override
 	public void onInitialize() {
@@ -60,6 +85,7 @@ public class Photographica implements ModInitializer {
 		ModItems.register();
 		ModBlocks.register();
 		ModBlockEntities.register();
+		dev.hitom.photographica.registry.ModEntities.register();
 		ModScreenHandlers.register();
 
 		if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
@@ -79,8 +105,20 @@ public class Photographica implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(UpdateArmorStandCameraPayload.ID,        UpdateArmorStandCameraPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(CreatePhotoFromArmorStandPayload.ID,    CreatePhotoFromArmorStandPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(TakeFilmPhotoFromArmorStandPayload.ID,  TakeFilmPhotoFromArmorStandPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(dev.hitom.photographica.network.CreatePhotoFromDronePayload.ID,
+				dev.hitom.photographica.network.CreatePhotoFromDronePayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(dev.hitom.photographica.network.UpdateDronePositionPayload.ID,
+				dev.hitom.photographica.network.UpdateDronePositionPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(EquipCameraToArmorStandPayload.ID,      EquipCameraToArmorStandPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(UnequipCameraFromArmorStandPayload.ID, UnequipCameraFromArmorStandPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(UploadPhotoChunkPayload.ID,            UploadPhotoChunkPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(RequestPhotoPayload.ID,                RequestPhotoPayload.CODEC);
+		PayloadTypeRegistry.playS2C().register(DownloadPhotoChunkPayload.ID,          DownloadPhotoChunkPayload.CODEC);
+		PayloadTypeRegistry.playS2C().register(PhotoNotFoundPayload.ID,               PhotoNotFoundPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(dev.hitom.photographica.network.SendFaxPayload.ID,
+				dev.hitom.photographica.network.SendFaxPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(dev.hitom.photographica.network.DroneSignalLostPayload.ID,
+				dev.hitom.photographica.network.DroneSignalLostPayload.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(UpdateCameraSettingsPayload.ID, (payload, context) -> {
 			context.server().execute(() -> {
@@ -97,7 +135,7 @@ public class Photographica implements ModInitializer {
 							incoming.focusDistance(), incoming.focalLengthMm(), incoming.lensType(),
 							incoming.filmType(), incoming.remainingShots(),
 							incoming.exposureMode(), incoming.focusMode(), incoming.autoWind(), incoming.timerSeconds(),
-							incoming.motionBlur());
+							incoming.motionBlur(), incoming.focusPeaking());
 					FilmCameraItem.setSettings(stack, safe);
 				}
 			});
@@ -108,6 +146,11 @@ public class Photographica implements ModInitializer {
 			context.server().execute(() -> {
 				ItemStack camera = player.getStackInHand(Hand.MAIN_HAND);
 				if (!(camera.getItem() instanceof CameraItem) && !(camera.getItem() instanceof MirrorlessCameraItem)) return;
+				// Charge is spent HERE, not on the client that asked for the photo. The client
+				// runs the same check first (see PhotoCapture#take) so the shutter refuses
+				// visibly rather than silently producing nothing — but this is the copy that
+				// actually decides, and it's also what stops a flat battery from being ignored.
+				if (!dev.hitom.photographica.component.CameraPower.consumeForShot(camera)) return;
 				//? if >=1.21.11 {
 				/*ServerWorld world = (ServerWorld) player.getEntityWorld();*/
 				//?} else {
@@ -120,19 +163,60 @@ public class Photographica implements ModInitializer {
 						pos.getX(), pos.getY(), pos.getZ(),
 						payload.settings()
 				);
-				// If the camera has an SD card loaded, store the photo on it
-				if (camera.contains(ModDataComponents.SD_CARD)) {
-					SdCardData sd = camera.get(ModDataComponents.SD_CARD);
-					if (sd != null && !sd.isFull()) {
-						camera.set(ModDataComponents.SD_CARD, sd.withPhoto(photoData));
-						return;
-					}
-				}
+				// Onto the fitted card if there's room. storePhoto writes the card ITEM in the
+				// gear slot, not just the camera's mirror of it, so pulling the card back out
+				// takes the photos with it.
+				if (dev.hitom.photographica.component.CameraGear.storePhoto(camera, photoData)) return;
 				// Otherwise create a Photo item
 				ItemStack photo = new ItemStack(ModItems.PHOTO);
 				photo.set(ModDataComponents.PHOTO_DATA, photoData);
 				if (!player.getInventory().insertStack(photo)) {
 					player.dropItem(photo, false);
+				}
+			});
+		});
+
+		// UploadPhotoChunkPayload: reassemble a client's just-captured photo and persist the
+		// canonical copy under the world save, independent of (and not blocking) the
+		// CreatePhotoPayload/TakeFilmPhotoPayload metadata flow above — the item/SD-card entry
+		// is created immediately either way, the pixel data simply catches up.
+		ServerPlayNetworking.registerGlobalReceiver(UploadPhotoChunkPayload.ID, (payload, context) -> {
+			byte[] full = uploadAssembler.receive(payload.id(), payload.chunkIndex(), payload.totalChunks(), payload.data());
+			if (full == null) return;
+			context.server().execute(() -> {
+				try {
+					File dir = photosDir(context.server());
+					if (!dir.exists()) dir.mkdirs();
+					Files.write(new File(dir, payload.id() + ".jpg").toPath(), full);
+				} catch (IOException e) {
+					LOGGER.error("Failed to persist uploaded photo {}", payload.id(), e);
+				}
+			});
+		});
+
+		// RequestPhotoPayload: another player's client is missing this photo locally (they
+		// weren't the photographer, or it's a fresh install) — serve the canonical copy back
+		// chunked, or say so if the server doesn't have it either.
+		ServerPlayNetworking.registerGlobalReceiver(RequestPhotoPayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> {
+				File file = new File(photosDir(context.server()), payload.id() + ".jpg");
+				if (!file.exists()) {
+					ServerPlayNetworking.send(player, new PhotoNotFoundPayload(payload.id()));
+					return;
+				}
+				try {
+					byte[] data = Files.readAllBytes(file.toPath());
+					boolean sent = PhotoChunkAssembler.split(data, (chunkIndex, totalChunks, chunk) ->
+							ServerPlayNetworking.send(player,
+									new DownloadPhotoChunkPayload(payload.id(), chunkIndex, totalChunks, chunk)));
+					if (!sent) {
+						LOGGER.warn("Photo {} is {} bytes — too large to serve", payload.id(), data.length);
+						ServerPlayNetworking.send(player, new PhotoNotFoundPayload(payload.id()));
+					}
+				} catch (IOException e) {
+					LOGGER.error("Failed to read photo {} for {}", payload.id(), player.getName().getString(), e);
+					ServerPlayNetworking.send(player, new PhotoNotFoundPayload(payload.id()));
 				}
 			});
 		});
@@ -200,7 +284,7 @@ public class Photographica implements ModInitializer {
 								cur.focusDistance(), cur.focalLengthMm(), cur.lensType(),
 								fresh.filmType(), fresh.totalExposures(),
 								cur.exposureMode(), cur.focusMode(), cur.autoWind(), cur.timerSeconds(),
-								cur.motionBlur()));
+								cur.motionBlur(), cur.focusPeaking()));
 						s.decrement(1);
 						player.playSound(SoundEvents.BLOCK_DISPENSER_DISPENSE, 0.6f, 1.2f);
 						player.sendMessage(Text.literal("フィルムを装填しました"), true);
@@ -364,6 +448,43 @@ public class Photographica implements ModInitializer {
 				//?} else {
 				net.minecraft.entity.Entity entity = context.player().getServerWorld().getEntityById(payload.entityId());
 				//?}
+				// Drone-mounted camera: same payload/settings shape as the armor-stand case, just
+				// a different equipment model (one TrackedData<ItemStack> slot, not vanilla gear
+				// slots) — see DroneEntity#getEquippedCamera/#setEquippedCamera. Re-clamps focal
+				// length to the drone's 24-200mm zoom range and re-forces f/2.8 server-side
+				// regardless of what the payload claims, since DroneEntity#applyDroneCameraProfile
+				// is the only legitimate source of truth for "this camera is mounted on a drone"
+				// and a client could in principle send anything.
+				if (entity instanceof dev.hitom.photographica.entity.DroneEntity drone) {
+					// A COPY, not the tracked stack itself — DataTracker.set() only actually
+					// syncs to clients when the new value differs from the stored one, and
+					// mutating the already-stored ItemStack in place (as an earlier version of
+					// this did) meant comparing that object against itself: trivially "equal"
+					// every time, so the change silently never left the server. Scroll-to-zoom
+					// (and the continuous AF sync) both route through this same receiver, so
+					// this one bug was why neither one ever visibly updated on any client.
+					ItemStack camera = drone.getEquippedCamera().copy();
+					if (camera.isEmpty()) return;
+					CameraSettings incoming = payload.settings();
+					int focal = Math.max(dev.hitom.photographica.component.LensKind.DRONE_FOCAL_MIN,
+							Math.min(dev.hitom.photographica.component.LensKind.DRONE_FOCAL_MAX, incoming.focalLengthMm()));
+					CameraSettings forced = new CameraSettings(
+							2.8f, incoming.shutterSpeedIdx(), incoming.iso(), incoming.focusDistance(),
+							focal, dev.hitom.photographica.component.LensKind.DRONE_ZOOM,
+							incoming.filmType(), incoming.remainingShots(), incoming.exposureMode(),
+							incoming.focusMode(), incoming.autoWind(), incoming.timerSeconds(),
+							incoming.motionBlur(), incoming.focusPeaking());
+					if (camera.getItem() instanceof FilmCameraItem) {
+						FilmCameraItem.setSettings(camera, forced);
+					} else if (camera.getItem() instanceof CameraItem) {
+						CameraItem.setSettings(camera, forced);
+					} else {
+						return;
+					}
+					drone.setEquippedCamera(camera);
+					return;
+				}
+
 				if (!(entity instanceof ArmorStandEntity stand)) return;
 				// Try MAINHAND first, then OFFHAND
 				for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND, EquipmentSlot.CHEST}) {
@@ -383,7 +504,7 @@ public class Photographica implements ModInitializer {
 								incoming.focusDistance(), incoming.focalLengthMm(), incoming.lensType(),
 								incoming.filmType(), incoming.remainingShots(),
 								incoming.exposureMode(), incoming.focusMode(), incoming.autoWind(), incoming.timerSeconds(),
-								incoming.motionBlur());
+								incoming.motionBlur(), incoming.focusPeaking());
 						FilmCameraItem.setSettings(camera, safe);
 						stand.equipStack(slot, camera);
 						return;
@@ -435,6 +556,137 @@ public class Photographica implements ModInitializer {
 				ItemStack photo = new ItemStack(ModItems.PHOTO);
 				photo.set(ModDataComponents.PHOTO_DATA, photoData);
 				if (!player.getInventory().insertStack(photo)) player.dropItem(photo, false);
+			});
+		});
+
+		// CreatePhotoFromDronePayload: same idea as the armor-stand version above, but the
+		// camera lives in the drone's own TrackedData field rather than a vanilla equipment slot.
+		ServerPlayNetworking.registerGlobalReceiver(dev.hitom.photographica.network.CreatePhotoFromDronePayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> {
+				//? if >=1.21.11 {
+				/*net.minecraft.entity.Entity entity = ((ServerWorld) player.getEntityWorld()).getEntityById(payload.droneEntityId());*/
+				//?} else {
+				net.minecraft.entity.Entity entity = player.getServerWorld().getEntityById(payload.droneEntityId());
+				//?}
+				if (!(entity instanceof dev.hitom.photographica.entity.DroneEntity drone)) return;
+				// Copy before mutating — see the UpdateArmorStandCameraPayload receiver above
+				// for why mutating the tracked stack in place silently breaks sync.
+				ItemStack camera = drone.getEquippedCamera().copy();
+				if (camera.isEmpty()) return;
+
+				//? if >=1.21.11 {
+				/*ServerWorld world = (ServerWorld) player.getEntityWorld();*/
+				//?} else {
+				ServerWorld world = player.getServerWorld();
+				//?}
+				BlockPos pos = drone.getBlockPos();
+				PhotoData photoData = new PhotoData(
+						payload.id(), player.getName().getString(), world.getTime(),
+						world.getRegistryKey().getValue().toString(),
+						pos.getX(), pos.getY(), pos.getZ(),
+						payload.settings());
+
+				if (camera.contains(ModDataComponents.SD_CARD)) {
+					SdCardData sd = camera.get(ModDataComponents.SD_CARD);
+					if (sd != null && !sd.isFull()) {
+						camera.set(ModDataComponents.SD_CARD, sd.withPhoto(photoData));
+						drone.setEquippedCamera(camera);
+						return;
+					}
+				}
+				ItemStack photo = new ItemStack(ModItems.PHOTO);
+				photo.set(ModDataComponents.PHOTO_DATA, photoData);
+				if (!player.getInventory().insertStack(photo)) player.dropItem(photo, false);
+			});
+		});
+
+		// UpdateDronePositionPayload: move the drone to match wherever its pilot's view went
+		// this tick — see DronePilot. No ownership check for v1 (anyone could in principle
+		// spoof another player's drone's position with a crafted packet); acceptable for now,
+		// same trust level as the rest of this mod's client-authoritative state.
+		ServerPlayNetworking.registerGlobalReceiver(dev.hitom.photographica.network.UpdateDronePositionPayload.ID, (payload, context) -> {
+			context.server().execute(() -> {
+				//? if >=1.21.11 {
+				/*net.minecraft.entity.Entity entity = ((ServerWorld) context.player().getEntityWorld()).getEntityById(payload.droneEntityId());*/
+				//?} else {
+				net.minecraft.entity.Entity entity = context.player().getServerWorld().getEntityById(payload.droneEntityId());
+				//?}
+				if (!(entity instanceof dev.hitom.photographica.entity.DroneEntity drone)) return;
+				// A pilot actively steering it again (this packet only ever comes from
+				// DronePilot.tick()'s normal flight branch) means any in-progress signal-loss
+				// fall is over — cancel it before applying the packet's own position so the two
+				// don't fight over whether physics is on this tick.
+				drone.cancelFalling();
+				drone.markFlying();
+				// Deliberately NOT clamped to MAX_REMOTE_RANGE. An earlier version pinned the
+				// position onto a boundary sphere, which made the drone stop dead against an
+				// invisible wall — wrong for something that flies on momentum. Range is enforced
+				// by consequence instead: the pilot loses signal near the limit and the airframe
+				// coasts on out of control (see DroneSignalLostPayload / startFalling), so it can
+				// still END UP past the limit, it just can't be FLOWN there.
+				drone.updatePosition(payload.x(), payload.y(), payload.z());
+				drone.setYaw(payload.yaw());
+				drone.setPitch(payload.pitch());
+				drone.setBank(payload.bank());
+			});
+		});
+
+		// DroneSignalLostPayload: the pilot's own client already determined signal reached
+		// zero (see DronePilot.tick()) — this just tells the server to actually start the
+		// crash-fall. No ownership check for v1, same trust level as the position payload
+		// above; the worst a spoofed packet could do is crash someone's drone early.
+		ServerPlayNetworking.registerGlobalReceiver(dev.hitom.photographica.network.DroneSignalLostPayload.ID, (payload, context) -> {
+			context.server().execute(() -> {
+				//? if >=1.21.11 {
+				/*net.minecraft.entity.Entity entity = ((ServerWorld) context.player().getEntityWorld()).getEntityById(payload.droneEntityId());*/
+				//?} else {
+				net.minecraft.entity.Entity entity = context.player().getServerWorld().getEntityById(payload.droneEntityId());
+				//?}
+				if (!(entity instanceof dev.hitom.photographica.entity.DroneEntity drone)) return;
+				drone.startFalling(new net.minecraft.util.math.Vec3d(payload.vx(), payload.vy(), payload.vz()));
+			});
+		});
+
+		// SendFaxPayload: pull whatever's in the sending machine's own out-tray (never trust
+		// a stack sent over the wire) and deliver it to the target machine's in-tray — see
+		// FaxMachineBlockEntity.find(). Never trusts pos to actually be a fax machine, or the
+		// target number to resolve to anything: both are re-validated server-side.
+		ServerPlayNetworking.registerGlobalReceiver(dev.hitom.photographica.network.SendFaxPayload.ID, (payload, context) -> {
+			net.minecraft.server.network.ServerPlayerEntity player = context.player();
+			context.server().execute(() -> {
+				//? if >=1.21.11 {
+				/*net.minecraft.block.entity.BlockEntity be = ((ServerWorld) player.getEntityWorld()).getBlockEntity(payload.pos());*/
+				//?} else {
+				net.minecraft.block.entity.BlockEntity be = player.getServerWorld().getBlockEntity(payload.pos());
+				//?}
+				if (!(be instanceof dev.hitom.photographica.block.entity.FaxMachineBlockEntity sender)) return;
+
+				net.minecraft.item.ItemStack out = sender.getStack(dev.hitom.photographica.block.entity.FaxMachineBlockEntity.SLOT_OUT);
+				if (out.isEmpty() || !(out.getItem() instanceof dev.hitom.photographica.item.PhotoItem)) {
+					player.sendMessage(net.minecraft.text.Text.literal("送信する写真がありません"), true);
+					return;
+				}
+
+				dev.hitom.photographica.block.entity.FaxMachineBlockEntity target =
+						dev.hitom.photographica.block.entity.FaxMachineBlockEntity.find(context.server(), payload.targetNumber());
+				if (target == null) {
+					player.sendMessage(net.minecraft.text.Text.literal("その番号のFAX機は見つかりませんでした"), true);
+					return;
+				}
+				if (target == sender) {
+					player.sendMessage(net.minecraft.text.Text.literal("自分自身には送信できません"), true);
+					return;
+				}
+
+				net.minecraft.item.ItemStack incoming = out.copyWithCount(1);
+				// v1 limitation: the in-tray is a single slot — a fax that arrives before the
+				// last one was collected overwrites it, same as a real machine's paper jamming
+				// if nobody empties the tray.
+				target.setStack(dev.hitom.photographica.block.entity.FaxMachineBlockEntity.SLOT_IN, incoming);
+				out.decrement(1);
+				sender.markDirty();
+				player.sendMessage(net.minecraft.text.Text.literal("送信しました (#" + payload.targetNumber() + ")"), true);
 			});
 		});
 

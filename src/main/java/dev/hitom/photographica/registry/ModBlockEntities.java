@@ -3,6 +3,7 @@ package dev.hitom.photographica.registry;
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.block.entity.DarkroomBlockEntity;
 import dev.hitom.photographica.block.entity.EnlargerBlockEntity;
+import dev.hitom.photographica.block.entity.FaxMachineBlockEntity;
 import dev.hitom.photographica.block.entity.PhotoFrameBlockEntity;
 import dev.hitom.photographica.block.entity.PhotoStandBlockEntity;
 import dev.hitom.photographica.block.entity.PrinterBlockEntity;
@@ -66,6 +67,17 @@ public final class ModBlockEntities {
                     /*net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder.create(PhotoStandBlockEntity::new, ModBlocks.PHOTO_STAND).build()*/
                     //?} else {
                     BlockEntityType.Builder.create(PhotoStandBlockEntity::new, ModBlocks.PHOTO_STAND).build(null)
+                    //?}
+            );
+
+    public static final BlockEntityType<FaxMachineBlockEntity> FAX_MACHINE =
+            Registry.register(
+                    Registries.BLOCK_ENTITY_TYPE,
+                    Identifier.of(Photographica.MOD_ID, "fax_machine"),
+                    //? if >=1.21.4 {
+                    /*net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder.create(FaxMachineBlockEntity::new, ModBlocks.FAX_MACHINE).build()*/
+                    //?} else {
+                    BlockEntityType.Builder.create(FaxMachineBlockEntity::new, ModBlocks.FAX_MACHINE).build(null)
                     //?}
             );
 

@@ -53,17 +53,19 @@ public final class AutoCamera {
 	// cos(5°) — entities must be within this cone of the look direction
 	private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
 
-	// Focus-pull (rack) easing. AF does not snap instantly: focusDistance is eased
-	// toward the target stop in log space, so the lens "pulls" focus like a real
-	// motor. Per client tick (20 Hz): move a fraction of the remaining log-distance,
-	// capped so a big focus change racks over a visible ~0.6–1.0 s instead of jumping.
-	private static final float PULL_RATE     = 0.30f;  // fraction of remaining log-distance / tick
-	private static final float PULL_MAX_STEP = 0.22f;  // max log units / tick (caps rack speed)
-	private static final float PULL_SNAP_EPS = 0.01f;  // lock onto target below this log-distance
-	// When AF/MOB hits sky, focus eases to FAR_ANCHOR rather than snapping to FOCUS_INFINITY.
-	// Snapping to ∞ would activate infinity-foreground-blur every time the reticle sweeps sky,
-	// causing visible flicker. The flag lets the viewfinder still label the distance "inf".
-	private static final float FAR_ANCHOR = 1000.0f;
+	// Focus-pull (rack) easing. AF does not snap instantly: focusDistance is eased toward the
+	// target stop, so the lens "pulls" focus like a real motor. Racking happens in DIOPTER
+	// space (1/distance) rather than log-distance: a real focus ring turns at a constant rate
+	// in diopters, and — the reason this matters here — infinity is then a genuine finite
+	// value (0 dioptres) instead of a point log-space can only approach asymptotically. That
+	// used to force a workaround (ease toward a large-but-finite FAR_ANCHOR "as if" it were
+	// the target, snap the label to ∞ separately) which could let the label and the actual
+	// racked value disagree while a rack was still in flight. Diopter space has no such
+	// asymptote, so the rack can head straight for the real target and the label can read the
+	// same value the lens (and the DoF shader) actually uses.
+	private static final float RACK_RATE      = 0.28f;   // fraction of remaining dioptres / tick
+	private static final float RACK_MAX_STEP  = 0.35f;   // max dioptres / tick (caps rack speed)
+	private static final float RACK_SNAP_EPS  = 0.0005f; // lock onto target below this many dioptres
 	public  static volatile boolean afAtInfinity = false;
 
 	public static void tick(MinecraftClient mc) {
@@ -157,11 +159,11 @@ public final class AutoCamera {
 		}
 
 		float snapped = snapFocus(targetDepth);
-		// Ease the *current* live focus distance toward the snapped stop in log
-		// space (focus-pull). This runs every client tick, so the lens racks
-		// smoothly over several ticks instead of jumping in one frame.
 		afAtInfinity = (snapped >= CameraSettings.FOCUS_INFINITY);
-		float pulled = pullFocus(original.focusDistance(), snapped);
+		// Ease the *current* live focus distance toward the snapped stop in diopter space
+		// (focus-pull). This runs every client tick, so the lens racks smoothly over several
+		// ticks instead of jumping in one frame.
+		float pulled = rackDioptric(original.focusDistance(), snapped);
 		// Only short-circuit once we've effectively reached the eased target this
 		// tick — comparing against `pulled` (not `snapped`) keeps the easing
 		// progressing while the rack is still in motion.
@@ -169,21 +171,88 @@ public final class AutoCamera {
 		return updated.withFocusDistance(pulled);
 	}
 
-	/** Eases the current focus distance one tick toward the target stop in log space. */
-	private static float pullFocus(float current, float target) {
-		// Ease to FAR_ANCHOR instead of snapping to FOCUS_INFINITY so sky hits don't
-		// trigger the infinity-foreground-blur mode and cause flicker.
-		if (target >= CameraSettings.FOCUS_INFINITY) target = FAR_ANCHOR;
-		if (current >= CameraSettings.FOCUS_INFINITY) current = FAR_ANCHOR;
-		current = Math.max(0.01f, current);
-		float logCur = (float) Math.log(current);
-		float logTar = (float) Math.log(target);
-		float diff   = logTar - logCur;
-		if (Math.abs(diff) <= PULL_SNAP_EPS) return target;
-		float step = diff * PULL_RATE;
-		if (step >  PULL_MAX_STEP) step =  PULL_MAX_STEP;
-		if (step < -PULL_MAX_STEP) step = -PULL_MAX_STEP;
-		return (float) Math.exp(logCur + step);
+	/**
+	 * Snaps focus for a tripod (armor-stand mounted) capture, at the moment the shutter fires.
+	 * The ordinary AF/MOB tick above only ever runs while the PLAYER is sneaking, since that's
+	 * how the viewfinder itself is gated — a camera mounted on a stand is never "sneaked with",
+	 * so its AF/MOB modes would otherwise sit frozen at whatever the player's own view last
+	 * resolved, unrelated to what the stand is actually pointed at. MF is left untouched, and
+	 * this snaps straight to the target rather than racking — there's no live preview on a
+	 * tripod shot for a gradual pull to be visible in anyway.
+	 */
+	public static CameraSettings snapFocusFromArmorStand(MinecraftClient mc,
+	                                                      net.minecraft.entity.decoration.ArmorStandEntity stand,
+	                                                      CameraSettings s) {
+		return snapFocusFromRay(mc, stand.getEyePos(), stand.getRotationVec(1.0f), s);
+	}
+
+	/**
+	 * Same as {@link #snapFocusFromArmorStand}, but for a mount whose eye/look isn't a fixed
+	 * entity to read directly — a piloted drone's "eye" is wherever the render camera already
+	 * is (vanilla's rider-camera follow), so the caller passes that instead.
+	 */
+	/**
+	 * AF for a drone-mounted camera. Unlike {@link #snapFocusFromRay}, which in AF mode only
+	 * raycasts BLOCKS, this also considers living subjects — including the pilot's own body,
+	 * which is visible in every drone shot and is usually what the shot is of. Whichever of the
+	 * two is NEARER wins, so a subject standing in front of a wall focuses on the subject
+	 * rather than the wall behind them, the way any real AF behaves.
+	 *
+	 * <p>Not folded into {@code snapFocusFromRay}'s AF branch because a handheld camera's AF
+	 * genuinely should ignore the holder (see {@code nearestMobInCone}'s {@code includeSelf}).
+	 */
+	public static CameraSettings snapFocusFromDroneRay(MinecraftClient mc, Vec3d eye, Vec3d look, CameraSettings s) {
+		if (s.focusMode() == CameraSettings.FOCUS_MF || mc.world == null) return s;
+		float blockDepth = blockRaycastDepth(mc, eye, look);
+		Float subject = nearestMobInCone(mc, eye, look, true);
+		float target = (subject != null && subject < blockDepth) ? subject : blockDepth;
+		return s.withFocusDistance(snapFocus(target));
+	}
+
+	public static CameraSettings snapFocusFromRay(MinecraftClient mc, Vec3d eye, Vec3d look, CameraSettings s) {
+		if (s.focusMode() == CameraSettings.FOCUS_MF || mc.world == null) return s;
+
+		float targetDepth;
+		if (s.focusMode() == CameraSettings.FOCUS_MOB) {
+			Float mobDist = nearestMobInCone(mc, eye, look);
+			targetDepth = mobDist != null ? mobDist : CameraSettings.FOCUS_INFINITY;
+		} else {
+			targetDepth = blockRaycastDepth(mc, eye, look);
+		}
+		return s.withFocusDistance(snapFocus(targetDepth));
+	}
+
+	private static float blockRaycastDepth(MinecraftClient mc, Vec3d eye, Vec3d look) {
+		final double maxDist = 1000.0;
+		Vec3d end = eye.add(look.multiply(maxDist));
+		net.minecraft.util.hit.BlockHitResult hit = mc.world.raycast(
+				new net.minecraft.world.RaycastContext(eye, end,
+						net.minecraft.world.RaycastContext.ShapeType.OUTLINE,
+						net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+		return (hit != null && hit.getType() != net.minecraft.util.hit.HitResult.Type.MISS)
+				? (float) eye.distanceTo(hit.getPos()) : CameraSettings.FOCUS_INFINITY;
+	}
+
+	/** distance (blocks) -> dioptres (1/distance). Infinity is exactly 0. */
+	private static float toDiopters(float distance) {
+		return (distance >= CameraSettings.FOCUS_INFINITY) ? 0f : 1f / Math.max(distance, 0.01f);
+	}
+
+	/** dioptres -> distance (blocks). Anything within RACK_SNAP_EPS of 0 reads as infinity. */
+	private static float fromDiopters(float diopters) {
+		return (diopters <= RACK_SNAP_EPS) ? CameraSettings.FOCUS_INFINITY : 1f / diopters;
+	}
+
+	/** Eases the current focus distance one tick toward the target stop in diopter space. */
+	private static float rackDioptric(float current, float target) {
+		float curD = toDiopters(current);
+		float tgtD = toDiopters(target);
+		float diff = tgtD - curD;
+		if (Math.abs(diff) <= RACK_SNAP_EPS) return target;
+		float step = diff * RACK_RATE;
+		if (step >  RACK_MAX_STEP) step =  RACK_MAX_STEP;
+		if (step < -RACK_MAX_STEP) step = -RACK_MAX_STEP;
+		return fromDiopters(curD + step);
 	}
 
 	// -------------------------------------------------------------------------
@@ -220,12 +289,29 @@ public final class AutoCamera {
 
 	private static Float nearestMobInCone(MinecraftClient mc) {
 		if (mc.player == null || mc.world == null) return null;
-		Vec3d eye = mc.player.getEyePos();
-		Vec3d look = mc.player.getRotationVec(1.0f);
+		// Read from the render camera, not the player's own eye — while drone mode is flying,
+		// they're not the same point, and MOB tracking should aim where the shot actually is.
+		return nearestMobInCone(mc, RenderCamera.pos(mc), RenderCamera.look(mc));
+	}
+
+	private static Float nearestMobInCone(MinecraftClient mc, Vec3d eye, Vec3d look) {
+		return nearestMobInCone(mc, eye, look, false);
+	}
+
+	/**
+	 * @param includeSelf whether the client player counts as a focusable subject. False for a
+	 *        handheld camera — you can't photograph yourself through your own viewfinder, and
+	 *        letting your own body win the cone test would peg focus at arm's length forever.
+	 *        True for a drone-mounted camera, where the pilot's own body is visible in the shot
+	 *        (thirdPerson is forced, see DronePilot) and is usually the whole point of the shot.
+	 */
+	private static Float nearestMobInCone(MinecraftClient mc, Vec3d eye, Vec3d look, boolean includeSelf) {
+		if (mc.player == null || mc.world == null) return null;
 
 		double best = Double.MAX_VALUE;
+		net.minecraft.util.math.Box searchBox = new net.minecraft.util.math.Box(eye, eye).expand(50.0);
 		for (LivingEntity e : mc.world.getEntitiesByClass(LivingEntity.class,
-				mc.player.getBoundingBox().expand(50.0), ent -> ent != mc.player && ent.isAlive())) {
+				searchBox, ent -> (includeSelf || ent != mc.player) && ent.isAlive())) {
 			//? if >=1.21.11 {
 			/*Vec3d toEnt = e.getEntityPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);
 			*///?} else {

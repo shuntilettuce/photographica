@@ -1,6 +1,7 @@
 package dev.hitom.photographica.client;
 
 import dev.hitom.photographica.Photographica;
+import dev.hitom.photographica.component.CameraPower;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.FilmRollData;
@@ -136,6 +137,21 @@ public final class PhotoCapture {
 	 */
 	private static volatile boolean armorStandSkipOnce = false;
 
+	// Drone capture state. Deliberately separate from the armorStand* fields above rather than
+	// reusing armorStandCapturePending itself: GameRendererMixin re-asserts mc.setCameraEntity
+	// on that flag every frame, which is exactly right for an un-ridden armor stand but wrong
+	// for a drone — the pilot is riding it, so the render camera is already correctly
+	// positioned via vanilla's own rider-camera follow, and forcing cameraEntity away from the
+	// player would break their free-look entirely. armorStandFocalLength IS shared (FOV
+	// override doesn't care which kind of mount it's for), and pendingArmorStandEntityId /
+	// accumArmorStandEntityId are reused as "whichever entity this pending capture is
+	// attributed to" for both cases — only the pendingIsDrone / accumIsDrone flags decide which
+	// network payload and cleanup path fires.
+	public static volatile boolean droneCapturePending = false;
+	public static volatile int droneCaptureEntityId = -1;
+	private static volatile boolean pendingIsDrone = false;
+	private static volatile boolean accumIsDrone = false;
+
 	// Depth buffer pre-read during WorldRenderEvents.LAST (before Iris overwrites it).
 	private static volatile float[] pendingLinearDepth = null;
 	private static volatile int pendingDepthFbW = 0;
@@ -221,6 +237,20 @@ public final class PhotoCapture {
 						SoundEvents.BLOCK_LEVER_CLICK, 0.5f, 0.9f));
 				return;
 			}
+		}
+
+		// Flash power for this frame, measured against whatever the camera is focused on — the
+		// subject distance autofocus already resolved is exactly the distance a real flash's
+		// output has to cover. Latched now so the developed photo matches the moment of firing.
+		pendingFlashPower = CameraPower.flashIllumination(cameraStack, lastSceneDepthBlocks);
+
+		// Power. Checked here, alongside the film/card prerequisites and before the self-timer
+		// arms, so a dead battery fails immediately instead of counting down and then refusing.
+		if (!CameraPower.hasPowerForShot(cameraStack)) {
+			mc.player.sendMessage(Text.literal(CameraPower.powerFailureMessage(cameraStack)), true);
+			mc.getSoundManager().play(uiSound(
+					SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.6f));
+			return;
 		}
 
 		long now = System.currentTimeMillis();
@@ -357,6 +387,11 @@ public final class PhotoCapture {
 	}
 
 	private static boolean isEvfActive(MinecraftClient mc) {
+		// Piloting a drone IS looking through an EVF continuously — its f/2.8 built-in camera
+		// (see DroneEntity#createBuiltInCamera) needs the same live depth-of-field preview a
+		// handheld mirrorless gets (see DroneSignalHud), just never gated on sneaking-with-a-
+		// camera-in-hand the way the handheld case is, since piloting has neither concept.
+		if (dev.hitom.photographica.client.DronePilot.isActive()) return true;
 		if (mc.player == null || !mc.player.isSneaking() || mc.currentScreen != null) return false;
 		ItemStack stack = mc.player.getMainHandStack();
 		if (stack.getItem() instanceof MirrorlessCameraItem) return true;
@@ -393,6 +428,8 @@ public final class PhotoCapture {
 		CameraSettings settings = pendingSettings;
 		boolean isFilm = pendingIsFilm;
 		int captureStandId = pendingArmorStandEntityId; // capture before reset
+		boolean wasDrone = pendingIsDrone;
+		pendingIsDrone = false;
 		pendingId = null;
 		pendingSettings = null;
 		pendingIsFilm = false;
@@ -427,7 +464,15 @@ public final class PhotoCapture {
 		processAndSavePhoto(raw, mc, id, settings, fLinearDepth, fFbW, fFbH);
 		//?}
 
-		if (captureStandId >= 0) {
+		if (captureStandId >= 0 && wasDrone) {
+			// Always digital: the drone's camera is fixed built-in equipment, never a film body
+			// (see DroneEntity#createBuiltInCamera), so there is no film branch to take here.
+			ClientPlayNetworking.send(new dev.hitom.photographica.network.CreatePhotoFromDronePayload(id, settings, captureStandId));
+			if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (ドローン)"), true);
+			droneCapturePending = false;
+			armorStandFocalLength = 0;
+			droneCaptureEntityId = -1;
+		} else if (captureStandId >= 0) {
 			if (isFilm) {
 				ClientPlayNetworking.send(new TakeFilmPhotoFromArmorStandPayload(id, settings, captureStandId));
 				if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て・フィルム)"), true);
@@ -470,29 +515,69 @@ public final class PhotoCapture {
 			return;
 		}
 		NativeImage cropped = null;
+		NativeImage zoomed = null;
 		NativeImage downsampled = null;
 		NativeImage processed = null;
 		try {
 			cropped = cropTo3to2(raw);
-			downsampled = boxDownsample(cropped, 1280);
+			// NEVER close `cropped` here: cropTo3to2 returns `raw` ITSELF when the framebuffer
+			// already has the target aspect (a 3:2 window, or 2:3 in portrait mode), so closing
+			// it would free `raw` — which the finally block then frees a second time. Double-
+			// freeing a NativeImage's native buffer can take the whole JVM down. Every
+			// intermediate is instead handed to the finally block, which closes each exactly
+			// once and never closes an alias of `raw`.
+			if (settings.lensType() == LensKind.DRONE_ZOOM) {
+				float blockPx = LensKind.digitalZoomSoftenPx(settings.focalLengthMm());
+				if (blockPx > 1.0f) zoomed = applyDigitalSoftening(cropped, blockPx);
+			}
+			downsampled = boxDownsample(zoomed != null ? zoomed : cropped, 1280);
 			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH, true);
 			File dir = new File(mc.runDirectory, "photographica/photos");
 			if (!dir.exists() && !dir.mkdirs()) {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 				return;
 			}
-			File outFile = new File(dir, id + ".png");
-			processed.writeTo(outFile);
+			File outFile = new File(dir, id + ".jpg");
+			writeJpeg(processed, outFile);
 			Photographica.LOGGER.info("Photo saved: {} ({}x{})",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
 			ClipboardUtil.copyImageAsync(outFile);
+			uploadPhotoToServer(id, outFile);
 		} catch (IOException e) {
 			Photographica.LOGGER.error("Photo capture failed", e);
 		} finally {
 			if (processed != null) processed.close();
-			if (downsampled != null && downsampled != cropped && downsampled != raw) downsampled.close();
+			// boxDownsample and cropTo3to2 both return their SOURCE unchanged when there is
+			// nothing to do, so every one of these can be an alias of an earlier stage (or of
+			// `raw`); each guard exists to keep a shared buffer from being closed twice.
+			if (downsampled != null && downsampled != zoomed && downsampled != cropped && downsampled != raw) downsampled.close();
+			if (zoomed != null && zoomed != cropped && zoomed != raw) zoomed.close();
 			if (cropped != null && cropped != raw) cropped.close();
 			raw.close();
+		}
+	}
+
+	/**
+	 * Sends this photo's just-written PNG to the server in chunks, so it becomes readable by
+	 * anyone (not just this client) — see {@link dev.hitom.photographica.network.UploadPhotoChunkPayload}.
+	 * Fire-and-forget: the server persists the canonical copy independently of the
+	 * CreatePhotoPayload/TakeFilmPhotoPayload metadata payload sent separately, so a failure
+	 * here only means other players can't view this one photo, nothing about the local item
+	 * itself depends on it succeeding.
+	 */
+	private static void uploadPhotoToServer(UUID id, File outFile) {
+		try {
+			byte[] data = java.nio.file.Files.readAllBytes(outFile.toPath());
+			boolean sent = dev.hitom.photographica.network.PhotoChunkAssembler.split(data,
+					(chunkIndex, totalChunks, chunk) ->
+							ClientPlayNetworking.send(new dev.hitom.photographica.network.UploadPhotoChunkPayload(
+									id, chunkIndex, totalChunks, chunk)));
+			if (!sent) {
+				Photographica.LOGGER.warn("Photo {} is {} bytes — too large to upload; it stays local only",
+						id, data.length);
+			}
+		} catch (IOException e) {
+			Photographica.LOGGER.error("Failed to upload photo {} to server", id, e);
 		}
 	}
 
@@ -542,10 +627,17 @@ public final class PhotoCapture {
 	private static void accumulateFrame(NativeImage frame) {
 		if (frame == null) return;
 		NativeImage cropped = null;
+		NativeImage zoomed = null;
 		NativeImage ds = null;
 		try {
 			cropped = cropTo3to2(frame);
-			ds = boxDownsample(cropped, 1280);
+			// Same aliasing hazard as processAndSavePhoto: cropTo3to2 can hand back `frame`
+			// itself, so nothing is closed here — the finally block owns every buffer.
+			if (accumSettings != null && accumSettings.lensType() == LensKind.DRONE_ZOOM) {
+				float blockPx = LensKind.digitalZoomSoftenPx(accumSettings.focalLengthMm());
+				if (blockPx > 1.0f) zoomed = applyDigitalSoftening(cropped, blockPx);
+			}
+			ds = boxDownsample(zoomed != null ? zoomed : cropped, 1280);
 			int w = ds.getWidth();
 			int h = ds.getHeight();
 			if (accumR == null) {
@@ -567,7 +659,8 @@ public final class PhotoCapture {
 				accumSamples++;
 			}
 		} finally {
-			if (ds != null && ds != cropped && ds != frame) ds.close();
+			if (ds != null && ds != zoomed && ds != cropped && ds != frame) ds.close();
+			if (zoomed != null && zoomed != cropped && zoomed != frame) zoomed.close();
 			if (cropped != null && cropped != frame) cropped.close();
 			frame.close();
 		}
@@ -579,6 +672,7 @@ public final class PhotoCapture {
 		CameraSettings settings = accumSettings;
 		boolean isFilm = accumIsFilm;
 		int finalStandId = accumArmorStandEntityId; // capture before reset
+		boolean wasDrone = accumIsDrone;
 		float[] depth = accumDepth;
 		int depthFbW = accumDepthFbW;
 		int depthFbH = accumDepthFbH;
@@ -615,11 +709,12 @@ public final class PhotoCapture {
 				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
 				return;
 			}
-			File outFile = new File(dir, id + ".png");
-			processed.writeTo(outFile);
+			File outFile = new File(dir, id + ".jpg");
+			writeJpeg(processed, outFile);
 			Photographica.LOGGER.info("Long-exposure photo saved: {} ({}x{}, {} frames accumulated)",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight(), n);
 			ClipboardUtil.copyImageAsync(outFile);
+			uploadPhotoToServer(id, outFile);
 		} catch (IOException e) {
 			Photographica.LOGGER.error("Long-exposure photo capture failed", e);
 		} finally {
@@ -627,7 +722,13 @@ public final class PhotoCapture {
 			averaged.close();
 		}
 
-		if (finalStandId >= 0) {
+		if (finalStandId >= 0 && wasDrone) {
+			ClientPlayNetworking.send(new dev.hitom.photographica.network.CreatePhotoFromDronePayload(id, settings, finalStandId));
+			if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (ドローン)"), true);
+			droneCapturePending = false;
+			armorStandFocalLength = 0;
+			droneCaptureEntityId = -1;
+		} else if (finalStandId >= 0) {
 			if (isFilm) {
 				ClientPlayNetworking.send(new TakeFilmPhotoFromArmorStandPayload(id, settings, finalStandId));
 				if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (防具立て・フィルム)"), true);
@@ -653,10 +754,98 @@ public final class PhotoCapture {
 		}
 	}
 
+	/**
+	 * How much light the flash contributes at full power, as a multiplier on the exposure.
+	 * 8x is a little over three stops — enough to take a scene that would have needed a
+	 * tripod-and-30-seconds and make it a handheld shot, which is the entire point of owning
+	 * one, without turning daylight shots into white rectangles (they are already at or above
+	 * correct exposure, so the highlight rolloff absorbs it).
+	 */
+	private static final float FLASH_EXPOSURE_GAIN = 8.0f;
+
+	/**
+	 * Flash power reaching the subject for the shot currently being processed, 0.0 - 1.0.
+	 * Captured at trigger time rather than read from the camera during processing because the
+	 * photo is developed asynchronously on 1.21.11 — by then the player may have swapped or
+	 * drained the flash, and the photo has to reflect the moment the shutter fired.
+	 */
+	private static volatile float pendingFlashPower = 0f;
+
+	/** JPEG quality for saved photos. High enough that the mod's own grain and bokeh survive
+	 *  without visible blocking, low enough to be roughly 5-10x smaller than the PNG this
+	 *  replaced — which matters most for multiplayer, where every photo is chunked over the
+	 *  network to anyone who views it. */
+	private static final int JPEG_QUALITY = 88;
+
+	/**
+	 * Writes {@code img} as a JPEG. {@link NativeImage#writeTo} only speaks PNG, but LWJGL's
+	 * STB bindings (already on the classpath — NativeImage itself decodes through them) include
+	 * a JPEG encoder, so this goes straight to stb rather than through AWT/ImageIO, which would
+	 * drag a second imaging stack onto the render thread.
+	 *
+	 * <p>Pixels are read through {@link #niGet}, which normalises every version to ABGR, so the
+	 * RGB order written here is correct on all of them.
+	 */
+	private static void writeJpeg(NativeImage img, File out) throws IOException {
+		int w = img.getWidth();
+		int h = img.getHeight();
+		java.nio.ByteBuffer buf = org.lwjgl.system.MemoryUtil.memAlloc(w * h * 3);
+		try {
+			for (int y = 0; y < h; y++) {
+				for (int x = 0; x < w; x++) {
+					int c = niGet(img, x, y);
+					buf.put((byte) (c & 0xFF));          // R (low byte — see niGet)
+					buf.put((byte) ((c >> 8) & 0xFF));   // G
+					buf.put((byte) ((c >> 16) & 0xFF));  // B
+				}
+			}
+			buf.flip();
+			if (!org.lwjgl.stb.STBImageWrite.stbi_write_jpg(out.getAbsolutePath(), w, h, 3, buf, JPEG_QUALITY)) {
+				throw new IOException("stbi_write_jpg failed for " + out);
+			}
+		} finally {
+			org.lwjgl.system.MemoryUtil.memFree(buf);
+		}
+	}
+
+	/**
+	 * Clears every in-flight capture so none of it leaks into the next world joined (see
+	 * {@code PhotographicaClient}'s disconnect hook). Disconnecting mid-capture — a kick, a
+	 * crash, or just quitting during the mirror-up delay — otherwise leaves
+	 * {@link #armorStandFocalLength} pinning the FOV to a lens that isn't equipped any more,
+	 * and a non-null {@link #pendingId} making every single frame do a depth read-back for a
+	 * screenshot that will never be taken. Purely transient state: nothing here is a photo
+	 * that's already been saved.
+	 */
+	public static void resetOnDisconnect() {
+		resetAccumState();
+		pendingId = null;
+		pendingSettings = null;
+		pendingIsFilm = false;
+		pendingIsDrone = false;
+		pendingArmorStandEntityId = -1;
+		pendingLinearDepth = null;
+		armorStandCapturePending = false;
+		armorStandCaptureEntityId = -1;
+		armorStandFocalLength = 0;
+		armorStandSkipOnce = false;
+		savedArmorStandPerspective = null;
+		droneCapturePending = false;
+		droneCaptureEntityId = -1;
+		timerFireMs = 0L;
+		timerStack = null;
+		timerArmorStandEntityId = -1;
+		timerIsFiring = false;
+		mirrorEndMs = 0L;
+		flashEndMs = 0L;
+		secondClickAtMs = 0L;
+	}
+
 	private static void resetAccumState() {
 		accumId = null;
 		accumSettings = null;
 		accumIsFilm = false;
+		accumIsDrone = false;
 		accumArmorStandEntityId = -1;
 		accumEndMs = 0L;
 		accumSamples = 0;
@@ -742,7 +931,7 @@ public final class PhotoCapture {
 				CameraSettings settings = isFilm
 						? FilmCameraItem.getSettings(stack)
 						: CameraItem.getSettings(stack);
-				armArmorStandCapture(standId, stack, settings, isFilm, now);
+				armCapture(standId, stack, settings, isFilm, now);
 			} else {
 				// Call take() directly, but flag it so take() skips re-arming the timer.
 				timerIsFiring = true;
@@ -775,8 +964,12 @@ public final class PhotoCapture {
 			return;
 		}
 
-		// Digital: check SD card
-		if (!isFilm) {
+		// Digital: check SD card — except a drone's built-in camera, which has no SD card slot
+		// at all (see DroneEntity#createBuiltInCamera); the server just hands finished photos
+		// straight to the pilot's inventory in that case (see the CreatePhotoFromDronePayload
+		// receiver), so there's nothing here to validate.
+		boolean isDrone = mc.world.getEntityById(entityId) instanceof dev.hitom.photographica.entity.DroneEntity;
+		if (!isFilm && !isDrone) {
 			if (!cameraStack.contains(ModDataComponents.SD_CARD)) {
 				mc.player.sendMessage(Text.literal("⚠ SDカードが装填されていません"), true);
 				mc.getSoundManager().play(uiSound(
@@ -827,7 +1020,88 @@ public final class PhotoCapture {
 			return;
 		}
 
-		armArmorStandCapture(entityId, cameraStack, settings, isFilm, now);
+		armCapture(entityId, cameraStack, settings, isFilm, now);
+	}
+
+	/** Resolves the target entity and dispatches to the matching arm logic. */
+	private static void armCapture(int entityId, ItemStack cameraStack, CameraSettings settings,
+	                               boolean isFilm, long now) {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.world == null) return;
+		if (mc.world.getEntityById(entityId) instanceof dev.hitom.photographica.entity.DroneEntity) {
+			armDroneCapture(entityId, cameraStack, settings, isFilm, now);
+		} else {
+			armArmorStandCapture(entityId, cameraStack, settings, isFilm, now);
+		}
+	}
+
+	/**
+	 * Arms a capture from a piloted drone's perspective. Unlike the armor-stand case, there is
+	 * no camera-entity swap: the pilot is already riding the drone, so vanilla's own
+	 * rider-camera follow means the render camera is already exactly where it needs to be —
+	 * this only has to snap AF/MOB focus and queue the screenshot.
+	 */
+	private static void armDroneCapture(int entityId, ItemStack cameraStack,
+	                                    CameraSettings settings, boolean isFilm, long now) {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.world == null) return;
+		if (!(mc.world.getEntityById(entityId) instanceof dev.hitom.photographica.entity.DroneEntity)) return;
+
+		lastCaptureMs = now;
+		motionBlurEnabled = true; // hovering drone ~= stable enough to treat like a tripod shot
+
+		// Same reasoning as the armor-stand case: AF/MOB only ticks while the PLAYER is
+		// sneaking, which piloting a drone never is — snap it here from the render camera,
+		// which (via vanilla's rider-camera follow) is already exactly where the drone is.
+		// The drone-specific variant so the pilot's own body can be the focus subject.
+		settings = AutoCamera.snapFocusFromDroneRay(mc, RenderCamera.pos(mc), RenderCamera.look(mc), settings);
+
+		pendingSettings = settings;
+		pendingId = UUID.randomUUID();
+		pendingIsFilm = isFilm;
+		pendingArmorStandEntityId = entityId;
+		pendingIsDrone = true;
+		droneCapturePending = true;
+		droneCaptureEntityId = entityId;
+		armorStandFocalLength = LensKind.hasLens(settings.lensType()) ? settings.focalLengthMm() : 0;
+
+		pendingLinearDepth = null;
+		// No armorStandSkipOnce needed: nothing swapped cameras this frame, so the frame
+		// about to render already reflects the drone's (== the rider's) viewpoint.
+
+		double shutterSec = settings.shutterSeconds();
+		if (shutterSec >= 1.0 / 30.0) {
+			long durationMs = Math.max((long) (shutterSec * 1000), 1L);
+			accumId = pendingId;
+			accumSettings = settings;
+			accumIsFilm = isFilm;
+			accumIsDrone = true;
+			accumArmorStandEntityId = entityId;
+			accumEndMs = now + durationMs;
+			accumSampleIntervalMs = Math.max(8L, durationMs / ACCUM_MAX_SAMPLES);
+			accumNextSampleMs = now;
+			accumSamples = 0;
+			accumR = null; accumG = null; accumB = null;
+			accumDepth = null;
+		}
+
+		boolean isMirrorless = cameraStack.getItem() instanceof MirrorlessCameraItem;
+		if (isMirrorless) {
+			mirrorEndMs = now;
+			secondClickAtMs = 0;
+		} else {
+			mirrorEndMs = now + MIRROR_DURATION_MS;
+			secondClickAtMs = now + MIRROR_DOWN_DELAY_MS;
+		}
+		flashEndMs = now + FLASH_TOTAL_MS;
+
+		if (isFilm) {
+			mc.getSoundManager().play(uiSound(SoundEvents.BLOCK_PISTON_CONTRACT, 1.2f, 1.4f));
+		} else if (isMirrorless) {
+			mc.getSoundManager().play(uiSound(SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 0.6f, 1.8f));
+		} else {
+			mc.getSoundManager().play(uiSound(SoundEvents.BLOCK_TRIPWIRE_CLICK_ON, 1.5f, 0.9f));
+		}
 	}
 
 	/**
@@ -845,6 +1119,11 @@ public final class PhotoCapture {
 
 		lastCaptureMs = now;
 		motionBlurEnabled = true; // armor stand = always stable
+
+		// AF/MOB only ever tick from the player's own (sneaking) viewpoint — snap focus from
+		// the stand's actual eye/look here so a tripod shot in AF or MOB mode doesn't fire with
+		// whatever the player's view last happened to resolve.
+		settings = AutoCamera.snapFocusFromArmorStand(mc, stand, settings);
 
 		pendingSettings = settings;
 		pendingId = UUID.randomUUID();
@@ -921,7 +1200,7 @@ public final class PhotoCapture {
 	 * instead of the lens focal length, making the photo look wider or narrower than intended.
 	 */
 	public static int pendingHandheldFocalLength() {
-		if (armorStandCapturePending) return 0;  // armor stand FOV handled by armorStandFocalLength
+		if (armorStandCapturePending || droneCapturePending) return 0;  // handled by armorStandFocalLength
 		CameraSettings s = pendingSettings;
 		if (s == null) s = accumSettings;         // during long-exposure accumulation
 		if (s == null) return 0;
@@ -954,6 +1233,15 @@ public final class PhotoCapture {
 
 		// Exposure multiplier relative to the reference (F5.6 · 1/60 · ISO 400).
 		float mult = (float) (t * 60.0 * ((5.6 / n) * (5.6 / n)) * (s / 400.0));
+
+		// Flash. Folded into the exposure multiplier rather than added as a separate brightening
+		// pass so it goes through the same highlight rolloff as available light — a flashed
+		// subject clips the way an overexposed one does, instead of turning flat white. Scaled
+		// by how much light actually reached the subject at this distance (see FlashItem), so a
+		// small unit fired across a big room barely lifts the frame.
+		if (pendingFlashPower > 0f) {
+			mult *= 1.0f + pendingFlashPower * FLASH_EXPOSURE_GAIN;
+		}
 
 		// Reciprocity failure: film loses sensitivity at long exposures (>= 1s).
 		if (FilmKind.isFilm(settings.filmType()) && t >= 1.0) {
@@ -1064,9 +1352,12 @@ public final class PhotoCapture {
 			pass3 = pass2;
 		}
 
-		// Pass 4: Diffraction softening at narrow apertures (f/16+)
+		// Pass 4: Diffraction softening at narrow apertures (f/16+). Only needed on the CPU
+		// DoF path (linearDepth != null, pre-1.21.11): on >=1.21.11 the GPU shader already
+		// folds diffraction into its circle-of-confusion (evf_blur.fsh airyDiscMM), so this
+		// box blur would double it up.
 		NativeImage pass4;
-		if (n >= 16.0) {
+		if (n >= 16.0 && linearDepth != null) {
 			pass4 = applyBoxBlur3x3(pass3, w, h);
 			pass3.close();
 		} else {
@@ -1369,7 +1660,9 @@ public final class PhotoCapture {
 		// in blocks (≈ metres); the *200 factor scales blocks→mm subject distance.
 		//   coc_mm = f^2 / (N * (S1 - f)) * |S2 - S1| / S2
 		boolean infinityFocus = (focusDist >= CameraSettings.FOCUS_INFINITY);
-		float fmm = settings.focalLengthMm();
+		// Not necessarily the focal length the shot was FRAMED at — the drone's zoom pins bokeh
+		// to its wide end so telephoto shots don't dissolve (see LensKind#bokehFocalLengthMm).
+		float fmm = LensKind.bokehFocalLengthMm(settings.lensType(), settings.focalLengthMm());
 		float pxPerMm = (float) ih / 24.0f;   // 24mm sensor height maps to image height px
 		float[] cocMap = new float[iw * ih];
 		boolean[] isFgMap = new boolean[iw * ih];   // true = closer than the focus plane
@@ -1523,9 +1816,75 @@ public final class PhotoCapture {
 		return dst;
 	}
 
+	/**
+	 * The drone's digital-zoom detail loss (see {@link LensKind#digitalZoomSoftenPx}) — mirrors
+	 * the live viewfinder's GLSL pass ({@code digital_zoom.fsh}) exactly: reconstruct the image
+	 * from a sample grid {@code blockPx} pixels apart, so the detail a real sensor wouldn't
+	 * have resolved at this focal length is genuinely gone. Framing is untouched (the render
+	 * already used the true focal length's FOV) — this only ever costs sharpness.
+	 *
+	 * <p>Reconstruction is bilinear with eased weights, NOT nearest-neighbour: a real upscale
+	 * goes soft, it does not produce visible mosaic blocks. Returns a new image sized the same
+	 * as {@code src}; caller closes both.
+	 */
+	private static NativeImage applyDigitalSoftening(NativeImage src, float blockPx) {
+		int w = src.getWidth();
+		int h = src.getHeight();
+		NativeImage dst = new NativeImage(w, h, false);
+		for (int y = 0; y < h; y++) {
+			float gy  = (y + 0.5f) / blockPx - 0.5f;
+			int   gy0 = (int) Math.floor(gy);
+			float fy  = gy - gy0;
+			fy = fy * fy * (3.0f - 2.0f * fy);
+			int sy0 = clampCoord(Math.round((gy0 + 0.5f) * blockPx - 0.5f), h);
+			int sy1 = clampCoord(Math.round((gy0 + 1.5f) * blockPx - 0.5f), h);
+			for (int x = 0; x < w; x++) {
+				float gx  = (x + 0.5f) / blockPx - 0.5f;
+				int   gx0 = (int) Math.floor(gx);
+				float fx  = gx - gx0;
+				fx = fx * fx * (3.0f - 2.0f * fx);
+				int sx0 = clampCoord(Math.round((gx0 + 0.5f) * blockPx - 0.5f), w);
+				int sx1 = clampCoord(Math.round((gx0 + 1.5f) * blockPx - 0.5f), w);
+				niSet(dst, x, y, lerpArgb(
+						lerpArgb(niGet(src, sx0, sy0), niGet(src, sx1, sy0), fx),
+						lerpArgb(niGet(src, sx0, sy1), niGet(src, sx1, sy1), fx), fy));
+			}
+		}
+		return dst;
+	}
+
+	private static int clampCoord(int v, int max) {
+		return v < 0 ? 0 : (v >= max ? max - 1 : v);
+	}
+
+	/** Per-channel lerp on a packed ARGB int. Channel order is irrelevant here — every channel
+	 *  is blended identically, so this works whatever packing niGet/niSet use on this version. */
+	private static int lerpArgb(int a, int b, float t) {
+		int out = 0;
+		for (int shift = 0; shift < 32; shift += 8) {
+			int ca = (a >> shift) & 0xFF;
+			int cb = (b >> shift) & 0xFF;
+			out |= (clampCh(Math.round(ca + (cb - ca) * t)) << shift);
+		}
+		return out;
+	}
+
+    // Every per-pixel routine in this file packs colour as ABGR — red in the LOW byte (see the
+    // `red = color & 0xFF` reads in applyPhotographicEffects). 1.21.1 hands that layout back
+    // directly from getColor(), but 1.21.4 made getColor() private and exposes getColorArgb(),
+    // which is the opposite order. Left unconverted that silently swapped red and blue on
+    // 1.21.4+: symmetric work (exposure, blur, downsampling) cancels out and looks fine, but
+    // every asymmetric effect came out wrong — B&W applied the 0.299 red weight to blue, and
+    // each film stock's colour signature was mirrored. Normalising here fixes all of it in one
+    // place and gives writeJpeg a single guaranteed channel order to serialise.
     //? if >=1.21.4 {
-    /*private static int niGet(net.minecraft.client.texture.NativeImage img, int x, int y) { return img.getColorArgb(x, y); }
-    private static void niSet(net.minecraft.client.texture.NativeImage img, int x, int y, int c) { img.setColorArgb(x, y, c); }
+    /*private static int niGet(net.minecraft.client.texture.NativeImage img, int x, int y) { return swapRedBlue(img.getColorArgb(x, y)); }
+    private static void niSet(net.minecraft.client.texture.NativeImage img, int x, int y, int c) { img.setColorArgb(x, y, swapRedBlue(c)); }
+
+    // Swaps the outer two colour bytes, leaving alpha and green in place. Its own inverse.
+    private static int swapRedBlue(int c) {
+        return (c & 0xFF00FF00) | ((c >> 16) & 0xFF) | ((c & 0xFF) << 16);
+    }
     *///?} else {
     private static int niGet(net.minecraft.client.texture.NativeImage img, int x, int y) { return img.getColor(x, y); }
     private static void niSet(net.minecraft.client.texture.NativeImage img, int x, int y, int c) { img.setColor(x, y, c); }

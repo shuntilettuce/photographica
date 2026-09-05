@@ -104,9 +104,10 @@ public class GameRendererMixin {
 	@Inject(method = "renderHand(FZLorg/joml/Matrix4f;)V", at = @At("HEAD"), cancellable = true)
 	private void photographica$suppressHandWhileCapturing(float tickDelta, boolean blockOutline,
 			org.joml.Matrix4f matrix, CallbackInfo ci) {
-		if (VideoRecorder.isRecording()
-				|| PhotoCapture.isAccumulating()
-				|| PhotoCapture.armorStandCapturePending) {
+		// isCapturePending() covers an ordinary handheld shot too, not just accumulation/tripod
+		// — without it, a plain photo bakes the held camera model into its own picture.
+		if (VideoRecorder.isRecording() || PhotoCapture.isCapturePending() || photographica$isPilotingDrone()
+				|| photographica$isMirrorlessViewfinderActive()) {
 			ci.cancel();
 		}
 	}
@@ -115,10 +116,17 @@ public class GameRendererMixin {
 	// keep the framing at the stand's eye), but first-person view-bob is still applied from
 	// the *player's* walk cycle, so the locked-off tripod shot jitters when the player walks.
 	// Cancel bobView() entirely while tripod-recording for a steady camcorder shot.
+	//
+	// Same problem, same fix, for the drone's "C" lock: CameraMixin cancels Camera.update()
+	// to hold the render camera at the frozen drone position, but bobView() is a completely
+	// separate transform layered on top afterward, driven by the player's OWN walk cycle —
+	// so a player walking into frame of a "locked" drone shot still shook the whole image
+	// with their own footsteps, exactly backwards from the point of locking it in the first
+	// place (the player should be free to walk into a *steady* shot).
 	@Inject(method = "bobView(Lnet/minecraft/client/util/math/MatrixStack;F)V", at = @At("HEAD"), cancellable = true)
 	private void photographica$suppressBobDuringTripod(net.minecraft.client.util.math.MatrixStack matrices,
 			float tickDelta, CallbackInfo ci) {
-		if (VideoRecorder.isTripodRecording()) ci.cancel();
+		if (VideoRecorder.isTripodRecording() || dev.hitom.photographica.client.DronePilot.isActive()) ci.cancel();
 	}
 
 	// After updateCamera() completes, reset mc.cameraEntity back to the player.
@@ -161,8 +169,14 @@ public class GameRendererMixin {
 			//?}
 			return;
 		}
-		// Armor stand capture mode: use the armor stand camera's focal length
-		if (PhotoCapture.armorStandCapturePending && PhotoCapture.armorStandFocalLength > 0) {
+		// Armor stand / drone capture mode: use the mounted camera's focal length. The drone's
+		// digital zoom never affects FRAMING — the render always gets the true focal length's
+		// FOV, live and captured alike, and digital zoom costs only sharpness afterwards (see
+		// PhotoCapture#applyDigitalSoftening). An earlier version clamped this to the optical
+		// end and had the post-process crop supply the rest of the magnification, which made
+		// captures frame differently from the live view they were composed in.
+		if ((PhotoCapture.armorStandCapturePending || PhotoCapture.droneCapturePending)
+				&& PhotoCapture.armorStandFocalLength > 0) {
 			int f = PhotoCapture.armorStandFocalLength;
 			double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
 			//? if >=1.21.4 {
@@ -186,6 +200,23 @@ public class GameRendererMixin {
 			cir.setReturnValue(vFovDegrees);
 			//?}
 			return;
+		}
+
+		// Live drone piloting view (not an actual capture frame): the mounted camera's FOV
+		// applies continuously across the whole 24-200mm range, exactly matching the capture
+		// branch above. Digital zoom is a SHARPNESS cost, not a framing one — the detail loss
+		// is applied as a separate pass (see DroneSignalHud / EvfBlurRenderer#applyDigitalZoom).
+		if (dev.hitom.photographica.client.DronePilot.isActive()) {
+			int f = dev.hitom.photographica.client.DronePilot.getMountedFocalLength(MinecraftClient.getInstance());
+			if (f > 0) {
+				double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
+				//? if >=1.21.4 {
+				/*cir.setReturnValue((float) vFovDegrees);
+				*///?} else {
+				cir.setReturnValue(vFovDegrees);
+				//?}
+				return;
+			}
 		}
 
 		PlayerEntity player = MinecraftClient.getInstance().player;
@@ -251,8 +282,11 @@ public class GameRendererMixin {
 					target = "Lnet/minecraft/client/render/GameRenderer;renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
 					shift = At.Shift.BEFORE))
 	private void photographica$suppressHandBeforeAccumSample(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
-		// Suppress hand during long-exposure accumulation AND armor stand capture
-		if (PhotoCapture.isAccumulating() || PhotoCapture.armorStandCapturePending) {
+		// Suppress hand for ANY pending capture — plain handheld shot, long-exposure
+		// accumulation, or armor stand — not just the latter two; a plain shot with no
+		// suppression bakes the held camera model into its own photo.
+		if (PhotoCapture.isCapturePending() || photographica$isPilotingDrone()
+				|| photographica$isMirrorlessViewfinderActive()) {
 			//? if <1.21.11 {
 			this.renderHand = false;
 			//?}
@@ -306,17 +340,27 @@ public class GameRendererMixin {
 					target = "Lnet/minecraft/client/render/GameRenderer;renderWorld(Lnet/minecraft/client/render/RenderTickCounter;)V",
 					shift = At.Shift.AFTER))
 	private void photographica$captureAfterComposite(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
-		// Snapshot state BEFORE captureIfPending() — both flags reset inside that call.
-		boolean wasAccumulating = PhotoCapture.isAccumulating();
-		boolean wasArmorStand = PhotoCapture.armorStandCapturePending;
+		// Snapshot state BEFORE captureIfPending() clears pendingId/accumId/armorStandCapturePending.
+		boolean wasCapturePending = PhotoCapture.isCapturePending();
 		// Apply EVF blur BEFORE capture so the screenshot contains GPU bokeh (1.21.11).
 		// No-op on <1.21.11 (blurScheduled is never set; blur is drawn directly from HUD).
 		// forCapture=true → blur the full framebuffer so the photo's edges are covered.
 		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur(PhotoCapture.isCapturePending());
+		// Focus peaking is a viewfinder-only manual-focus aid; applyScheduledPeaking() is a
+		// no-op whenever forCapture is true, so it can never end up baked into a saved photo.
+		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledPeaking(PhotoCapture.isCapturePending());
+		// Drone digital zoom is a live-viewfinder-only crop+pixelate — the saved photo gets its
+		// own independent crop baked in CPU-side (PhotoCapture#applyDigitalZoom), so this must
+		// never also run on a capture frame or the zoom would effectively double up.
+		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledDigitalZoom(PhotoCapture.isCapturePending());
 		PhotoCapture.captureIfPending();
 		VideoRecorder.captureFrameIfRecording();
-		// Restore renderHand for the vanilla renderHand() call that follows
-		if (wasAccumulating || wasArmorStand || photographica$videoHandSuppressed) {
+		// Restore renderHand for the vanilla renderHand() call that follows. isRidingDrone()/
+		// isMirrorlessViewfinderActive() are re-checked fresh here rather than snapshotted —
+		// unlike capture state, neither changes between the BEFORE and AFTER injection points
+		// within the same frame, so a live check is equivalent and avoids two more fields.
+		if (wasCapturePending || photographica$videoHandSuppressed
+				|| photographica$isPilotingDrone() || photographica$isMirrorlessViewfinderActive()) {
 			//? if <1.21.11 {
 			this.renderHand = true;
 			//?}
@@ -325,5 +369,30 @@ public class GameRendererMixin {
 
 	private static boolean isCamera(ItemStack stack) {
 		return stack.getItem() instanceof CameraItem || stack.getItem() instanceof FilmCameraItem;
+	}
+
+	/** True while piloting a drone — the held item (if any) isn't what the player is actually
+	 *  "using" at that moment, so the first-person hand/held-item render is never appropriate,
+	 *  the same way it's suppressed during any other capture-adjacent state. */
+	private static boolean photographica$isPilotingDrone() {
+		return dev.hitom.photographica.client.DronePilot.isActive();
+	}
+
+	/** True while looking through a mirrorless camera's live EVF (sneaking, lens attached, no
+	 *  screen open) — same gate ViewfinderHud uses to draw the bezels/exposure preview. The
+	 *  first-person hand holding the camera has no business being visible at the same time as
+	 *  that overlay: you're looking at a viewfinder image, not your own hand, and the vanilla
+	 *  view-bob animation on the held item (which doesn't know anything about the EVF) reads as
+	 *  a distracting jitter layered on top of the overlay. */
+	private static boolean photographica$isMirrorlessViewfinderActive() {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc.player == null || mc.currentScreen != null || !mc.player.isSneaking()) return false;
+		ItemStack stack = mc.player.getMainHandStack();
+		if (!(stack.getItem() instanceof dev.hitom.photographica.item.MirrorlessCameraItem)) {
+			stack = mc.player.getOffHandStack();
+			if (!(stack.getItem() instanceof dev.hitom.photographica.item.MirrorlessCameraItem)) return false;
+		}
+		CameraSettings s = CameraItem.getSettings(stack);
+		return LensKind.hasLens(s.lensType());
 	}
 }

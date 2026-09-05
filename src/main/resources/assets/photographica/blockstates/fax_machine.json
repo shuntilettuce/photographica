@@ -1,0 +1,6 @@
+{"variants":{
+  "facing=west":{"model":"photographica:block/fax_machine"},
+  "facing=north":{"model":"photographica:block/fax_machine","y":90},
+  "facing=east":{"model":"photographica:block/fax_machine","y":180},
+  "facing=south":{"model":"photographica:block/fax_machine","y":270}
+}}

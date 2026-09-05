@@ -1,1 +1,6 @@
-{"variants":{"":{"model":"photographica:block/printer"}}}
+{"variants":{
+  "facing=south":{"model":"photographica:block/printer"},
+  "facing=west":{"model":"photographica:block/printer","y":90},
+  "facing=north":{"model":"photographica:block/printer","y":180},
+  "facing=east":{"model":"photographica:block/printer","y":270}
+}}

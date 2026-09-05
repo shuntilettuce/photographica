@@ -33,18 +33,27 @@ float linearDepth(float d) {
     return 2.0 * Near * Far / (Far + Near - ndc * (Far - Near));
 }
 
+// Diffraction-limited spot size (Airy disc diameter, mid-visible 550nm), in mm. Combined
+// with the defocus blur in quadrature below, this puts a physically real sharpness ceiling
+// around f/11 instead of the lens reading "infinitely sharp" as the aperture keeps closing.
+float airyDiscMM(float aperture) {
+    return 2.44 * 0.00055 * aperture;
+}
+
 // Physically-based thin-lens circle of confusion, in framebuffer pixels.
 float computeCoc(float depthM) {
     depthM = max(depthM, 0.05);
     float fmm = FocalLenMm;
     float cocMM;
-    if (FocusDist >= 99999.0) {
+    if (FocusDist >= 999.0) {
         cocMM = (fmm * fmm) / (Aperture * depthM * DofScale);
     } else {
         float s1mm = FocusDist * DofScale;
         float denom = Aperture * max(s1mm - fmm, 1.0);
         cocMM = (fmm * fmm) * abs(depthM - FocusDist) / (depthM * denom);
     }
+    float airyMM = airyDiscMM(Aperture);
+    cocMM = sqrt(cocMM * cocMM + airyMM * airyMM);
     return clamp(cocMM * PxPerMm, 0.0, MaxBlurPx);
 }
 
@@ -125,7 +134,7 @@ void main() {
     // in-focus subject sits right at the focus distance, so some of its pixels read as
     // depth < focus and must still be allowed to receive a foreground bloom.)
     bool hasNearFg = false;
-    if (FocusDist < 99999.0) {
+    if (FocusDist < 999.0) {
         for (int k = 0; k < 16 && !hasNearFg; k++) {
             float a = float(k) * (TWO_PI / 16.0);
             vec2 dir = vec2(cos(a), sin(a));
@@ -164,6 +173,14 @@ void main() {
     vec3 focC  = vec3(0.0); float focA  = 0.0;
     vec3 farC  = vec3(0.0); float farA  = 0.0;
 
+    // Fill: a cheap, always-on nearest-background reconstruction. A sharp sample never
+    // scatters into focC/farC below (a point with no bokeh has nothing to spread), so a
+    // small gap in a near-field silhouette — a leaf edge, a fence gap — can end up with
+    // zero focus/far signal even though the sharp subject behind it is only a few pixels
+    // away. Fill exists purely as a fallback for that case; see the composite below.
+    const float FILL_SOFT = 3.0;
+    vec3 fillC = vec3(0.0); float fillW = 0.0;
+
     // Centre deposits into its own layer. Blend smoothly between the sharp FOCUS layer and
     // the blurred NEAR/FAR layer across the in-focus boundary: a hard cutoff here made a
     // region snap from sharp to blurred (with a 4x weight jump and a change of occlusion
@@ -188,17 +205,31 @@ void main() {
 
         float sDepthM = linearDepth(texture(DepthSampler, sc).r);
         float sCoc    = max(computeCoc(sDepthM) - 1.5, 0.0);
+        vec3  sCol    = texture(InSampler, sc).rgb;
+
+        // Any sample at or behind the centre's own depth is a candidate for the fill
+        // reconstruction, sharp or not — weighted by inverse-square distance so the
+        // nearest visible bit of background dominates.
+        if (sDepthM >= depthM - 0.5) {
+            float fw = 1.0 / (r * r + FILL_SOFT * FILL_SOFT);
+            fillC += sCol * fw; fillW += fw;
+        }
+
         if (sCoc < 0.5) continue;          // sharp samples don't scatter (handled at centre only)
         if (r > sCoc)   continue;          // this sample's bokeh disc doesn't reach P
 
-        vec3  sCol = texture(InSampler, sc).rgb;
-        float w    = areaPerSample / max(sCoc * sCoc, 1.0);
+        float w = areaPerSample / max(sCoc * sCoc, 1.0);
         if (sDepthM < FocusDist) { nearC += sCol * w; nearA += w; }
         else                     { farC  += sCol * w; farA  += w; }
     }
 
-    // Composite far -> focus -> near with occlusion weighting (a nearer layer hides the
-    // ones behind it; normalising by present coverage keeps holes from going black).
+    // Composite: near layer over everything behind it. The old version blended all three
+    // layers by normalising through a shared wsum — but when the background right behind a
+    // near-field silhouette is sharp (its samples never reach focC/farC, see above), that
+    // wsum collapsed to just the near layer's own weight and cancelled straight back out
+    // (nearCol * na / na = nearCol), making a partially-transparent leaf or fence gap read
+    // as fully opaque. Compositing near over a reconstructed "under" colour with a plain
+    // (1 - na) weight can't cancel like that, so a real fractional coverage stays fractional.
     vec3 nearCol = (nearA > 0.0) ? nearC / nearA : vec3(0.0);
     vec3 focCol  = (focA  > 0.0) ? focC  / focA  : vec3(0.0);
     vec3 farCol  = (farA  > 0.0) ? farC  / farA  : vec3(0.0);
@@ -207,12 +238,13 @@ void main() {
     float fo = clamp(focA,  0.0, 1.0);
     float fr = clamp(farA,  0.0, 1.0);
 
-    float wNear  = na;
-    float wFocus = fo * (1.0 - na);
-    float wFar   = fr * (1.0 - na) * (1.0 - fo);
-    float wsum   = wNear + wFocus + wFar;
+    float underA   = fo + fr * (1.0 - fo);
+    vec3  underCol = (underA > 0.0001) ? (focCol * fo + farCol * fr * (1.0 - fo)) / underA : vec3(0.0);
+    vec3  fillCol  = (fillW > 0.0) ? fillC / fillW : centre.rgb;
+    // underA is near-binary: the gather either found real focus/far colour or it didn't, so
+    // a narrow ramp is enough to pick between "real" and "filled" without a visible seam.
+    float trust    = smoothstep(0.01, 0.12, underA);
+    vec3  bgCol    = mix(fillCol, underCol, trust);
 
-    fragColor = (wsum > 0.001)
-        ? vec4((nearCol * wNear + focCol * wFocus + farCol * wFar) / wsum, 1.0)
-        : centre;
+    fragColor = vec4(nearCol * na + bgCol * (1.0 - na), 1.0);
 }

@@ -73,8 +73,8 @@ public class FilmCameraScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = width / 2;
-		rowH = Math.min(22, Math.max(20, (height - 90) / 10));
-		panelH = 10 * rowH + 82;
+		rowH = Math.min(22, Math.max(20, (height - 90) / 11));
+		panelH = 11 * rowH + 82;
 		panelPy = Math.max(4, (height - panelH) / 2);
 		topRow = panelPy + 16;
 		int row = 0;
@@ -174,9 +174,17 @@ public class FilmCameraScreen extends Screen {
 					dirty = true;
 				}, true);
 
+		// Focus peaking — live viewfinder-only edge highlight, never baked into the photo
+		addRow(cx, topRow + row++ * rowH, "フォーカスピーキング",
+				() -> settings.focusPeaking() ? "§aON" : "§cOFF",
+				step -> {
+					settings = settings.withFocusPeaking(!settings.focusPeaking());
+					dirty = true;
+				}, true);
+
 		FilmRollData film = FilmCameraItem.getFilm(stack);
 		boolean loaded = film.totalExposures() > 0;
-		int btnY = topRow + 10 * rowH + 14;
+		int btnY = topRow + 11 * rowH + 14;
 
 		if (armorStandEntityId >= 0) {
 			// Armor stand mode: "Shoot" | "Remove camera" | "Close"
@@ -291,7 +299,7 @@ public class FilmCameraScreen extends Screen {
 					+ "  ·  " + wound;
 			statusColor = GuiHelper.CREAM;
 		}
-		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, topRow + 10 * rowH + 2, statusColor);
+		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(status), cx, topRow + 11 * rowH + 2, statusColor);
 
 		// Title text on nameplate
 		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("FILM CAMERA"), cx, panelPy + 6, GuiHelper.CREAM);
@@ -409,42 +417,42 @@ public class FilmCameraScreen extends Screen {
 		return new CameraSettings(v, settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withShutter(int v) {
 		return new CameraSettings(settings.aperture(), v, settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withFocus(float v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				v, settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withFocalLength(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), v, settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withLensAndFocal(int lens, int focal) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), focal, lens,
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withExposureMode(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				v, settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				v, settings.focusMode(), settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 	private CameraSettings withFocusMode(int v) {
 		return new CameraSettings(settings.aperture(), settings.shutterSpeedIdx(), settings.iso(),
 				settings.focusDistance(), settings.focalLengthMm(), settings.lensType(),
 				settings.filmType(), settings.remainingShots(),
-				settings.exposureMode(), v, settings.autoWind(), settings.timerSeconds(), settings.motionBlur());
+				settings.exposureMode(), v, settings.autoWind(), settings.timerSeconds(), settings.motionBlur(), settings.focusPeaking());
 	}
 }

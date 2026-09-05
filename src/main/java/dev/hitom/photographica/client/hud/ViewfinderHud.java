@@ -85,18 +85,37 @@ public final class ViewfinderHud {
 
 		boolean isMirrorless = stack.getItem() instanceof MirrorlessCameraItem;
 
-		// EVF real-time DoF blur (mirrorless only, before any overlays).
-		// Per-pixel CoC is computed in the shader using the captured depth texture.
-		if (isMirrorless && LensKind.hasLens(s.lensType()) && s.aperture() < 8.0f) {
-			//? if >=1.21.11 {
-			/*// Schedule the blur to run in GameRendererMixin before captureIfPending() so the
-			// screenshot captures the already-blurred scene. applyScheduledBlur() writes the
-			// result straight into the scene colour texture (writeBackFbo), scissored to the
-			// viewfinder frame — works for both vanilla and Iris on 1.21.11.
+		// EVF real-time DoF blur, live-previewed for mirrorless only — an optical (non-EVF)
+		// viewfinder shows deep DoF regardless of aperture, same as a real DSLR's finder; the
+		// photo still comes out with proper bokeh either way.
+		//? if >=1.21.11 {
+		/*// On >=1.21.11 this scheduleBlur() call is what bakes bokeh into the SAVED PHOTO too
+		// (applyScheduledBlur() runs in GameRendererMixin before captureIfPending() — see
+		// PhotoCapture.onWorldRenderEnd(), which skips the CPU depth pre-read entirely on this
+		// version). So unlike the live preview, it must NOT be gated to mirrorless — a plain
+		// (non-EVF) camera's photos still need bokeh baked in, they just don't preview it live.
+		if (LensKind.hasLens(s.lensType()) && s.aperture() < 8.0f) {
 			EvfBlurRenderer.scheduleBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture(), s.focalLengthMm());
-			*///?} else {
+		}
+		*///?} else {
+		// On <1.21.11 the saved photo gets its blur from PhotoCapture's own CPU depth-of-field
+		// pass (independent of this call, and NOT gated to mirrorless), so this one really is
+		// just the live preview and the mirrorless gate belongs here.
+		if (isMirrorless && LensKind.hasLens(s.lensType()) && s.aperture() < 8.0f) {
 			EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2, s.focusDistance(), s.aperture(), s.focalLengthMm(),
 					EvfBlurRenderer.DOF_SCALE_STILL);
+		}
+		//?}
+
+		// Focus peaking — independent of the DoF/aperture gate above (it's a manual-focus aid,
+		// most useful stopped down for landscapes where DoF blur itself would do nothing).
+		// Never runs on a capture frame: applyScheduledPeaking() no-ops when forCapture is true,
+		// and the <1.21.11 branch below is only ever reached from this live-HUD draw.
+		if (isMirrorless && LensKind.hasLens(s.lensType()) && s.focusPeaking()) {
+			//? if >=1.21.11 {
+			/*EvfBlurRenderer.schedulePeaking(fx, fy, fx2, fy2, s.focusDistance());
+			*///?} else {
+			EvfBlurRenderer.applyPeaking(fx, fy, fx2, fy2, s.focusDistance());
 			//?}
 		}
 

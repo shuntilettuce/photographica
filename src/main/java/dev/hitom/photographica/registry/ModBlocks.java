@@ -3,6 +3,7 @@ package dev.hitom.photographica.registry;
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.block.DarkroomBlock;
 import dev.hitom.photographica.block.EnlargerBlock;
+import dev.hitom.photographica.block.FaxMachineBlock;
 import dev.hitom.photographica.block.PhotoFrameBlock;
 import dev.hitom.photographica.block.PhotoStandBlock;
 import dev.hitom.photographica.block.PrinterBlock;
@@ -32,7 +33,8 @@ public final class ModBlocks {
                     .mapColor(MapColor.STONE_GRAY)
                     .instrument(NoteBlockInstrument.BASEDRUM)
                     .requiresTool()
-                    .strength(2.5f))
+                    .strength(2.5f)
+                    .nonOpaque())
     );
 
     public static final Block PRINTER = Registry.register(
@@ -42,7 +44,8 @@ public final class ModBlocks {
                     .mapColor(MapColor.IRON_GRAY)
                     .instrument(NoteBlockInstrument.IRON_XYLOPHONE)
                     .requiresTool()
-                    .strength(3.0f))
+                    .strength(3.0f)
+                    .nonOpaque())
     );
 
     public static final Block ENLARGER = Registry.register(
@@ -52,7 +55,8 @@ public final class ModBlocks {
                     .mapColor(MapColor.OAK_TAN)
                     .instrument(NoteBlockInstrument.BASS)
                     .requiresTool()
-                    .strength(2.5f))
+                    .strength(2.5f)
+                    .nonOpaque())
     );
 
     public static final Block PHOTO_FRAME = Registry.register(
@@ -75,6 +79,17 @@ public final class ModBlocks {
                     .nonOpaque())
     );
 
+    public static final Block FAX_MACHINE = Registry.register(
+            Registries.BLOCK,
+            Identifier.of(Photographica.MOD_ID, "fax_machine"),
+            new FaxMachineBlock(bs("fax_machine")
+                    .mapColor(MapColor.IRON_GRAY)
+                    .instrument(NoteBlockInstrument.IRON_XYLOPHONE)
+                    .requiresTool()
+                    .strength(3.0f)
+                    .nonOpaque())
+    );
+
     public static void register() {
         // Register BlockItems
         Registry.register(Registries.ITEM,
@@ -92,6 +107,9 @@ public final class ModBlocks {
         Registry.register(Registries.ITEM,
                 Identifier.of(Photographica.MOD_ID, "photo_stand"),
                 new BlockItem(PHOTO_STAND, is("photo_stand")));
+        Registry.register(Registries.ITEM,
+                Identifier.of(Photographica.MOD_ID, "fax_machine"),
+                new BlockItem(FAX_MACHINE, is("fax_machine")));
 
         // Add to creative tab
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> {
@@ -100,6 +118,7 @@ public final class ModBlocks {
             entries.add(ENLARGER.asItem());
             entries.add(PHOTO_FRAME.asItem());
             entries.add(PHOTO_STAND.asItem());
+            entries.add(FAX_MACHINE.asItem());
         });
     }
 

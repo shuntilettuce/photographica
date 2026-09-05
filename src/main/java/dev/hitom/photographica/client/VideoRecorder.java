@@ -333,8 +333,12 @@ public final class VideoRecorder {
 
     private static float computeSceneFocusDepth(MinecraftClient mc, int armorStandId) {
         if (mc.world == null || mc.player == null) return currentFocusDepth;
-        net.minecraft.util.math.Vec3d eye = mc.player.getCameraPosVec(1.0f);
-        net.minecraft.util.math.Vec3d look = mc.player.getRotationVec(1.0f);
+        // Read from the render camera rather than the player directly: it's the same point
+        // during ordinary handheld recording, but automatically follows wherever the shot is
+        // actually coming from otherwise — a drone-mode flight, or a tripod recording where
+        // mc.setCameraEntity() has already redirected the camera to the armor stand.
+        net.minecraft.util.math.Vec3d eye = dev.hitom.photographica.client.RenderCamera.pos(mc);
+        net.minecraft.util.math.Vec3d look = dev.hitom.photographica.client.RenderCamera.look(mc);
         final double maxDist = 1000.0;
         net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
         net.minecraft.util.hit.BlockHitResult blockHit = mc.world.raycast(
@@ -347,7 +351,7 @@ public final class VideoRecorder {
         final double entityDist = Math.min(bestDist, 60.0);
         net.minecraft.util.math.Vec3d entityEnd = eye.add(look.multiply(entityDist));
         net.minecraft.util.math.Box searchBox =
-                mc.player.getBoundingBox().stretch(look.multiply(entityDist)).expand(1.0);
+                new net.minecraft.util.math.Box(eye, eye).stretch(look.multiply(entityDist)).expand(1.0);
         final int excludeId = armorStandId;
         net.minecraft.util.hit.EntityHitResult entityHit =
                 net.minecraft.entity.projectile.ProjectileUtil.raycast(mc.player, eye, entityEnd,
@@ -407,6 +411,7 @@ public final class VideoRecorder {
         boolean ffmpegOk = runFfmpeg(rawDirIn, metas, outMp4);
 
         ppProgress = 100;
+        File sessionDir = rawDirIn.getParentFile();
         if (ffmpegOk) {
             ppMessage = "✓ 保存: photographica/videos/" + sessionId + ".mp4";
             Photographica.LOGGER.info("[VideoRecorder] Video saved: {}", outMp4);
@@ -417,6 +422,10 @@ public final class VideoRecorder {
             ppMessage = "ffmpeg なし — PNG 保存: photographica/videos/" + sessionId + "/";
             Photographica.LOGGER.warn("[VideoRecorder] ffmpeg not found; PNGs at {}", pngDir);
         }
+        // concat.txt is written to the SESSION dir, one level above raw/ (see runFfmpeg), so
+        // neither branch above touches it — every recording ever made used to leave a
+        // photographica/video_temp/<session>/ directory behind holding it, forever.
+        deleteDir(sessionDir);
 
         postProcessing = false;
         doneAtMs       = System.currentTimeMillis();
@@ -530,6 +539,31 @@ public final class VideoRecorder {
         File[] files = dir.listFiles();
         if (files != null) for (File f : files) f.delete();
         dir.delete();
+    }
+
+    /**
+     * Deletes leftover {@code photographica/video_temp} sessions at client start. Raw frames
+     * are full-size PNGs — a two-minute recording is thousands of them — and the only paths
+     * that clean them up are inside {@link #doPostProcess}, which runs on a daemon thread. Any
+     * crash, force-quit, or exit while recording or mid-encode therefore strands the whole
+     * session's frames on disk permanently, and nothing ever revisits them. Safe to run at
+     * startup precisely because no recording can be in progress yet.
+     */
+    public static void sweepOrphanedTempDirs() {
+        File tempRoot = new File(MinecraftClient.getInstance().runDirectory, "photographica/video_temp");
+        File[] sessions = tempRoot.listFiles();
+        if (sessions == null) return;
+        int swept = 0;
+        for (File session : sessions) {
+            // Sessions are <id>/raw/*.png plus <id>/concat.txt, so one nested level down.
+            File raw = new File(session, "raw");
+            if (raw.isDirectory()) deleteDir(raw);
+            deleteDir(session);
+            swept++;
+        }
+        if (swept > 0) {
+            Photographica.LOGGER.info("[VideoRecorder] Cleaned up {} orphaned recording temp dir(s)", swept);
+        }
     }
 
     //? if >=1.21.4 {

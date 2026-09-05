@@ -31,9 +31,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class WorldRendererMixin {
 
 	/**
-	 * Suppresses the block-selection outline during any capture or recording,
-	 * so it never bleeds into photos or video frames.
+	 * Suppresses the block-selection outline during any capture or recording, so it never
+	 * bleeds into photos or video frames — and throughout drone piloting, where it's pure
+	 * noise: clicks are blocked while flying (see MouseMixin), so the outline marks a block the
+	 * pilot cannot interact with anyway, and it's the PLAYER's crosshair target rather than the
+	 * drone's, so it doesn't even correspond to what's on screen.
 	 */
+	@org.spongepowered.asm.mixin.Unique
+	private static boolean photographica$shouldHideOutline() {
+		return PhotoCapture.isCapturePending() || VideoRecorder.isRecording()
+				|| dev.hitom.photographica.client.DronePilot.isActive();
+	}
 	//? if >=1.21.11 {
 	/*@Inject(
 			method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;DDDLnet/minecraft/client/render/state/OutlineRenderState;IF)V",
@@ -41,7 +49,7 @@ public class WorldRendererMixin {
 			cancellable = true
 	)
 	private void photographica$hideOutlineDuringCapture(CallbackInfo ci) {
-		if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) ci.cancel();
+		if (photographica$shouldHideOutline()) ci.cancel();
 	}
 	*///?} else if >=1.21.4 {
 	/*@Inject(
@@ -50,7 +58,7 @@ public class WorldRendererMixin {
 			cancellable = true
 	)
 	private void photographica$hideOutlineDuringCapture(CallbackInfo ci) {
-		if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) ci.cancel();
+		if (photographica$shouldHideOutline()) ci.cancel();
 	}*/
 	//?} else {
 	@Inject(
@@ -61,7 +69,7 @@ public class WorldRendererMixin {
 	private void photographica$hideOutlineDuringCapture(MatrixStack matrices, VertexConsumer vertexConsumer,
 	                                                    Entity entity, double cameraX, double cameraY, double cameraZ,
 	                                                    BlockPos pos, BlockState state, CallbackInfo ci) {
-		if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) {
+		if (photographica$shouldHideOutline()) {
 			ci.cancel();
 		}
 	}

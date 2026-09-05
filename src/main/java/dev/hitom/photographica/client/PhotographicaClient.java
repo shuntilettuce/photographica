@@ -61,11 +61,18 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.RotationAxis;
 import org.lwjgl.glfw.GLFW;
 
+import java.io.File;
+
 public class PhotographicaClient implements ClientModInitializer {
 	//? if >=1.21.11 {
 	/*private static final KeyBinding.Category PHOTOGRAPHICA_CATEGORY =
 			KeyBinding.Category.create(net.minecraft.util.Identifier.of("photographica", "photographica"));
 	*///?}
+
+	/** Reassembles chunked photo downloads fetched on a local cache miss — see
+	 *  PhotoTextureCache.getOrLoad() and the DownloadPhotoChunkPayload receiver below. */
+	private static final dev.hitom.photographica.network.PhotoChunkAssembler photoDownloadAssembler =
+			new dev.hitom.photographica.network.PhotoChunkAssembler();
 
 	@Override
 	public void onInitializeClient() {
@@ -91,9 +98,75 @@ public class PhotographicaClient implements ClientModInitializer {
 		DevelopedFilmItem.clientOpenFilmStrip = stack ->
 				MinecraftClient.getInstance().setScreen(new FilmStripScreen(stack));
 
+		// Touching a drone bare-handed no longer flies it (see DroneEntity.onInteract) — flying
+		// now goes through whichever DroneRemoteItem is paired to it, used from anywhere within
+		// "radio range" rather than requiring the pilot to physically touch the airframe. Range
+		// is the same DronePilot.computeSignal() the pilot's own per-tick monitoring uses — one
+		// definition of "can I reach it" shared between connecting and staying connected.
+		dev.hitom.photographica.item.DroneRemoteItem.clientTryPilot = stack -> {
+			MinecraftClient client = MinecraftClient.getInstance();
+			if (client.player == null || client.world == null) return;
+			Integer freq = stack.get(dev.hitom.photographica.component.ModDataComponents.DRONE_FREQUENCY);
+			if (freq == null) {
+				client.player.sendMessage(net.minecraft.text.Text.literal(
+						"📡 このリモコンは未ペアリングです。ドローンにタッチしてください"), true);
+				return;
+			}
+			net.minecraft.util.math.Vec3d eye = client.player.getEyePos();
+			net.minecraft.util.math.Box searchBox = client.player.getBoundingBox().expand(DronePilot.getFullRange());
+			dev.hitom.photographica.entity.DroneEntity target = null;
+			int bestSignal = 0;
+			for (dev.hitom.photographica.entity.DroneEntity d : client.world.getEntitiesByClass(
+					dev.hitom.photographica.entity.DroneEntity.class, searchBox, e -> e.getFrequency() == freq)) {
+				//? if >=1.21.11 {
+				/*net.minecraft.util.math.Vec3d dPos = d.getEntityPos();
+				*///?} else {
+				net.minecraft.util.math.Vec3d dPos = d.getPos();
+				//?}
+				int sig = DronePilot.computeSignal(client, eye, dPos);
+				if (sig > bestSignal) {
+					bestSignal = sig;
+					target = d;
+				}
+			}
+			if (target == null) {
+				client.player.sendMessage(net.minecraft.text.Text.literal(
+						"📡 チャンネル " + freq + " のドローンに電波が届きません"), true);
+				return;
+			}
+			DronePilot.toggle(client, target);
+		};
+
+		// Fetch-on-miss for photos taken by someone else (or on a different machine) — see
+		// PhotoTextureCache.getOrLoad(), which sends RequestPhotoPayload on a local cache miss.
+		net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+				dev.hitom.photographica.network.DownloadPhotoChunkPayload.ID, (payload, context) -> {
+					byte[] full = photoDownloadAssembler.receive(
+							payload.id(), payload.chunkIndex(), payload.totalChunks(), payload.data());
+					if (full == null) return;
+					context.client().execute(() -> {
+						try {
+							File dir = new File(MinecraftClient.getInstance().runDirectory, "photographica/photos");
+							if (!dir.exists()) dir.mkdirs();
+							java.nio.file.Files.write(new File(dir, payload.id() + ".jpg").toPath(), full);
+							dev.hitom.photographica.client.render.PhotoTextureCache.onFetched(payload.id());
+						} catch (java.io.IOException e) {
+							dev.hitom.photographica.Photographica.LOGGER.error("Failed to save fetched photo {}", payload.id(), e);
+							dev.hitom.photographica.client.render.PhotoTextureCache.onNotFound(payload.id());
+						}
+					});
+				});
+		net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+				dev.hitom.photographica.network.PhotoNotFoundPayload.ID, (payload, context) ->
+						context.client().execute(() ->
+								dev.hitom.photographica.client.render.PhotoTextureCache.onNotFound(payload.id())));
+
 		HandledScreens.register(ModScreenHandlers.DARKROOM, DarkroomScreen::new);
 		HandledScreens.register(ModScreenHandlers.PRINTER, PrinterScreen::new);
+		HandledScreens.register(ModScreenHandlers.CAMERA_GEAR, dev.hitom.photographica.client.screen.CameraGearScreen::new);
+		HandledScreens.register(ModScreenHandlers.ALBUM, dev.hitom.photographica.client.screen.AlbumScreen::new);
 		HandledScreens.register(ModScreenHandlers.ENLARGER, EnlargerScreen::new);
+		HandledScreens.register(ModScreenHandlers.FAX_MACHINE, dev.hitom.photographica.client.screen.FaxMachineScreen::new);
 
 		// Settings key (unbound by default).
 		//? if >=1.21.11 {
@@ -193,9 +266,59 @@ public class PhotographicaClient implements ClientModInitializer {
 				"category.photographica"
 		));
 		//?}
-
+		// Lock drone camera in place / hand movement back to the player (default C) — same key
+		// and same tripod-lock behaviour as snapmatica's freecam. Pressing it again resumes
+		// flying; a full exit back to the player's own view happens via Esc (the pause menu),
+		// handled inside DronePilot.tick() itself.
+		//? if >=1.21.11 {
+		/*KeyBinding droneLockKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.drone_release",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_C,
+				PHOTOGRAPHICA_CATEGORY
+		));
+		*///?} else {
+		KeyBinding droneLockKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.drone_release",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_C,
+				"category.photographica"
+		));
+		//?}
+		// Fires the mounted camera directly while piloting (default X) — mouse clicks are
+		// blocked outright while flying (see MouseMixin), so the normal handheld shutter (a
+		// right-click) can never reach it; this is the fast path instead of needing to open the
+		// full settings screen and click 撮影 every time.
+		//? if >=1.21.11 {
+		/*KeyBinding droneShutterKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.drone_shutter",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_X,
+				PHOTOGRAPHICA_CATEGORY
+		));
+		*///?} else {
+		KeyBinding droneShutterKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.photographica.drone_shutter",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_X,
+				"category.photographica"
+		));
+		//?}
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			AutoCamera.tick(client);
+			DronePilot.tick(client);
+			while (droneShutterKey.wasPressed()) {
+				DronePilot.triggerCapture(client);
+			}
+			while (droneLockKey.wasPressed()) {
+				// Only meaningful while actually piloting — flying a drone back into range and
+				// re-pairing the remote is now the only way back in, matching the rest of the
+				// realistic/range-limited remote system (see DroneRemoteItem/DronePilot); there's
+				// no longer a "jump back into whatever drone you last flew from anywhere" shortcut.
+				if (DronePilot.isActive()) {
+					DronePilot.toggleLock(client);
+				}
+			}
 			// Tripod recording films from the stand via a render-only camera redirect,
 			// but the camera ENTITY must stay the player every tick or movement, look,
 			// sneak and interaction input all die.  Assert it here as a safety net — a
@@ -221,9 +344,22 @@ public class PhotographicaClient implements ClientModInitializer {
 			}
 			if (settingsKey.wasPressed()) {
 				int recStandId = VideoRecorder.getRecordingArmorStandEntityId();
+				dev.hitom.photographica.entity.DroneEntity pilotedDrone = null;
+				if (DronePilot.isActive() && client.world != null
+						&& client.world.getEntityById(DronePilot.droneEntityId())
+								instanceof dev.hitom.photographica.entity.DroneEntity d) {
+					pilotedDrone = d;
+				}
 				if (recStandId >= 0) {
 					// Armor-stand recording active: open stop screen even without camera in hand
 					client.setScreen(new VideoCameraScreen(VideoRecorder.getRecordingStack(), recStandId));
+				} else if (pilotedDrone != null && !pilotedDrone.getEquippedCamera().isEmpty()) {
+					// Piloting a drone: open its built-in camera's settings, using the same
+					// screen the armor-stand tripod uses (armorStandEntityId repurposed to mean
+					// "whichever entity is carrying this camera"). Always a plain CameraItem —
+					// the drone's camera is fixed equipment (DroneEntity#createBuiltInCamera)
+					// and nothing can swap it for a film or video body.
+					client.setScreen(new CameraScreen(pilotedDrone.getEquippedCamera(), pilotedDrone.getId()));
 				} else {
 					ItemStack stack = client.player.getMainHandStack();
 					if (!openCameraScreen(stack)) {
@@ -258,6 +394,29 @@ public class PhotographicaClient implements ClientModInitializer {
 
 		HudRenderCallback.EVENT.register(ViewfinderHud::render);
 		HudRenderCallback.EVENT.register(VideoRecorderHud::render);
+		HudRenderCallback.EVENT.register(dev.hitom.photographica.client.hud.DroneSignalHud::render);
+
+		// Leaving a world has to clear the client-side state machines, because all of it is
+		// static and none of it is otherwise tied to a world's lifetime. Piloting state is the
+		// dangerous one: DronePilot.isActive() staying true into the next world leaves the
+		// camera mixin driving the view from a stale position, mouse look and clicks cancelled,
+		// and most of the HUD suppressed — a near-unrecoverable state on join.
+		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			DronePilot.reset();
+			PhotoCapture.resetOnDisconnect();
+			// Photo textures are GPU-resident and keyed by a UUID that means nothing on the
+			// next server. Without this they accumulate for the whole game session (each is a
+			// full-size RGBA texture), and — more visibly — a photo left in the `fetching` set
+			// because its request was cut short by this very disconnect would stay stuck
+			// "loading" forever, even after rejoining.
+			dev.hitom.photographica.client.render.PhotoTextureCache.clear();
+			// Not a reset but a real stop: it finishes encoding whatever was already filmed
+			// (so the footage isn't lost), and restores the smooth-camera option it borrowed —
+			// a global setting that would otherwise stay flipped for the rest of the session.
+			// Also clears the tripod recording id, which drives the FOV override, the camera
+			// redirect and the hidden hand. No-ops when nothing is recording.
+			VideoRecorder.stopRecording();
+		});
 		HudRenderCallback.EVENT.register((ctx, tick) -> {
 			long now = System.currentTimeMillis();
 
@@ -310,6 +469,13 @@ public class PhotographicaClient implements ClientModInitializer {
 				PhotoStandBlockEntityRenderer::new);
 		//?}
 
+		net.fabricmc.fabric.api.client.rendering.v1.EntityModelLayerRegistry.registerModelLayer(
+				dev.hitom.photographica.client.render.DroneEntityModel.LAYER,
+				dev.hitom.photographica.client.render.DroneEntityModel::getTexturedModelData);
+		net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry.register(
+				dev.hitom.photographica.registry.ModEntities.DRONE,
+				dev.hitom.photographica.client.render.DroneEntityRenderer::new);
+
 		// Render all four camera item models on the player's chest when worn.
 		// Uses the humanoid body bone for correct rotation with body/head animations.
 		//? if <1.21.4 {
@@ -356,6 +522,10 @@ public class PhotographicaClient implements ClientModInitializer {
 
 		// Discard cached photo textures when disconnecting so stale GPU resources are freed.
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> PhotoTextureCache.clear());
+		// Recording temp frames are only ever cleaned by the post-process thread, so anything
+		// interrupted by a crash or a force-quit stays on disk forever. Swept once at startup,
+		// where no recording can be in flight.
+		VideoRecorder.sweepOrphanedTempDirs();
 	}
 
 	/** Opens the settings screen for whichever camera type is in the given stack. */
