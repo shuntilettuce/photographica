@@ -211,6 +211,160 @@ public final class MediaLibrary {
         }
     }
 
+
+    // ── Thumbnails ──────────────────────────────────────────────────────────────
+    /**
+     * The roll draws thumbnails, and used not to.
+     *
+     * <p>Every cell asked for {@link #texture}, which decodes the file at FULL resolution on the
+     * render thread the first time it is asked and hands back a texture of the same size. A
+     * contact sheet of 116-pixel cells was therefore uploading two-megapixel images, one per
+     * cell, synchronously, inside the frame that wanted to draw them — and with the cache
+     * bounded at 48, a wide grid could evict a picture and be asked for it again on the very
+     * next frame, so scrolling re-decoded the same photographs over and over. That is the whole
+     * of why it was slow.
+     *
+     * <p>Two things fix it and both are obvious in hindsight. A thumbnail is at most
+     * {@link #THUMB_MAX} on its long edge, which is a hundredth of the pixels and a hundredth of
+     * the upload; and the decode happens on a worker, with the frame drawing a placeholder until
+     * the picture arrives rather than waiting for it. The GPU upload still has to be on the
+     * render thread, so finished images queue and {@link #pumpThumbnails} takes a couple per
+     * frame — a bounded amount of work per frame instead of an unbounded one.
+     *
+     * <p>The viewer still calls {@link #texture} and still gets the real thing: it shows one
+     * picture at full size on purpose, and a thumbnail there would be a blurry lie.
+     */
+    private static final int THUMB_MAX = 320;
+    /** Thumbnails are ~1% of a photograph, so the cache can hold a wide grid without thrashing. */
+    private static final int MAX_THUMBS = 192;
+    /** Uploads per frame. Bounded so a fast scroll cannot stall a frame however far it jumps. */
+    private static final int UPLOADS_PER_FRAME = 2;
+
+    private static final Map<String, Identifier> thumbs = new LinkedHashMap<>();
+    private static final Set<String> thumbInFlight =
+            java.util.Collections.synchronizedSet(new HashSet<>());
+    private static final java.util.Queue<Object[]> thumbReady =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private static final java.util.concurrent.ExecutorService thumbPool =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "snapmatica-thumbs");
+                t.setDaemon(true);
+                return t;
+            });
+
+    /** The thumbnail for an entry, or null while it is still being made. */
+    public static Identifier thumbnail(Entry e) {
+        File src = e.video() ? posterFile(e.file()) : e.file();
+        String key = src.getAbsolutePath();
+
+        Identifier cached = thumbs.get(key);
+        if (cached != null) return cached;
+        if (failed.contains(key)) return null;
+        if (!src.exists()) {
+            if (e.video()) requestPoster(e.file());
+            return null;
+        }
+        if (thumbInFlight.add(key)) {
+            thumbPool.submit(() -> {
+                try {
+                    NativeImage full = decode(src);
+                    if (full == null) throw new IOException("no decoder for " + src.getName());
+                    float ar = (float) full.getWidth() / Math.max(1, full.getHeight());
+                    NativeImage small = downscale(full, THUMB_MAX);
+                    if (small != full) full.close();
+                    thumbReady.add(new Object[] {key, small, ar});
+                } catch (Exception ex) {
+                    System.err.println("[Snapmatica] Gallery: thumbnail failed for "
+                            + src + " \u2014 " + ex);
+                    failed.add(key);
+                    thumbInFlight.remove(key);
+                }
+            });
+        }
+        return null;
+    }
+
+    /**
+     * Hand finished thumbnails to the GPU. Called once per rendered frame by the roll.
+     *
+     * <p>Registration has to happen on the render thread, so the worker leaves the decoded image
+     * here and this takes {@link #UPLOADS_PER_FRAME} of them. Everything else about the picture
+     * was done off-thread.
+     */
+    public static void pumpThumbnails() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc == null) return;
+        for (int n = 0; n < UPLOADS_PER_FRAME; n++) {
+            Object[] job = thumbReady.poll();
+            if (job == null) return;
+            String key = (String) job[0];
+            NativeImage image = (NativeImage) job[1];
+            try {
+                aspects.put(key, (Float) job[2]);
+                String path = "thumb/" + key.toLowerCase().replaceAll("[^a-z0-9_/.-]", "_");
+                if (path.length() > 200) path = "thumb/" + Integer.toHexString(key.hashCode());
+                Identifier id = Identifier.of("snapmatica", path);
+                //? if >=1.21.10 {
+                final Identifier fid = id;
+                mc.getTextureManager().registerTexture(fid, new NativeImageBackedTexture(() -> fid.toString(), image));
+                //?} else {
+                /*mc.getTextureManager().registerTexture(id, new NativeImageBackedTexture(image));
+                *///?}
+                thumbs.put(key, id);
+                while (thumbs.size() > MAX_THUMBS) {
+                    var it = thumbs.entrySet().iterator();
+                    var oldest = it.next();
+                    it.remove();
+                    mc.getTextureManager().destroyTexture(oldest.getValue());
+                }
+            } catch (Exception ex) {
+                System.err.println("[Snapmatica] Gallery: thumbnail upload failed \u2014 " + ex);
+                failed.add(key);
+                image.close();
+            } finally {
+                thumbInFlight.remove(key);
+            }
+        }
+    }
+
+    /**
+     * Box-average down to {@code maxEdge}, or hand the image back untouched if it already fits.
+     *
+     * <p>An average rather than a nearest-neighbour pick: a photograph reduced to a twentieth by
+     * sampling every twentieth pixel is not a small picture of the scene, it is a small picture
+     * of the noise. Averaging the block each output pixel stands for is what makes a thumbnail
+     * look like the photograph.
+     */
+    private static NativeImage downscale(NativeImage src, int maxEdge) {
+        int sw = src.getWidth(), sh = src.getHeight();
+        int longEdge = Math.max(sw, sh);
+        if (longEdge <= maxEdge) return src;
+        int dw = Math.max(1, sw * maxEdge / longEdge);
+        int dh = Math.max(1, sh * maxEdge / longEdge);
+        NativeImage out = new NativeImage(dw, dh, false);
+        for (int y = 0; y < dh; y++) {
+            int y0 = y * sh / dh, y1 = Math.max(y0 + 1, (y + 1) * sh / dh);
+            for (int x = 0; x < dw; x++) {
+                int x0 = x * sw / dw, x1 = Math.max(x0 + 1, (x + 1) * sw / dw);
+                long a = 0, b = 0, g = 0, r = 0, n = 0;
+                for (int sy = y0; sy < y1; sy++) {
+                    for (int sx = x0; sx < x1; sx++) {
+                        int c = Pixels.getAbgr(src, sx, sy);
+                        r +=  c         & 0xFF;
+                        g += (c >>>  8) & 0xFF;
+                        b += (c >>> 16) & 0xFF;
+                        a += (c >>> 24) & 0xFF;
+                        n++;
+                    }
+                }
+                if (n == 0) n = 1;
+                Pixels.setAbgr(out, x, y, (int) ((a / n) << 24 | (b / n) << 16
+                        | (g / n) << 8 | (r / n)));
+            }
+        }
+        return out;
+    }
+
     private static void evictIfNeeded() {
         MinecraftClient mc = MinecraftClient.getInstance();
         while (loaded.size() > MAX_TEXTURES) {

@@ -164,10 +164,19 @@ public class GalleryScreen extends Screen {
 
     // ── Layout ──────────────────────────────────────────────────────────────────
 
+    /** Below this a cell stops being a picture and starts being a smear. */
+    private static final int MIN_CELL = 54;
+
+    /** The most columns this window can hold without the cells collapsing. */
+    private int maxCols() { return Math.max(1, (width - PAD) / (MIN_CELL + PAD)); }
+
     private int cols() {
         int fixed = SnapmaticaClient.galleryCols;
-        if (fixed > 0) return Math.max(1, fixed);
-        return Math.max(1, (width - PAD) / (COLS_TARGET_CELL + PAD));
+        int auto = Math.max(1, (width - PAD) / (COLS_TARGET_CELL + PAD));
+        // A chosen density is a request, not a promise: a narrow window cannot show ten
+        // pictures across without each of them being a few pixels wide, so the window still
+        // has the last word.
+        return Math.min(fixed > 0 ? fixed : auto, maxCols());
     }
 
     /** Step the density on, wrapping. Keeps the top-left picture in view. */
@@ -176,8 +185,10 @@ public class GalleryScreen extends Screen {
         for (int i = 0; i < COL_CHOICES.length; i++) {
             if (COL_CHOICES[i] == SnapmaticaClient.galleryCols) { cur = i; break; }
         }
-        int n = COL_CHOICES.length;
-        SnapmaticaClient.galleryCols = COL_CHOICES[((cur + dir) % n + n) % n];
+        // Clamped, not wrapped. Running off the dense end and reappearing at the sparse one is
+        // not a density control, it is a surprise.
+        int next = Math.max(0, Math.min(COL_CHOICES.length - 1, cur + dir));
+        SnapmaticaClient.galleryCols = COL_CHOICES[next];
         SnapmaticaConfig.save();
         // The row the top of the viewport was showing, kept across the change, so the roll does
         // not jump somewhere else the moment the density changes.
@@ -254,6 +265,10 @@ public class GalleryScreen extends Screen {
         String count = Component.translatable("snapmatica.gallery.items", entries.size()).getString();
         ctx.text(font, count, width - PAD - font.width(count) - 2, 10, 0xFF7A7A85);
 
+        // A couple of finished thumbnails onto the GPU, and no more: the decode already
+        // happened on a worker, and this is the only part that has to be here.
+        MediaLibrary.pumpThumbnails();
+
         if (entries.isEmpty()) {
             ctx.centeredText(font, Component.translatable("snapmatica.gallery.empty"),
                     width / 2, height / 2, 0xFF7A7A85);
@@ -292,7 +307,7 @@ public class GalleryScreen extends Screen {
         int thumbH = w * 2 / 3;
         ctx.fill(x, y, x + w, y + thumbH, hover ? 0xFF2A2A32 : 0xFF1A1A20);
 
-        Identifier tex = MediaLibrary.texture(e);
+        Identifier tex = MediaLibrary.thumbnail(e);
         if (tex != null) {
             drawFitted(ctx, tex, x, y, w, thumbH, MediaLibrary.aspect(e));
         } else {

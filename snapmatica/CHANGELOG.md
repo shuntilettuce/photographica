@@ -254,6 +254,19 @@ ISO1600相当に粒つく、2段、まさにこれが生む2倍。センサー�
   カメラの移動は一切不要**で、サンプリングパターンが変わればいい。だからライブは見ていて
   コストのかからない方の半分だけを取り、前景の裏を見ることは元通り**写真の性質**のまま——
   シャッターなら眼を動かす余裕があり、誰もそれを見ていない。
+- **一覧のスクロールが重かったのを直した。三つ別の問題だった。**
+  <p>**サムネイルが存在しなかった。** 各セルは `texture()` を呼んでいて、それは初回に
+  **フル解像度で、描画スレッド上で、同期に**デコードして同じサイズのテクスチャを返す。
+  116pxのセルに200万画素をアップロードしていたわけだ。しかもキャッシュ上限が48枚なので、
+  広いグリッドでは追い出した写真を**次のフレームでまた要求**する——スクロールが同じ写真を
+  延々と再デコードしていた。長辺320pxに縮めて(画素数は約1/100)、**デコードはワーカーへ**、
+  GPUアップロードだけ描画スレッドで**1フレーム2枚まで**。縮小は最近傍でなく箱平均——
+  20分の1に間引いた写真は「小さな風景」ではなく「小さなノイズ」になるので。
+  ビューアは従来通りフル解像度を読む(1枚を意図して大きく見る場所で、サムネイルは嘘になる)。
+  <p>**UIが潰れた。** 選んだ密度が窓幅を無視していた。密度は**要求であって約束ではない**ので、
+  セルが54pxを切る列数は窓の側が拒否する。
+  <p>**端で一周した。** 一番密なところからさらに回すと一番疎に戻っていた。密度コントロールでは
+  なくただの驚きなので、巡回をやめて両端で止める。
 - **写真一覧に表示数を持たせ、スクロールバーを掴めるようにした。** 一覧は窓の幅だけから
   列数を決めていた。既定としては正しいが、**唯一の選択肢としては間違っている** — コンタクト
   シートは撮影者が探している密度で読むもので、「一度に何枚」がその全部だからだ。左下の
@@ -640,6 +653,22 @@ untouched the one thing a bigger sensor is actually bought for.
   pattern to change. So the live view keeps the half that costs nothing to look at, and seeing
   behind a defocused foreground stays what it always was — a property of the photograph, where
   the shutter can afford to move the eye and nobody is watching it happen.
+- **The roll's scrolling was slow, and it was three separate things.**
+  <p>**There were no thumbnails.** Every cell called `texture()`, which decodes the file at FULL
+  resolution on the render thread the first time it is asked and returns a texture of the same
+  size — two megapixels uploaded into a 116-pixel cell, synchronously, inside the frame that
+  wanted to draw it. With the cache bounded at 48, a wide grid could evict a picture and be asked
+  for it again on the very next frame, so scrolling re-decoded the same photographs over and
+  over. Thumbnails are now 320 px on the long edge (about a hundredth of the pixels), **decoded
+  on a worker**, with the GPU upload — the only part that has to be on the render thread —
+  bounded at two per frame. The reduction is a box average rather than a nearest-neighbour pick:
+  a photograph sampled every twentieth pixel is not a small picture of the scene, it is a small
+  picture of the noise. The viewer still reads the real thing, since it shows one picture at full
+  size on purpose.
+  <p>**The layout collapsed.** A chosen density ignored the window. It is a request, not a
+  promise, so the window now refuses any column count that would put cells under 54 px.
+  <p>**It wrapped at the ends.** Running off the dense end reappeared at the sparse one, which is
+  not a density control but a surprise. Clamped.
 - **The camera roll has a density, and its scrollbar is a control.** The grid sized itself from
   the window and nothing else — the right default and the wrong only option, since a contact
   sheet is read at whatever density the photographer is looking for and "how many at once" is the
