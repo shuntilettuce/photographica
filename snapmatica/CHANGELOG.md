@@ -261,9 +261,11 @@ ISO1600相当に粒つく、2段、まさにこれが生む2倍。センサー�
   <p>スクロールバーは飾りだった(幅3px、当たり判定なし)。掴んで動かせるようにし、溝を
   クリックすればそこへ飛ぶ。掴む場所はつまみの中の位置を保持するので、掴んだ瞬間に絵が
   飛ばない。幅は6px、当たり判定は14pxで、カーソルが入ると明るくなる。
-  <p>Ctrl+ホイールでの密度変更は**入れなかった**。1.21.11 が `Screen.hasControlDown()` を
-  廃止していて、修飾キーの取得が4バージョンで4通りになる。ボタン1本で足りる機能に
-  版分岐を4つ抱える価値はない。
+  <p>**Ctrl+ホイールでも変えられる。** カメラは再生時にズームレバーでこれをやる——1枚、4枚、
+  9枚、36枚——しかも**それらの間を移動するのと同じコントロール上の同じ操作**なので、ボタン
+  だけでなくホイールに載っているべきものだ。1.21.11 が `Screen.hasControlDown()` を廃止した
+  ので修飾キーは `CameraScrollHandler` 経由で聞く。あのクラスは GLFW に尋ねる版分岐を
+  既に持っていたので、**分岐を2つに増やさず1つを共有**した(ついでにあちらの重複も畳んだ)。
 
 - **ファインダーの時間積分を削除した。** 走る平均は止まっている間だけ深まるので、
   ノイズは確かに減るが**見ていて気持ちが悪い**。前の版で瞳ウォークを消したときと同じ判断で、
@@ -647,9 +649,12 @@ untouched the one thing a bigger sensor is actually bought for.
   and clicking the trough jumps there. The grab point is held inside the thumb so the roll does
   not lurch the moment it is caught. Six pixels wide with a fourteen-pixel hit zone, and it
   lights up under the pointer.
-  <p>Ctrl+wheel for the density was **not** added: 1.21.11 dropped `Screen.hasControlDown()`, so
-  reading a modifier is four different things across four versions. That is not worth four
-  branches for something one button already does.
+  <p>**Ctrl+wheel changes it too.** A camera does this in playback with the zoom lever — one
+  picture, four, nine, thirty-six — and it is the same gesture on the same control that moves
+  through them, which is why it belongs on the wheel and not only on a button. 1.21.11 dropped
+  `Screen.hasControlDown()`, so the modifier is read through `CameraScrollHandler`, which already
+  owned a version branch for asking GLFW directly: **one branch shared rather than a second one
+  added**, and its own duplicate folded into the same helper on the way past.
 
 - **The viewfinder's temporal integration is removed.** The running average only deepens while
   the view is held still, so it does cut the noise and it is unpleasant to watch. Same judgement

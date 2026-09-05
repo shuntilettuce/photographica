@@ -36,7 +36,7 @@
   "snapmatica.gallery.title": "SNAPMATICA  ROLL",
   "snapmatica.gallery.items": "%s items",
   "snapmatica.gallery.empty": "No photos or videos yet.",
-  "snapmatica.gallery.help_grid": "click a shot to open it   •   wheel to scroll",
+  "snapmatica.gallery.help_grid": "click a shot to open it   •   wheel to scroll   Ctrl+wheel: density",
   "snapmatica.gallery.preparing": "generating preview…",
   "snapmatica.gallery.unreadable": "cannot load",
   "snapmatica.gallery.video": "video",

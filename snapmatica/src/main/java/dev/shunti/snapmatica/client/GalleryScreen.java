@@ -549,6 +549,12 @@ public class GalleryScreen extends Screen {
 
     private boolean onScroll(double dy) {
         if (viewing >= 0) { step(dy > 0 ? -1 : 1); return true; }
+        // Ctrl+wheel changes the density. A camera does this in playback with the zoom lever --
+        // one picture, four, nine, thirty-six -- and it is the same gesture on the same control
+        // that moves through them, which is why it belongs on the wheel and not only on a
+        // button. The modifier is read through CameraScrollHandler because Screen.hasControlDown
+        // is gone at 1.21.11 and that class already owns the version branch for asking GLFW.
+        if (CameraScrollHandler.ctrlDown()) { cycleCols(dy > 0 ? -1 : 1); return true; }
         scroll -= (int) (dy * 40);
         clampScroll();
         return true;

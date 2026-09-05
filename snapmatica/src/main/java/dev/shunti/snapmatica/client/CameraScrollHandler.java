@@ -60,18 +60,8 @@ public final class CameraScrollHandler {
 
         int dir = delta > 0 ? 1 : -1;
 
-        //? if >=1.21.10 {
-        boolean ctrl = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
-                || InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
-        boolean alt = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
-                || InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
-        //?} else {
-        /*long win = mc.getWindow().getHandle();
-        boolean ctrl = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_CONTROL)
-                || InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_CONTROL);
-        boolean alt = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_ALT)
-                || InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_ALT);
-        *///?}
+        boolean ctrl = ctrlDown();
+        boolean alt  = altDown();
 
         if (ctrl && alt) {
             adjustFocusDistance(dir);
@@ -181,4 +171,32 @@ public final class CameraScrollHandler {
         }
         return best;
     }
+
+    /**
+     * Is a modifier held?
+     *
+     * <p>Asked of GLFW through Minecraft's thin wrapper rather than of {@code Screen}, because
+     * {@code Screen.hasControlDown} does not exist on every version this mod builds for — and
+     * because these are read while no screen is open at all, from the scroll handler. The window
+     * argument changed shape at 1.21.10 (the Window object rather than its raw handle), which is
+     * the whole of the branch.
+     *
+     * <p>Public because the camera roll needs the same question answered, and one branch is
+     * better than two.
+     */
+    public static boolean ctrlDown() { return modifierDown(GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL); }
+
+    public static boolean altDown() { return modifierDown(GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_RIGHT_ALT); }
+
+    private static boolean modifierDown(int left, int right) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc == null || mc.getWindow() == null) return false;
+        //? if >=1.21.10 {
+        return InputUtil.isKeyPressed(mc.getWindow(), left) || InputUtil.isKeyPressed(mc.getWindow(), right);
+        //?} else {
+        /*long win = mc.getWindow().getHandle();
+        return InputUtil.isKeyPressed(win, left) || InputUtil.isKeyPressed(win, right);
+        *///?}
+    }
+
 }

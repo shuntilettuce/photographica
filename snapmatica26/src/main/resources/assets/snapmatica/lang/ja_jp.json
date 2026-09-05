@@ -36,7 +36,7 @@
   "snapmatica.gallery.title": "SNAPMATICA  ROLL",
   "snapmatica.gallery.items": "%s 件",
   "snapmatica.gallery.empty": "写真も動画もまだありません",
-  "snapmatica.gallery.help_grid": "クリックで開く　•　ホイールでスクロール",
+  "snapmatica.gallery.help_grid": "クリックで開く　•　ホイールでスクロール   Ctrl+ホイール: 表示数",
   "snapmatica.gallery.preparing": "プレビュー生成中...",
   "snapmatica.gallery.unreadable": "読み込めません",
   "snapmatica.gallery.video": "動画",
