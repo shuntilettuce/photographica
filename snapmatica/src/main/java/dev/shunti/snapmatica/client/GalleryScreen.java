@@ -24,6 +24,8 @@ public class GalleryScreen extends Screen {
 
     private static final int COLS_TARGET_CELL = 116;  // px; column count follows the window
     private static final int PAD              = 8;
+    /** Breathing room between the metadata column and the picture. */
+    private static final int EXIF_GAP = 10;
     private static final int HEADER_H         = 30;
     private static final int HINT_H           = 14;   // the one-line hint under the grid
     private static final int BUTTON_H         = 20;
@@ -39,9 +41,19 @@ public class GalleryScreen extends Screen {
      * highlight and click like every other button in the game; they are simply hidden while
      * the grid is up, since they act on the item being viewed.
      */
-    private CameraUi.Button copyBtn, revealBtn, openBtn, backBtn;
+    private CameraUi.Button copyBtn, revealBtn, openBtn, deleteBtn, backBtn;
     /** Back sits at the end of the action row in the viewer, but alone it belongs centred. */
     private int backViewerX, backGridX;
+
+    /**
+     * Delete asks once before it acts: the first press arms it and relabels the button as a
+     * question, the second within a few seconds carries it out. Armed state clears itself on a
+     * timeout or on leaving the shot being armed for, so a delete can never land on whatever
+     * happens to be on screen minutes later.
+     */
+    private boolean deleteArmed = false;
+    private long    deleteArmedAt = 0L;
+    private static final long DELETE_CONFIRM_TIMEOUT_MS = 4000L;
 
     private static final SimpleDateFormat STAMP = new SimpleDateFormat("yyyy/MM/dd HH:mm");
 
@@ -57,8 +69,8 @@ public class GalleryScreen extends Screen {
 
         int by = height - BUTTON_H - 6;
         int gap = 4;
-        int wCopy = 84, wReveal = 116, wOpen = 84, wBack = 64;
-        int total = wCopy + wReveal + wOpen + wBack + gap * 3;
+        int wCopy = 84, wReveal = 116, wOpen = 84, wDelete = 84, wBack = 64;
+        int total = wCopy + wReveal + wOpen + wDelete + wBack + gap * 4;
         int x = (width - total) / 2;
 
         copyBtn = CameraUi.Button.of(x, by, wCopy,
@@ -73,15 +85,20 @@ public class GalleryScreen extends Screen {
                 Text.translatable("snapmatica.gallery.open"),
                 b -> { if (viewing >= 0) open(entries.get(viewing)); });
         x += wOpen + gap;
+        deleteBtn = CameraUi.Button.ghost(x, by, wDelete,
+                Text.translatable("snapmatica.gallery.delete"),
+                b -> onDeletePressed());
+        x += wDelete + gap;
         backViewerX = x;
         backGridX = (width - wBack) / 2;
         backBtn = CameraUi.Button.ghost(x, by, wBack,
                 Text.translatable("snapmatica.common.close"),
-                b -> { if (viewing >= 0) { viewing = -1; refreshActions(); } else close(); });
+                b -> { if (viewing >= 0) { leaveViewer(); } else close(); });
 
         addDrawableChild(copyBtn);
         addDrawableChild(revealBtn);
         addDrawableChild(openBtn);
+        addDrawableChild(deleteBtn);
         addDrawableChild(backBtn);
         refreshActions();
     }
@@ -89,14 +106,40 @@ public class GalleryScreen extends Screen {
     /** Keeps the action row in step with what is on screen. */
     private void refreshActions() {
         boolean viewer = viewing >= 0;
-        copyBtn.visible = revealBtn.visible = openBtn.visible = viewer;
+        copyBtn.visible = revealBtn.visible = openBtn.visible = deleteBtn.visible = viewer;
         backBtn.setX(viewer ? backViewerX : backGridX);
         backBtn.setMessage(Text.translatable(viewer ? "snapmatica.common.back"
                                                     : "snapmatica.common.close"));
         if (viewer) {
             openBtn.setMessage(Text.translatable(entries.get(viewing).video()
                     ? "snapmatica.gallery.play" : "snapmatica.gallery.open"));
+            deleteBtn.setMessage(Text.translatable(deleteArmed
+                    ? "snapmatica.gallery.delete_confirm" : "snapmatica.gallery.delete"));
         }
+    }
+
+    private void onDeletePressed() {
+        if (viewing < 0) return;
+        if (deleteArmed) {
+            MediaLibrary.Entry e = entries.get(viewing);
+            MediaLibrary.deleteEntry(e);
+            deleteArmed = false;
+            entries = MediaLibrary.scan();
+            viewing = entries.isEmpty() ? -1 : Math.min(viewing, entries.size() - 1);
+            clampScroll();
+            refreshActions();
+        } else {
+            deleteArmed = true;
+            deleteArmedAt = System.currentTimeMillis();
+            refreshActions();
+        }
+    }
+
+    /** Leaves the viewer for the grid, disarming any pending delete confirmation. */
+    private void leaveViewer() {
+        viewing = -1;
+        deleteArmed = false;
+        refreshActions();
     }
 
     @Override
@@ -124,8 +167,13 @@ public class GalleryScreen extends Screen {
      * buried everything under it. The backdrop is painted from {@link #render} instead, where
      * the order is ours to control on every version.
      */
+    //? if >=1.21 {
     @Override
     public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {}
+    //?} else {
+    /*@Override
+    public void renderBackground(DrawContext ctx) {}
+    *///?}
 
     /** The dimmed backdrop this screen sits on. */
     private void drawBackdrop(DrawContext ctx) {
@@ -134,6 +182,10 @@ public class GalleryScreen extends Screen {
 
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+        if (deleteArmed && System.currentTimeMillis() - deleteArmedAt > DELETE_CONFIRM_TIMEOUT_MS) {
+            deleteArmed = false;
+            refreshActions();
+        }
         drawBackdrop(ctx);
         if (viewing >= 0) renderViewer(ctx);
         else              renderGrid(ctx, mouseX, mouseY);
@@ -212,8 +264,16 @@ public class GalleryScreen extends Screen {
         Identifier tex = MediaLibrary.texture(e);
 
         int top = HEADER_H, bottom = height - FOOTER_H;
+        // The metadata gets a column of its own on the left and the picture takes what is
+        // left, rather than the panel being laid over the picture. A 3:2 frame in a 16:9
+        // window already leaves margin on both sides, so on any normal window this costs the
+        // image nothing — it only shifts where the letterboxing sits.
+        java.util.List<String> exifLines = exifLines(e);
+        int exifW = exifPanelWidth(exifLines);
+        int imgLeft = PAD + (exifW > 0 ? exifW + EXIF_GAP : 0);
         if (tex != null) {
-            drawFitted(ctx, tex, PAD, top, width - PAD * 2, bottom - top, MediaLibrary.aspect(e));
+            drawFitted(ctx, tex, imgLeft, top, width - imgLeft - PAD, bottom - top,
+                    MediaLibrary.aspect(e));
         } else {
             ctx.drawCenteredTextWithShadow(textRenderer,
                     Text.translatable(e.video() ? "snapmatica.gallery.preparing"
@@ -226,9 +286,62 @@ public class GalleryScreen extends Screen {
         ctx.drawTextWithShadow(textRenderer, Text.literal(pos),
                 width - PAD - textRenderer.getWidth(pos) - 2, 10, 0xFF7A7A85);
 
+        drawExifPanel(ctx, exifLines, exifW, top, bottom);
+
         ctx.drawCenteredTextWithShadow(textRenderer,
                 Text.translatable("snapmatica.gallery.help_viewer"),
                 width / 2, height - FOOTER_H + 3, CameraUi.CREAM_DIM);
+    }
+
+    /**
+     * What the shot was taken at, read back out of the file itself rather than from the current
+     * camera state — the settings have almost certainly moved since, and the point of the panel
+     * is to say what THIS photograph used.
+     *
+     * <p>Empty for anything with no readable metadata (a video, or a PNG saved before this mod
+     * wrote any), in which case no column is reserved and the picture uses the full width.
+     */
+    private java.util.List<String> exifLines(MediaLibrary.Entry e) {
+        PhotoExif.Info info = MediaLibrary.exif(e);
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        if (info == null) return lines;
+        if (info.exposure() != null) lines.add(info.exposure());
+        if (info.lens() != null)     lines.add(info.lens());
+        if (info.mode() != null)     lines.add(info.mode());
+        if (info.taken() != null)    lines.add(info.taken());
+        return lines;
+    }
+
+    /** Width the panel needs, or 0 when there is nothing to show. */
+    private int exifPanelWidth(java.util.List<String> lines) {
+        if (lines.isEmpty()) return 0;
+        int w = 0;
+        for (String l : lines) w = Math.max(w, textRenderer.getWidth(l));
+        return w + 12;
+    }
+
+    /** Draws the panel in its reserved column, vertically centred against the picture. */
+    private void drawExifPanel(DrawContext ctx, java.util.List<String> lines, int panelW,
+                               int top, int bottom) {
+        if (lines.isEmpty()) return;
+        int lineH = textRenderer.fontHeight + 2;
+        int panelH = lines.size() * lineH + 8;
+        int px = PAD;
+        int py = top + (bottom - top - panelH) / 2;
+
+        ctx.fill(px, py, px + panelW, py + panelH, 0x50101014);
+        // A hairline down the left edge, so the block reads as a label rather than as a
+        // rectangle that happens to be sitting there.
+        ctx.fill(px, py, px + 1, py + panelH, 0x80E8DCC4);
+
+        int ty = py + 4;
+        for (int i = 0; i < lines.size(); i++) {
+            // The exposure triangle is the line anyone actually looks for, so it gets the
+            // readable colour and the rest recede.
+            ctx.drawTextWithShadow(textRenderer, Text.literal(lines.get(i)), px + 6, ty,
+                    i == 0 ? 0xFFE8DCC4 : 0xFF9A9AA5);
+            ty += lineH;
+        }
     }
 
     /** Draws the texture centred and letterboxed inside the box, never stretched. */
@@ -238,15 +351,15 @@ public class GalleryScreen extends Screen {
         int dx = bx + (bw - dw) / 2, dy = by + (bh - dh) / 2;
         // Three generations, three signatures: a RenderPipeline in 1.21.11, a RenderLayer
         // factory in 1.21.4, and neither in 1.21.1.
-        //? if >=1.21.11 {
-        /*ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED,
+        //? if >=1.21.10 {
+        ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED,
                 tex, dx, dy, 0f, 0f, dw, dh, dw, dh);
-        *///?} elif >=1.21.2 {
+        //?} elif >=1.21.2 {
         /*ctx.drawTexture(net.minecraft.client.render.RenderLayer::getGuiTextured,
                 tex, dx, dy, 0f, 0f, dw, dh, dw, dh);
         *///?} else {
-        ctx.drawTexture(tex, dx, dy, 0f, 0f, dw, dh, dw, dh);
-        //?}
+        /*ctx.drawTexture(tex, dx, dy, 0f, 0f, dw, dh, dw, dh);
+        *///?}
     }
 
     // ── Input ───────────────────────────────────────────────────────────────────
@@ -254,9 +367,11 @@ public class GalleryScreen extends Screen {
     /**
      * 1.21.11 replaced the loose (x, y, button) / (key, scancode, mods) parameters with Click
      * and KeyInput records, so each version gets its own thin wrapper over the shared logic.
+     * 1.20.1 needs a third: it predates 1.21's separate horizontal/vertical scroll split, so
+     * {@code mouseScrolled} there takes a single plain amount instead of (dx, dy).
      */
-    //? if >=1.21.11 {
-    /*@Override
+    //? if >=1.21.10 {
+    @Override
     public boolean mouseClicked(net.minecraft.client.gui.Click click, boolean doubled) {
         return super.mouseClicked(click, doubled) || onClick(click.x(), click.y(), click.button());
     }
@@ -270,8 +385,8 @@ public class GalleryScreen extends Screen {
     public boolean keyPressed(net.minecraft.client.input.KeyInput input) {
         return onKey(input.key()) || super.keyPressed(input);
     }
-    *///?} else {
-    @Override
+    //?} elif >=1.21 {
+    /*@Override
     public boolean mouseClicked(double mx, double my, int button) {
         return super.mouseClicked(mx, my, button) || onClick(mx, my, button);
     }
@@ -285,7 +400,22 @@ public class GalleryScreen extends Screen {
     public boolean keyPressed(int key, int scancode, int mods) {
         return onKey(key) || super.keyPressed(key, scancode, mods);
     }
-    //?}
+    *///?} else {
+    /*@Override
+    public boolean mouseClicked(double mx, double my, int button) {
+        return super.mouseClicked(mx, my, button) || onClick(mx, my, button);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mx, double my, double amount) {
+        return onScroll(amount) || super.mouseScrolled(mx, my, amount);
+    }
+
+    @Override
+    public boolean keyPressed(int key, int scancode, int mods) {
+        return onKey(key) || super.keyPressed(key, scancode, mods);
+    }
+    *///?}
 
     private boolean onClick(double mx, double my, int button) {
         // In the viewer everything worth doing is on a button, so a stray click does nothing.
@@ -318,7 +448,7 @@ public class GalleryScreen extends Screen {
             case 263 -> { step(-1); return true; }                        // left
             case 262 -> { step(1);  return true; }                        // right
             case 257, 335 -> { open(entries.get(viewing)); return true; } // enter
-            case 256 -> { viewing = -1; refreshActions(); return true; }  // esc: back to grid
+            case 256 -> { leaveViewer(); return true; }                  // esc: back to grid
             default -> { return false; }
         }
     }
@@ -326,6 +456,7 @@ public class GalleryScreen extends Screen {
     private void step(int d) {
         if (entries.isEmpty()) return;
         viewing = Math.floorMod(viewing + d, entries.size());
+        deleteArmed = false;
         refreshActions();
     }
 

@@ -5,7 +5,9 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+//? if >=1.21 {
 import net.minecraft.client.render.RenderTickCounter;
+//?}
 import net.minecraft.text.Text;
 
 /**
@@ -31,7 +33,12 @@ public final class VideoRecorderHud {
     private static final long DONE_HOLD_MS = 2000L;
     private static final long DONE_FADE_MS = 3000L;
 
+    // See ViewfinderOverlay.render for why this splits at 1.21 (RenderTickCounter vs float).
+    //? if >=1.21 {
     public static void render(DrawContext ctx, RenderTickCounter tickCounter) {
+    //?} else {
+    /*public static void render(DrawContext ctx, float tickDelta) {
+    *///?}
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.options.hudHidden || mc.currentScreen != null) return;
 
@@ -50,7 +57,7 @@ public final class VideoRecorderHud {
 
         long now       = System.currentTimeMillis();
         long elapsed   = now - VideoRecorder.getRecordStartMs();
-        long totalMs   = (long) VideoRecorder.MAX_FRAMES * 1000L / VideoRecorder.FPS;
+        long totalMs   = VideoRecorder.MAX_RECORD_SECONDS * 1000L;
         long remaining = totalMs - elapsed;
 
         String elapsedStr  = formatDuration(elapsed);

@@ -5,21 +5,16 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 
-import java.awt.Graphics2D;
-import java.awt.Image;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-
-import javax.imageio.ImageIO;
 
 /**
  * Copies the most recently captured photo / video to the system clipboard.
@@ -30,8 +25,9 @@ import javax.imageio.ImageIO;
  * Windows 7+) to do the copy out-of-process. On other platforms, AWT is used
  * directly with the headless flag forced to false before the toolkit is loaded.
  *
- *  - Photos  → clipboard image (pasteable into Discord, chat apps, image editors)
- *  - Videos  → clipboard file reference (pasteable into Explorer / Discord upload)
+ *  - Photos and videos both go on the clipboard as a FILE reference (pasteable into
+ *    Explorer, Discord, chat apps — a pasted file reference attaches the same way a
+ *    pasted bitmap would, but keeps the real file's actual bytes and format).
  */
 @Environment(EnvType.CLIENT)
 public final class ClipboardUtil {
@@ -49,32 +45,32 @@ public final class ClipboardUtil {
         }
     }
 
-    /** Copy a saved PNG to the clipboard as image data (async). */
-    public static void copyImageAsync(File pngFile) {
-        run("snapmatica-clipboard-image", () -> {
-            if (IS_WINDOWS) {
-                String path = pngFile.getAbsolutePath().replace("'", "''");
-                powershell(
-                    "Add-Type -Assembly System.Windows.Forms;" +
-                    "Add-Type -Assembly System.Drawing;" +
-                    "$img=[System.Drawing.Image]::FromFile('" + path + "');" +
-                    "[System.Windows.Forms.Clipboard]::SetImage($img);" +
-                    "$img.Dispose()");
-            } else {
-                BufferedImage src = ImageIO.read(pngFile);
-                if (src == null) throw new IllegalStateException("Image decode failed: " + pngFile.getName());
-                // Flatten alpha: AWT's imageFlavor with alpha causes CF_DIB corruption on Windows.
-                BufferedImage rgb = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_RGB);
-                Graphics2D g = rgb.createGraphics();
-                g.drawImage(src, 0, 0, null);
-                g.dispose();
-                clipboard().setContents(new ImageTransferable(rgb), null);
-            }
-        }, Text.translatable("snapmatica.clip.photo"));
+    /**
+     * Copy a saved photo to the clipboard (async) — as a FILE reference, not a decoded bitmap.
+     *
+     * <p>This used to convert the file to an in-memory bitmap first ({@code
+     * System.Drawing.Image}/AWT {@code BufferedImage}) and put THAT on the clipboard
+     * ({@code Clipboard.SetImage}/{@code DataFlavor.imageFlavor}). Windows' image clipboard
+     * format (CF_DIB) is an uncompressed bitmap with no record of what file it came from, so a
+     * shot saved as JPG — chosen specifically for its smaller, lossy-compressed size — pasted
+     * out the other end as whatever raw bitmap the receiving app chose to re-save it as
+     * (typically PNG), the actual JPEG bytes never having survived the round trip at all. A
+     * file reference (the same clipboard mechanism {@link #copyFileAsync} already uses for
+     * video) carries the real file — real bytes, real format, real size — and modern chat/
+     * image apps (Discord, Slack, browsers) accept a pasted file reference as an attachment
+     * exactly the way they accept a pasted bitmap, so nothing about the paste experience
+     * changes; only what the far end actually receives does.
+     */
+    public static void copyImageAsync(File imageFile) {
+        copyFileReferenceAsync(imageFile, Text.translatable("snapmatica.clip.photo"));
     }
 
     /** Copy a saved file (e.g. an MP4) to the clipboard as a file reference (async). */
     public static void copyFileAsync(File file) {
+        copyFileReferenceAsync(file, Text.translatable("snapmatica.clip.video"));
+    }
+
+    private static void copyFileReferenceAsync(File file, Text successMsg) {
         run("snapmatica-clipboard-file", () -> {
             if (IS_WINDOWS) {
                 String path = file.getAbsolutePath().replace("'", "''");
@@ -86,7 +82,7 @@ public final class ClipboardUtil {
             } else {
                 clipboard().setContents(new FileTransferable(List.of(file)), null);
             }
-        }, Text.translatable("snapmatica.clip.video"));
+        }, successMsg);
     }
 
     // ── internals ─────────────────────────────────────────────────────────────────
@@ -132,15 +128,6 @@ public final class ClipboardUtil {
 
     private static Clipboard clipboard() {
         return Toolkit.getDefaultToolkit().getSystemClipboard();
-    }
-
-    private record ImageTransferable(Image image) implements Transferable {
-        @Override public DataFlavor[] getTransferDataFlavors() { return new DataFlavor[]{DataFlavor.imageFlavor}; }
-        @Override public boolean isDataFlavorSupported(DataFlavor f) { return DataFlavor.imageFlavor.equals(f); }
-        @Override public Object getTransferData(DataFlavor f) throws UnsupportedFlavorException {
-            if (!DataFlavor.imageFlavor.equals(f)) throw new UnsupportedFlavorException(f);
-            return image;
-        }
     }
 
     private record FileTransferable(List<File> files) implements Transferable {

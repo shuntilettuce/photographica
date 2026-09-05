@@ -19,7 +19,9 @@ import java.util.function.Supplier;
 public class VideoRecorderScreen extends Screen {
 
     private static final List<Float>   APERTURES = List.of(1.4f, 2.0f, 2.8f, 4.0f, 5.6f, 8.0f, 11.0f, 16.0f, 22.0f);
-    private static final List<Integer> FPS_LIST  = List.of(24, 30);
+    private static final List<Integer> FPS_LIST  = List.of(24, 30, 60);
+    private static final List<Integer> WIDTH_LIST = List.of(
+            VideoRecorder.WIDTH_720P, VideoRecorder.WIDTH_1080P, VideoRecorder.WIDTH_1440P);
     // Zoom stops (focal length, mm): wide → tele. Larger = more zoomed in.
     private static final List<Integer> FOCAL_LIST = List.of(14, 18, 24, 35, 50, 85, 135, 200);
 
@@ -40,7 +42,7 @@ public class VideoRecorderScreen extends Screen {
         int cx     = width  / 2;
         int cy     = height / 2;
         int rowX   = cx - ROW_W / 2;
-        int top    = cy - 58;
+        int top    = cy - 70;
         int row    = 0;
 
         // Aperture (F-value)
@@ -65,6 +67,17 @@ public class VideoRecorderScreen extends Screen {
                 step -> {
                     int idx = FPS_LIST.indexOf(VideoRecorder.getCurrentFps()) + step;
                     VideoRecorder.setFps(FPS_LIST.get(clamp(idx, FPS_LIST.size())));
+                    SnapmaticaConfig.save();
+                }, !VideoRecorder.isRecording());
+
+        // Resolution — locked once recording, same reasoning as FPS. Higher costs more
+        // crop/downsample/PNG-write time per frame, so it's a real trade against frame-drop
+        // risk rather than a free upgrade — worth showing, not just defaulting silently.
+        addSettingRow(rowX, top + row++ * ROW_H, Text.literal("Resolution"),
+                () -> resolutionLabel(VideoRecorder.getCurrentWidth()),
+                step -> {
+                    int idx = WIDTH_LIST.indexOf(VideoRecorder.getCurrentWidth()) + step;
+                    VideoRecorder.setWidth(WIDTH_LIST.get(clamp(idx, WIDTH_LIST.size())));
                     SnapmaticaConfig.save();
                 }, !VideoRecorder.isRecording());
 
@@ -94,8 +107,13 @@ public class VideoRecorderScreen extends Screen {
      * buried everything under it. The backdrop is painted from {@link #render} instead, where
      * the order is ours to control on every version.
      */
+    //? if >=1.21 {
     @Override
     public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {}
+    //?} else {
+    /*@Override
+    public void renderBackground(DrawContext ctx) {}
+    *///?}
 
     /** The dimmed backdrop this screen sits on. */
     private void drawBackdrop(DrawContext ctx) {
@@ -140,6 +158,12 @@ public class VideoRecorderScreen extends Screen {
 
     private static String fmt(float v) {
         return v == Math.floor(v) ? String.valueOf((int) v) : String.valueOf(v);
+    }
+
+    private static String resolutionLabel(int width) {
+        if (width >= VideoRecorder.WIDTH_1440P) return "1440p";
+        if (width >= VideoRecorder.WIDTH_1080P) return "1080p";
+        return "720p";
     }
 
     private static String motionBlurLabel(int v) {

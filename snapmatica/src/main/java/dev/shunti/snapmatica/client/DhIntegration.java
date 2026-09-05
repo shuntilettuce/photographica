@@ -57,8 +57,8 @@ public final class DhIntegration {
         }
         if (level == null) return -1f;
 
-        Vec3d eye  = mc.player.getCameraPosVec(1.0f);
-        Vec3d look = mc.player.getRotationVec(1.0f);
+        Vec3d eye  = SnapmaticaClient.cameraPos(mc);
+        Vec3d look = SnapmaticaClient.cameraLook(mc);
 
         // Cap the LOD raycast distance: a miss (looking at sky just above terrain)
         // traverses the full distance, so 100k blocks could hitch badly. 8192 blocks

@@ -3,17 +3,53 @@ mod_version = "1.0.2"
 maven_group = "dev.shunti.snapmatica"
 archives_base_name = "snapmatica"
 
+["1.20.1"]
+yarn_mappings = "1.20.1+build.10"
+loader_version = "0.16.14"
+fabric_version = "0.92.11+1.20.1"
+# DrawContext already exists here (it wasn't a 1.20.2 addition, that was an earlier wrong
+# guess) — the real API gaps are narrower: renderBackground's arity, mouseScrolled's arity,
+# ClickableWidget's paint method being named renderButton (renamed renderWidget in 1.20.2),
+# and no RenderTickCounter type (render/HUD callbacks take a plain float tickDelta instead).
+# Not verified against 1.20 itself.
+mc_range = "1.20.1"
+minecraft_range = "~1.20.1"
+
 ["1.21.1"]
 yarn_mappings = "1.21.1+build.3"
 loader_version = "0.16.10"
-fabric_version = "0.115.1+1.21.1"
+fabric_version = "0.116.0+1.21.1"
+# 1.21 is byte-for-byte the same target as 1.21.1 for this mod — the version matrix was built
+# and every branch compiled with zero `//? if` additions — so one jar covers both.
+mc_range = "1.21-1.21.1"
+minecraft_range = "~1.21.1"
+
+["1.21.3"]
+yarn_mappings = "1.21.3+build.2"
+loader_version = "0.16.10"
+fabric_version = "0.114.1+1.21.3"
+# The real API boundary is 1.21.2, not 1.21.4: the projection-matrix accessor, NativeImage's
+# pixel access and DrawContext.drawTexture all change here, so this jar covers 1.21.2 as well.
+mc_range = "1.21.2-1.21.3"
+minecraft_range = "~1.21.3"
 
 ["1.21.4"]
 yarn_mappings = "1.21.4+build.8"
 loader_version = "0.16.14"
 fabric_version = "0.110.5+1.21.4"
+mc_range = "1.21.4"
+minecraft_range = "~1.21.4"
+
+["1.21.10"]
+yarn_mappings = "1.21.10+build.3"
+loader_version = "0.17.3"
+fabric_version = "0.138.4+1.21.10"
+mc_range = "1.21.10"
+minecraft_range = "~1.21.10"
 
 ["1.21.11"]
 yarn_mappings = "1.21.11+build.6"
 loader_version = "0.17.3"
-fabric_version = "0.141.1+1.21.11"
+fabric_version = "0.141.3+1.21.11"
+mc_range = "1.21.11"
+minecraft_range = "~1.21.11"

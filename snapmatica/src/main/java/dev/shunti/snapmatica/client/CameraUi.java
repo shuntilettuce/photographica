@@ -90,9 +90,10 @@ public final class CameraUi {
 
         // 1.21.11 made renderWidget final and split painting into drawIcon plus a text
         // consumer, so the label composites in the correct layer above the fills. Earlier
-        // versions draw the whole button inline.
+        // versions draw the whole button inline. 1.20.1 calls that same method renderButton —
+        // renamed to renderWidget in 1.20.2.
         //? if >=1.21.11 {
-        /*@Override
+        @Override
         protected void drawIcon(DrawContext ctx, int mouseX, int mouseY, float delta) {
             drawBody(ctx);
             drawLabel(ctx.getHoverListener(this, DrawContext.HoverType.NONE));
@@ -104,14 +105,22 @@ public final class CameraUi {
                     net.minecraft.text.TextColor.fromRgb(labelColour() & 0xFFFFFF)));
             drawTextWithMargin(consumer, label, 2);
         }
-        *///?} else {
-        @Override
+        //?} elif >=1.20.2 {
+        /*@Override
         protected void renderWidget(DrawContext ctx, int mouseX, int mouseY, float delta) {
             drawBody(ctx);
             var tr = MinecraftClient.getInstance().textRenderer;
             ctx.drawCenteredTextWithShadow(tr, getMessage(),
                     getX() + getWidth() / 2, getY() + 6, labelColour());
         }
-        //?}
+        *///?} else {
+        /*@Override
+        protected void renderButton(DrawContext ctx, int mouseX, int mouseY, float delta) {
+            drawBody(ctx);
+            var tr = MinecraftClient.getInstance().textRenderer;
+            ctx.drawCenteredTextWithShadow(tr, getMessage(),
+                    getX() + getWidth() / 2, getY() + 6, labelColour());
+        }
+        *///?}
     }
 }

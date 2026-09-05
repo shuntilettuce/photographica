@@ -1,8 +1,10 @@
 package dev.shunti.snapmatica.client.mixin;
 
 import dev.shunti.snapmatica.client.PhotoCapture;
+import dev.shunti.snapmatica.client.SnapmaticaClient;
 import dev.shunti.snapmatica.client.VideoRecorder;
 import net.minecraft.block.BlockState;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.util.math.MatrixStack;
@@ -14,36 +16,52 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Hides the targeted-block outline during photo capture and video recording, so the
- * black selection wireframe never appears in the saved photo or the recorded footage.
+ * Hides the targeted-block outline during photo capture, video recording, and whenever the
+ * viewfinder is up (sneaking or freecam) — a black wireframe box sitting in the middle of the
+ * frame has nothing to do with composing a shot, on top of never belonging in the saved photo
+ * or recorded footage in the first place.
  */
 @Mixin(WorldRenderer.class)
 public class WorldRendererMixin {
 
     //? if >=1.21.11 {
-    /*@Inject(
+    @Inject(
             method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;DDDLnet/minecraft/client/render/state/OutlineRenderState;IF)V",
             at = @At("HEAD"),
             cancellable = true
     )
     private void snapmatica$hideOutlineDuringCapture(CallbackInfo ci) {
-        if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) {
+        if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()
+                || SnapmaticaClient.viewfinderActive(MinecraftClient.getInstance())) {
             ci.cancel();
         }
     }
-    *///?} else if >=1.21.4 {
+    //?} else if >=1.21.10 {
+    /*@Inject(
+            method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;DDDLnet/minecraft/client/render/state/OutlineRenderState;I)V",
+            at = @At("HEAD"),
+            cancellable = true
+    )
+    private void snapmatica$hideOutlineDuringCapture(CallbackInfo ci) {
+        if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()
+                || SnapmaticaClient.viewfinderActive(MinecraftClient.getInstance())) {
+            ci.cancel();
+        }
+    }
+    *///?} else if >=1.21.2 {
     /*@Inject(
             method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;Lnet/minecraft/entity/Entity;DDDLnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;I)V",
             at = @At("HEAD"),
             cancellable = true
     )
     private void snapmatica$hideOutlineDuringCapture(CallbackInfo ci) {
-        if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) {
+        if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()
+                || SnapmaticaClient.viewfinderActive(MinecraftClient.getInstance())) {
             ci.cancel();
         }
     }*/
     //?} else {
-    @Inject(
+    /*@Inject(
             method = "drawBlockOutline(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;Lnet/minecraft/entity/Entity;DDDLnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)V",
             at = @At("HEAD"),
             cancellable = true
@@ -51,9 +69,10 @@ public class WorldRendererMixin {
     private void snapmatica$hideOutlineDuringCapture(MatrixStack matrices, VertexConsumer vertexConsumer,
                                                      Entity entity, double cameraX, double cameraY, double cameraZ,
                                                      BlockPos pos, BlockState state, CallbackInfo ci) {
-        if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) {
+        if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()
+                || SnapmaticaClient.viewfinderActive(MinecraftClient.getInstance())) {
             ci.cancel();
         }
     }
-    //?}
+    *///?}
 }
