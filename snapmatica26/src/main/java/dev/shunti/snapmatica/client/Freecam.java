@@ -1064,4 +1064,9 @@ public final class Freecam {
                 + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
                 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
     }
+    /** No path focus lock in the 26 tree yet; the caller falls back to ordinary AF. */
+    public static Float pathFocusLockDistance() {
+        return null;
+    }
+
 }

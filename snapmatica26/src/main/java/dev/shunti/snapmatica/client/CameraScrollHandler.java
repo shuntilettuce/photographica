@@ -60,10 +60,18 @@ public final class CameraScrollHandler {
 
         int dir = delta > 0 ? 1 : -1;
 
+        //? if >=1.21.10 {
         boolean ctrl = InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
                 || InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
         boolean alt = InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
                 || InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
+        //?} else {
+        /*long win = mc.getWindow().getHandle();
+        boolean ctrl = InputConstants.isKeyDown(win, GLFW.GLFW_KEY_LEFT_CONTROL)
+                || InputConstants.isKeyDown(win, GLFW.GLFW_KEY_RIGHT_CONTROL);
+        boolean alt = InputConstants.isKeyDown(win, GLFW.GLFW_KEY_LEFT_ALT)
+                || InputConstants.isKeyDown(win, GLFW.GLFW_KEY_RIGHT_ALT);
+        *///?}
 
         if (ctrl && alt) {
             adjustFocusDistance(dir);
@@ -86,11 +94,17 @@ public final class CameraScrollHandler {
 
     private static void adjustFocalLength(int dir) {
         if (SnapmaticaClient.lensType == NONE) return;
-        int idx = nearestIntIdx(FOCAL_STOPS, SnapmaticaClient.focalLengthMm);
-        SnapmaticaClient.focalLengthMm = FOCAL_STOPS.get(
-                Math.max(0, Math.min(FOCAL_STOPS.size() - 1, idx + dir)));
+        SnapmaticaClient.focalLengthMm = stepFocalLength(SnapmaticaClient.focalLengthMm, dir);
         // Zooming does not move the blades, so the f-number follows the focal length.
         SnapmaticaClient.applyFocalLengthToAperture();
+    }
+
+    /** Steps a focal length to the next lens stop in either direction — shared by the normal
+     *  scroll-to-zoom handler above and Freecam's keyframe dolly-zoom edit, so both draw from
+     *  the same stop table instead of keeping two copies of it in sync by hand. */
+    public static int stepFocalLength(int currentMm, int dir) {
+        int idx = nearestIntIdx(FOCAL_STOPS, currentMm);
+        return FOCAL_STOPS.get(Math.max(0, Math.min(FOCAL_STOPS.size() - 1, idx + dir)));
     }
 
     private static void adjustAperture(int dir) {

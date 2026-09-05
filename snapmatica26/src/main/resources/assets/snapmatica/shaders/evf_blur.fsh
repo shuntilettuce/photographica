@@ -5,6 +5,7 @@ uniform sampler2D DepthSampler;  // non-linear depth [0,1] from scene framebuffe
 uniform sampler2D NoiseSampler;  // 128x128 blue-noise dither (void-and-cluster), GL_REPEAT
 uniform sampler2D NearSampler;   // low-res, big-blurred premultiplied FOREGROUND layer
 uniform sampler2D BgSampler;     // low-res, big-blurred BACKGROUND (foreground holes filled)
+                                 // thing a single image cannot contain
 uniform int   Pass;              // 0 = gather/copy, 1 = extract fg, 2 = blur, 3 = extract bg
 uniform vec2 BlurDir;            // gather/copy: .x>=0.5 gather, <0.5 copy.  blur: H=(1,0) V=(0,1)
 uniform vec2 PixelSize;          // 1/texW, 1/texH of the CURRENT render target
@@ -12,6 +13,16 @@ uniform float FocusDist;         // focus distance in blocks (metres); ignored w
 uniform int   AfMode;            // 1 = derive focus from the centre pixel's depth, on the GPU
 uniform int   NearDownscale;     // full-res texels per near-layer texel (EvfBlurRenderer)
 uniform int   NearLayer;         // 0 = composite the gather alone, skipping the near-field
+uniform float NoiseRot;          // extra rotation of the sample disc, per aperture sub-frame
+uniform vec2  NoiseOffset;       // shift of the blue-noise LOOKUP, per aperture sub-frame.
+                                 // Rotating every disc by a common angle was not enough: each
+                                 // pixel still drew the SAME noise value on all 64 sub-frames,
+                                 // so its sampling bias was frozen in place and the sum
+                                 // reinforced it instead of averaging it away — the texture's
+                                 // own 128 px period showed up in the finished photograph.
+                                 // Translating the lookup keeps the blue-noise spectrum (a
+                                 // shift of a tiled texture is still that texture) while giving
+                                 // every pixel a fresh value each time
 uniform float MaxBlurPx;         // max blur radius in framebuffer pixels (perf clamp)
 uniform float Near;              // near clip plane in blocks
 uniform float Far;               // far clip plane in blocks
@@ -23,13 +34,35 @@ uniform float DistortK;          // radial distortion: >0 barrel, <0 pincushion,
 uniform float Aspect;            // fbW/fbH, so the distortion stays radially round
 uniform int   DoGather;          // 0 = no defocus to compute; pass the scene straight through
 uniform vec2  MotionRotPx;       // screen shift from camera ROTATION over one sample, in px
+uniform sampler2D HistorySampler; // the running average of the pupil, for the live view
+uniform float HistoryWeight;     // how much of THIS frame goes into it; 1 starts a new average
 uniform vec3  MotionVelCam;      // camera TRANSLATION over one sample, camera space, in blocks
+#define MAX_MOVERS 8
+uniform int   MoveCount;         // entities moving across this sample's slice of the exposure
+uniform vec3  MoveMin[MAX_MOVERS];   // their boxes, in camera space (right, up, forward)
+uniform vec3  MoveMax[MAX_MOVERS];
+uniform vec3  MoveVel[MAX_MOVERS];   // and their own travel across the slice, camera space
 uniform float FocalPx;           // focal length in pixels, for projecting that translation
-uniform float SampleBoost;       // 0..1, ramped with MaxBlurPx; 0 if the uniform is never set,
-                                  // which is what makes an ordinary shot's behaviour the default
+uniform float SampleBoost;       // -1..1. Positive ramps the tap ceiling up with MaxBlurPx,
+                                  // negative ramps it down for the ambient mode; 0 if the
+                                  // uniform is never set, which makes the ordinary shot default
 uniform float CaptureHQ;         // 0..1; 1 on the single frame actually being photographed —
                                   // a live viewfinder pays for every frame, a shutter press
                                   // pays once, so that one frame can spend far more
+uniform int   DynRange;          // 1 = simulate a narrower-dynamic-range sensor (see below)
+uniform float ExposureGain;      // aperture/shutter/ISO/ND gain vs. neutral (f/5.6, 1/60, 400)
+                                  // — PhotoProcessor.exposureFactor(). Applied for real here,
+                                  // which is what makes the viewfinder show the exposure
+uniform float DynRangeStops;     // how many stops of scene brightness the simulated sensor
+                                  // captures before crush/rolloff sets in — narrower clips and
+                                  // crushes sooner (a cheaper sensor); see applyDynamicRange
+uniform float CaK;               // lateral chromatic aberration: fractional difference in
+                                  // magnification between the red and blue ends, 0 = corrected
+uniform vec3  WbGain;            // white-balance per-channel gain (1,1,1 = no correction),
+                                  // applied in LINEAR light — SnapmaticaClient.whiteBalanceGain()
+uniform sampler2D LiveDepthSampler; // the scene depth as it stands NOW, vs DepthSampler's copy
+uniform int   HandMask;          // 1 = keep anything that is not world geometry sharp
+uniform float HandNearBlocks;    // depth nearer than this (blocks) is the held item, not world
 
 in vec2 texCoord;
 out vec4 fragColor;
@@ -89,6 +122,12 @@ out vec4 fragColor;
 const int   SAMPLES      = 384;
 const int   SAMPLES_BASE = 128;
 const int   SAMPLES_HQ   = 1024;
+// The bottom of the range, for the ambient depth of field — the always-on mode that applies the
+// lens to ordinary play rather than to a photograph. A viewfinder is held for a few seconds and
+// a shutter fires once, so both can spend freely; a permanent effect is paid for on every frame
+// forever, and 128 taps is not a bill anyone wants to keep paying to walk around. See how
+// SampleBoost is read below: negative values interpolate DOWN toward this.
+const int   SAMPLES_LOW  = 32;
 const float GOLDEN_ANGLE = 2.39996323;
 const float TWO_PI       = 6.28318531;
 #define NOISE_SIZE 128.0
@@ -225,13 +264,37 @@ float airyDiscMM() {
  */
 vec2 motionSmearPx(vec2 uv, float depthM) {
     vec2 m = MotionRotPx;
+    // Pixel offset from the frame centre, needed for the forward-motion term: moving ahead
+    // pushes everything radially outward, and the rate grows with distance from the centre of
+    // expansion.
+    vec2  p = (uv - 0.5) / PixelSize;
+    float z = max(depthM, 0.25);
     if (dot(MotionVelCam, MotionVelCam) > 1e-9) {
-        // Pixel offset from the frame centre, needed for the forward-motion term: moving
-        // ahead pushes everything radially outward, and the rate grows with distance from
-        // the centre of expansion.
-        vec2 p = (uv - 0.5) / PixelSize;
-        float z = max(depthM, 0.25);
         m += (FocalPx * MotionVelCam.xy + p * MotionVelCam.z) / z;
+    }
+    // A mob crossing a still frame needs its OWN vector: the camera term above is one velocity
+    // for the whole picture, and a mob is the one thing in the picture not moving at it. Its
+    // path across the exposure is already recorded — the burst replays it — so the velocity is
+    // a subtraction on data that is sitting there, and this is what turns those replayed
+    // instants from a row of copies back into a trail.
+    //
+    // Which pixels are the mob is decided in CAMERA SPACE, not by a rectangle on screen. The
+    // pixel's own position is recoverable from gl_FragCoord and its depth, so the test is
+    // whether that point is inside the mob's box — three dimensions, so the wall behind it and
+    // the ground below its feet are excluded on their own depth rather than by hoping a
+    // rectangle misses them.
+    if (MoveCount > 0) {
+        vec2 fbSize = 1.0 / PixelSize;
+        // gl_FragCoord is bottom-left origin with +y up, which is the same handedness the boxes
+        // are built in — no convention to guess at.
+        vec3 pc = vec3((gl_FragCoord.xy - fbSize * 0.5) * z / FocalPx, z);
+        for (int k = 0; k < MAX_MOVERS; k++) {
+            if (k >= MoveCount) break;
+            if (all(greaterThanEqual(pc, MoveMin[k])) && all(lessThanEqual(pc, MoveMax[k]))) {
+                m += (FocalPx * MoveVel[k].xy + p * MoveVel[k].z) / z;
+                break;   // one mob per pixel; the nearest wins, and they are sorted by speed
+            }
+        }
     }
     // Deliberately a hair longer than the gap it measures. The vector is exact for LINEAR
     // motion over that gap, but a pan is rarely perfectly linear tick to tick — an orbit
@@ -306,21 +369,174 @@ float computeCoc(float depthM) {
 /**
  * The circle of confusion as the GATHER uses it: the optical one, with a soft floor.
  *
- * <p>A disc narrower than a pixel or so cannot be drawn, so the gather subtracts a floor before
- * using it. It did that with `max(coc - 1.5, 0)`, which is a CLIFF: defocus is exactly zero out
- * to 1.5 px and the per-tap disc test needed another half pixel on top, so nothing happened at
- * all until the true circle reached 2.0 px and then a half-pixel disc switched on at full
- * weight. On a surface receding smoothly from the focal plane that threshold is a CONTOUR, and
- * it draws a visible line across the picture where the blur starts.
+ * <p>A disc narrower than a pixel or so cannot be drawn — there is nothing between "this pixel"
+ * and "this pixel and a bit of its neighbour" — so the gather has always subtracted a floor
+ * before using it. It did that with `max(coc - 1.5, 0)`, which is a CLIFF: defocus is exactly
+ * zero out to 1.5 px and the per-tap disc test needed another half pixel on top, so nothing at
+ * all happened until the true circle reached 2.0 px and then a half-pixel disc switched on at
+ * full weight. On a surface receding smoothly away from the focal plane that threshold is a
+ * CONTOUR, and it draws a visible line across the picture where the blur starts. It was always
+ * there; it only became the worst thing in the frame once everything around it got better.
  *
- * <p>A knee instead of a cliff: cocGather = c^2 / (c + K), which is zero at zero, has zero SLOPE
- * at zero so blur creeps in rather than switching on, and is within 0.03 px of c - K by 50 px of
- * blur. The floor still does its job without a depth at which the answer jumps.
+ * <p>A knee instead of a cliff:
+ *
+ * <pre>  cocGather = c² / (c + K)  </pre>
+ *
+ * which is zero at zero, has zero SLOPE at zero — so blur creeps in rather than switching on —
+ * approaches {@code c - K} within 0.03 px by 50 px of blur, and is monotone and smooth
+ * everywhere between. The floor still does its job (a true circle of 1 px renders as 0.4, half
+ * a pixel as 0.13, both below what a pixel can show) without a depth at which the answer jumps.
+ *
+ * <p>Dithering the threshold was the other option and is strictly worse: it turns one wrong edge
+ * into noise spread over the whole band, which is the same error with its structure hidden
+ * rather than the error removed. There is no reason to hide it — the discontinuity was in the
+ * function, and the function is ours.
  */
 float cocGather(float depthM) {
     const float COC_KNEE = 1.5;
     float c = computeCoc(depthM);
     return c * c / (c + COC_KNEE);
+}
+
+/**
+ * The sensor's own response: a narrower-latitude shadow crush and a highlight shoulder.
+ *
+ * <p>Runs on ALREADY-EXPOSED colour. It used to multiply by the exposure gain, apply the curve
+ * and divide the gain back out, because the exposure itself was applied later, on the CPU, to
+ * the saved photo alone — so this had to borrow the gain to know where the highlights were and
+ * then hand back a frame at unchanged brightness. Exposure is applied here now (see Pass 5), so
+ * the borrowing is gone and the curve simply acts on the value the sensor actually recorded.
+ *
+ * <p>Still a LOOK rather than a physical response: Minecraft's framebuffer is already
+ * tonemapped, clamped LDR colour by the time this shader sees it, so there is no true scene
+ * radiance to re-expose against a real sensor curve. What this recreates is the mark a
+ * narrower-latitude sensor leaves — shadows compressing toward black rather than fading out
+ * linearly, highlights easing into a shoulder rather than running out of range unmodified.
+ */
+vec3 applyDynamicRange(vec3 c) {
+    if (DynRange == 0) return c;
+    // BLACK_LIFT was originally calibrated at 0.045 (4.5%) for the 8-stop default, on the
+    // assumption of a properly dark shadow to crush. Minecraft's own lighting doesn't render a
+    // dim interior that dark — a torch-lit room reads as a moderate grey — so a 4.5% lift left
+    // it almost untouched. Raised enough to actually reach that grey. Narrower ranges lift
+    // BLACK_LIFT and lower SHOULDER together (crush sooner, clip sooner), wider ones relax both.
+    float stops      = max(DynRangeStops, 1.0);
+    float BLACK_LIFT = clamp(0.10 * (8.0 / stops), 0.01, 0.35);
+    float SHOULDER   = clamp(1.0 - 0.2 * (8.0 / stops), 0.4, 0.97);
+    vec3 x = max(c - BLACK_LIFT, 0.0) / (1.0 - BLACK_LIFT);
+    vec3 over = max(x - SHOULDER, 0.0);
+    return min(x, SHOULDER) + over / (1.0 + over * 3.0);
+}
+
+/**
+ * The gentle S the saved photo has always carried, moved here from the CPU so the viewfinder
+ * shows it too. Lifts midtones slightly and leaves both ends alone.
+ */
+vec3 applyToneCurve(vec3 c) {
+    return c * (1.0 + 0.15 * (1.0 - abs(c - 0.5) * 2.0));
+}
+
+/**
+ * Highlight rolloff — an exponential shoulder above 200/255, so the top end eases into clipping
+ * instead of arriving at it. Also moved from the CPU; the constants are the same ones, divided
+ * through by 255.
+ */
+vec3 applyHighlightRolloff(vec3 c) {
+    const float KNEE = 200.0 / 255.0;
+    const float SOFT = 55.0 / 255.0;
+    vec3 over = max(c - KNEE, 0.0);
+    return min(c, KNEE) + SOFT * (1.0 - exp(-over / SOFT));
+}
+
+// sRGB transfer function, both ways. Needed because white balance and exposure are both
+// linear-light operations while everything in this framebuffer is gamma-encoded. Neither
+// clamps: the exposure multiply is allowed to run past 1 so the highlight shoulder below has
+// something left to catch.
+vec3 srgbToLinear(vec3 c) {
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
+}
+
+vec3 linearToSrgb(vec3 c) {
+    return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+}
+
+/**
+ * Lateral (transverse) chromatic aberration — the coloured fringing along a high-contrast edge
+ * that gets worse toward the corners and vanishes dead centre.
+ *
+ * <p>A lens bends short wavelengths harder than long ones, so it does not merely focus them at
+ * different depths (that is LONGITUDINAL CA, which shows as colour on out-of-focus edges) — it
+ * also MAGNIFIES them differently, so the red and blue images of the same scene are very
+ * slightly different sizes. That difference is what this is: three radial scales about the
+ * optical axis, red a touch larger and blue a touch smaller, green left where it is. Zero
+ * displacement at the centre and growing with distance from it falls out of that on its own,
+ * with nothing to special-case.
+ *
+ * <p>Linear in image height, which is the dominant term; a real lens has a higher-order
+ * component on top that makes the very corners worse than this. Applied in UV space with no
+ * aspect correction, deliberately — a uniform scale in UV is a uniform scale on screen, since
+ * each axis scales by the same fraction of its own extent, so the displacement is already
+ * radial in pixels.
+ */
+vec3 applyCa(vec2 uv) {
+    if (CaK < 1e-6) return texture(InSampler, uv).rgb;
+    vec2 c = uv - 0.5;
+    return vec3(
+        texture(InSampler, 0.5 + c * (1.0 + CaK)).r,
+        texture(InSampler, uv).g,
+        texture(InSampler, 0.5 + c * (1.0 - CaK)).b);
+}
+
+/**
+ * Whether this pixel is the held item rather than world geometry — in which case there is no
+ * honest circle of confusion for it and it must be left alone.
+ *
+ * <p>Two tests, because the held item reaches the frame by two entirely different routes:
+ *
+ * <p><b>Drawn after the depth copy.</b> Vanilla draws the hand at the end of renderWorld,
+ * after the copy is taken and after it has cleared the depth buffer, so the hand leaves no mark
+ * in the copy at all — its pixels carry the depth of whatever world geometry is behind them.
+ * Comparing the live depth against the copy finds it without caring about draw order.
+ *
+ * <p><b>Drawn INSIDE the world pass, at a reserved depth.</b> Iris disables vanilla's hand
+ * rendering entirely ({@code MixinGameRenderer.iris$disableVanillaHandRendering}) and draws it
+ * from its own {@code HandRenderer} within the level render — so with Iris installed the hand
+ * IS in the depth copy, the test above finds nothing, and ordering the blur ahead of vanilla's
+ * hand call achieves nothing because that call never runs. Iris multiplies the hand's
+ * projection by {@code scale(1, 1, 0.125)}, which compresses its clip-space z into a reserved
+ * band: NDC [-0.125, 0.125], window depth 0.4375 to 0.5625, which linearises to roughly 0.09
+ * to 0.11 blocks. World geometry cannot be there — the player's own bounding box keeps the
+ * nearest block face about 0.3 blocks from the eye — so a plain "nearer than HandNearBlocks"
+ * test separates the two cleanly, and does nothing at all when no hand is in the depth to find.
+ */
+/**
+ * Whether a GATHER TAP has landed on the held item, from a depth the caller already sampled.
+ *
+ * <p>Keeping the item's own pixels sharp is only half the job. Every background pixel near it
+ * builds its blur by averaging neighbours, and neighbours that happen to be the item drag its
+ * colour out into the blur — which is the faint aura that appears around a sharp item sitting
+ * on a defocused scene. The item is not scene geometry at that distance, so it has no business
+ * contributing to anyone else's circle of confusion.
+ *
+ * <p>Only the reserved-depth test, deliberately, and no texture fetch of its own. The other
+ * route in {@link drawnAfterDepthCopy} — an item drawn after the copy — cannot produce this
+ * halo at all: there the blur runs before the item is drawn, so there is no item colour in the
+ * frame to bleed. Costing the gather an extra fetch per tap to look for something that cannot
+ * be there would be paying for nothing, on the one loop in this shader that runs hundreds of
+ * times per pixel.
+ */
+bool tapIsHeldItem(float linDepth) {
+    return HandMask == 1 && HandNearBlocks > 0.0 && linDepth < HandNearBlocks;
+}
+
+bool drawnAfterDepthCopy(vec2 uv) {
+    if (HandMask == 0) return false;
+    float copied = texture(DepthSampler, uv).r;
+    // Reserved-depth hand (Iris and anything else that draws it inside the world pass).
+    if (HandNearBlocks > 0.0 && linearDepth(copied) < HandNearBlocks) return true;
+    // Hand drawn after the copy was taken (vanilla).
+    float live = texture(LiveDepthSampler, uv).r;
+    return live < copied - 1e-5;
 }
 
 vec2 hash22(vec2 p) {
@@ -336,6 +552,87 @@ vec3 hash32(vec2 p) {
 }
 
 void main() {
+    // ── Pass 5 / 6: DynamicRangeSim, applied as its own final step ───────────────────
+    // Not folded into the composite pass below any more — focus peaking's own edge detector
+    // (a separate pass, EvfBlurRenderer.applyPeaking) runs on whatever this shader leaves in
+    // mainTex, and BLACK_LIFT crushing shadow detail into a flat 0 destroyed exactly the
+    // local contrast peaking needs to find an edge there: a dim, in-focus subject read as
+    // "no edge, nothing to peak" once the crush had already flattened it. Running these AFTER
+    // peaking (EvfBlurRenderer orders the GL calls that way) means peaking sees the real,
+    // uncrushed detail, and the crush/rolloff is the last thing that touches the frame instead
+    // of something in the middle of the pipeline. Pass 5 applies the curve (mainTex -> aux);
+    // Pass 6 is a plain copy back (aux -> mainTex), the same two-step shape
+    // EvfBlurRenderer.applyPeaking already uses for the same reason (feedback loop otherwise).
+    // White balance rides along in Pass 5 rather than getting a pass of its own: both are
+    // sensor-side, both are per-pixel with no neighbourhood, and both have to land after
+    // peaking (which is a viewfinder aid drawn over the picture, not part of it). Multiplied
+    // BEFORE the dynamic-range curve, which is the real order — a channel gain is applied to
+    // the signal, and whatever that gain pushes past full scale is what the sensor clips.
+    if (Pass == 5) {
+        // Both gains in LINEAR light. A sensor's gain multiplies photons; the framebuffer holds
+        // gamma-encoded numbers, and multiplying those instead applies the wrong magnitude
+        // everywhere except where the two curves happen to cross.
+        //
+        // The exposure multiply is HERE rather than on the CPU over the saved photo, which is
+        // what makes the viewfinder show the exposure the settings actually call for. It is not
+        // a preview of that exposure — it is the same multiply, on the same buffer the capture
+        // is read back from, so the two cannot drift apart. Deliberately NOT clamped before the
+        // curve below: the shoulder exists to catch highlights on their way out of range, and
+        // clipping first would leave it nothing to catch.
+        vec3 c = srgbToLinear(texture(InSampler, texCoord).rgb);
+        c = c * WbGain * ExposureGain;
+        c = linearToSrgb(max(c, 0.0));
+        c = applyDynamicRange(c);
+        c = applyToneCurve(c);
+        c = applyHighlightRolloff(c);
+        fragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+        return;
+    }
+    if (Pass == 6) { fragColor = texture(InSampler, texCoord); return; }
+
+    // ── Pass 8: fold this frame into the running average of the pupil ────────────────
+    //
+    // One pupil sample per frame instead of a hundred per shutter press, which is the only
+    // budget a live view has. The average is the integral; see LiveAperture for why the
+    // excursion is a fifth of the pupil and what that buys.
+    //
+    // Clamped to the neighbourhood the CURRENT frame actually contains, which is what keeps
+    // this from being a smear. A running average has no idea that something walked through the
+    // frame, and without the clamp a mob would leave a comet behind it for as long as the
+    // average is deep. Taking the min and max of the four neighbours and pinning the history
+    // inside them means anything genuinely new overrides the average immediately, while the
+    // gather's grain — which is scattered around the same true value — is left free to average
+    // away, because it never leaves that range.
+    //
+    // The box is WIDENED before it is used. A tight clamp would also reject the very thing the
+    // pupil is being integrated for: what is behind a defocused foreground appears in some
+    // viewpoints and not others, so it is legitimately outside the current frame's local range
+    // wherever the foreground happens to cover it this time round. The margin is what lets
+    // occlusion through while still catching the gross motion the clamp exists for.
+    if (Pass == 8) {
+        vec3 cur = texture(InSampler, texCoord).rgb;
+        if (HistoryWeight >= 1.0) { fragColor = vec4(cur, 1.0); return; }
+        vec3 lo = cur, hi = cur;
+        vec3 n0 = texture(InSampler, texCoord + vec2( PixelSize.x, 0.0)).rgb;
+        vec3 n1 = texture(InSampler, texCoord + vec2(-PixelSize.x, 0.0)).rgb;
+        vec3 n2 = texture(InSampler, texCoord + vec2(0.0,  PixelSize.y)).rgb;
+        vec3 n3 = texture(InSampler, texCoord + vec2(0.0, -PixelSize.y)).rgb;
+        lo = min(lo, min(min(n0, n1), min(n2, n3)));
+        hi = max(hi, max(max(n0, n1), max(n2, n3)));
+        vec3 mid = 0.5 * (lo + hi);
+        vec3 halfSpan = 0.5 * (hi - lo) + vec3(0.08);
+        vec3 hist = clamp(texture(HistorySampler, texCoord).rgb,
+                          mid - halfSpan, mid + halfSpan);
+        fragColor = vec4(mix(hist, cur, HistoryWeight), 1.0);
+        return;
+    }
+    // ── Pass 7: lateral chromatic aberration ─────────────────────────────────────────
+    // Its own pass, and ordered BEFORE peaking (EvfBlurRenderer sequences the draws), because
+    // it is the lens — the light is already fringed by the time it reaches the sensor, let
+    // alone the finder overlay drawn on top of it. Pairs with Pass 6 to copy back, the same
+    // ping-pong Pass 5 and applyPeaking use.
+    if (Pass == 7) { fragColor = vec4(applyCa(texCoord), 1.0); return; }
+
     // Every pass must resolve this identically, or the low-res near-field layer would be
     // extracted against a different focus than the gather it is composited over.
     gFocus = resolveFocus();
@@ -411,7 +708,7 @@ void main() {
         float radius = max(coc * 0.24, 8.0);    // low-res texels (coc is full-res px)
 
         const int DISC_TAPS = 64;
-        float rot  = texture(NoiseSampler, fract(gl_FragCoord.xy / NOISE_SIZE)).r * TWO_PI;
+        float rot  = texture(NoiseSampler, fract(gl_FragCoord.xy / NOISE_SIZE + NoiseOffset)).r * TWO_PI + NoiseRot;
         vec4  acc  = vec4(0.0);
         for (int i = 0; i < DISC_TAPS; i++) {
             float fi = float(i) + 0.5;
@@ -455,6 +752,13 @@ void main() {
         // alike. Distorting only some of them would tear the image along the boundary between
         // the paths, since the sharp and blurred branches would be sampling different geometry.
         vec2 srcUV = lensDistort(texCoord);
+        // Held item and anything else drawn after the depth copy: the gather already left it
+        // untouched, so hand it on without the denoise, which would otherwise soften it using
+        // a circle of confusion computed from the world behind it.
+        if (drawnAfterDepthCopy(srcUV)) {
+            fragColor = vec4(texture(InSampler, srcUV).rgb, 1.0);
+            return;
+        }
         float d = linearDepth(texture(DepthSampler, srcUV).r);
         float c = cocGather(d);
         float sc = c;
@@ -528,7 +832,7 @@ void main() {
                 return;
             }
             const int DENOISE_TAPS = 32;
-            float drot = texture(NoiseSampler, fract(gl_FragCoord.xy / NOISE_SIZE)).r * TWO_PI;
+            float drot = texture(NoiseSampler, fract(gl_FragCoord.xy / NOISE_SIZE + NoiseOffset)).r * TWO_PI + NoiseRot;
             vec3  sum   = texture(InSampler, srcUV).rgb;
             float wsum  = 1.0;
             for (int j = 0; j < DENOISE_TAPS; j++) {
@@ -536,6 +840,9 @@ void main() {
                 float dr = sqrt(fj / float(DENOISE_TAPS)) * rad;
                 float da = fj * GOLDEN_ANGLE + drot;
                 vec2  o  = vec2(cos(da), sin(da)) * dr;
+                // Same exclusion as the gather. This kernel is small, but it sits directly on
+                // the item's edge where the halo is most visible.
+                if (tapIsHeldItem(linearDepth(texture(DepthSampler, srcUV + o * PixelSize).r))) continue;
                 float w  = exp(-dr * dr / (2.0 * sigma * sigma));
                 sum  += texture(InSampler, srcUV + o * PixelSize).rgb * w;
                 wsum += w;
@@ -592,6 +899,9 @@ void main() {
     // distortion. Hand it the scene unchanged rather than walk 96 depth taps per pixel to
     // rediscover that every circle of confusion is sub-pixel.
     if (DoGather == 0) { fragColor = vec4(centre.rgb, 1.0); return; }
+    // See drawnAfterDepthCopy: this pixel has no depth of its own in the copy, so there is no
+    // honest circle of confusion to gather with. Keep it exactly as rendered.
+    if (drawnAfterDepthCopy(texCoord)) { fragColor = vec4(centre.rgb, 1.0); return; }
 
     float depthM = linearDepth(texture(DepthSampler, texCoord).r);
     float cocP   = cocGather(depthM);
@@ -616,6 +926,10 @@ void main() {
             float t  = float(s) / float(SCAN_RINGS);
             float rr = MaxBlurPx * t * t;
             float sd = linearDepth(texture(DepthSampler, texCoord + dir * rr * PixelSize).r);
+            // A held item sits about a tenth of a block out, so its circle of confusion is
+            // enormous — letting it into this scan would report a huge foreground right next
+            // to the crosshair and blow the gather radius up all around it.
+            if (tapIsHeldItem(sd)) continue;
             float sc2 = cocGather(sd);
             // One sample stands for the whole annulus between its ring and the next, so a hit
             // counts when the CoC found comes within half a ring gap of reaching here: the
@@ -641,10 +955,14 @@ void main() {
         }
     }
 
-    // 0.07, not 0.5: near the handover the gather is at its floor of 24 taps over a radius
-    // of 1, so the innermost tap sits at sqrt(0.5/24) = 0.144 px and the feather admits out
-    // to 2*cocP -- 0.07 puts that tap at exactly zero weight, and 0.07 of gathered blur is a
-    // true circle of 0.36 px, which no pixel can show.
+    // 0.07 px, not 0.5. With the knee and the narrowing feather the gather agrees with the
+    // centre pixel as the circle closes, so the only thing this early-out still buys is the
+    // work it saves, and it should hand over at the point where the two answers are identical
+    // rather than merely close. They are identical while no tap can qualify: near the handover
+    // the gather is at its floor of 24 taps over a radius of 1, so the innermost sits at
+    // sqrt(0.5/24) = 0.144 px, and the feather admits out to 2·cocP. Handing over at 0.07 puts
+    // that first tap just outside the disc — weight exactly zero, not merely small — and 0.07
+    // of gathered blur is a true circle of 0.36 px, which no pixel can show.
     if (cocP < 0.07 && !hasNearFg) {   // sharp, nothing blooming over it → leave crisp
         fragColor = vec4(centre.rgb, 1.0);   // alpha 1 = fully sampled, needs no denoise
         return;
@@ -674,8 +992,15 @@ void main() {
     // path runs through a Cg-based compiler, and this depth of nesting across a line break is
     // a known place for it to miscompile silently rather than reject. No difference in the
     // generated result once broken apart; this is a shape the compiler happens to get right.
-    float boostT  = clamp(SampleBoost, 0.0, 1.0);
-    float tapCeil = mix(float(SAMPLES_BASE), float(SAMPLES), boostT);
+    // SampleBoost is signed. Positive raises the ceiling from the 128-tap base toward SAMPLES,
+    // for the frames whose blur is wide enough to starve at 128 (see the note by SAMPLES);
+    // negative lowers it toward SAMPLES_LOW for the ambient mode. Exactly 0 — its value if the
+    // uniform is never set at all — still reproduces the base 128, so a wiring failure degrades
+    // to the well-tested default in either direction.
+    float boostT  = clamp(SampleBoost, -1.0, 1.0);
+    float tapCeil = boostT >= 0.0
+            ? mix(float(SAMPLES_BASE), float(SAMPLES),     boostT)
+            : mix(float(SAMPLES_BASE), float(SAMPLES_LOW), -boostT);
     // Kept as a separate, later assignment rather than folded into the mix() above — same
     // reasoning as splitting boostT/tapCeil apart: a flat if() overwriting a plain float is a
     // shape this compiler is known to get right, where a deeper nested expression is not.
@@ -689,7 +1014,7 @@ void main() {
     if (th.y > 0.5) lc.y = 1.0 - lc.y;
     if (th.z > 0.5) lc = lc.yx;
     lc = fract(lc + hash22(ntile + 19.7));
-    float rot  = texture(NoiseSampler, lc).r * TWO_PI;
+    float rot  = texture(NoiseSampler, fract(lc + NoiseOffset)).r * TWO_PI + NoiseRot;
 
     // How many taps actually landed inside a contributing disc. When the gather has to be
     // sized for a big neighbour while this pixel's own CoC is small, most taps fall outside
@@ -770,6 +1095,8 @@ void main() {
         vec2  sc  = texCoord + vec2(cos(ang), sin(ang)) * r * PixelSize;
 
         float sDepthM = linearDepth(texture(DepthSampler, sc).r);
+        // See tapIsHeldItem — this is the tap that would otherwise paint the halo.
+        if (tapIsHeldItem(sDepthM)) continue;
         // The haze floor belongs here as much as it does on the centre pixel. It was applied
         // only there, so the same surface had one circle of confusion when it was the pixel
         // being written and a smaller one when it was somebody's neighbour — and since a
@@ -788,8 +1115,11 @@ void main() {
         // — the painterly, brush-stroke look. Feathering membership over a one-pixel band
         // makes the same disc, with its edge antialiased instead of quantised.
         // The feather NARROWS with the disc. A fixed half-pixel band admits taps out to
-        // sCoc + 0.5 whatever sCoc is, so the gather never became the identity as the
-        // circle closed -- and the gate that hid that was itself the cliff.
+        // sCoc + 0.5 whatever sCoc is, so a disc of 0.1 px still pulled in neighbours a fifth
+        // of a pixel away at meaningful weight — the gather never became the identity, and the
+        // gate that used to hide that (`sCoc >= 0.5 ? ... : 0`) was itself the cliff. Tying the
+        // band to the disc makes the gather converge continuously on "just this pixel" as the
+        // circle closes, which is what lets the floor above be soft rather than switched.
         float feather = clamp(sCoc, 0.02, 0.5);
         float edge = smoothstep(sCoc + feather, sCoc - feather, r);
 
@@ -805,6 +1135,9 @@ void main() {
         vec3 sCol = texture(InSampler, sc).rgb;
         if (wantFill) {
             float fw2 = 1.0 / (r * r + FILL_SOFT * FILL_SOFT);
+            // The whole point: read what is actually behind, rather than average the
+            // neighbours and hope. The weighting is unchanged, so a background that is itself
+            // defocused still comes through softened by the same falloff as before.
             fillC += sCol * fw2;
             fillW += fw2;
         }
@@ -892,6 +1225,10 @@ void main() {
     // backdrop, so there is no foreground/background decision here for a seam to form along.
     float trust = smoothstep(0.01, 0.12, underA);
     if (fillW <= 0.0) trust = 1.0;   // no estimate to fall back on; leave the gather alone
+    // NOTE what was wrong here, because it is a tempting mistake. Forcing trust to 0 whenever a
+    // `trust` was written for. Where the gather DID see the backdrop, its own layers hold the
+    // right answer already; the fill is for the interior of a silhouette, where it saw nothing.
+    // foreground cut out of it, a scene with shallow depth of field came back as bare sky.
     underCol = mix(fillC / max(fillW, 1e-4), underCol, trust);
 
     // The foreground-bokeh fix: `na` composites as an alpha instead of being divided back out.

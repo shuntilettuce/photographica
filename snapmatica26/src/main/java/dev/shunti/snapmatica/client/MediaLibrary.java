@@ -1,14 +1,15 @@
 package dev.shunti.snapmatica.client;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,7 +26,9 @@ import java.util.concurrent.Executors;
 /**
  * Everything the gallery needs: what has been shot, and the GPU textures to show it with.
  *
- * <p>Photos are PNGs the mod wrote itself. Videos are mp4, which nothing in Minecraft can
+ * <p>Photos are PNG, JPG or DNG, whichever {@link SnapmaticaClient#photoFormat} was set to
+ * when the shutter was pressed. All three appear in the roll, but each needs its own decoder —
+ * see {@link #decode}. Videos are mp4, which nothing in Minecraft can
  * decode, so each gets a poster frame extracted by ffmpeg once and cached beside it; playback
  * is handed to whatever the desktop uses for video.
  */
@@ -56,6 +59,21 @@ public final class MediaLibrary {
      */
     private static final Map<String, Float> aspects = new HashMap<>();
 
+    /**
+     * EXIF read back per file, so the viewer can show what a shot was taken at without
+     * re-reading (and re-parsing) the file on every frame it is on screen. A miss is cached
+     * too, as an empty Optional — a video, a PNG from before this mod wrote metadata, or
+     * anything else with nothing to show should be asked about once, not forever.
+     */
+    private static final Map<String, java.util.Optional<PhotoExif.Info>> exifCache = new HashMap<>();
+
+    /** What the shot was taken at, or null if the file carries no readable metadata. */
+    public static PhotoExif.Info exif(Entry e) {
+        if (e.video()) return null;
+        return exifCache.computeIfAbsent(e.file().getAbsolutePath(),
+                k -> java.util.Optional.ofNullable(PhotoExif.read(e.file()))).orElse(null);
+    }
+
     /** Poster-frame extraction shells out to ffmpeg, so it must not run on the render thread. */
     private static final ExecutorService thumbExecutor =
             Executors.newSingleThreadExecutor(r -> {
@@ -76,18 +94,26 @@ public final class MediaLibrary {
     /** Newest first, which is the order anyone actually wants to look at their shots in. */
     public static List<Entry> scan() {
         List<Entry> out = new ArrayList<>();
-        collect(photoDir(), ".png", false, out);
-        collect(videoDir(), ".mp4", true, out);
+        // Every format the shutter can produce. None of the three shares a decoder: see
+        // #decode — NativeImage reads PNG and nothing else, JPEG goes through ImageIO, and a
+        // DNG is read back by the code that wrote it.
+        collect(photoDir(), new String[]{".png", ".jpg", ".jpeg", ".dng"}, false, out);
+        collect(videoDir(), new String[]{".mp4"}, true, out);
         out.sort(Comparator.comparingLong(Entry::modified).reversed());
         return out;
     }
 
-    private static void collect(File dir, String ext, boolean video, List<Entry> out) {
+    private static void collect(File dir, String[] exts, boolean video, List<Entry> out) {
         File[] fs = dir.listFiles();
         if (fs == null) return;
         Arrays.stream(fs)
-                .filter(f -> f.isFile() && f.getName().toLowerCase().endsWith(ext))
+                .filter(f -> f.isFile() && matchesAny(f.getName().toLowerCase(), exts))
                 .forEach(f -> out.add(new Entry(f, video, f.lastModified())));
+    }
+
+    private static boolean matchesAny(String name, String[] exts) {
+        for (String ext : exts) if (name.endsWith(ext)) return true;
+        return false;
     }
 
     /**
@@ -112,17 +138,69 @@ public final class MediaLibrary {
         return upload(key, src);
     }
 
-    private static Identifier upload(String key, File src) {
+    /**
+     * Decodes a saved shot, whichever of the three formats it is.
+     *
+     * <p>{@code NativeImage.read} is PNG-only — it validates the PNG signature and throws
+     * "Bad PNG Signature" on anything else, which is what made every JPG in the roll show as
+     * unreadable. Only the PNG path can use it.
+     *
+     * <p>JPEG goes through ImageIO instead. That is safe here despite Minecraft running with
+     * {@code java.awt.headless=true}: ImageIO's codecs are pure decoders with no display
+     * dependency, which is the same distinction {@link ClipboardUtil} already relies on, and
+     * separate from AWT's GUI classes, which genuinely do throw when headless.
+     *
+     * <p>DNG is read by {@link DngReader} — this mod wrote it, so it can read it back.
+     */
+    private static NativeImage decode(File src) throws IOException {
+        String n = src.getName().toLowerCase();
+        if (n.endsWith(".dng")) {
+            try {
+                return DngReader.read(src);
+            } catch (Exception e) {
+                throw new IOException("DNG decode failed: " + e, e);
+            }
+        }
+        if (n.endsWith(".jpg") || n.endsWith(".jpeg")) {
+            java.awt.image.BufferedImage buf;
+            try (InputStream is = new FileInputStream(src)) {
+                buf = javax.imageio.ImageIO.read(is);
+            }
+            if (buf == null) throw new IOException("ImageIO could not decode " + src.getName());
+            int w = buf.getWidth(), h = buf.getHeight();
+            NativeImage img = new NativeImage(w, h, false);
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int rgb = buf.getRGB(x, y);
+                    int r = (rgb >>> 16) & 0xFF, g = (rgb >>> 8) & 0xFF, b = rgb & 0xFF;
+                    Pixels.setAbgr(img, x, y, 0xFF000000 | (b << 16) | (g << 8) | r);
+                }
+            }
+            return img;
+        }
         try (InputStream is = new FileInputStream(src)) {
-            NativeImage image = NativeImage.read(is);
+            return NativeImage.read(is);
+        }
+    }
+
+    private static Identifier upload(String key, File src) {
+        try {
+            NativeImage image = decode(src);
+            if (image == null) throw new IOException("no decoder for " + src.getName());
             aspects.put(key, (float) image.getWidth() / Math.max(1, image.getHeight()));
             // Identifier paths allow only [a-z0-9_./-]; a timestamped filename has none of the
             // rest, but lowercase it and strip anything else to be safe.
             String path = "gallery/" + key.toLowerCase().replaceAll("[^a-z0-9_/.-]", "_");
             if (path.length() > 200) path = "gallery/" + Integer.toHexString(key.hashCode());
-            final Identifier id = Identifier.fromNamespaceAndPath("snapmatica", path);
+            Identifier id = Identifier.fromNamespaceAndPath("snapmatica", path);
+            //? if >=1.21.10 {
+            final Identifier fid = id;
             Minecraft.getInstance().getTextureManager()
-                    .register(id, new DynamicTexture(id::toString, image));
+                    .register(fid, new DynamicTexture(() -> fid.toString(), image));
+            //?} else {
+            /*Minecraft.getInstance().getTextureManager()
+                    .register(id, new DynamicTexture(image));
+            *///?}
             loaded.put(key, id);
             evictIfNeeded();
             return id;
@@ -192,29 +270,6 @@ public final class MediaLibrary {
     }
 
     /**
-     * Deletes a shot from disk — the poster frame too, for a video — and drops any cached
-     * texture for it so the grid never redraws a destroyed handle.
-     */
-    public static void deleteEntry(Entry e) {
-        File src = e.video() ? posterFile(e.file()) : e.file();
-        String key = src.getAbsolutePath();
-        Identifier tex = loaded.remove(key);
-        if (tex != null) Minecraft.getInstance().getTextureManager().release(tex);
-        failed.remove(key);
-        aspects.remove(key);
-
-        if (e.video()) {
-            File poster = posterFile(e.file());
-            if (poster.exists() && !poster.delete()) {
-                System.err.println("[Snapmatica] Could not delete poster " + poster);
-            }
-        }
-        if (!e.file().delete()) {
-            System.err.println("[Snapmatica] Could not delete " + e.file());
-        }
-    }
-
-    /**
      * Reveals a file in the desktop's file manager, selected rather than merely opening the
      * folder — Explorer and Finder both take a flag for it, and elsewhere opening the parent
      * directory is the closest equivalent.
@@ -231,6 +286,30 @@ public final class MediaLibrary {
             cmd = new String[]{"xdg-open", f.getParentFile().getAbsolutePath()};
         }
         run(cmd, "reveal " + f);
+    }
+
+    /**
+     * Deletes a shot from disk — the poster frame too, for a video — and drops any cached
+     * texture for it so the grid never redraws a destroyed handle.
+     */
+    public static void deleteEntry(Entry e) {
+        File src = e.video() ? posterFile(e.file()) : e.file();
+        String key = src.getAbsolutePath();
+        Identifier tex = loaded.remove(key);
+        if (tex != null) Minecraft.getInstance().getTextureManager().release(tex);
+        failed.remove(key);
+        aspects.remove(key);
+        exifCache.remove(e.file().getAbsolutePath());
+
+        if (e.video()) {
+            File poster = posterFile(e.file());
+            if (poster.exists() && !poster.delete()) {
+                System.err.println("[Snapmatica] Could not delete poster " + poster);
+            }
+        }
+        if (!e.file().delete()) {
+            System.err.println("[Snapmatica] Could not delete " + e.file());
+        }
     }
 
     /** Copies an entry to the clipboard: the image itself for a photo, the file for a video. */

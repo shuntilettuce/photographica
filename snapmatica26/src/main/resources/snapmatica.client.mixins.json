@@ -11,7 +11,12 @@
     "EntityRendererMixin",
     "AvatarRendererMixin",
     "CameraMixin",
-    "GuiMixin"
+    "GuiMixin",
+    "ExposureInputMixin",
+    "EntityExposureMixin",
+    "IrisTimerMixin",
+    "CloudTimeMixin",
+    "WorldTimeMixin"
   ],
   "injectors": {
     "defaultRequire": 1

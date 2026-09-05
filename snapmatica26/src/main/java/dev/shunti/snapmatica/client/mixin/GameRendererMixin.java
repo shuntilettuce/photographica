@@ -42,6 +42,10 @@ public class GameRendererMixin {
             at = @At("RETURN"))
     private void snapmatica$applyFocalLength(DeltaTracker dt, float f1, float f2,
                                              CallbackInfo ci) {
+        // Once per frame, before the level is drawn: step the live temporal integration on and
+        // decide whether its running average survives into this frame. See LiveAperture.
+        dev.shunti.snapmatica.client.LiveAperture.beginFrame();
+
         Player player = Minecraft.getInstance().player;
         if (player == null) return;
 
