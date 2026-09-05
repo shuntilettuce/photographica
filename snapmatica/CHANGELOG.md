@@ -263,6 +263,12 @@ ISO1600相当に粒つく、2段、まさにこれが生む2倍。センサー�
   GPUアップロードだけ描画スレッドで**1フレーム2枚まで**。縮小は最近傍でなく箱平均——
   20分の1に間引いた写真は「小さな風景」ではなく「小さなノイズ」になるので。
   ビューアは従来通りフル解像度を読む(1枚を意図して大きく見る場所で、サムネイルは嘘になる)。
+  <p>**キャプションが隣と重なっていた。** セルの下に固定書式の日時を1つ刷っていて、それは
+  以前の固定密度なら妥当だが他のどの密度でも嘘になる。GUIスケール4で7列だとセルは約58px、
+  `2026/08/27 12:03` はその1.5倍あるので、全部の日付が隣に食い込んで行が読めない1本の線に
+  なっていた。コンタクトシートはコマが小さくなればキャプションを詰める。**セル幅に収まる
+  一番長い書式**を選び、日付すら入らないなら何も刷らない——読めない幅のキャプションは
+  無いより悪い。隣まで巻き込むので。
   <p>**UIが潰れた。** 選んだ密度が窓幅を無視していた。密度は**要求であって約束ではない**ので、
   セルが54pxを切る列数は窓の側が拒否する。
   <p>**端で一周した。** 一番密なところからさらに回すと一番疎に戻っていた。密度コントロールでは
@@ -665,6 +671,13 @@ untouched the one thing a bigger sensor is actually bought for.
   a photograph sampled every twentieth pixel is not a small picture of the scene, it is a small
   picture of the noise. The viewer still reads the real thing, since it shows one picture at full
   size on purpose.
+  <p>**The captions ran into each other.** One fixed format was printed under every cell, which
+  is fine at the one density the roll used to be stuck at and false at any other: at a GUI scale
+  of 4 a seven-wide grid gives cells about 58 px across, and `2026/08/27 12:03` is half again as
+  wide as that, so every caption overprinted its neighbour and the row became one illegible line.
+  A contact sheet shortens its captions when the frames get small; the longest format that fits
+  the cell is the one that gets printed now, and if even the day does not fit, nothing does — a
+  caption too wide to read is worse than none, because it takes the next one with it.
   <p>**The layout collapsed.** A chosen density ignored the window. It is a request, not a
   promise, so the window now refuses any column count that would put cells under 54 px.
   <p>**It wrapped at the ends.** Running off the dense end reappeared at the sparse one, which is

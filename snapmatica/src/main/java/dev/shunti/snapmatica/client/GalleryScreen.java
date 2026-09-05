@@ -63,7 +63,25 @@ public class GalleryScreen extends Screen {
     private long    deleteArmedAt = 0L;
     private static final long DELETE_CONFIRM_TIMEOUT_MS = 4000L;
 
-    private static final SimpleDateFormat STAMP = new SimpleDateFormat("yyyy/MM/dd HH:mm");
+    /**
+     * Stamps for a cell caption, longest first.
+     *
+     * <p>The roll printed one fixed format under every thumbnail, which is fine at the density
+     * it used to be stuck at and false at any other: at a GUI scale of 4 a seven-wide grid gives
+     * cells about 58 px across, and "2026/08/27 12:03" is half again as wide as that, so every
+     * caption ran into its neighbour and the row became one illegible line. A contact sheet
+     * shortens its captions when the frames get small; so does this. The first of these that
+     * fits the cell is the one that gets printed, and if even the day does not fit, nothing does
+     * — a caption too wide to read is worse than no caption, because it takes the next one with
+     * it.
+     */
+    private static final SimpleDateFormat[] STAMPS = {
+            new SimpleDateFormat("yyyy/MM/dd HH:mm"),
+            new SimpleDateFormat("yyyy/MM/dd"),
+            new SimpleDateFormat("MM/dd HH:mm"),
+            new SimpleDateFormat("MM/dd"),
+    };
+    private static final SimpleDateFormat STAMP = STAMPS[0];
 
     public GalleryScreen() {
         super(Text.literal("Gallery"));
@@ -163,6 +181,16 @@ public class GalleryScreen extends Screen {
     public boolean shouldPause() { return false; }
 
     // ── Layout ──────────────────────────────────────────────────────────────────
+
+    /** The longest stamp that fits {@code avail} pixels, or "" when none of them do. */
+    private String captionFor(long modified, int avail) {
+        Date d = new Date(modified);
+        for (SimpleDateFormat f : STAMPS) {
+            String t = f.format(d);
+            if (textRenderer.getWidth(t) <= avail) return t;
+        }
+        return "";
+    }
 
     /** Below this a cell stops being a picture and starts being a smear. */
     private static final int MIN_CELL = 54;
@@ -338,8 +366,10 @@ public class GalleryScreen extends Screen {
             ctx.fill(x + w - 1, y, x + w, y + thumbH, 0xFFE8DCC4);
         }
 
-        String stamp = STAMP.format(new Date(e.modified()));
-        ctx.drawTextWithShadow(textRenderer, Text.literal(stamp), x + 1, y + thumbH + 3, 0xFF8A8A95);
+        String stamp = captionFor(e.modified(), w - 2);
+        if (!stamp.isEmpty()) {
+            ctx.drawTextWithShadow(textRenderer, Text.literal(stamp), x + 1, y + thumbH + 3, 0xFF8A8A95);
+        }
     }
 
     private void renderViewer(DrawContext ctx) {
