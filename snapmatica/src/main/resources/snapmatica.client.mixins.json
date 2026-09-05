@@ -2,7 +2,7 @@
   "required": true,
   "refmap": "snapmatica.refmap.json",
   "package": "dev.shunti.snapmatica.client.mixin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "${mixin_compat_level}",
   "client": [
     "GameRendererMixin",
     "GameRendererInvoker",
@@ -10,7 +10,14 @@
     "MouseMixin",
     "WorldRendererMixin",
     "EntityRendererMixin",
-    "PlayerEntityRendererMixin"
+    "PlayerEntityRendererMixin",
+    "CameraMixin",
+    "InGameHudMixin",
+    "WorldTimeMixin",
+    "CloudTimeMixin",
+    "IrisTimerMixin",
+    "EntityExposureMixin",
+    "ExposureInputMixin"
   ],
   "injectors": {
     "defaultRequire": 1
