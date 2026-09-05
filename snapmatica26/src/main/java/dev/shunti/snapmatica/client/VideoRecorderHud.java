@@ -49,7 +49,7 @@ public final class VideoRecorderHud {
 
         long now       = System.currentTimeMillis();
         long elapsed   = now - VideoRecorder.getRecordStartMs();
-        long totalMs   = (long) VideoRecorder.MAX_FRAMES * 1000L / VideoRecorder.FPS;
+        long totalMs   = VideoRecorder.MAX_RECORD_SECONDS * 1000L;
         long remaining = totalMs - elapsed;
 
         String elapsedStr  = formatDuration(elapsed);

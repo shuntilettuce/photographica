@@ -1,7 +1,9 @@
 package dev.shunti.snapmatica.client.mixin;
 
 import dev.shunti.snapmatica.client.PhotoCapture;
+import dev.shunti.snapmatica.client.SnapmaticaClient;
 import dev.shunti.snapmatica.client.VideoRecorder;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -17,7 +19,8 @@ public class LevelRendererMixin {
             cancellable = true
     )
     private void snapmatica$hideOutlineDuringCapture(CallbackInfo ci) {
-        if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()) {
+        if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()
+                || SnapmaticaClient.viewfinderActive(Minecraft.getInstance())) {
             ci.cancel();
         }
     }

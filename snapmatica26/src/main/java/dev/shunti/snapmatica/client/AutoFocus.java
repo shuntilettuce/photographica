@@ -63,10 +63,17 @@ public final class AutoFocus {
         return atInfinity() ? SnapmaticaClient.FOCUS_INFINITY : SnapmaticaClient.focusDistance;
     }
 
-    /** Blocks a photographer focuses THROUGH rather than ON: glass of every kind, panes, bars. */
+    /**
+     * Blocks a photographer focuses THROUGH rather than ON: glass of every kind, panes, bars —
+     * and barriers, which are invisible in the rendered scene but still solid to collision, so
+     * the plain world raycast (and its full-cube outline shape) reports them same as any other
+     * block. A camera cannot focus on something it cannot see; treating a barrier as opaque
+     * would rack the lens onto empty air with nothing on screen to justify it.
+     */
     private static boolean isSeeThrough(net.minecraft.world.level.block.Block b) {
         return b instanceof net.minecraft.world.level.block.TransparentBlock   // glass, stained, tinted
-                || b instanceof net.minecraft.world.level.block.IronBarsBlock;     // panes, iron bars
+                || b instanceof net.minecraft.world.level.block.IronBarsBlock  // panes, iron bars
+                || b instanceof net.minecraft.world.level.block.BarrierBlock;  // invisible collision-only
     }
 
     /**
@@ -109,10 +116,9 @@ public final class AutoFocus {
 
     public static void tick(Minecraft mc) {
         if (mc.player == null || mc.level == null) return;
-        // Track while the sneak viewfinder is up OR while recording (so the baked-in
-        // preview blur keeps focus on the subject even when not sneaking).
-        boolean active = (SnapmaticaClient.viewfinderSneakEnabled && mc.player.isShiftKeyDown())
-                || VideoRecorder.isRecording();
+        // Track while the viewfinder is up (sneaking or freecam) OR while recording (so the
+        // baked-in preview blur keeps focus on the subject even when neither is active).
+        boolean active = SnapmaticaClient.viewfinderActive(mc) || VideoRecorder.isRecording();
         if (!active) return;
 
         // Handover: autofocus moves the lens without touching the ring, so the moment manual
@@ -212,12 +218,17 @@ public final class AutoFocus {
 
     private static Float nearestMobInCone(Minecraft mc) {
         if (mc.player == null || mc.level == null) return null;
-        Vec3 eye = mc.player.getEyePosition();
-        Vec3 look = mc.player.getViewVector(1.0f);
+        Vec3 eye = SnapmaticaClient.cameraPos(mc);
+        Vec3 look = SnapmaticaClient.cameraLook(mc);
 
         double best = Double.MAX_VALUE;
+        // Rooted at the camera eye rather than the player's own bounding box, so this still
+        // covers the cone when freecam has moved the camera away from the player's body. The
+        // player themself is a valid target once freecam has moved the camera away from them.
+        net.minecraft.world.phys.AABB searchBox =
+                new net.minecraft.world.phys.AABB(eye, eye).inflate(50.0);
         for (LivingEntity e : mc.level.getEntitiesOfClass(LivingEntity.class,
-                mc.player.getBoundingBox().inflate(50.0), ent -> ent != mc.player && ent.isAlive())) {
+                searchBox, ent -> (ent != mc.player || Freecam.isActive()) && ent.isAlive())) {
             Vec3 toEnt = e.position().add(0, e.getBbHeight() * 0.5, 0).subtract(eye);
             double dist = toEnt.length();
             if (dist < 0.1) continue;

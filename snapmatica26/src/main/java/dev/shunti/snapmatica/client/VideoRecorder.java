@@ -12,9 +12,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -39,9 +39,16 @@ public final class VideoRecorder {
 
     // ── Constants ────────────────────────────────────────────────────────────────
     public static final int FPS        = 24;
-    public static final int MAX_FRAMES = 30 * 120;   // 2 minutes @ 30 fps
+    public static final int MAX_RECORD_SECONDS = 120;
 
     private static int currentFps = FPS;
+
+    /** The frame-count cap, in {@code virtualFrameCount} slots — a fixed TIME limit, not a
+     *  fixed frame count, so recording at 60 fps gets the same 2 minutes 30 fps always did
+     *  rather than being quietly capped at half the length. */
+    private static int maxFrames() {
+        return currentFps * MAX_RECORD_SECONDS;
+    }
 
     // Motion blur via ffmpeg frame-blending (tmix), applied at encode time. The
     // per-frame CPU motion blur was removed in the "record the preview" rewrite to
@@ -95,9 +102,32 @@ public final class VideoRecorder {
     private static List<FrameMeta> frameMetas;
 
     // Count of frames whose PNG write has completed (success or failure).
-    // Incremented by the ioExecutor thread; read by the post-processing thread
+    // Incremented by the writeExecutor thread; read by the post-processing thread
     // to display write-phase progress (0–10%).
     private static final AtomicInteger writtenFrames = new AtomicInteger(0);
+
+    // The last frame actually written, kept around ONLY to blend against the next one when
+    // the render thread falls behind — see captureFrameIfRecording's fillIns. Owned
+    // exclusively by writeExecutor (a single thread), so no synchronization is needed even
+    // though it is read-then-replaced across separate submitted tasks.
+    private static NativeImage lastProcessedFrame;
+
+    // A held-back frame used to just repeat, stretching its duration stamp to cover the gap —
+    // correct real-time speed, but a visible freeze-then-jump. This writes the missing slots
+    // as real files instead, each one a blend between the last frame actually captured and
+    // this one, spaced evenly across the gap — a plain cross-fade rather than true optical-flow
+    // interpolation, but the same reasoning as everywhere else in this mod that a cheap blend
+    // between two REAL, KNOWN frames beats an expensive estimate: it costs one image blend per
+    // filled slot, done here on its own thread, never the render thread that was already
+    // struggling. Deliberately single-threaded and separate from the parallel crop pool — the
+    // blend needs frame N-1's actual output, so writes must happen in the same order they were
+    // captured, which a multi-threaded pool cannot promise on its own.
+    private static final ExecutorService writeExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "snapmatica-video-write");
+        t.setDaemon(true);
+        t.setPriority(Thread.MIN_PRIORITY);
+        return t;
+    });
 
     // Frame scaling and PNG encoding are pure CPU work on independent frames, and each
     // output file carries its own index, so they parallelise freely. A single thread could
@@ -151,7 +181,12 @@ public final class VideoRecorder {
         writtenFrames.set(0);
         recordStartMs = System.currentTimeMillis();
         nextFrameMs   = recordStartMs;
-        frameMetas    = new ArrayList<>(MAX_FRAMES);
+        frameMetas    = new ArrayList<>(maxFrames());
+        // Dropped on writeExecutor itself (not here) so this can't race a straggling task
+        // still finishing up from the previous take.
+        writeExecutor.submit(() -> {
+            if (lastProcessedFrame != null) { lastProcessedFrame.close(); lastProcessedFrame = null; }
+        });
 
         // Probe scene depth immediately so the first frame gets correct focus/DoF.
         float initDepth = computeSceneFocusDepth(mc);
@@ -226,23 +261,40 @@ public final class VideoRecorder {
 
         long now = System.currentTimeMillis();
         if (now < nextFrameMs) return;
-        if (virtualFrameCount >= MAX_FRAMES) { stopRecording(); return; }
+        if (virtualFrameCount >= maxFrames()) { stopRecording(); return; }
 
         // How many frame slots this single PNG covers. When the render thread is
-        // slower than the target FPS, several time slots pass between captures; the
-        // duration stamp keeps playback at correct real-world speed.
+        // slower than the target FPS, several time slots pass between captures.
         long overdue = now - nextFrameMs;           // ≥ 0 here
         int slotsConsumed = 1 + (int)(overdue * currentFps / 1000L);
         slotsConsumed = Math.min(slotsConsumed, currentFps); // cap at 1 s to absorb pauses
-        float durationSec = (float) slotsConsumed / currentFps;
 
         virtualFrameCount += slotsConsumed;
         nextFrameMs = recordStartMs + (long)(virtualFrameCount * 1000.0 / currentFps);
 
-        int  idx     = frameCount;
-        File outFile = new File(rawDir, String.format("frame_%04d.png", idx));
-        frameMetas.add(new FrameMeta(idx, durationSec));
-        frameCount++;
+        // Missing slots used to be covered by stretching this one frame's duration stamp —
+        // correct real-time speed, but a visible freeze-then-jump. Filling them with real
+        // extra files instead (blended against the last frame actually captured — see
+        // writeWithInterpolation) means every file gets the plain single-slot duration, same
+        // as a frame that was never late at all; the video's timing comes out identical
+        // either way, just spread across more frames instead of one long one. Capped well
+        // below slotsConsumed's own 1-second ceiling — past a handful of filled slots the gap
+        // is a genuine freeze, and cross-fading a static scene with itself that many times
+        // over doesn't read as motion, just a slow dissolve; better to be honest about it.
+        int fillIns = Math.min(slotsConsumed - 1, MAX_INTERPOLATED_FILL);
+        int startIdx = frameCount;
+        float slotSec = 1f / currentFps;
+        for (int k = 0; k <= fillIns; k++) {
+            frameMetas.add(new FrameMeta(startIdx + k, slotSec));
+        }
+        // Any slots beyond the interpolation cap still need to be accounted for in the
+        // timeline, same as before: stretch the real frame's own duration to cover them.
+        int remainderSlots = slotsConsumed - 1 - fillIns;
+        if (remainderSlots > 0) {
+            frameMetas.set(frameMetas.size() - 1,
+                    new FrameMeta(startIdx + fillIns, (1 + remainderSlots) * slotSec));
+        }
+        frameCount += fillIns + 1;
 
         if (virtualFrameCount >= currentFps * 60 && virtualFrameCount - slotsConsumed < currentFps * 60
                 && mc.player != null)
@@ -251,28 +303,128 @@ public final class VideoRecorder {
         // The framebuffer is already DoF-blurred (applyPreviewBlur ran above). Screenshot it.
         // Nothing but the read-back itself happens here — scaling and encoding are handed
         // straight to the I/O pool so the render thread is freed as early as possible.
-        Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> submitFrame(raw, outFile));
+        int fStartIdx = startIdx, fFillIns = fillIns;
+        Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> submitFrame(raw, fStartIdx, fFillIns));
+    }
+
+    /** At most this many synthetic blended frames fill a single gap — see the reasoning at
+     *  the call site in captureFrameIfRecording. */
+    private static final int MAX_INTERPOLATED_FILL = 6;
+
+    /** The queue of pending writes, as a promise chain rather than a literal queue — each
+     *  capture appends one more stage. Crops still run on the parallel {@link #ioExecutor}
+     *  pool and can finish in any order, but chaining onto this (rather than acting the
+     *  moment each crop finishes) forces the actual writes back into capture order, which
+     *  {@link #writeWithInterpolation}'s blend against the previous frame depends on.
+     *  Read/written only from the render thread (every {@code submitFrame} call happens
+     *  synchronously from there), so it needs no synchronization of its own. */
+    private static CompletableFuture<Void> writeTail =
+            CompletableFuture.completedFuture(null);
+
+    /**
+     * Takes ownership of a freshly read-back frame and crops/downsamples it on the parallel
+     * I/O pool, then hands the small result to {@link #writeWithInterpolation} on the
+     * sequential writer for blending and the actual disk write — after whichever capture came
+     * before it, however the crop pool happened to finish them. {@code raw} is closed here
+     * exactly once, on every path.
+     */
+    private static void submitFrame(NativeImage raw, int startIdx, int fillIns) {
+        CompletableFuture<NativeImage> cropped =
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return cropAndDownsample(raw, 1280);
+                    } finally {
+                        raw.close();
+                    }
+                }, ioExecutor);
+
+        writeTail = writeTail.thenCombine(cropped, (v, frame) -> frame)
+                .thenAcceptAsync(frame -> writeWithInterpolation(frame, startIdx, fillIns), writeExecutor)
+                .exceptionally(ex -> {
+                    System.err.println("[VideoRecorder] Frame pipeline failed: idx " + startIdx + " — " + ex);
+                    return null;
+                });
     }
 
     /**
-     * Takes ownership of a freshly read-back frame and does the whole scale-and-encode on
-     * the I/O pool. {@code raw} is closed here exactly once, on every path.
+     * Runs on {@link #writeExecutor} only. Blends {@link #lastProcessedFrame} into however
+     * many synthetic frames the gap before this one needs, writes those plus this real frame,
+     * then keeps this one as the new {@code lastProcessedFrame} for next time. {@code frame}
+     * is NOT closed here on the success path — ownership transfers to
+     * {@code lastProcessedFrame}, released whenever it is next replaced or recording resets.
      */
-    private static void submitFrame(NativeImage raw, File outFile) {
-        ioExecutor.submit(() -> {
-            try {
-                NativeImage frame = cropAndDownsample(raw, 1280);
-                try { frame.writeToFile(outFile); }
-                catch (IOException e) {
-                    System.err.println("[VideoRecorder] Frame write failed: " + outFile);
-                } finally { frame.close(); }
-            } catch (Exception e) {
-                System.err.println("[VideoRecorder] Frame process failed: " + outFile);
-            } finally {
-                raw.close();
-                writtenFrames.incrementAndGet();
+    private static void writeWithInterpolation(NativeImage frame, int startIdx, int fillIns) {
+        try {
+            if (fillIns > 0 && lastProcessedFrame != null
+                    && lastProcessedFrame.getWidth() == frame.getWidth()
+                    && lastProcessedFrame.getHeight() == frame.getHeight()) {
+                for (int k = 0; k < fillIns; k++) {
+                    float t = (k + 1f) / (fillIns + 1f); // evenly spaced between prev and this
+                    NativeImage blended = blendFrames(lastProcessedFrame, frame, t);
+                    writeOne(blended, startIdx + k);
+                    blended.close();
+                }
+            } else if (fillIns > 0) {
+                // No previous frame to blend against (the very first capture of the take, or
+                // a resolution change) — write plain repeats instead of skipping the slots.
+                for (int k = 0; k < fillIns; k++) writeOne(frame, startIdx + k);
             }
-        });
+            writeOne(frame, startIdx + fillIns);
+        } catch (Exception e) {
+            System.err.println("[VideoRecorder] Frame write failed: idx " + startIdx);
+        } finally {
+            if (lastProcessedFrame != null) lastProcessedFrame.close();
+            lastProcessedFrame = frame;
+        }
+    }
+
+    private static void writeOne(NativeImage img, int idx) {
+        File outFile = new File(rawDir, String.format("frame_%04d.png", idx));
+        try {
+            img.writeToFile(outFile);
+        } catch (IOException e) {
+            System.err.println("[VideoRecorder] Frame write failed: " + outFile);
+        } finally {
+            writtenFrames.incrementAndGet();
+        }
+    }
+
+    /** Plain per-pixel cross-fade — the same reasoning as everywhere else in this mod that a
+     *  cheap blend of two REAL, KNOWN frames beats an expensive motion estimate: it isn't
+     *  trying to guess what happened in between, just smoothing the jump between two frames
+     *  that are both already known exactly. */
+    private static NativeImage blendFrames(NativeImage a, NativeImage b, float t) {
+        int w = a.getWidth(), h = a.getHeight();
+        NativeImage out = new NativeImage(w, h, false);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int ca = getArgb(a, x, y), cb = getArgb(b, x, y);
+                int ar = lerp8((ca >>> 16) & 0xFF, (cb >>> 16) & 0xFF, t);
+                int ag = lerp8((ca >>>  8) & 0xFF, (cb >>>  8) & 0xFF, t);
+                int ab = lerp8( ca         & 0xFF,  cb         & 0xFF, t);
+                setArgb(out, x, y, 0xFF000000 | (ar << 16) | (ag << 8) | ab);
+            }
+        }
+        return out;
+    }
+
+    // NativeImage on 26.1.2 exposes only getPixel/setPixel, in ABGR order (no ARGB
+    // accessor pair) — see cropAndDownsample's getPixel/setPixel below for the same
+    // conversion. Kept as a separate ARGB-in/ARGB-out pair here because blendFrames'
+    // channel math reads more naturally in ARGB order than threading the ABGR shuffle
+    // through every line of it.
+    private static int getArgb(NativeImage img, int x, int y) {
+        int abgr = img.getPixel(x, y);
+        int a = (abgr >>> 24) & 0xFF, b = (abgr >>> 16) & 0xFF, g = (abgr >>> 8) & 0xFF, r = abgr & 0xFF;
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+    private static void setArgb(NativeImage img, int x, int y, int argb) {
+        int a = (argb >>> 24) & 0xFF, r = (argb >>> 16) & 0xFF, g = (argb >>> 8) & 0xFF, b = argb & 0xFF;
+        img.setPixel(x, y, (a << 24) | (b << 16) | (g << 8) | r);
+    }
+
+    private static int lerp8(int a, int b, float t) {
+        return Math.round(a + (b - a) * t);
     }
 
     /**
@@ -295,7 +447,7 @@ public final class VideoRecorder {
         // is part of the footage's look, and GPU AF would snap instantly.
         EvfBlurRenderer.renderBlur(0, 0, sw, sh,
                 currentFocusDepth, SnapmaticaClient.aperture,
-                SnapmaticaClient.focalLengthMm, EvfBlurRenderer.DOF_SCALE_STILL, false);
+                SnapmaticaClient.focalLengthMm, SnapmaticaClient.dofScaleMm, false, false);
     }
 
     // ── Autofocus ────────────────────────────────────────────────────────────────
@@ -330,8 +482,8 @@ public final class VideoRecorder {
     private static float computeSceneFocusDepth(Minecraft mc) {
         if (mc.level == null || mc.player == null) return currentFocusDepth;
         final double maxDist = 1000.0;
-        net.minecraft.world.phys.Vec3 eye = mc.player.getEyePosition(1.0f);
-        net.minecraft.world.phys.Vec3 look = mc.player.getViewVector(1.0f);
+        net.minecraft.world.phys.Vec3 eye = SnapmaticaClient.cameraPos(mc);
+        net.minecraft.world.phys.Vec3 look = SnapmaticaClient.cameraLook(mc);
         net.minecraft.world.phys.Vec3 end = eye.add(look.scale(maxDist));
         net.minecraft.world.phys.BlockHitResult blockHit =
                 AutoFocus.raycastThroughGlass(mc, eye, look, maxDist);
@@ -341,13 +493,21 @@ public final class VideoRecorder {
         final double entityDist = Math.min(bestDist, 60.0);
         net.minecraft.world.phys.Vec3 entityEnd = eye.add(look.scale(entityDist));
         net.minecraft.world.phys.AABB searchBox =
-                mc.player.getBoundingBox().expandTowards(look.scale(entityDist)).inflate(1.0);
+                new net.minecraft.world.phys.AABB(eye, eye).expandTowards(look.scale(entityDist)).inflate(1.0);
         net.minecraft.world.phys.EntityHitResult entityHit =
                 net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(mc.player, eye, entityEnd,
                         searchBox, e -> !e.isSpectator() && e.isAlive(), entityDist * entityDist);
         if (entityHit != null) {
             double eDist = eye.distanceTo(entityHit.getLocation());
             if (eDist < bestDist) bestDist = eDist;
+        }
+        if (Freecam.isActive()) {
+            java.util.Optional<net.minecraft.world.phys.Vec3> playerHit = mc.player
+                    .getBoundingBox().inflate(mc.player.getPickRadius()).clip(eye, entityEnd);
+            if (playerHit.isPresent()) {
+                double pDist = eye.distanceTo(playerHit.get());
+                if (pDist < bestDist) bestDist = pDist;
+            }
         }
         return (float) Math.min(bestDist, 999.0);
     }
@@ -363,10 +523,12 @@ public final class VideoRecorder {
             return;
         }
 
-        // Wait for the I/O thread to finish writing all frame PNGs,
-        // updating the progress bar (0–10%) while we wait.
+        // Wait for every frame's crop-then-write to finish, updating the progress bar
+        // (0–10%) while we wait. Waiting on writeTail itself (the last stage of the whole
+        // pipeline) rather than draining ioExecutor separately, since crop completion alone
+        // no longer means the frame has actually been written — see submitFrame.
         ppMessage = Component.translatable("snapmatica.pp.writing");
-        Future<?> sentinel = ioExecutor.submit(() -> {});
+        CompletableFuture<Void> sentinel = writeTail;
         while (!sentinel.isDone()) {
             ppProgress = writtenFrames.get() * 10 / total;
             try { Thread.sleep(200); } catch (InterruptedException ie) {

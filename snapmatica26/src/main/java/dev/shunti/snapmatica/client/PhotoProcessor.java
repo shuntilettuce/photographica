@@ -9,10 +9,14 @@ public final class PhotoProcessor {
 
     public static double exposureFactor() {
         int em = SnapmaticaClient.exposureMode;
-        int shutterIdx = (em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx;
-        float aperture = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
+        // In auto modes, read the exact continuous target rather than the value rounded to the
+        // nearest marked stop for the readout — see the field docs on SnapmaticaClient.
+        double shutter = (em == 1 || em == 3)
+                ? SnapmaticaClient.autoShutterSecondsIdeal
+                : SnapmaticaClient.SHUTTER_SECONDS[Math.max(0,
+                        Math.min(SnapmaticaClient.SHUTTER_SECONDS.length - 1, SnapmaticaClient.shutterSpeedIdx))];
+        double aperture = (em == 2 || em == 3) ? SnapmaticaClient.autoApertureIdeal : SnapmaticaClient.aperture;
         int   iso      = SnapmaticaClient.iso;
-        double shutter = SnapmaticaClient.SHUTTER_SECONDS[Math.max(0, Math.min(SnapmaticaClient.SHUTTER_SECONDS.length - 1, shutterIdx))];
 
         final double neutralAperture = 5.6;
         final double neutralShutter  = 1.0 / 60.0;

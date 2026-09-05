@@ -45,14 +45,18 @@ public final class CameraScrollHandler {
 
     /** Positive delta = scroll up. Returns true if consumed. */
     public static boolean onScroll(double delta) {
+        // A keyframe being dragged takes the wheel outright — it's how depth gets set while
+        // grabbing, and fighting a normal zoom/aperture adjustment for the same scroll would
+        // be exactly the wrong moment for the lens to also start moving.
+        if (Freecam.adjustDragDepth(delta)) return true;
+
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.screen != null) return false;
 
-        // Active while sneaking with viewfinder mode enabled, OR any time while recording
+        // Active while the viewfinder is up (sneaking or freecam), OR any time while recording
         // (lets you zoom / adjust the lens mid-shot — recording happens in any pose, not
         // just the sneak viewfinder pose).
-        if (!VideoRecorder.isRecording()
-                && (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isShiftKeyDown())) return false;
+        if (!VideoRecorder.isRecording() && !SnapmaticaClient.viewfinderActive(mc)) return false;
 
         int dir = delta > 0 ? 1 : -1;
 

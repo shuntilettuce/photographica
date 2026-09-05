@@ -76,6 +76,12 @@ public final class PhotoCapture {
     private static volatile int     accumSamples = 0;
     private static volatile int     accumW = 0, accumH = 0;
     private static volatile float[] accumR = null, accumG = null, accumB = null;
+    // Previous real sample's raw channel values (not yet averaged), kept only to build the
+    // cheap virtual mid-sample below. Doubling ACCUM_MAX_SAMPLES cost a full extra screenshot
+    // readback + shader pass per sample; a same-size CPU blend of two adjacent real frames
+    // buys back most of the smoothness for none of that GPU cost.
+    private static volatile float[] accumPrevR = null, accumPrevG = null, accumPrevB = null;
+    private static volatile boolean accumHasPrev = false;
     private static volatile float[] accumDepth = null;
     private static volatile int     accumDepthFbW = 0, accumDepthFbH = 0;
 
@@ -92,6 +98,15 @@ public final class PhotoCapture {
      */
     public static boolean isCapturePending() {
         return capturePending || accumArmed;
+    }
+
+    /**
+     * True only for the single frame of a FAST-shutter capture — never during a long
+     * exposure's accumulation, which already converges by averaging its samples together and
+     * should not also pay for the expensive high-sample-count blur pass every frame.
+     */
+    public static boolean isSingleShotCapturePending() {
+        return capturePending;
     }
 
     /** True while a long exposure is integrating — used to decide whether to smear samples. */
@@ -199,20 +214,42 @@ public final class PhotoCapture {
                 accumR = new float[w * h];
                 accumG = new float[w * h];
                 accumB = new float[w * h];
+                accumPrevR = new float[w * h];
+                accumPrevG = new float[w * h];
+                accumPrevB = new float[w * h];
             }
             // A resize mid-exposure changes the buffer dimensions; drop the odd frame rather
             // than corrupt the sums.
             if (w != accumW || h != accumH) return;
+
+            boolean haveVirtual = accumHasPrev;
             for (int y = 0; y < h; y++) {
                 for (int x = 0; x < w; x++) {
-                    int c   = getPixelAbgr(frame, x, y);
-                    int idx = y * w + x;
-                    accumR[idx] +=  c        & 0xFF;
-                    accumG[idx] += (c >>> 8) & 0xFF;
-                    accumB[idx] += (c >>> 16) & 0xFF;
+                    int   c   = getPixelAbgr(frame, x, y);
+                    int   idx = y * w + x;
+                    float rr =  c        & 0xFF;
+                    float gg = (c >>> 8) & 0xFF;
+                    float bb = (c >>> 16) & 0xFF;
+                    if (haveVirtual) {
+                        // Cheap stand-in for an extra real sample: the midpoint between this
+                        // frame and the previous real one, folded in alongside this frame
+                        // itself. No pixel motion estimation needed here — the renderer's
+                        // per-sample smear already draws the real motion into both frames, so
+                        // a straight blend of two adjacent real samples is a fair stand-in for
+                        // whatever landed in between, at zero extra GPU cost.
+                        accumR[idx] += (accumPrevR[idx] + rr) * 0.5f + rr;
+                        accumG[idx] += (accumPrevG[idx] + gg) * 0.5f + gg;
+                        accumB[idx] += (accumPrevB[idx] + bb) * 0.5f + bb;
+                    } else {
+                        accumR[idx] += rr;
+                        accumG[idx] += gg;
+                        accumB[idx] += bb;
+                    }
+                    accumPrevR[idx] = rr; accumPrevG[idx] = gg; accumPrevB[idx] = bb;
                 }
             }
-            accumSamples++;
+            accumSamples += haveVirtual ? 2 : 1;
+            accumHasPrev = true;
         } finally {
             frame.close();
         }
@@ -250,6 +287,8 @@ public final class PhotoCapture {
         accumEndMs   = 0L;
         accumSamples = 0;
         accumR = null; accumG = null; accumB = null;
+        accumPrevR = null; accumPrevG = null; accumPrevB = null;
+        accumHasPrev = false;
         accumDepth = null;
         accumDepthFbW = 0; accumDepthFbH = 0;
     }
@@ -348,9 +387,7 @@ public final class PhotoCapture {
     public static void onBeforeTranslucent() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
-        boolean sneakViewfinder = mc.player.isShiftKeyDown()
-                && (SnapmaticaClient.viewfinderSneakEnabled || capturePending);
-        if (!sneakViewfinder && !capturePending && !VideoRecorder.isRecording()) return;
+        if (!SnapmaticaClient.viewfinderActive(mc) && !capturePending && !VideoRecorder.isRecording()) return;
 
         int[] viewport = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
@@ -377,9 +414,7 @@ public final class PhotoCapture {
         if (mc.player == null) return;
         // Run when the viewfinder is active (sneaking + mode enabled), when a photo is
         // pending, OR when video is recording (needs depth every frame regardless of sneak).
-        boolean sneakViewfinder = mc.player.isShiftKeyDown()
-                && (SnapmaticaClient.viewfinderSneakEnabled || capturePending);
-        if (!sneakViewfinder && !capturePending && !VideoRecorder.isRecording()) return;
+        if (!SnapmaticaClient.viewfinderActive(mc) && !capturePending && !VideoRecorder.isRecording()) return;
 
         // Depth is captured earlier now — see onBeforeTranslucent().
 
@@ -392,22 +427,38 @@ public final class PhotoCapture {
         if (nowMs - lastAfQueryMs >= AF_QUERY_INTERVAL_MS) {
             lastAfQueryMs = nowMs;
             final double maxDist = 1000.0;
-            net.minecraft.world.phys.Vec3 eye = mc.player.getEyePosition(1.0f);
-            net.minecraft.world.phys.Vec3 look = mc.player.getViewVector(1.0f);
+            net.minecraft.world.phys.Vec3 eye = SnapmaticaClient.cameraPos(mc);
+            net.minecraft.world.phys.Vec3 look = SnapmaticaClient.cameraLook(mc);
             net.minecraft.world.phys.Vec3 end = eye.add(look.scale(maxDist));
             net.minecraft.world.phys.BlockHitResult blockHit =
                     AutoFocus.raycastThroughGlass(mc, eye, look, maxDist);
             double bestDist = (blockHit != null
                     && blockHit.getType() != net.minecraft.world.phys.HitResult.Type.MISS)
                     ? eye.distanceTo(blockHit.getLocation()) : maxDist;
-            net.minecraft.world.phys.AABB searchBox = mc.player.getBoundingBox()
-                    .expandTowards(look.scale(maxDist)).inflate(1.0);
+            // Rooted at the actual camera eye rather than the player's own bounding box, so
+            // this still covers the ray when freecam has moved the camera away from the body.
+            net.minecraft.world.phys.AABB searchBox =
+                    new net.minecraft.world.phys.AABB(eye, eye).expandTowards(look.scale(maxDist)).inflate(1.0);
+            // ProjectileUtil.getEntityHitResult always excludes the entity passed as its first
+            // argument — normally mc.player itself, so the AF ray can never land on the
+            // photographer this way. Checked separately below.
             net.minecraft.world.phys.EntityHitResult entityHit =
                     net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(mc.player, eye, end,
                             searchBox, e -> !e.isSpectator() && e.isAlive(), bestDist * bestDist);
             if (entityHit != null) {
                 double eDist = eye.distanceTo(entityHit.getLocation());
                 if (eDist < bestDist) bestDist = eDist;
+            }
+            // With freecam moved away from the player's body, they're a valid subject like
+            // anything else — a selfie is exactly a subject in front of a lens the player
+            // isn't holding.
+            if (Freecam.isActive()) {
+                java.util.Optional<net.minecraft.world.phys.Vec3> playerHit = mc.player
+                        .getBoundingBox().inflate(mc.player.getPickRadius()).clip(eye, end);
+                if (playerHit.isPresent()) {
+                    double pDist = eye.distanceTo(playerHit.get());
+                    if (pDist < bestDist) bestDist = pDist;
+                }
             }
             lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : SnapmaticaClient.FOCUS_INFINITY;
             // Raycast missed (sky / beyond loaded range). The old GPU centre-depth readback

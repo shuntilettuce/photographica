@@ -35,6 +35,9 @@ public final class SnapmaticaConfig {
         SnapmaticaClient.viewfinderSneakEnabled = getBool(p, "viewfinderSneakEnabled", SnapmaticaClient.viewfinderSneakEnabled);
         SnapmaticaClient.portraitOrientation    = getBool(p, "portraitOrientation",    SnapmaticaClient.portraitOrientation);
         SnapmaticaClient.motionBlur             = getBool(p, "motionBlur",             SnapmaticaClient.motionBlur);
+        SnapmaticaClient.focusPeaking           = getBool(p, "focusPeaking",           SnapmaticaClient.focusPeaking);
+        SnapmaticaClient.droneMode              = getBool(p, "droneMode",              SnapmaticaClient.droneMode);
+        SnapmaticaClient.freecamHidePlayer      = getBool(p, "freecamHidePlayer",      SnapmaticaClient.freecamHidePlayer);
         SnapmaticaClient.exposureMode           = getInt (p, "exposureMode",           SnapmaticaClient.exposureMode);
         SnapmaticaClient.focusMode              = getInt (p, "focusMode",              SnapmaticaClient.focusMode);
         SnapmaticaClient.shutterSpeedIdx        = getInt (p, "shutterSpeedIdx",        SnapmaticaClient.shutterSpeedIdx);
@@ -47,6 +50,7 @@ public final class SnapmaticaConfig {
         // and the first zoom would jump the aperture to whatever the default diameter implied.
         SnapmaticaClient.apertureDiameterMm     = getFloat(p, "apertureDiameterMm",    SnapmaticaClient.apertureDiameterMm);
         SnapmaticaClient.focusDistance          = getFloat(p, "focusDistance",         SnapmaticaClient.focusDistance);
+        SnapmaticaClient.dofScaleMm             = getFloat(p, "dofScaleMm",            SnapmaticaClient.dofScaleMm);
         // The ring starts wherever the lens was left, so nothing racks on world join.
         SnapmaticaClient.focusTarget            = SnapmaticaClient.focusDistance;
         VideoRecorder.setFps(getInt(p, "videoFps", VideoRecorder.getCurrentFps()));
@@ -57,6 +61,9 @@ public final class SnapmaticaConfig {
         p.setProperty("viewfinderSneakEnabled", Boolean.toString(SnapmaticaClient.viewfinderSneakEnabled));
         p.setProperty("portraitOrientation",    Boolean.toString(SnapmaticaClient.portraitOrientation));
         p.setProperty("motionBlur",             Boolean.toString(SnapmaticaClient.motionBlur));
+        p.setProperty("focusPeaking",           Boolean.toString(SnapmaticaClient.focusPeaking));
+        p.setProperty("droneMode",              Boolean.toString(SnapmaticaClient.droneMode));
+        p.setProperty("freecamHidePlayer",      Boolean.toString(SnapmaticaClient.freecamHidePlayer));
         p.setProperty("exposureMode",           Integer.toString(SnapmaticaClient.exposureMode));
         p.setProperty("focusMode",              Integer.toString(SnapmaticaClient.focusMode));
         p.setProperty("shutterSpeedIdx",        Integer.toString(SnapmaticaClient.shutterSpeedIdx));
@@ -66,6 +73,7 @@ public final class SnapmaticaConfig {
         p.setProperty("aperture",               Float.toString(SnapmaticaClient.aperture));
         p.setProperty("apertureDiameterMm",     Float.toString(SnapmaticaClient.apertureDiameterMm));
         p.setProperty("focusDistance",          Float.toString(SnapmaticaClient.focusDistance));
+        p.setProperty("dofScaleMm",             Float.toString(SnapmaticaClient.dofScaleMm));
         p.setProperty("videoFps",               Integer.toString(VideoRecorder.getCurrentFps()));
         try {
             Files.createDirectories(FILE.getParent());

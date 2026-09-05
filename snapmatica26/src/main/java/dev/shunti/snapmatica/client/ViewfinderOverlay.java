@@ -32,7 +32,7 @@ public final class ViewfinderOverlay {
             }
             return;
         }
-        if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isShiftKeyDown()) return;
+        if (!SnapmaticaClient.viewfinderActive(mc)) return;
         if (mc.screen != null) return;
 
         // Exactly the region the capture will crop to — see PhotoCapture.frameRect. The frame
@@ -80,7 +80,7 @@ public final class ViewfinderOverlay {
             // Same predicate the DoF shader is driven from, so the readout cannot claim
             // infinity while the blur works off a finite focus distance.
             boolean atInf = AutoFocus.atInfinity();
-            String fd = atInf ? "inf" : fmtFocusDist(SnapmaticaClient.focusDistance);
+            String fd = atInf ? "inf" : fmtFocusDist(SnapmaticaClient.focusDistance, SnapmaticaClient.dofScaleMm);
             ctx.text(font, fd, fx2 - font.width(fd) - 6, fy + 4, rc, true);
         }
 
@@ -93,19 +93,13 @@ public final class ViewfinderOverlay {
                 : Component.translatable("snapmatica.vf.no_lens").getString();
         ctx.text(font, lens, fx+6, fy+4, 0xFF9A8D72, true);
 
-        if (hasLens) {
-            double safe = 1.0 / SnapmaticaClient.focalLengthMm;
-            if (SnapmaticaClient.SHUTTER_SECONDS[si] > safe * 1.5)
-                ctx.text(font, "WARN Blur", fx+6, fy+4+font.lineHeight+2, 0xFFFF5555, true);
-        }
-
         String[] el  = {"M","Av","Tv","P"};
         String[] fl2 = {"MF","AF","MOB"};
         ctx.text(font,
                 el[clampIdx(SnapmaticaClient.exposureMode,4)]
                 + " | " + fl2[clampIdx(SnapmaticaClient.focusMode,3)]
                 +" | "+(SnapmaticaClient.portraitOrientation ? "3:2 V" : "3:2 H"),
-                fx+6, fy+4+font.lineHeight*2+4, 0xFFCCCCFF, true);
+                fx+6, fy+4+font.lineHeight+2, 0xFFCCCCFF, true);
     }
 
     private static void renderEvfPreview(GuiGraphicsExtractor ctx, int fx, int fy, int fx2, int fy2) {
@@ -169,11 +163,13 @@ public final class ViewfinderOverlay {
                 Math.abs(ev) <= 2.0 ? 0xFFE08A3C : 0xFFC2362B);
     }
 
+    /** Reads the same continuous auto-axis targets {@link PhotoProcessor#exposureFactor} does. */
     private static double computeEvDeviation() {
         int em = SnapmaticaClient.exposureMode;
-        int si = (em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx;
-        float ap = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
-        double ss = SnapmaticaClient.SHUTTER_SECONDS[clampIdx(si, SHUTTERS.length)];
+        double ss = (em == 1 || em == 3)
+                ? SnapmaticaClient.autoShutterSecondsIdeal
+                : SnapmaticaClient.SHUTTER_SECONDS[clampIdx(SnapmaticaClient.shutterSpeedIdx, SHUTTERS.length)];
+        double ap = (em == 2 || em == 3) ? SnapmaticaClient.autoApertureIdeal : SnapmaticaClient.aperture;
         return Math.log(ss * 60.0 * Math.pow(5.6 / ap, 2)
                 * (SnapmaticaClient.iso / 400.0)) / Math.log(2.0);
     }
@@ -221,9 +217,11 @@ public final class ViewfinderOverlay {
         return v == (int)v ? String.valueOf((int)v) : String.format("%.1f", v);
     }
 
-    private static String fmtFocusDist(float v) {
-        if (v >= SnapmaticaClient.FOCUS_INFINITY) return "∞";
-        if (v < 10.0f) return String.format("%.1fm", v);
-        return Math.round(v) + "m";
+    /** Blocks are what the focus ring is marked in; metres are what the DoF is computed from. */
+    private static String fmtFocusDist(float blocks, float dofScaleMm) {
+        if (blocks >= SnapmaticaClient.FOCUS_INFINITY) return "∞";
+        float metres = blocks * dofScaleMm / 1000f;
+        String m = (metres < 10.0f) ? String.format("%.1fm", metres) : Math.round(metres) + "m";
+        return Math.round(blocks) + "blk (" + m + ")";
     }
 }

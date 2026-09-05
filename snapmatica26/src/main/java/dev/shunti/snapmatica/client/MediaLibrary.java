@@ -192,6 +192,29 @@ public final class MediaLibrary {
     }
 
     /**
+     * Deletes a shot from disk — the poster frame too, for a video — and drops any cached
+     * texture for it so the grid never redraws a destroyed handle.
+     */
+    public static void deleteEntry(Entry e) {
+        File src = e.video() ? posterFile(e.file()) : e.file();
+        String key = src.getAbsolutePath();
+        Identifier tex = loaded.remove(key);
+        if (tex != null) Minecraft.getInstance().getTextureManager().release(tex);
+        failed.remove(key);
+        aspects.remove(key);
+
+        if (e.video()) {
+            File poster = posterFile(e.file());
+            if (poster.exists() && !poster.delete()) {
+                System.err.println("[Snapmatica] Could not delete poster " + poster);
+            }
+        }
+        if (!e.file().delete()) {
+            System.err.println("[Snapmatica] Could not delete " + e.file());
+        }
+    }
+
+    /**
      * Reveals a file in the desktop's file manager, selected rather than merely opening the
      * folder — Explorer and Finder both take a flag for it, and elsewhere opening the parent
      * directory is the closest equivalent.

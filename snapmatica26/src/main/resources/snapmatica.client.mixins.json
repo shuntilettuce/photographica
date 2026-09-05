@@ -9,7 +9,9 @@
     "MouseMixin",
     "LevelRendererMixin",
     "EntityRendererMixin",
-    "AvatarRendererMixin"
+    "AvatarRendererMixin",
+    "CameraMixin",
+    "GuiMixin"
   ],
   "injectors": {
     "defaultRequire": 1

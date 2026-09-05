@@ -16,9 +16,8 @@ public class ItemInHandRendererMixin {
     @Inject(method = "renderHandsWithItems", at = @At("HEAD"), cancellable = true)
     private void snapmatica$suppressHand(CallbackInfo ci) {
         Minecraft mc = Minecraft.getInstance();
-        if (PhotoCapture.isCapturePending() ||
-                VideoRecorder.isRecording() ||
-                (SnapmaticaClient.viewfinderSneakEnabled && mc.player != null && mc.player.isShiftKeyDown())) {
+        if (PhotoCapture.isCapturePending() || VideoRecorder.isRecording()
+                || SnapmaticaClient.viewfinderActive(mc)) {
             ci.cancel();
         }
     }

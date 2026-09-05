@@ -21,6 +21,9 @@ public class SnapmaticaClient implements ClientModInitializer {
     private static KeyMapping viewfinderSneakKey;
     private static KeyMapping orientationKey;
     private static KeyMapping recordKey;
+    private static KeyMapping pinKey;
+    private static KeyMapping freecamLockKey;
+    private static KeyMapping pathMenuKey;
 
     public static float   aperture        = 5.6f;
 
@@ -95,10 +98,76 @@ public class SnapmaticaClient implements ClientModInitializer {
     public static int     focusMode       = 0;
     public static boolean motionBlur      = false;
 
+    /**
+     * Highlights high-contrast edges near the focus distance in the viewfinder, the same aid
+     * a real mirrorless body draws for manual focus. Never baked into a photo or a recorded
+     * frame — see {@code EvfBlurRenderer.applyBlur}'s {@code showPeaking} computation.
+     */
+    public static boolean focusPeaking = false;
+
+    /**
+     * Millimetres of subject distance per block — how big the world is to the lens. A
+     * Minecraft block has no real-world size of its own, so this is a setting rather than a
+     * constant; the screen shows it as centimetres per block, which is how a builder thinks
+     * about it. Kept in millimetres because that is the unit the thin-lens formula wants.
+     */
+    public static float   dofScaleMm      = EvfBlurRenderer.DOF_SCALE_STILL;
+
     public static int     autoShutterIdx  = 10;
     public static float   autoAperture    = 5.6f;
+    /**
+     * The exact, unrounded shutter speed and aperture an auto axis is targeting — what the
+     * exposure math should use, as opposed to {@link #autoShutterIdx}/{@link #autoAperture},
+     * which are that same target rounded to the nearest marked stop for the readout. Reading
+     * the rounded value back as the exposure itself reintroduced up to half a stop of
+     * quantisation error, and because aperture moves continuously with zoom, an axis sitting
+     * near a stop boundary could cross it on an imperceptible change and swing the photo a
+     * full stop between frames.
+     */
+    public static double  autoShutterSecondsIdeal = 1.0 / 60.0;
+    public static double  autoApertureIdeal       = 5.6;
 
     public static boolean viewfinderSneakEnabled = true;
+
+    /**
+     * Freecam's control feel: off is direct WASD flight; on trades that for inertia, an
+     * altitude hold, and orbiting a dropped pin — suited to aerial footage rather than
+     * precise still-photo positioning.
+     */
+    public static boolean droneMode = false;
+
+    /**
+     * When true, freecam does not force the player's body into view — useful for landscape
+     * or wildlife footage the player's own frozen body has no business being in.
+     */
+    public static boolean freecamHidePlayer = false;
+
+    /**
+     * Whether the viewfinder should be showing right now — sneaking with the toggle on, OR
+     * freecam, which is a photography tool in its own right. Sneak state itself means nothing
+     * while freecam is active, since the player is frozen wherever it happened to be.
+     */
+    public static boolean viewfinderActive(Minecraft mc) {
+        if (Freecam.isActive()) return true;
+        return viewfinderSneakEnabled && mc.player != null && mc.player.isShiftKeyDown();
+    }
+
+    /**
+     * Where the photograph is actually taken from — the render camera, not {@code mc.player}'s
+     * eye. They coincide unless something is driving the camera independently of the player
+     * (today, only {@link Freecam}), but reading it from here is what lets autofocus, depth of
+     * field and the capture origin all follow it automatically.
+     */
+    public static net.minecraft.world.phys.Vec3 cameraPos(Minecraft mc) {
+        return mc.gameRenderer.getMainCamera().position();
+    }
+
+    /** The render camera's look direction — see {@link #cameraPos}. */
+    public static net.minecraft.world.phys.Vec3 cameraLook(Minecraft mc) {
+        net.minecraft.client.Camera camera = mc.gameRenderer.getMainCamera();
+        return net.minecraft.world.phys.Vec3.directionFromRotation(
+                camera.xRot(), camera.yRot());
+    }
 
     public static final double[] SHUTTER_SECONDS = {
             30.0, 15.0, 8.0, 4.0, 2.0, 1.0,
@@ -149,6 +218,27 @@ public class SnapmaticaClient implements ClientModInitializer {
                 category
         ));
 
+        pinKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.snapmatica.pin",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_X,
+                category
+        ));
+
+        freecamLockKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.snapmatica.freecam_lock",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_C,
+                category
+        ));
+
+        pathMenuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.snapmatica.path_menu",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_Q,
+                category
+        ));
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
 
@@ -171,6 +261,21 @@ public class SnapmaticaClient implements ClientModInitializer {
                 client.setScreen(new CameraScreen());
             }
 
+            while (pinKey.consumeClick()) {
+                Freecam.togglePin(client);
+            }
+            while (freecamLockKey.consumeClick()) {
+                Freecam.toggleLock(client);
+            }
+            while (pathMenuKey.consumeClick()) {
+                if (client.screen instanceof CameraPathScreen) {
+                    client.setScreen(null);
+                } else if (Freecam.isActive() && client.screen == null) {
+                    client.setScreen(new CameraPathScreen());
+                }
+            }
+            Freecam.tick(client);
+
             AutoFocus.tick(client);
             updateAutoValues();
         });
@@ -183,6 +288,16 @@ public class SnapmaticaClient implements ClientModInitializer {
         HudElementRegistry.addLast(
                 Identifier.fromNamespaceAndPath("snapmatica", "video_recorder"),
                 VideoRecorderHud::render
+        );
+
+        HudElementRegistry.addLast(
+                Identifier.fromNamespaceAndPath("snapmatica", "freecam_hud"),
+                FreecamHud::render
+        );
+
+        HudElementRegistry.addLast(
+                Identifier.fromNamespaceAndPath("snapmatica", "camera_path"),
+                CameraPathRenderer::render
         );
 
         // The depth copy happens BEFORE translucent terrain so glass cannot stamp its own
@@ -203,16 +318,21 @@ public class SnapmaticaClient implements ClientModInitializer {
             float ap = apAuto ? 5.6f : aperture;
             double targetSS = ap * ap * 400.0 / (60.0 * 31.36 * iso);
             autoShutterIdx = nearestShutterIdx(targetSS);
+            autoShutterSecondsIdeal = targetSS;
         } else {
             autoShutterIdx = shutterSpeedIdx;
+            autoShutterSecondsIdeal = SHUTTER_SECONDS[
+                    Math.max(0, Math.min(SHUTTER_SECONDS.length - 1, shutterSpeedIdx))];
         }
 
         if (apAuto) {
             double ss = SHUTTER_SECONDS[Math.max(0, Math.min(SHUTTER_SECONDS.length - 1, shutterSpeedIdx))];
             double targetAp = 5.6 * Math.sqrt(ss * 60.0 * iso / 400.0);
-            autoAperture = nearestAperture((float) Math.max(1.4, Math.min(22.0, targetAp)));
+            autoApertureIdeal = Math.max(1.4, Math.min(22.0, targetAp));
+            autoAperture = nearestAperture((float) autoApertureIdeal);
         } else {
             autoAperture = aperture;
+            autoApertureIdeal = aperture;
         }
     }
 

@@ -102,6 +102,21 @@ public final class EvfBlurRenderer {
     private static int locPass       = -1;
     private static int locNearSamp   = -1;
     private static int locBgSamp     = -1;
+    private static int locSampleBoost = -1;
+    private static int locCaptureHQ   = -1;
+
+    // Focus peaking — a separate tiny program so it can never perturb the DoF gather it
+    // shares a framebuffer with. See applyPeaking() / evf_peaking.fsh.
+    private static int peakProgram      = -1;
+    private static int peakLocIn        = -1;
+    private static int peakLocDepth     = -1;
+    private static int peakLocPass      = -1;
+    private static int peakLocPixelSize = -1;
+    private static int peakLocFocusDist = -1;
+    private static int peakLocAfMode    = -1;
+    private static int peakLocNear      = -1;
+    private static int peakLocFar       = -1;
+    private static int peakLocColor     = -1;
 
     /**
      * Millimetres of subject distance per Minecraft block — the scale the thin-lens maths
@@ -207,8 +222,10 @@ public final class EvfBlurRenderer {
         outVelCam[0] = 0f; outVelCam[1] = 0f; outVelCam[2] = 0f;
         if (mc.player == null) { haveMotionRef = false; return; }
 
-        double yaw = mc.player.getYRot(), pitch = mc.player.getXRot();
-        double x = mc.player.getX(), y = mc.player.getY(), z = mc.player.getZ();
+        net.minecraft.client.Camera camera = mc.gameRenderer.getMainCamera();
+        double yaw = camera.yRot(), pitch = camera.xRot();
+        net.minecraft.world.phys.Vec3 camPos = SnapmaticaClient.cameraPos(mc);
+        double x = camPos.x, y = camPos.y, z = camPos.z;
 
         if (haveMotionRef) {
             // Yaw wraps at +-180; take the short way round or a single turn past the seam
@@ -246,8 +263,10 @@ public final class EvfBlurRenderer {
     public static void markMotionSampled() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) { haveMotionRef = false; return; }
-        prevYaw = mc.player.getYRot();   prevPitch = mc.player.getXRot();
-        prevX   = mc.player.getX();     prevY = mc.player.getY(); prevZ = mc.player.getZ();
+        net.minecraft.client.Camera camera = mc.gameRenderer.getMainCamera();
+        prevYaw = camera.yRot();   prevPitch = camera.xRot();
+        net.minecraft.world.phys.Vec3 camPos = SnapmaticaClient.cameraPos(mc);
+        prevX   = camPos.x;     prevY = camPos.y; prevZ = camPos.z;
         haveMotionRef = true;
     }
 
@@ -361,9 +380,32 @@ public final class EvfBlurRenderer {
      * physical thin-lens model (focal length, aperture, focus distance), so
      * maxBlurPx here is only a performance ceiling on the kernel radius.
      */
+    /** GLSL-style smoothstep — Java has no builtin. */
+    private static float smoothstep(float edge0, float edge1, float x) {
+        float t = clamp01((x - edge0) / (edge1 - edge0));
+        return t * t * (3.0f - 2.0f * t);
+    }
+
+    private static float clamp01(float v) {
+        return Math.max(0.0f, Math.min(1.0f, v));
+    }
+
     public static void renderBlur(int fx, int fy, int fx2, int fy2,
                                   float focusDist, float aperture, float focalLenMm,
-                                  float dofScaleMm, boolean gpuAutoFocus) {
+                                  float dofScaleMm, boolean gpuAutoFocus, boolean captureHQ) {
+        renderBlur(fx, fy, fx2, fy2, focusDist, aperture, focalLenMm, dofScaleMm,
+                  gpuAutoFocus, captureHQ, false);
+    }
+
+    /**
+     * @param showPeaking Draws focus peaking over the result — see {@link #applyPeaking}.
+     *                    Never true for a capture; it is a viewfinder aid, not something that
+     *                    belongs in a saved photo or a recorded frame.
+     */
+    public static void renderBlur(int fx, int fy, int fx2, int fy2,
+                                  float focusDist, float aperture, float focalLenMm,
+                                  float dofScaleMm, boolean gpuAutoFocus, boolean captureHQ,
+                                  boolean showPeaking) {
         if (depthTex == -1) return;
 
         Minecraft mc = Minecraft.getInstance();
@@ -382,11 +424,20 @@ public final class EvfBlurRenderer {
         // reason — at f/22 it capped the disc at 11 px however long the lens was. Taking the
         // largest CoC the current focal length, aperture and focus distance can actually
         // produce lets a long lens spread as far as it should, and keeps the gather tight
-        // when the optics genuinely cannot blur much. 120 px remains as a perf ceiling: the
-        // direct (non-mip) disc gather undersamples into grain beyond it.
+        // when the optics genuinely cannot blur much.
+        //
+        // 200 px remains as a ceiling, raised from 120. It is NOT a GPU cost limit — the
+        // gather always spends exactly SAMPLES taps regardless of radius, so a wider disc
+        // costs nothing extra to trace. It is an IMAGE QUALITY limit: those taps spread over
+        // a bigger disc sample it more sparsely, and past a radius the copy pass's denoise
+        // (capped at 14 px near the lens, see evf_blur.fsh) can no longer fully hide, that
+        // sparseness reads as grain. Foreground close enough to genuinely need much more than
+        // 200 px — a leaf a few centimetres from the lens at f/1.4 can want 400-600 px — will
+        // still read as a soft, slightly grainy wash rather than a crisp silhouette, which is
+        // closer to what the lens would actually show than either extreme.
         float pxPerMm   = fbH / 24.0f;   // 24 mm sensor height maps to fbH px
         float maxBlurPx = Math.min(
-                maxCocPx(focusDist, aperture, focalLenMm, dofScaleMm, pxPerMm), 120.0f);
+                maxCocPx(focusDist, aperture, focalLenMm, dofScaleMm, pxPerMm), 200.0f);
         // Sub-pixel defocus is not worth a full gather — and this, not an f-number rule, is
         // the only reason to skip the blur.
         boolean anyBlur    = maxBlurPx >= 1.0f;
@@ -396,6 +447,11 @@ public final class EvfBlurRenderer {
         float   distortK   = distortionK(focalLenMm);
         boolean anyDistort = Math.abs(distortK) >= 1e-4f;
         if (!anyBlur && !anyDistort) return;
+        // Ramps the gather's sample ceiling with how wide a circle the frame actually needs —
+        // see SAMPLES_BASE/SAMPLES/SAMPLES_HQ in evf_blur.fsh. Computed before the anyBlur
+        // correction below since it only matters when maxBlurPx is already large, which
+        // implies anyBlur is already true.
+        float sampleBoost = smoothstep(150.0f, 450.0f, maxBlurPx);
         if (!anyBlur) maxBlurPx = 1.0f;   // keep the gather's radii trivial
 
         ensureInit(fbW, fbH);
@@ -472,6 +528,8 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locDofScale, dofScaleMm);
         GL20.glUniform1f(locDistortK, distortK);
         GL20.glUniform1i(locDoGather, anyBlur ? 1 : 0);
+        GL20.glUniform1f(locSampleBoost, sampleBoost);
+        GL20.glUniform1f(locCaptureHQ, captureHQ ? 1.0f : 0.0f);
 
         // Motion smear only during a long exposure. A fast shutter IS one instant, so freezing
         // the action is the correct answer there, not blurring it.
@@ -583,6 +641,10 @@ public final class EvfBlurRenderer {
         GL20.glUniform2f(locBlurDir, 0.0f, 0.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
+        if (showPeaking && peakProgram != -1) {
+            applyPeaking(mainTex, fbW, fbH, focusDist, gpuAutoFocus, writeBackFbo);
+        }
+
         GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
                 GL11.GL_TEXTURE_2D, 0, 0);
 
@@ -617,6 +679,46 @@ public final class EvfBlurRenderer {
         // (their async LOD buffer churn runs on this same render thread; a lingering error
         // flag can push the NVIDIA driver into the glDeleteBuffers crash seen in reports).
         for (int e = 0; e < 32 && GL11.glGetError() != GL11.GL_NO_ERROR; e++) { /* drain */ }
+    }
+
+    /**
+     * Draws focus peaking over the frame the DoF pass just finished, in place. Two passes
+     * because a texture can't be read and written by the same draw call — feedback loop, and
+     * undefined which one wins on any given GPU: detect + highlight reads {@code mainTex} and
+     * writes {@code auxTex} (free at this point — the gather already consumed it), then a
+     * plain copy lands the result back in {@code mainTex}, where the rest of the pipeline (and
+     * the screenshot, on the rare frame this runs on despite being asked not to) expects the
+     * finished frame to be.
+     */
+    private static void applyPeaking(int mainTex, int fbW, int fbH, float focusDist,
+                                     boolean gpuAutoFocus, int writeBackFbo) {
+        GL20.glUseProgram(peakProgram);
+        GL20.glUniform1i(peakLocIn, 0);
+        GL20.glUniform1i(peakLocDepth, 1);
+        GL20.glUniform2f(peakLocPixelSize, 1.0f / fbW, 1.0f / fbH);
+        GL20.glUniform1f(peakLocFocusDist, focusDist);
+        GL20.glUniform1i(peakLocAfMode, gpuAutoFocus ? 1 : 0);
+        GL20.glUniform1f(peakLocNear, currentDepthNear);
+        GL20.glUniform1f(peakLocFar, currentDepthFar);
+        GL20.glUniform3f(peakLocColor, 1.0f, 0.2f, 0.05f);   // warm red-orange, reads against most scenes
+
+        // Pass 0: detect + highlight, mainTex -> auxTex.
+        GL20.glUniform1i(peakLocPass, 0);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, auxFbo);
+        GL13.glActiveTexture(GL13.GL_TEXTURE1);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, mainTex);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+
+        // Pass 1: plain copy back, auxTex -> mainTex.
+        GL20.glUniform1i(peakLocPass, 1);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, writeBackFbo);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, auxTex);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+
+        GL20.glUseProgram(program);
     }
 
     public static float readCenterLinearDepthBlocks() {
@@ -662,15 +764,16 @@ public final class EvfBlurRenderer {
      *
      * @param forCapture blur the FULL framebuffer, because the photo crop reaches past the
      *                   viewfinder frame and a scissored pass would leave its edges sharp
+     * @param captureHQ  true only for a single fast-shutter frame — the extra sample budget a
+     *                   live viewfinder or a long exposure's accumulated frames cannot afford.
      */
-    public static void applyBlur(boolean forCapture) {
+    public static void applyBlur(boolean forCapture, boolean captureHQ) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || SnapmaticaClient.lensType == 0) return;
 
         // Same predicate the viewfinder draws itself by, so the two cannot disagree about
         // whether the camera is up.
-        boolean viewfinderUp = SnapmaticaClient.viewfinderSneakEnabled
-                && mc.player.isShiftKeyDown() && mc.screen == null;
+        boolean viewfinderUp = SnapmaticaClient.viewfinderActive(mc) && mc.screen == null;
         if (!viewfinderUp && !PhotoCapture.isCapturePending()) return;
 
         int sw = mc.getWindow().getGuiScaledWidth();
@@ -682,9 +785,12 @@ public final class EvfBlurRenderer {
         }
         // GPU autofocus is wired but off — Voxy's LOD terrain leaves no usable depth in the
         // vanilla buffer, so sampling it changes nothing. Flip to test another LOD mod.
+        // Peaking is a viewfinder aid, never baked into the photo or a recorded frame — it
+        // has no business surviving in something you keep.
+        boolean showPeaking = !forCapture && SnapmaticaClient.focusPeaking;
         renderBlur(x0, y0, x1, y1, AutoFocus.shaderFocusDistance(),
                 SnapmaticaClient.aperture, SnapmaticaClient.focalLengthMm,
-                DOF_SCALE_STILL, false);
+                SnapmaticaClient.dofScaleMm, false, captureHQ, showPeaking);
     }
 
     /**
@@ -713,6 +819,7 @@ public final class EvfBlurRenderer {
 
     private static void ensureInit(int fbW, int fbH) {
         if (program == -1) initProgram();
+        if (peakProgram == -1) initPeakProgram();
         if (auxFbo == -1 || auxW != fbW || auxH != fbH) initAux(fbW, fbH);
         int nw = Math.max(1, fbW / NEAR_DOWNSCALE);
         int nh = Math.max(1, fbH / NEAR_DOWNSCALE);
@@ -834,6 +941,8 @@ public final class EvfBlurRenderer {
             locPass      = GL20.glGetUniformLocation(program, "Pass");
             locNearSamp  = GL20.glGetUniformLocation(program, "NearSampler");
             locBgSamp    = GL20.glGetUniformLocation(program, "BgSampler");
+            locSampleBoost = GL20.glGetUniformLocation(program, "SampleBoost");
+            locCaptureHQ   = GL20.glGetUniformLocation(program, "CaptureHQ");
 
             float[] verts = {
                 -1f, -1f,  0f, 0f,
@@ -859,6 +968,49 @@ public final class EvfBlurRenderer {
             System.out.println("[Snapmatica] EvfBlurRenderer initialised");
         } catch (Exception e) {
             System.err.println("[Snapmatica] EvfBlurRenderer init failed: " + e.getMessage());
+        }
+    }
+
+    /** Compiles the focus-peaking program. Shares {@link #vao}/{@link #vbo} with the main
+     *  program — a fullscreen quad's attribute layout doesn't depend on which program reads it. */
+    private static void initPeakProgram() {
+        try {
+            String vshSrc = readResource("/assets/snapmatica/shaders/evf_blur.vsh");
+            String fshSrc = readResource("/assets/snapmatica/shaders/evf_peaking.fsh");
+
+            int vs = compileShader(GL20.GL_VERTEX_SHADER,   "evf_blur.vsh (peaking)", vshSrc);
+            int fs = compileShader(GL20.GL_FRAGMENT_SHADER, "evf_peaking.fsh", fshSrc);
+            if (vs == -1 || fs == -1) return;
+
+            int prog = GL20.glCreateProgram();
+            GL20.glAttachShader(prog, vs);
+            GL20.glAttachShader(prog, fs);
+            GL20.glBindAttribLocation(prog, 0, "Position");
+            GL20.glBindAttribLocation(prog, 1, "UV0");
+            GL20.glLinkProgram(prog);
+            GL20.glDeleteShader(vs);
+            GL20.glDeleteShader(fs);
+
+            if (GL20.glGetProgrami(prog, GL20.GL_LINK_STATUS) == GL11.GL_FALSE) {
+                System.err.println("[Snapmatica] EvfPeaking link error: " + GL20.glGetProgramInfoLog(prog));
+                GL20.glDeleteProgram(prog);
+                return;
+            }
+
+            peakProgram      = prog;
+            peakLocIn        = GL20.glGetUniformLocation(peakProgram, "InSampler");
+            peakLocDepth     = GL20.glGetUniformLocation(peakProgram, "DepthSampler");
+            peakLocPass      = GL20.glGetUniformLocation(peakProgram, "Pass");
+            peakLocPixelSize = GL20.glGetUniformLocation(peakProgram, "PixelSize");
+            peakLocFocusDist = GL20.glGetUniformLocation(peakProgram, "FocusDist");
+            peakLocAfMode    = GL20.glGetUniformLocation(peakProgram, "AfMode");
+            peakLocNear      = GL20.glGetUniformLocation(peakProgram, "Near");
+            peakLocFar       = GL20.glGetUniformLocation(peakProgram, "Far");
+            peakLocColor     = GL20.glGetUniformLocation(peakProgram, "PeakColor");
+
+            System.out.println("[Snapmatica] Focus peaking initialised");
+        } catch (Exception e) {
+            System.err.println("[Snapmatica] Focus peaking init failed: " + e.getMessage());
         }
     }
 

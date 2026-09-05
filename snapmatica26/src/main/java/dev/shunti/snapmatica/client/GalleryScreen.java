@@ -41,9 +41,19 @@ public class GalleryScreen extends Screen {
      * highlight and click like every other button in the game; they are simply hidden while
      * the grid is up, since they act on the item being viewed.
      */
-    private CameraUi.SnapButton copyBtn, revealBtn, openBtn, backBtn;
+    private CameraUi.SnapButton copyBtn, revealBtn, openBtn, deleteBtn, backBtn;
     /** Back sits at the end of the action row in the viewer, but alone it belongs centred. */
     private int backViewerX, backGridX;
+
+    /**
+     * Delete asks once before it acts: the first press arms it and relabels the button as a
+     * question, the second within a few seconds carries it out. Armed state clears itself on a
+     * timeout or on leaving the shot being armed for, so a delete can never land on whatever
+     * happens to be on screen minutes later.
+     */
+    private boolean deleteArmed = false;
+    private long    deleteArmedAt = 0L;
+    private static final long DELETE_CONFIRM_TIMEOUT_MS = 4000L;
 
     private static final SimpleDateFormat STAMP = new SimpleDateFormat("yyyy/MM/dd HH:mm");
 
@@ -59,8 +69,8 @@ public class GalleryScreen extends Screen {
 
         int by = height - BUTTON_H - 6;
         int gap = 4;
-        int wCopy = 84, wReveal = 116, wOpen = 84, wBack = 64;
-        int total = wCopy + wReveal + wOpen + wBack + gap * 3;
+        int wCopy = 84, wReveal = 116, wOpen = 84, wDelete = 84, wBack = 64;
+        int total = wCopy + wReveal + wOpen + wDelete + wBack + gap * 4;
         int x = (width - total) / 2;
 
         copyBtn = CameraUi.SnapButton.of(x, by, wCopy,
@@ -75,15 +85,20 @@ public class GalleryScreen extends Screen {
                 Component.translatable("snapmatica.gallery.open"),
                 b -> { if (viewing >= 0) open(entries.get(viewing)); });
         x += wOpen + gap;
+        deleteBtn = CameraUi.SnapButton.ghost(x, by, wDelete,
+                Component.translatable("snapmatica.gallery.delete"),
+                b -> onDeletePressed());
+        x += wDelete + gap;
         backViewerX = x;
         backGridX = (width - wBack) / 2;
         backBtn = CameraUi.SnapButton.ghost(x, by, wBack,
                 Component.translatable("snapmatica.common.close"),
-                b -> { if (viewing >= 0) { viewing = -1; refreshActions(); } else onClose(); });
+                b -> { if (viewing >= 0) { leaveViewer(); } else onClose(); });
 
         addRenderableWidget(copyBtn);
         addRenderableWidget(revealBtn);
         addRenderableWidget(openBtn);
+        addRenderableWidget(deleteBtn);
         addRenderableWidget(backBtn);
         refreshActions();
     }
@@ -91,14 +106,40 @@ public class GalleryScreen extends Screen {
     /** Keeps the action row in step with what is on screen. */
     private void refreshActions() {
         boolean viewer = viewing >= 0;
-        copyBtn.visible = revealBtn.visible = openBtn.visible = viewer;
+        copyBtn.visible = revealBtn.visible = openBtn.visible = deleteBtn.visible = viewer;
         backBtn.setX(viewer ? backViewerX : backGridX);
         backBtn.setMessage(Component.translatable(viewer ? "snapmatica.common.back"
                                                          : "snapmatica.common.close"));
         if (viewer) {
             openBtn.setMessage(Component.translatable(entries.get(viewing).video()
                     ? "snapmatica.gallery.play" : "snapmatica.gallery.open"));
+            deleteBtn.setMessage(Component.translatable(deleteArmed
+                    ? "snapmatica.gallery.delete_confirm" : "snapmatica.gallery.delete"));
         }
+    }
+
+    private void onDeletePressed() {
+        if (viewing < 0) return;
+        if (deleteArmed) {
+            MediaLibrary.Entry e = entries.get(viewing);
+            MediaLibrary.deleteEntry(e);
+            deleteArmed = false;
+            entries = MediaLibrary.scan();
+            viewing = entries.isEmpty() ? -1 : Math.min(viewing, entries.size() - 1);
+            clampScroll();
+            refreshActions();
+        } else {
+            deleteArmed = true;
+            deleteArmedAt = System.currentTimeMillis();
+            refreshActions();
+        }
+    }
+
+    /** Leaves the viewer for the grid, disarming any pending delete confirmation. */
+    private void leaveViewer() {
+        viewing = -1;
+        deleteArmed = false;
+        refreshActions();
     }
 
     @Override
@@ -134,6 +175,10 @@ public class GalleryScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+        if (deleteArmed && System.currentTimeMillis() - deleteArmedAt > DELETE_CONFIRM_TIMEOUT_MS) {
+            deleteArmed = false;
+            refreshActions();
+        }
         drawBackdrop(ctx);
         if (viewing >= 0) renderViewer(ctx);
         else              renderGrid(ctx, mouseX, mouseY);
@@ -287,7 +332,7 @@ public class GalleryScreen extends Screen {
             case 263 -> { step(-1); return true; }                        // left
             case 262 -> { step(1);  return true; }                        // right
             case 257, 335 -> { open(entries.get(viewing)); return true; } // enter
-            case 256 -> { viewing = -1; refreshActions(); return true; }  // esc: back to grid
+            case 256 -> { leaveViewer(); return true; }  // esc: back to grid
             default -> { return false; }
         }
     }
@@ -295,6 +340,7 @@ public class GalleryScreen extends Screen {
     private void step(int d) {
         if (entries.isEmpty()) return;
         viewing = Math.floorMod(viewing + d, entries.size());
+        deleteArmed = false;
         refreshActions();
     }
 

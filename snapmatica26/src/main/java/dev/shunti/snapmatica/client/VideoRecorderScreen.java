@@ -19,7 +19,7 @@ import java.util.function.Supplier;
 public class VideoRecorderScreen extends Screen {
 
     private static final List<Float>   APERTURES  = List.of(1.4f, 2.0f, 2.8f, 4.0f, 5.6f, 8.0f, 11.0f, 16.0f, 22.0f);
-    private static final List<Integer> FPS_LIST   = List.of(24, 30);
+    private static final List<Integer> FPS_LIST   = List.of(24, 30, 60);
     private static final List<Integer> FOCAL_LIST = List.of(14, 18, 24, 35, 50, 85, 135, 200);
 
     private static final int ARROW_W = 20;

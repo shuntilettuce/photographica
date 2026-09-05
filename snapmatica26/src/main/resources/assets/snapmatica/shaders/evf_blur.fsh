@@ -25,6 +25,11 @@ uniform int   DoGather;          // 0 = no defocus to compute; pass the scene st
 uniform vec2  MotionRotPx;       // screen shift from camera ROTATION over one sample, in px
 uniform vec3  MotionVelCam;      // camera TRANSLATION over one sample, camera space, in blocks
 uniform float FocalPx;           // focal length in pixels, for projecting that translation
+uniform float SampleBoost;       // 0..1, ramped with MaxBlurPx; 0 if the uniform is never set,
+                                  // which is what makes an ordinary shot's behaviour the default
+uniform float CaptureHQ;         // 0..1; 1 on the single frame actually being photographed —
+                                  // a live viewfinder pays for every frame, a shutter press
+                                  // pays once, so that one frame can spend far more
 
 in vec2 texCoord;
 out vec4 fragColor;
@@ -40,7 +45,50 @@ out vec4 fragColor;
 // one sample per hundred pixels, and that shortfall is what the denoise below was covering
 // for. Paying for the samples here is the honest fix: the noise never appears, so it does not
 // have to be smeared away afterwards.
-const int   SAMPLES      = 128;
+// Coverage is decided by counting how many taps land on the near field, which is a binomial
+// trial: its error is sqrt(p(1-p)/N), largest at intermediate coverage and ZERO at full
+// coverage. That single fact ties together everything the defocus can get wrong at the top of
+// its range. The old 120 px ceiling on the circle of confusion pinned every heavy foreground to
+// p = 1, so there was no noise to see — and no transparency either, which is why a leaf against
+// the lens kept a findable outline. Lifting the ceiling makes the opacity right and lets the
+// noise through; more samples buy it back; and any other correction that stops diluting the
+// foreground's share (see the layer-pivot note in the composite) spends the same currency.
+//
+// The base ceiling stays at 128, on measurement rather than on principle. Raising it to 192
+// UNCONDITIONALLY was tried: on a white fence a metre and a half from a 35 mm at f/2, focused
+// 20 blocks out — a shot someone would actually take — the grain is 0.41 levels either way,
+// identical. It only earned anything at the far end, where the fence is 60 cm from the lens
+// and the focus is 148 m (1.64 levels against 1.40), and it cost 30-60% of the whole pass to
+// get there — not a trade worth making for a configuration no photographer would set up.
+//
+// MaxSamples exists because "no photographer would set up" stopped being true once the world
+// scale itself became a setting. A block scaled to a centimetre puts the SAME steep-falloff
+// optics a real diorama lens has, and that background asymptote (see DofScale) is reached
+// within a few blocks rather than a few hundred — so the grain that used to need a 60 cm
+// foreground and a 148 m focus to provoke now sits in ordinary midground, wherever a receding
+// surface crosses from "still sharpening" to "already at the lens's max blur". Measured on
+// exactly that transition: 128 taps read 1.28 levels of grain, 512 read 0.39 — the same
+// sqrt(N) falloff as the fence test, just needed here instead of only at the extreme.
+//
+// EvfBlurRenderer raises this ceiling only as far as MaxBlurPx itself justifies, so an ordinary
+// shot — where MaxBlurPx stays under the threshold that starts the ramp — pays nothing extra.
+// SampleBoost carries that decision in; SAMPLES stays the hard, compiled-in top of the range,
+// and a SampleBoost of exactly 0 (its value if the uniform is never set) reproduces the base
+// 128 exactly, so a wiring failure degrades to the well-tested default rather than to silence.
+//
+// Even 384 taps is not the end of what this transition needs — a real, dithered Minecraft
+// texture (per-texel noise, not the flat or periodic fills these numbers were measured
+// against) has more variance for a limited disc to estimate, and stays visibly grainy at 384
+// taps on content like a shingled roof at extreme world scale. Buying that down further with
+// MORE samples, every frame, is not affordable — but the viewfinder and the photograph are not
+// the same frame. A live preview is redrawn dozens of times a second and has to stay cheap; a
+// shutter press produces exactly one frame, and that frame can spend what a real shutter does
+// — a fraction of a second of shutter lag most people would not begrudge for a visibly cleaner
+// result. SAMPLES_HQ is that budget: about 2.7x SAMPLES, spent only when CaptureHQ says this
+// is the frame actually being kept.
+const int   SAMPLES      = 384;
+const int   SAMPLES_BASE = 128;
+const int   SAMPLES_HQ   = 1024;
 const float GOLDEN_ANGLE = 2.39996323;
 const float TWO_PI       = 6.28318531;
 #define NOISE_SIZE 128.0
@@ -105,20 +153,29 @@ float resolveFocus() {
     return (d >= Far * 0.98) ? 100000.0 : d;
 }
 
-/**
- * Minimum blur applied to distant geometry regardless of the thin-lens result — an
- * atmospheric-haze floor that also hides LOD popping.
+/*
+ * There is no atmospheric haze floor any more.
  *
- * It used to be an unconditional `max(c, smoothstep(200, 600, d) * 5.0)` at two sites, which
- * meant ANY geometry past 200 blocks was forced to at least 5 px of blur even with the lens
- * focused at infinity. That, not the depth values, is why the horizon stayed soft at inf:
- * the infinity branch of computeCoc() correctly returned ~0 and this floor put the blur
- * straight back. At infinity focus the far field IS the focal plane, so the floor is off.
+ * It forced a minimum of 5 px of blur on anything past a few hundred blocks, ramped in over
+ * 200..600 blocks and faded out as the focus approached its far stop. It was written to stand
+ * in for aerial perspective and to hide LOD popping, and it is not either of those things: a
+ * lens does not defocus a mountain for being far away, and haze reduces contrast rather than
+ * resolution. Because the amount came from a constant instead of from the optics, it did not
+ * move when the aperture did — stopped down to f/22, where the circle of confusion is 1.4 px
+ * and the whole scene should be sharp, distant terrain still came through as mush.
+ *
+ * It also stayed invisible until the defocus was made self-consistent. Only the pixel being
+ * written got the floor; when that same pixel was somebody's neighbour it did not, so no tap
+ * ever cleared the disc test and the gather did nothing with it. Applying the floor everywhere
+ * a circle of confusion is asked for — correct in itself — switched on a feature that had been
+ * dormant since it was written, which is why this only appeared now.
+ *
+ * Its other half was worse. Multiplying by (1 - infinityBlend) tied the floor to the FOCUS
+ * rather than to the subject, so racking out to infinity made distant terrain snap from blurred
+ * to sharp with nothing in the scene having changed — very visible in video. Without it the far
+ * field is one continuous function of depth: 0.41 px at a 200-block focus, 0.12 px at infinity.
  */
-float distantHazeFloor(float depthM) {
-    // Faded out as the focus approaches the far stop rather than switched off at it.
-    return (1.0 - infinityBlend(gFocus)) * smoothstep(200.0, 600.0, depthM) * 5.0;
-}
+
 
 /**
  * Diameter of the Airy disc, in mm — the blur a perfect lens cannot avoid.
@@ -176,7 +233,15 @@ vec2 motionSmearPx(vec2 uv, float depthM) {
         float z = max(depthM, 0.25);
         m += (FocalPx * MotionVelCam.xy + p * MotionVelCam.z) / z;
     }
-    return m;
+    // Deliberately a hair longer than the gap it measures. The vector is exact for LINEAR
+    // motion over that gap, but a pan is rarely perfectly linear tick to tick — an orbit
+    // arcs, a hand wobbles — so a chord drawn exactly between two samples can fall a little
+    // short of the true path and leave a hairline seam where the next sample's smear was
+    // supposed to meet it. Overshooting slightly buys every consecutive sample's trail a
+    // small overlap instead of an exact hand-off, which hides the seam at the cost of a
+    // touch more blur than the strict geometry calls for — favouring a continuous trail
+    // over an exact one, since the exact one is what read as choppy.
+    return m * 1.35;
 }
 
 vec2 lensDistort(vec2 uv) {
@@ -372,7 +437,6 @@ void main() {
         vec2 srcUV = lensDistort(texCoord);
         float d = linearDepth(texture(DepthSampler, srcUV).r);
         float c = max(computeCoc(d) - 1.5, 0.0);
-        c = max(c, distantHazeFloor(d));
         float sc = c;
         // Only pixels that are THEMSELVES defocused get softened.
         //
@@ -414,23 +478,48 @@ void main() {
             // ones the gather had resolved perfectly well — which is bokeh thrown away for
             // nothing. Where confidence is high this collapses to no denoise at all.
             float starved = 1.0 - texture(InSampler, srcUV).a;
-            float rad   = clamp(sc * 0.16, 1.0, 8.0) * starved;
-            float sigma = max(rad * 0.5, 0.5);
+            // Reach, and tap count, decoupled.
+            //
+            // This was a solid (2r+1)^2 kernel, which is what forced the radius to stop at 8 px:
+            // 289 taps already, and 1089 at 16. The reach it could afford was the one thing it
+            // needed most. A gather of N taps over a disc of radius R leaves its residue at a
+            // spatial scale of about R/sqrt(N) — 31 px for a 350 px disc at 128 taps — so an
+            // 8 px kernel cannot see the blotches it is there to remove, and the grain survives
+            // exactly where the defocus is strongest. Raising the gather's own tap count instead
+            // does work (384 taps measured the grain down from 2.2 levels to 1.25) and costs
+            // 2.8x the whole pass, which is not a trade worth making for residue.
+            //
+            // What is being averaged here is a smooth field plus per-pixel independent noise, and
+            // for that a sparse set of taps is as good as a solid one: 32 of them cut the noise
+            // by the same root-N, introduce no structure of their own because the signal under
+            // them has none at this scale, and cost a ninth of the old kernel at a third of
+            // its reach. Sized off the gather's residue scale rather than a fixed ceiling.
+            // Sized off the gather's residue scale — a disc of radius R sampled N times leaves
+            // blotches about R/sqrt(N) across — and NOT off this pixel's own circle of
+            // confusion, which is what it used. In a foreground's haze the pixel underneath is
+            // barely defocused itself: the wall behind a fence had a 17 px disc, so the old
+            // rule asked for 2.7 px of smoothing against blotches 31 px wide. The scale that
+            // matters belongs to whatever is blooming over the pixel, and MaxBlurPx bounds it.
+            float rad   = clamp(MaxBlurPx * 0.09, 1.0, 28.0) * starved;
+            float sigma = max(rad * 0.55, 0.5);
             if (rad < 0.75) {
                 fragColor = vec4(smearLen > 0.75 ? smearSample(srcUV, smear)
                                                  : texture(InSampler, srcUV).rgb, 1.0);
                 return;
             }
-            int   irad  = int(rad);
-            vec3  sum   = vec3(0.0);
-            float wsum  = 0.0;
-            for (int dy = -irad; dy <= irad; dy++)
-                for (int dx = -irad; dx <= irad; dx++) {
-                    vec2  o = vec2(float(dx), float(dy));
-                    float w = exp(-dot(o, o) / (2.0 * sigma * sigma));
-                    sum  += texture(InSampler, srcUV + o * PixelSize).rgb * w;
-                    wsum += w;
-                }
+            const int DENOISE_TAPS = 32;
+            float drot = texture(NoiseSampler, fract(gl_FragCoord.xy / NOISE_SIZE)).r * TWO_PI;
+            vec3  sum   = texture(InSampler, srcUV).rgb;
+            float wsum  = 1.0;
+            for (int j = 0; j < DENOISE_TAPS; j++) {
+                float fj = float(j) + 0.5;
+                float dr = sqrt(fj / float(DENOISE_TAPS)) * rad;
+                float da = fj * GOLDEN_ANGLE + drot;
+                vec2  o  = vec2(cos(da), sin(da)) * dr;
+                float w  = exp(-dr * dr / (2.0 * sigma * sigma));
+                sum  += texture(InSampler, srcUV + o * PixelSize).rgb * w;
+                wsum += w;
+            }
             dofCol = sum / wsum;
         }
         // Composite the big-blurred near-field foreground over the scene. The under-layer
@@ -486,28 +575,46 @@ void main() {
 
     float depthM = linearDepth(texture(DepthSampler, texCoord).r);
     float cocP   = max(computeCoc(depthM) - 1.5, 0.0);
-    cocP = max(cocP, distantHazeFloor(depthM));
 
     // Coarse scan for neighbours whose own disc is wide enough to reach this pixel. It yields
     // two things: whether a nearer, defocused neighbour blooms over us (hasNearFg), and how
     // far out anything that contributes actually lives (reachR).
+    const int SCAN_RINGS = 6;
     bool  hasNearFg = false;
     float reachR    = 0.0;
     for (int k = 0; k < 16; k++) {
         float a = float(k) * (TWO_PI / 16.0);
         vec2 dir = vec2(cos(a), sin(a));
-        for (int s = 1; s <= 6; s++) {
+        for (int s = 1; s <= SCAN_RINGS; s++) {
             // Quadratic radial spacing, so the rings crowd near the centre. Even steps put
             // the innermost ring at MaxBlurPx/5 — 24 px at f/1.4 — and a foreground whose CoC
             // was smaller than that was never detected at all: reachR stayed 0, the gather
             // shrank to the background's own tiny CoC, and the foreground never scattered
             // outward. Its silhouette then kept the geometry it has in focus, corners and
             // all, when a defocused corner should round off to an arc of its CoC.
-            float t  = float(s) / 6.0;
+            //
+            float t  = float(s) / float(SCAN_RINGS);
             float rr = MaxBlurPx * t * t;
             float sd = linearDepth(texture(DepthSampler, texCoord + dir * rr * PixelSize).r);
             float sc2 = max(computeCoc(sd) - 1.5, 0.0);
-            if (sc2 >= rr - 1.0) {
+            // One sample stands for the whole annulus between its ring and the next, so a hit
+            // counts when the CoC found comes within half a ring gap of reaching here: the
+            // surface it belongs to almost certainly has a point that much nearer. Without
+            // this the ray had to land within a pixel of a silhouette's edge to see it, and
+            // the outermost pair of rings sit 37 px apart — so an isolated leaf's haze was cut
+            // off at a clean circle around 0.85 of where its own disc actually reaches, and
+            // that circle is a visible edge in a frame that has no edge in it.
+            //
+            // The asymmetry is deliberate. A false negative costs the pixel its ENTIRE near
+            // field — the gather collapses to the background's own CoC and no foreground
+            // reaches it at all — while a false positive only widens the gather past what it
+            // needed and spends some sampling density, because the per-tap disc test below
+            // still decides what actually contributes. Dithering the scan per pixel was tried
+            // instead and is strictly worse: it scatters the depth taps out of cache for a
+            // 30-130% cost, and having no more information than before, it converts the same
+            // missing reach into noise rather than recovering it.
+            float slack = MaxBlurPx * t / float(SCAN_RINGS);
+            if (sc2 >= rr - 1.0 - slack) {
                 reachR = max(reachR, min(sc2, MaxBlurPx));
                 if (sd < depthM - 0.5 && sd < gFocus) hasNearFg = true;
             }
@@ -529,7 +636,28 @@ void main() {
     // random tap happened to land, which is grain by construction. Matching the radius to the
     // content puts every tap inside the disc, and the variance collapses.
     float gatherR       = clamp(max(cocP, reachR), 1.0, MaxBlurPx);
-    float areaPerSample = gatherR * gatherR / float(SAMPLES);
+    // Tap count follows the AREA being gathered, not a constant.
+    //
+    // The ceiling is sized for the widest disc the optics can ask for; spent on a narrow one it
+    // is pure waste — one tap per half pixel of disc area is already far denser than the
+    // signal, and below about 3.5 px of radius the count bottoms out at 24, which is still more
+    // taps than the disc has pixels. SampleBoost raises the ceiling itself, from 128 toward
+    // SAMPLES, for the frames where MaxBlurPx says a plain 128 will not be enough — see the
+    // note by SAMPLES above.
+    // Split across two named locals rather than nested inline (clamp(mix(clamp(...)))). The
+    // nested form measured 6x worse grain in exactly the scene it exists for, on the very
+    // driver every other measurement in this file was taken on — NVIDIA's legacy GLSL 150
+    // path runs through a Cg-based compiler, and this depth of nesting across a line break is
+    // a known place for it to miscompile silently rather than reject. No difference in the
+    // generated result once broken apart; this is a shape the compiler happens to get right.
+    float boostT  = clamp(SampleBoost, 0.0, 1.0);
+    float tapCeil = mix(float(SAMPLES_BASE), float(SAMPLES), boostT);
+    // Kept as a separate, later assignment rather than folded into the mix() above — same
+    // reasoning as splitting boostT/tapCeil apart: a flat if() overwriting a plain float is a
+    // shape this compiler is known to get right, where a deeper nested expression is not.
+    if (CaptureHQ > 0.5) tapCeil = float(SAMPLES_HQ);
+    int   nTaps   = int(clamp(gatherR * gatherR * 2.0, 24.0, tapCeil));
+    float areaPerSample = gatherR * gatherR / float(nTaps);
     vec2 ntile = floor(gl_FragCoord.xy / NOISE_SIZE);
     vec2 lc    = fract(gl_FragCoord.xy / NOISE_SIZE);
     vec3 th    = hash32(ntile);
@@ -550,26 +678,84 @@ void main() {
     vec3 focC  = vec3(0.0); float focA  = 0.0;
     vec3 farC  = vec3(0.0); float farA  = 0.0;
 
+    // Near-field COVERAGE, kept apart from nearA. Both count the same discs, but nearA carries
+    // the bokeh shaping (rim profile, cat's-eye) that decides what the near field LOOKS like,
+    // and coverage must not: the rim profile alone averages 1 + BOKEH_RIM/2 over a disc, so a
+    // foreground would come out 27% more opaque than its own geometry says purely because the
+    // bokeh has character. This one is the plain thin-lens integral — each source pixel spreads
+    // its light over pi*CoC^2, so what lands here is sum(dA / CoC^2), which is a real alpha.
+    float nearCov = 0.0;
+
+    // Each layer carries a colour weight and a COVERAGE separately. Both count the same discs,
+    // but the colour weight also carries the bokeh shaping (rim profile, cat's-eye) that decides
+    // what the blur LOOKS like, and coverage must not: the rim profile alone averages
+    // 1 + BOKEH_RIM/2 over a disc, so a foreground would come out 27% more opaque than its own
+    // geometry says purely because the bokeh has character. Coverage is the plain thin-lens
+    // integral — each source pixel spreads its light over pi*CoC^2, so what lands on this pixel
+    // is sum(dA / CoC^2), which is a real alpha.
+
+    // What can be seen PAST the near field, for the pixels where the gather finds nothing
+    // behind at all. A sharp background contributes to no layer — its own CoC is under half a
+    // pixel, so every tap on it fails the disc test — which is exactly the situation inside a
+    // defocused foreground silhouette, and why that silhouette used to survive at full opacity
+    // (see the composite at the end). The scene behind a leaf is genuinely absent from a single
+    // rendered frame, but the aperture sees around the leaf, so the background just outside it
+    // is the honest estimate.
+    //
+    // Weighted toward the nearest such samples rather than averaged flat, so a small
+    // silhouette fills with its own surroundings instead of a wide grey mean. A nearest-VALUE
+    // reconstruction (1/r^2, plus a dedicated close-range spiral to sample it properly) was
+    // tried, on the reasoning that it agrees with the real background at the silhouette edge
+    // by construction and so cannot step there. It is worse: over a textured backdrop the
+    // nearest value is a high-contrast sample of the wrong phase, and it drags into visible
+    // streaks. A neighbourhood average reads as the backdrop softening, which is the milder
+    // failure.
+    vec3  fillC = vec3(0.0); float fillW = 0.0;
+    float fillFar  = max(depthM * 0.25, 0.5);   // "clearly behind", scaled with distance
+    // Half weight at FILL_SOFT px. One falloff for every fill tap, near or far, so the
+    // estimate adapts on its own: where real background sits a few pixels away — the whole
+    // edge of any thin silhouette — those taps outweigh the rest and the reconstruction meets
+    // the sharp background it abuts. Deep inside a wide occluder nothing is close, every tap
+    // carries a similar small weight, and it degrades into the broad average that is all that
+    // is available there.
+    //
+    // Tight, because what gives a reconstructed region away is not its colour but its TEXTURE.
+    // Measured against a true thin-lens render of the same scene, the colour either side of a
+    // silhouette already matches to half a level out of 255 — it is local contrast that steps,
+    // and a wide average has none of it, so the foreground's outline reappears as a smooth
+    // band across an otherwise detailed backdrop. Pulling the estimate in to the nearest few
+    // pixels carries some of that detail inward and removes about half the step. A flat
+    // backdrop, where a too-tight fill would show as streaking, is unchanged.
+    const float FILL_SOFT = 2.0;
+
     {
         float w  = areaPerSample / max(cocP * cocP, 0.25);
         float fw = smoothstep(3.0, 0.5, cocP);
         focC += centre.rgb * w * fw; focA += w * fw;
         float bw = w * (1.0 - fw);
         if (bw > 0.0) {
-            if (depthM < gFocus) { nearC += centre.rgb * bw; nearA += bw; }
+            if (depthM < gFocus) { nearC += centre.rgb * bw; nearA += bw; nearCov += bw; }
             else                    { farC  += centre.rgb * bw; farA  += bw; }
         }
     }
 
-    for (int i = 0; i < SAMPLES; i++) {
+    for (int i = 0; i < nTaps; i++) {
         float fi  = float(i) + 0.5;
-        float r   = sqrt(fi / float(SAMPLES)) * gatherR;
+        float r   = sqrt(fi / float(nTaps)) * gatherR;
         float ang = fi * GOLDEN_ANGLE + rot;
         vec2  sc  = texCoord + vec2(cos(ang), sin(ang)) * r * PixelSize;
 
         float sDepthM = linearDepth(texture(DepthSampler, sc).r);
+        // The haze floor belongs here as much as it does on the centre pixel. It was applied
+        // only there, so the same surface had one circle of confusion when it was the pixel
+        // being written and a smaller one when it was somebody's neighbour — and since a
+        // sample only contributes within its OWN disc, a hazed distant surface reached nothing,
+        // not even itself. Its self-coverage then came out at a third of the 1 it should be,
+        // and the composite renormalises against that: a dark post against bright sky came out
+        // over twice as opaque as the lens gives, 12 px outside its own edge, which reads as a
+        // dark fringe clinging to the silhouette. Any CoC in this shader has to be the same
+        // function of depth wherever it is asked for.
         float sCoc    = max(computeCoc(sDepthM) - 1.5, 0.0);
-        if (sCoc < 0.5) continue;
 
         // Soft disc edge. This test used to be `if (r > sCoc) continue;` — a binary in/out.
         // Whether a neighbour contributes then flipped abruptly as the gather radius crossed
@@ -577,7 +763,23 @@ void main() {
         // from pixel to pixel and the boundaries between those sets showed up as flat patches
         // — the painterly, brush-stroke look. Feathering membership over a one-pixel band
         // makes the same disc, with its edge antialiased instead of quantised.
-        float edge = smoothstep(sCoc + 0.5, sCoc - 0.5, r);
+        float edge = (sCoc >= 0.5) ? smoothstep(sCoc + 0.5, sCoc - 0.5, r) : 0.0;
+
+        // Collect what lies behind, for the fill described above. Restricted to the inner part
+        // of the disc because the weight has fallen to a tenth by three fall-off lengths and
+        // the outer taps are most of the disc — and skipped entirely when nothing sampled is
+        // behind this pixel, which is every tap of an ordinary far-field bokeh, so the common
+        // case pays nothing for it. Samples do not need to be defocused to qualify: a SHARP
+        // background is precisely what has no disc of its own and so reaches no layer.
+        bool wantFill = (r < gatherR * 0.75) && (sDepthM > depthM + fillFar);
+        if (edge <= 0.0 && !wantFill) continue;
+
+        vec3 sCol = texture(InSampler, sc).rgb;
+        if (wantFill) {
+            float fw2 = 1.0 / (r * r + FILL_SOFT * FILL_SOFT);
+            fillC += sCol * fw2;
+            fillW += fw2;
+        }
         if (edge <= 0.0) continue;
 
         // Brightness across the disc, not a flat fill.
@@ -604,27 +806,90 @@ void main() {
         float catsEye   = 1.0 - CATS_EYE * offAxis * offAxis * max(outward, 0.0) * rn;
 
         contrib   += edge;
-        vec3  sCol = texture(InSampler, sc).rgb;
-        float w    = areaPerSample / max(sCoc * sCoc, 1.0) * edge * prof * max(catsEye, 0.0);
-        if (sDepthM < gFocus) { nearC += sCol * w; nearA += w; }
+        // Two weights from one disc: wc is the geometric coverage, w is that shaped into what
+        // the bokeh looks like. Only the near field needs them separated — focus and far are
+        // renormalised against each other below, so any uniform factor cancels there.
+        float wc   = areaPerSample / max(sCoc * sCoc, 1.0) * edge;
+        float w    = wc * prof * max(catsEye, 0.0);
+        if (sDepthM < gFocus) { nearC += sCol * w; nearA += w; nearCov += wc; }
         else                     { farC  += sCol * w; farA  += w; }
+    }
+
+    // Close-range sampling for the fill. The gather's taps are spread evenly over its whole
+    // disc, so the few pixels either side of a silhouette edge — the one place the
+    // reconstruction has to agree with the real background — hold barely two of them at a
+    // 100 px gather, and a falloff that favours the nearest taps means nothing if the nearest
+    // taps are not there. A tight spiral costs 24 taps and is what gives the weighting above
+    // something to prefer.
+    //
+    // Only for a pixel in FRONT of the focal plane that has a disc of its own. Everything else
+    // either carries its own sharp colour into the focus layer, which outweighs any fill by
+    // two orders of magnitude, or is background and needs no reconstructing — so neither side
+    // of this test can draw a contour, because the fill is unused on both.
+    if (depthM < gFocus && cocP >= 0.5) {
+        for (int j = 0; j < 24; j++) {
+            float fj = float(j) + 0.5;
+            float r2 = sqrt(fj / 24.0) * min(gatherR, 32.0);
+            float a2 = fj * GOLDEN_ANGLE + rot;
+            vec2  c2 = texCoord + vec2(cos(a2), sin(a2)) * r2 * PixelSize;
+            float d2 = linearDepth(texture(DepthSampler, c2).r);
+            if (d2 <= depthM + fillFar) continue;
+            float w2 = 1.0 / (r2 * r2 + FILL_SOFT * FILL_SOFT);
+            fillC += texture(InSampler, c2).rgb * w2;
+            fillW += w2;
+        }
     }
 
     vec3 nearCol = (nearA > 0.0) ? nearC / nearA : vec3(0.0);
     vec3 focCol  = (focA  > 0.0) ? focC  / focA  : vec3(0.0);
     vec3 farCol  = (farA  > 0.0) ? farC  / farA  : vec3(0.0);
 
-    float na = clamp(nearA, 0.0, 1.0);
+    float na = clamp(nearCov, 0.0, 1.0);
     float fo = clamp(focA,  0.0, 1.0);
     float fr = clamp(farA,  0.0, 1.0);
 
-    float wNear  = na;
-    float wFocus = fo * (1.0 - na);
-    float wFar   = fr * (1.0 - na) * (1.0 - fo);
-    float wsum   = wNear + wFocus + wFar;
+    // Everything the gather resolved from BEHIND the near field, and how much of the aperture
+    // that accounts for. Focus over far, renormalised against each other so a partially-sampled
+    // background still reads as itself rather than as a wash.
+    float underA   = clamp(fo + fr * (1.0 - fo), 0.0, 1.0);
+    vec3  underCol = (underA > 1e-4)
+                   ? (focCol * fo + farCol * fr * (1.0 - fo)) / (fo + fr * (1.0 - fo))
+                   : vec3(0.0);
 
-    float confidence = clamp(contrib / 40.0, 0.0, 1.0);
+    // Did the gather see ANYTHING behind the near field? Deliberately a question with a bimodal
+    // answer, not a deficit to be made up: underA is a biased estimator, but it collapses to
+    // exactly zero in one situation — a sharp background has no disc, no tap on it clears the
+    // membership test, and no layer receives it. That is the interior of a defocused foreground
+    // silhouette and nothing else. Both sides of the mix below are estimates of the same
+    // backdrop, so there is no foreground/background decision here for a seam to form along.
+    float trust = smoothstep(0.01, 0.12, underA);
+    if (fillW <= 0.0) trust = 1.0;   // no estimate to fall back on; leave the gather alone
+    underCol = mix(fillC / max(fillW, 1e-4), underCol, trust);
+
+    // The foreground-bokeh fix: `na` composites as an alpha instead of being divided back out.
+    // A leaf a metre from a fast lens spreads over a disc hundreds of times its own area, so it
+    // covers a few per cent of the aperture and belongs on screen as a few per cent. The gather
+    // always computed that coverage correctly; the composite destroyed it by dividing the result
+    // through by the sum of the very weights that carried it, so `nearCol * na / na` restored the
+    // leaf at full opacity wherever a sharp background sat behind it and reached no layer.
+    //
+    // NOTE the known limitation this still carries. When the focus is far enough that a pixel's
+    // own surface is itself "near", its self-weight lands in the same layer as whatever blooms
+    // over it, uncapped — 225/16 against a foreground's 0.35 for a background 4 px out of
+    // focus — so that foreground is diluted rather than composited over. Pivoting the layers on
+    // the pixel's own depth and capping the self-weight at 1 fixes it and was measured to: the
+    // opacity comes out right, and the grain triples, because the dilution had been hiding the
+    // binomial error in the coverage count. Both together need more effective samples than a
+    // point-sampled gather can pay for. See the note on prefiltering above SAMPLES.
+    float uw     = mix(1.0, underA, trust);
+    float wNear  = na;
+    float wUnder = uw * (1.0 - na);
+    float wsum   = wNear + wUnder;
+
+    float confidence = clamp(contrib / (0.3125 * float(nTaps)), 0.0, 1.0);
+    float covNoise   = sqrt(max(na * (1.0 - na), 0.0) / float(nTaps));
+    float need       = max(1.0 - confidence, clamp(covNoise * 12.0, 0.0, 1.0));
     fragColor = (wsum > 0.001)
-        ? vec4((nearCol * wNear + focCol * wFocus + farCol * wFar) / wsum, confidence)
+        ? vec4((nearCol * wNear + underCol * wUnder) / wsum, 1.0 - need)
         : vec4(centre.rgb, 1.0);
 }
