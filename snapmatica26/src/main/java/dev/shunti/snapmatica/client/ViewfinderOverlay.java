@@ -119,6 +119,14 @@ public final class ViewfinderOverlay {
         int cx = afFr[0] + Math.round(afFr[2] * 0.5f * (1f + SnapmaticaClient.afPointX));
         int cy = afFr[1] + Math.round(afFr[3] * 0.5f * (1f + SnapmaticaClient.afPointY));
         int rc = focusReticleColor();
+        // Where the AF point WOULD be if it had not been moved, drawn only once it has been.
+        // Without it there is nothing on screen saying how far off centre the reticle has got,
+        // or which way home is -- the frame's own middle is not visible, and on a scene with no
+        // symmetry to read it against, a point nudged a little looks exactly like a point that
+        // was never moved.
+        if (SnapmaticaClient.afPointX != 0f || SnapmaticaClient.afPointY != 0f) {
+            drawHomeMark(ctx, afFr[0] + afFr[2] / 2, afFr[1] + afFr[3] / 2);
+        }
         if (SnapmaticaClient.focusAreaWide) {
             drawAfPointGrid(ctx,cx,cy,rc);
         } else {
@@ -331,6 +339,36 @@ public final class ViewfinderOverlay {
         for (int gy = -1; gy <= 1; gy++) {
             for (int gx = -1; gx <= 1; gx++) {
                 drawAfBox(ctx, cx + gx * SPACING, cy + gy * SPACING, color);
+            }
+        }
+    }
+
+    /**
+     * The centre mark: four corners of a square, dim, with the sides left out.
+     *
+     * <p>Deliberately not the shape of anything else in the finder. A small box would be an
+     * AF-point box, and a small cross would be the SPOT reticle -- either would read as a
+     * second place the camera is measuring, when the whole job of this mark is to say "the one
+     * that measures is over there, and this is where it started". Corners are the mark a body
+     * uses for exactly this, and they survive being drawn over any scene because a corner is
+     * two strokes meeting rather than one line to be lost in a texture.
+     */
+    private static void drawHomeMark(GuiGraphicsExtractor ctx, int x, int y) {
+        final int H = 6;    // half-size, px
+        final int A = 2;    // how far each corner runs along its two sides
+        final int C = 0x55FFFFFF;   // dim: present when looked for, ignorable when not
+        for (int sx = -1; sx <= 1; sx += 2) {
+            for (int sy = -1; sy <= 1; sy += 2) {
+                int px = x + sx * H, py = y + sy * H;
+                // Both strokes are built from the corner pixel INWARD and span it, so the two
+                // meet exactly and all four corners come out the same length. Written as
+                // min/max around that far end rather than as a ternary per quadrant: the
+                // ternary version compiled, ran, and drew arms of two, three and one that did
+                // not reach its own corner, because fill() takes an exclusive far edge and
+                // that asymmetry has to be undone once per direction.
+                int ax = px - sx * A, ay = py - sy * A;
+                ctx.fill(Math.min(px, ax), py, Math.max(px, ax) + 1, py + 1, C);
+                ctx.fill(px, Math.min(py, ay), px + 1, Math.max(py, ay) + 1, C);
             }
         }
     }

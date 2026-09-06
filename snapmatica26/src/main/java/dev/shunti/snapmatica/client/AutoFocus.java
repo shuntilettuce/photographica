@@ -45,6 +45,25 @@ public final class AutoFocus {
     /** Per-tick travel while a direction is held: centre to the edge in about a second. */
     private static final float AF_POINT_STEP = 0.045f;
 
+    /**
+     * How near the centre the AF point has to come before the notch catches it, as a fraction
+     * of the half-frame.
+     *
+     * <p>Wider than {@link #AF_POINT_STEP} on purpose, and that is a requirement rather than a
+     * taste: a step larger than the notch could jump clean over it, and a detent you can miss
+     * by holding the key one tick longer is not a detent.
+     *
+     * <p>Radial, not per axis. The thing worth returning to is the CENTRE, and notching each
+     * axis separately would instead put a sticky cross through the whole frame — the point
+     * would catch on x=0 while being slid along the top of the picture, nowhere near home.
+     */
+    private static final float AF_DETENT = 0.07f;
+
+    /** Ticks of continued pushing needed to leave the notch: about a quarter second. */
+    private static final int AF_DETENT_TICKS = 5;
+
+    private static int afDetentHeld = 0;
+
     private static boolean afPointDirty = false;
 
     /**
@@ -74,11 +93,44 @@ public final class AutoFocus {
         if (CameraScrollHandler.keyDown(org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN))  dy += AF_POINT_STEP;
 
         if (dx == 0f && dy == 0f) {
+            // Let go and the notch re-arms, so the next sweep back to centre catches again.
+            afDetentHeld = 0;
             if (afPointDirty) { afPointDirty = false; SnapmaticaConfig.save(); }
             return;
         }
-        SnapmaticaClient.afPointX = clampPoint(SnapmaticaClient.afPointX + dx);
-        SnapmaticaClient.afPointY = clampPoint(SnapmaticaClient.afPointY + dy);
+
+        float nx = clampPoint(SnapmaticaClient.afPointX + dx);
+        float ny = clampPoint(SnapmaticaClient.afPointY + dy);
+
+        // A detent at the centre. Sweeping the point back toward the middle parks it exactly on
+        // centre and holds it there for a moment, which is what makes "put it back" a gesture
+        // rather than a game of landing on 0.000 by eye. Pushing through is still allowed --
+        // the notch costs time, not travel -- because a centre you cannot leave is a centre
+        // lock, and the point is meant to be placed anywhere.
+        if (nx * nx + ny * ny < AF_DETENT * AF_DETENT) {
+            if (afDetentHeld < AF_DETENT_TICKS) {
+                afDetentHeld++;
+                nx = 0f;
+                ny = 0f;
+            } else {
+                // Budget spent: leave along the way it was heading, all the way OUT of the
+                // notch. Nothing is ever left resting inside it, so releasing the key and
+                // pressing again cannot find the point somewhere the notch would snatch back.
+                float len = (float) Math.sqrt(nx * nx + ny * ny);
+                if (len > 1e-4f) {
+                    nx = nx / len * AF_DETENT;
+                    ny = ny / len * AF_DETENT;
+                } else {
+                    nx = Math.signum(dx) * AF_DETENT;
+                    ny = Math.signum(dy) * AF_DETENT;
+                }
+            }
+        } else {
+            afDetentHeld = 0;
+        }
+
+        SnapmaticaClient.afPointX = nx;
+        SnapmaticaClient.afPointY = ny;
         afPointDirty = true;
     }
 
