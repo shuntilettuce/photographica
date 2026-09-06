@@ -121,6 +121,8 @@ public final class EvfBlurRenderer {
     private static int locPixelSize  = -1;
     private static int locFocusDist  = -1;
     private static int locAfMode     = -1;
+    private static int locVignette   = -1;
+    private static int locFrameHalf  = -1;
     private static int locTileSamp   = -1;
     private static int locTileDims   = -1;
     private static int locTilePx     = -1;
@@ -862,6 +864,22 @@ public final class EvfBlurRenderer {
 
         GL20.glUniform1f(locFocusDist, focusDist);
         GL20.glUniform1i(locAfMode, gpuAutoFocus ? 1 : 0);
+        // Lens falloff — Pass 5 draws it, and Pass 5 already runs on every frame that is not a
+        // DNG or an aperture sub-frame, so this costs no pass of its own.
+        //
+        // Off for the two cases that would double it or intrude. A frame being read back as a
+        // photograph gets its falloff from PhotoCapture, on the CROPPED image and for a DNG as
+        // well, which is the copy that has to remain authoritative; and the ambient lens is
+        // ordinary play rather than a photograph, so it darkens no corners.
+        if (locVignette >= 0) {
+            boolean vigOff = lensOnly || PhotoCapture.isCapturePending();
+            GL20.glUniform1f(locVignette,
+                    vigOff ? 0f : PhotoCapture.vignetteStrength(aperture));
+            int vgSw = Math.max(1, mc.getWindow().getScaledWidth());
+            int vgSh = Math.max(1, mc.getWindow().getScaledHeight());
+            int[] vgFr = PhotoCapture.frameRect(vgSw, vgSh, SnapmaticaClient.portraitOrientation);
+            GL20.glUniform2f(locFrameHalf, vgFr[2] * 0.5f / vgSw, vgFr[3] * 0.5f / vgSh);
+        }
         // Measured against frameRect rather than against this pass's own fx..fy2, because those
         // two differ for a capture: the capture pass covers the whole framebuffer and the 3:2
         // crop happens afterwards in PhotoCapture. Going through the crop either way is what
@@ -1676,6 +1694,8 @@ public final class EvfBlurRenderer {
             locPixelSize = GL20.glGetUniformLocation(program, "PixelSize");
             locFocusDist = GL20.glGetUniformLocation(program, "FocusDist");
             locAfMode    = GL20.glGetUniformLocation(program, "AfMode");
+            locVignette  = GL20.glGetUniformLocation(program, "Vignette");
+            locFrameHalf = GL20.glGetUniformLocation(program, "FrameHalf");
             locTileSamp  = GL20.glGetUniformLocation(program, "TileSampler");
             locTileDims  = GL20.glGetUniformLocation(program, "TileDims");
             locTilePx    = GL20.glGetUniformLocation(program, "TilePx");

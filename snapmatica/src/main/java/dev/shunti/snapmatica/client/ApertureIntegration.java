@@ -318,8 +318,14 @@ public final class ApertureIntegration {
     private static volatile int     accW = 0, accH = 0;
     private static volatile float[] sumR = null, sumG = null, sumB = null;
 
-    /** sRGB→linear for the 256 values a readback can hold; the decode is otherwise per pixel. */
-    private static final float[] SRGB_TO_LINEAR = new float[256];
+    /**
+     * sRGB→linear for the 256 values a readback can hold; the decode is otherwise per pixel.
+     *
+     * <p>Shared with {@code PhotoCapture}'s vignetting rather than copied, for the reason
+     * {@link #linearToSrgb} gives: one definition of the transfer curve, matching the
+     * shader's constant for constant.
+     */
+    static final float[] SRGB_TO_LINEAR = new float[256];
     static {
         for (int i = 0; i < 256; i++) {
             double c = i / 255.0;
@@ -839,7 +845,7 @@ public final class ApertureIntegration {
     // photo taken this way and one taken through the gather differ in their optics and in
     // nothing else.
 
-    private static float linearToSrgb(float c) {
+    static float linearToSrgb(float c) {
         return c <= 0.0031308f ? c * 12.92f
                 : (float) (1.055 * Math.pow(c, 1.0 / 2.4) - 0.055);
     }

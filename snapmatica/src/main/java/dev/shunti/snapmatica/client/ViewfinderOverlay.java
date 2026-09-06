@@ -228,23 +228,6 @@ public final class ViewfinderOverlay {
             }
         }
 
-        // 3. Vignette
-        float vs = evfVignetteStrength(SnapmaticaClient.aperture);
-        if (vs > 0.01f) {
-            int fw = fx2 - fx, fh = fy2 - fy;
-            for (int b = 0; b < 6; b++) {
-                float t = (float)(6 - b) / 6f;
-                int a = (int)(vs * 80 * t * t);
-                if (a < 2) continue;
-                int bw = (6 - b) * fw / 24;
-                int bh = (6 - b) * fh / 24;
-                int vc = (a << 24);
-                ctx.fill(fx, fy, fx + bw, fy2, vc);
-                ctx.fill(fx2 - bw, fy, fx2, fy2, vc);
-                ctx.fill(fx, fy, fx2, fy + bh, vc);
-                ctx.fill(fx, fy2 - bh, fx2, fy2, vc);
-            }
-        }
     }
 
     // ── Exposure meter ──────────────────────────────────────────────────────────
@@ -394,13 +377,6 @@ public final class ViewfinderOverlay {
     }
 
     private static int clampByte(int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
-
-    private static float evfVignetteStrength(float ap) {
-        if (ap <= 1.4f) return 0.90f; if (ap <= 2.0f) return 0.72f;
-        if (ap <= 2.8f) return 0.55f; if (ap <= 4.0f) return 0.38f;
-        if (ap <= 5.6f) return 0.22f; if (ap <= 8.0f) return 0.11f;
-        if (ap <= 11f) return 0.05f; return 0.02f;
-    }
 
     private static void drawBracket(DrawContext ctx, int ax, int ay, int len, int t,
                                     int dx, int dy, int color) {

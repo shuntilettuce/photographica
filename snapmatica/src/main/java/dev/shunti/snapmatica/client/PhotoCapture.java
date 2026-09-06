@@ -968,13 +968,29 @@ public final class PhotoCapture {
                 // viewfinder and the photograph both go through.
 
                 // 1. Lens vignetting — applied for a DNG too; see this method's doc.
+                //
+                // In LINEAR light, which is not a refinement but the difference between this
+                // table meaning what it says and meaning twice that. Falloff scales RADIANCE:
+                // less of the aperture is visible from a corner of the frame, so less light
+                // arrives. These bytes are gamma-encoded, and multiplying them instead scales
+                // the light by vf^2.2 — at f/1.4 that turned an intended 1.74 stops in the
+                // corner into 3.82, which no lens does and which is why the corners read as a
+                // dark object rather than as shading. It is the same mistake Pass 5's own note
+                // describes for the exposure gain, in the one place that had not been moved.
+                //
+                // With the multiply in the right space the existing table lands inside the
+                // measured falloff of real fast primes at every stop — 1.74 at f/1.4 against a
+                // real 1.5–2.5, 0.74 at f/2.8 against 0.7–1.0 — which is the evidence it was
+                // written as a transmission all along.
                 float dx = (px - halfW) / halfW;
                 float dy = (py - halfH) / halfH;
                 float vig = vignetteStrength(SnapmaticaClient.aperture);
                 float vf = Math.max(0f, 1f - vig * (dx * dx + dy * dy) * 0.5f);
-                r = clamp((int)(r * vf));
-                g = clamp((int)(g * vf));
-                b = clamp((int)(b * vf));
+                if (vf < 1f) {
+                    r = vignettePixel(r, vf);
+                    g = vignettePixel(g, vf);
+                    b = vignettePixel(b, vf);
+                }
 
                 // 2. ISO noise — applied for a DNG too; see this method's doc. The
                 // Auto-ISO assist's target, not the manual dial, so a shot that leaned on it
@@ -1134,7 +1150,36 @@ public final class PhotoCapture {
 
     // ── Effect helpers ──────────────────────────────────────────────────────────
 
-    private static float vignetteStrength(float aperture) {
+    /**
+     * Linear→sRGB, tabulated, because the honest version is a pow per channel per pixel.
+     *
+     * <p>8192 steps: the curve's steepest region is its toe, where one step spans 12.92/8192 of
+     * an sRGB unit — under a hundredth of an 8-bit level — and its shallowest is near white,
+     * where a step is smaller still. So the table is exact to well inside what a byte can hold,
+     * for three array reads instead of three pows over every pixel of a photograph.
+     *
+     * <p>Built from {@link ApertureIntegration#linearToSrgb} rather than from a fresh formula,
+     * so the finder, the aperture integral and this all bend light the same way.
+     */
+    private static final int LIN_LUT_N = 8192;
+    private static final byte[] LIN_TO_SRGB8 = new byte[LIN_LUT_N];
+    static {
+        for (int i = 0; i < LIN_LUT_N; i++) {
+            float s = ApertureIntegration.linearToSrgb(i / (float) (LIN_LUT_N - 1));
+            LIN_TO_SRGB8[i] = (byte) Math.round(Math.max(0f, Math.min(1f, s)) * 255f);
+        }
+    }
+
+    /** One channel through the falloff: decode, scale the light, re-encode. */
+    private static int vignettePixel(int srgb8, float vf) {
+        float lin = ApertureIntegration.SRGB_TO_LINEAR[srgb8] * vf;
+        int idx = (int) (lin * (LIN_LUT_N - 1) + 0.5f);
+        if (idx < 0) idx = 0;
+        else if (idx >= LIN_LUT_N) idx = LIN_LUT_N - 1;
+        return LIN_TO_SRGB8[idx] & 0xFF;
+    }
+
+    static float vignetteStrength(float aperture) {
         if (aperture <= 1.4f) return 0.70f;
         if (aperture <= 2.0f) return 0.55f;
         if (aperture <= 2.8f) return 0.40f;

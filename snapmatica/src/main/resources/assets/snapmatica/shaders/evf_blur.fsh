@@ -58,6 +58,10 @@ uniform float DynRangeStops;     // how many stops of scene brightness the simul
                                   // crushes sooner (a cheaper sensor); see applyDynamicRange
 uniform float CaK;               // lateral chromatic aberration: fractional difference in
                                   // magnification between the red and blue ends, 0 = corrected
+uniform float Vignette;          // lens falloff: 0 none, else PhotoCapture.vignetteStrength
+uniform vec2  FrameHalf;         // half the PHOTOGRAPH's rectangle, as a fraction of the
+                                 // buffer, so the falloff is measured against the picture
+                                 // rather than against a letterboxed window
 uniform vec3  WbGain;            // white-balance per-channel gain (1,1,1 = no correction),
                                   // applied in LINEAR light — SnapmaticaClient.whiteBalanceGain()
 uniform sampler2D TileSampler;   // per-tile reach map -- see the tile passes below
@@ -672,6 +676,21 @@ void main() {
         // curve below: the shoulder exists to catch highlights on their way out of range, and
         // clipping first would leave it nothing to catch.
         vec3 c = srgbToLinear(texture(InSampler, texCoord).rgb);
+        // Lens falloff, ahead of the sensor's gain because that is the order it happens in: a
+        // corner of the frame sees less of the aperture, so less light arrives, and only then
+        // is what arrived amplified. Same formula and same table as the photograph
+        // (PhotoCapture.vignetteStrength) so the finder is not a second opinion about it.
+        //
+        // This replaces six nested RECTANGLES drawn over the finder as a HUD overlay, which
+        // darkened a corner and the middle of an edge by exactly the same amount — a lens hood
+        // clipping the frame, not a barrel vignetting it — and ended all six bands at the same
+        // radius, leaving a hard step a quarter of the way in. A smooth gradient is discounted
+        // by the eye as shading; an edge is detected as a thing, which is why the old one was
+        // conspicuous at apertures where a real lens's falloff is not.
+        if (Vignette > 0.0) {
+            vec2 vd = (texCoord - vec2(0.5)) / max(FrameHalf, vec2(1e-4));
+            c *= max(0.0, 1.0 - Vignette * dot(vd, vd) * 0.5);
+        }
         c = c * WbGain * ExposureGain;
         c = linearToSrgb(max(c, 0.0));
         c = applyDynamicRange(c);
