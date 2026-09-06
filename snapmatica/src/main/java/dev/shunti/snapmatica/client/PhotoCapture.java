@@ -645,6 +645,62 @@ public final class PhotoCapture {
      * block/entity/self logic to what this used to be inline, just run once per sample point
      * instead of duplicated across this file's two Stonecutter branches.
      */
+    /**
+     * The camera's look direction re-aimed at the AF point, as {yaw, pitch} in degrees.
+     *
+     * <p>Two things this is careful about, both of which the obvious version gets wrong.
+     *
+     * <p>First, the AF point is an ANGLE, not a pixel offset. The fraction is turned into a
+     * tangent against the frame and back into an angle, so a point halfway to the edge leaves
+     * at {@code atan(0.5 * tan(half-angle))} rather than at half the half-angle. The scale
+     * comes from the same focal-length-in-pixels the blur shader works in -- the frame's half
+     * width over that length IS the tangent of its half angle -- so the AF point, the reticle
+     * drawn over it and the circle of confusion computed for it agree at every focal length,
+     * instead of drifting apart as the lens gets long.
+     *
+     * <p>Second, the offset is applied in the CAMERA's basis and only then converted back to
+     * yaw and pitch, rather than being added to them. Adding degrees to yaw is what the +-5
+     * degree zone cluster does and is harmless at five degrees, but the AF point reaches half
+     * the field -- thirty degrees or more on a wide lens -- and a yaw offset added while the
+     * camera is pitched down does not point at the edge of the frame at all. It sweeps a line
+     * of latitude, which is a circle that shrinks as the camera tilts: at sixty degrees down
+     * the same yaw offset covers twice the angle asked for, and the AF point would slide off
+     * the subject the moment you looked up or down.
+     *
+     * <p>Returns the base angles untouched when the point is centred, which is both the common
+     * case and free.
+     */
+    static float[] afPointDirection(MinecraftClient mc, float baseYaw, float basePitch) {
+        float ax = SnapmaticaClient.afPointX, ay = SnapmaticaClient.afPointY;
+        if ((ax == 0f && ay == 0f) || mc.getWindow() == null) return new float[]{baseYaw, basePitch};
+
+        int sw = mc.getWindow().getScaledWidth();
+        int sh = mc.getWindow().getScaledHeight();
+        if (sw <= 0 || sh <= 0) return new float[]{baseYaw, basePitch};
+        int[] fr = frameRect(sw, sh, SnapmaticaClient.portraitOrientation);
+
+        // The full screen HEIGHT spans the sensor height -- that is how EvfBlurRenderer derives
+        // its focal length in pixels -- so the frame's own half angles are its pixel half sizes
+        // measured against that same length. Taking them from the FRAME rather than from the
+        // screen is what makes the portrait flip and every letterboxed window come out right
+        // without a second formula for each.
+        double halfTanScreen = SnapmaticaClient.sensorHeightMm() * 0.5
+                / Math.max(1e-4, SnapmaticaClient.imageDistanceMm(
+                        Math.max(1f, SnapmaticaClient.focalLengthMm)));
+        double tx =  ax * (fr[2] / (double) sh) * halfTanScreen;
+        double ty = -ay * (fr[3] / (double) sh) * halfTanScreen;   // screen y down, camera y up
+
+        net.minecraft.util.math.Vec3d fwd   = net.minecraft.util.math.Vec3d.fromPolar(basePitch, baseYaw);
+        net.minecraft.util.math.Vec3d right = net.minecraft.util.math.Vec3d.fromPolar(0f, baseYaw + 90f);
+        net.minecraft.util.math.Vec3d up    = right.crossProduct(fwd);
+        net.minecraft.util.math.Vec3d d = fwd.add(right.multiply(tx))
+                             .add(up.multiply(ty)).normalize();
+
+        float yaw   = (float) Math.toDegrees(Math.atan2(-d.x, d.z));
+        float pitch = (float) Math.toDegrees(-Math.asin(Math.max(-1.0, Math.min(1.0, d.y))));
+        return new float[]{yaw, pitch};
+    }
+
     private static double nearestSubjectDistance(MinecraftClient mc, net.minecraft.util.math.Vec3d eye,
                                                  float baseYaw, float basePitch, double maxDist) {
         // A modest cluster, not a frame-wide scan — real zone AF areas cover a fraction of
@@ -730,7 +786,8 @@ public final class PhotoCapture {
             final double maxDist = 1000.0;
             net.minecraft.util.math.Vec3d eye = SnapmaticaClient.cameraPos(mc);
             net.minecraft.client.render.Camera camera = mc.gameRenderer.getCamera();
-            double bestDist = nearestSubjectDistance(mc, eye, camera.getYaw(), camera.getPitch(), maxDist);
+            float[] af = afPointDirection(mc, camera.getYaw(), camera.getPitch());
+            double bestDist = nearestSubjectDistance(mc, eye, af[0], af[1], maxDist);
             lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : SnapmaticaClient.FOCUS_INFINITY;
             // Raycast missed (sky / beyond loaded range). The old GPU centre-depth readback
             // (readCenterLinearDepthBlocks -> glReadPixels on a depth FBO) crashed the NVIDIA
@@ -775,7 +832,8 @@ public final class PhotoCapture {
             final double maxDist = 1000.0;
             net.minecraft.util.math.Vec3d eye = SnapmaticaClient.cameraPos(mc);
             net.minecraft.client.render.Camera camera = mc.gameRenderer.getCamera();
-            double bestDist = nearestSubjectDistance(mc, eye, camera.getYaw(), camera.getPitch(), maxDist);
+            float[] af = afPointDirection(mc, camera.getYaw(), camera.getPitch());
+            double bestDist = nearestSubjectDistance(mc, eye, af[0], af[1], maxDist);
             lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : SnapmaticaClient.FOCUS_INFINITY;
 
             if (lastSceneDepthBlocks >= SnapmaticaClient.FOCUS_INFINITY) {

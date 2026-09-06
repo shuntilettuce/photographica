@@ -110,7 +110,15 @@ public final class ViewfinderOverlay {
         // ZONE draws a 3x3 grid of small open AF-point boxes instead, the same multi-point
         // display a real mirrorless body draws over its metering/AF area — see
         // SnapmaticaClient.focusAreaWide. Colour changes based on depth match either way.
-        int cx=sw/2,cy=sh/2,rc=focusReticleColor();
+        // The reticle marks where the camera is MEASURING, so it goes wherever the AF point
+        // was put -- one that stayed in the middle while the ray left off axis would be lying
+        // about the one thing it exists to say. Placed against the FRAME rather than the screen
+        // so it stays inside the picture when the finder is letterboxed, which is also the
+        // rectangle PhotoCapture.afPointDirection measures its angles against.
+        int[] afFr = PhotoCapture.frameRect(sw, sh, SnapmaticaClient.portraitOrientation);
+        int cx = afFr[0] + Math.round(afFr[2] * 0.5f * (1f + SnapmaticaClient.afPointX));
+        int cy = afFr[1] + Math.round(afFr[3] * 0.5f * (1f + SnapmaticaClient.afPointY));
+        int rc = focusReticleColor();
         if (SnapmaticaClient.focusAreaWide) {
             drawAfPointGrid(ctx,cx,cy,rc);
         } else {

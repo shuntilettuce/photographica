@@ -105,6 +105,7 @@ public final class EvfBlurRenderer {
     private static int locPixelSize  = -1;
     private static int locFocusDist  = -1;
     private static int locAfMode     = -1;
+    private static int locAfPoint    = -1;
     private static int locNearDownscale = -1;
     private static int locNearLayer  = -1;
     private static int locNoiseRot   = -1;
@@ -835,6 +836,22 @@ public final class EvfBlurRenderer {
 
         GL20.glUniform1f(locFocusDist, focusDist);
         GL20.glUniform1i(locAfMode, gpuAutoFocus ? 1 : 0);
+        // Measured against frameRect rather than against this pass's own fx..fy2, because those
+        // two differ for a capture: the capture pass covers the whole framebuffer and the 3:2
+        // crop happens afterwards in PhotoCapture. Going through the crop either way is what
+        // keeps the GPU's focus point on the same part of the scene as the CPU raycast and the
+        // reticle -- and on the same part of the scene in the photograph as in the finder.
+        if (locAfPoint >= 0) {
+            int afSw = Math.max(1, mc.getWindow().getScaledWidth());
+            int afSh = Math.max(1, mc.getWindow().getScaledHeight());
+            int[] afFr = PhotoCapture.frameRect(afSw, afSh, SnapmaticaClient.portraitOrientation);
+            float afU = (afFr[0] + afFr[2] * 0.5f * (1f + SnapmaticaClient.afPointX)) / afSw;
+            float afV = (afFr[1] + afFr[3] * 0.5f * (1f + SnapmaticaClient.afPointY)) / afSh;
+            // texCoord comes straight off the quad's UV0 and runs the way gl_FragCoord does --
+            // v upward from the bottom -- while the frame is laid out in GUI coordinates with y
+            // downward, so the vertical flips exactly once, and it flips here.
+            GL20.glUniform2f(locAfPoint, afU, 1.0f - afV);
+        }
         GL20.glUniform1i(locNearDownscale, NEAR_DOWNSCALE);
         GL20.glUniform1i(locNearLayer, NEAR_FIELD_LAYER ? 1 : 0);
         // Turn the gather's sampling disc by a different angle on every sub-frame of a burst.
@@ -1552,6 +1569,7 @@ public final class EvfBlurRenderer {
             locPixelSize = GL20.glGetUniformLocation(program, "PixelSize");
             locFocusDist = GL20.glGetUniformLocation(program, "FocusDist");
             locAfMode    = GL20.glGetUniformLocation(program, "AfMode");
+            locAfPoint   = GL20.glGetUniformLocation(program, "AfPoint");
             locNearDownscale = GL20.glGetUniformLocation(program, "NearDownscale");
             locNearLayer = GL20.glGetUniformLocation(program, "NearLayer");
             locNoiseRot  = GL20.glGetUniformLocation(program, "NoiseRot");

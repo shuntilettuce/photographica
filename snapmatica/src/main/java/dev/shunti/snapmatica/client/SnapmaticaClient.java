@@ -224,6 +224,38 @@ public class SnapmaticaClient implements ClientModInitializer {
     public static boolean focusAreaWide = false;
 
     /**
+     * Where in the frame the camera focuses, as a fraction of the half-frame from its centre:
+     * -1..+1 on each axis, 0,0 dead centre, +x right and +y DOWN (screen sense, so it reads the
+     * same way as the reticle it moves).
+     *
+     * <p>Every body made in the last thirty years lets you put the AF point on the subject.
+     * This one measured the middle of the frame and nothing else, so composing off-centre meant
+     * focus-and-recompose -- focus on the middle, swing the camera, and accept that the subject
+     * is no longer at the distance you measured. The error that introduces is not academic: it
+     * grows as the focus distance times one minus the cosine of the recompose angle, and at
+     * f/1.4 and a couple of metres that is most of the depth of field.
+     *
+     * <p>Stored as a fraction rather than in pixels so it survives a resize, a change of GUI
+     * scale and the portrait/landscape flip, and turned into a DIRECTION at the moment of use
+     * rather than into a pixel offset: the ray for a point halfway to the edge leaves the lens
+     * at {@code atan(0.5 * tan(half-angle))}, which is where that part of the picture actually
+     * looks. See {@code PhotoCapture#afPointDirection}.
+     */
+    public static float afPointX = 0f, afPointY = 0f;
+
+    /**
+     * How fast the focus racks: 0 slow, 1 normal, 2 fast.
+     *
+     * <p>A real body has this on its AF drive, and it is not a comfort setting. A slow rack is
+     * what makes a focus pull watchable and what stops the lens chasing every gap in a crowd;
+     * a fast one is what catches something that moved. It matters more since the exposure
+     * became an interval rather than an instant: a rack that happens while the shutter is open
+     * is IN the photograph, as the subject sliding through focus, so how fast the lens travels
+     * is now a visible property of the picture rather than only of the wait before it.
+     */
+    public static int afSpeed = 1;
+
+    /**
      * Ambient depth of field: the lens applied to ordinary play, not to a photograph.
      *
      * <p>Every setting it uses is its OWN — see {@link #ambientAperture} and {@link

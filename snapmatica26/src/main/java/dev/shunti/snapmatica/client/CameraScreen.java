@@ -96,6 +96,8 @@ public class CameraScreen extends Screen {
      * <p>Built as data first and placed second, because the placement depends on how much of
      * the list fits — which cannot be known until the whole list exists.
      */
+    private static final String[] AF_SPEED_LABELS = { "SLOW", "NORMAL", "FAST" };
+
     private record Item(String key, java.util.function.Supplier<String> value,
                         java.util.function.IntConsumer step, boolean editable) {
         static Item section(String key) { return new Item(key, null, null, false); }
@@ -277,6 +279,29 @@ public class CameraScreen extends Screen {
                 () -> FOCUS_MODE_LABELS[clampIdx(SnapmaticaClient.focusMode, FOCUS_MODE_LABELS.length)],
                 step -> SnapmaticaClient.focusMode =
                         clampStep(SnapmaticaClient.focusMode, step, FOCUS_MODE_LABELS.length),
+                true));
+
+        out.add(new Item("snapmatica.camera.af_speed",
+                () -> AF_SPEED_LABELS[clampIdx(SnapmaticaClient.afSpeed, AF_SPEED_LABELS.length)],
+                step -> { SnapmaticaClient.afSpeed =
+                        clampStep(SnapmaticaClient.afSpeed, step, AF_SPEED_LABELS.length);
+                    SnapmaticaConfig.save(); },
+                true));
+
+        // A stepper that recentres rather than one that walks the point along an axis: the
+        // point has two axes and this row has one, so pretending otherwise would give a control
+        // that can reach a third of the positions it displays. Recentring is the operation a
+        // body actually puts on a button, and the row earns its place by showing where the
+        // point IS -- and, in its label, by naming the keys that move it, which is the only
+        // place in the interface that could say so.
+        out.add(new Item("snapmatica.camera.af_point",
+                () -> (SnapmaticaClient.afPointX == 0f && SnapmaticaClient.afPointY == 0f)
+                        ? net.minecraft.network.chat.Component
+                                .translatable("snapmatica.camera.af_point_centre").getString()
+                        : String.format("%+.0f,%+.0f", SnapmaticaClient.afPointX * 100f,
+                                                       SnapmaticaClient.afPointY * 100f),
+                step -> { SnapmaticaClient.afPointX = 0f; SnapmaticaClient.afPointY = 0f;
+                    SnapmaticaConfig.save(); },
                 true));
 
         out.add(new Item("snapmatica.camera.focus_area",

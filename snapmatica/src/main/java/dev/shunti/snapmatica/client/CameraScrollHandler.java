@@ -188,6 +188,17 @@ public final class CameraScrollHandler {
 
     public static boolean altDown() { return modifierDown(GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_RIGHT_ALT); }
 
+    /**
+     * Whether a single key is physically down right now.
+     *
+     * <p>Here rather than as a key binding because the AF-point selector has to keep moving
+     * while a direction is HELD, and a binding reports presses, not state. Sharing
+     * {@link #modifierDown}'s body is the point: that method holds this mod's only branch for
+     * how the window is addressed across versions, and a second copy is a second thing to get
+     * wrong at the next one.
+     */
+    public static boolean keyDown(int key) { return modifierDown(key, key); }
+
     private static boolean modifierDown(int left, int right) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc == null || mc.getWindow() == null) return false;

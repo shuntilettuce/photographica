@@ -10,7 +10,8 @@ uniform int   Pass;              // 0 = gather/copy, 1 = extract fg, 2 = blur, 3
 uniform vec2 BlurDir;            // gather/copy: .x>=0.5 gather, <0.5 copy.  blur: H=(1,0) V=(0,1)
 uniform vec2 PixelSize;          // 1/texW, 1/texH of the CURRENT render target
 uniform float FocusDist;         // focus distance in blocks (metres); ignored when AfMode=1
-uniform int   AfMode;            // 1 = derive focus from the centre pixel's depth, on the GPU
+uniform int   AfMode;            // 1 = derive focus from the AF point's depth, on the GPU
+uniform vec2  AfPoint;           // where that is, in this texture's own 0..1 coordinates
 uniform int   NearDownscale;     // full-res texels per near-layer texel (EvfBlurRenderer)
 uniform int   NearLayer;         // 0 = composite the gather alone, skipping the near-field
 uniform float NoiseRot;          // extra rotation of the sample disc, per aperture sub-frame
@@ -183,7 +184,7 @@ float gFocus;
 
 float resolveFocus() {
     if (AfMode == 0) return FocusDist;
-    float d = linearDepth(texture(DepthSampler, vec2(0.5, 0.5)).r);
+    float d = linearDepth(texture(DepthSampler, AfPoint).r);
     // Reticle on sky / at the far plane: infinity, matching the CPU path's sentinel. Without
     // this the focus would sit at the far plane as a FINITE distance and re-enable the haze
     // floor below, softening the very horizon the camera is focused on.

@@ -33,6 +33,59 @@ public final class AutoFocus {
     public static volatile boolean afAtInfinity = false;
 
 
+    /**
+     * How far off centre the AF point may be placed, as a fraction of the half-frame.
+     *
+     * <p>Short of the edge on purpose: at a full 1.0 the reticle would be drawn half outside
+     * the frame, and the AF ray would leave along the very boundary of the picture, where half
+     * of a zone-AF cluster is measuring scene that was never in the photograph.
+     */
+    private static final float AF_POINT_MAX  = 0.9f;
+
+    /** Per-tick travel while a direction is held: centre to the edge in about a second. */
+    private static final float AF_POINT_STEP = 0.045f;
+
+    private static boolean afPointDirty = false;
+
+    /**
+     * Moves the AF point under the arrow keys while the viewfinder is up.
+     *
+     * <p>Polled, not bound. A key binding reports presses, and placing a point by tapping an
+     * arrow twenty times is not how the multi-controller on a body works -- you hold it and the
+     * point travels. {@link CameraScrollHandler#keyDown} is where this mod asks the window
+     * about a key, so this asks there too rather than growing a second copy of that branch.
+     *
+     * <p>Written to the config only once the keys come up. The point is a setting and belongs
+     * in the file -- a body remembers its AF point across a battery change -- but saving on
+     * every tick of a held arrow would be twenty file writes a second for one adjustment.
+     *
+     * <p>Reached from {@link #tick} after its guards, so the point holds still during a burst
+     * for the same reason the focus does: an exposure is one instant, and a reticle that
+     * wandered through it would be measuring a different subject at the end than at the start.
+     */
+    private static void tickAfPoint(Minecraft mc) {
+        // Any screen open means the arrows belong to it, not to the camera.
+        if (mc.screen != null) return;
+
+        float dx = 0f, dy = 0f;
+        if (CameraScrollHandler.keyDown(org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT))  dx -= AF_POINT_STEP;
+        if (CameraScrollHandler.keyDown(org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT)) dx += AF_POINT_STEP;
+        if (CameraScrollHandler.keyDown(org.lwjgl.glfw.GLFW.GLFW_KEY_UP))    dy -= AF_POINT_STEP;
+        if (CameraScrollHandler.keyDown(org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN))  dy += AF_POINT_STEP;
+
+        if (dx == 0f && dy == 0f) {
+            if (afPointDirty) { afPointDirty = false; SnapmaticaConfig.save(); }
+            return;
+        }
+        SnapmaticaClient.afPointX = clampPoint(SnapmaticaClient.afPointX + dx);
+        SnapmaticaClient.afPointY = clampPoint(SnapmaticaClient.afPointY + dy);
+        afPointDirty = true;
+    }
+
+    private static float clampPoint(float v) {
+        return v < -AF_POINT_MAX ? -AF_POINT_MAX : (v > AF_POINT_MAX ? AF_POINT_MAX : v);
+    }
+
     // Manual-focus rack, in dioptres per client tick (20 Hz). RATE is the fraction of the
     // remaining travel covered each tick; MAX caps how fast the barrel can physically turn, so
     // a jump from close focus to infinity takes a visible moment instead of teleporting.
@@ -130,6 +183,8 @@ public final class AutoFocus {
         boolean active = SnapmaticaClient.viewfinderActive(mc) || VideoRecorder.isRecording();
         if (!active) return;
 
+        tickAfPoint(mc);
+
         // The Camera Path menu's focus lock overrides whatever focus mode is selected, but
         // only while a path is actually playing — it exists to hold one subject in focus
         // through a flythrough shot regardless of what MF/AF/MOB would otherwise chase.
@@ -211,6 +266,22 @@ public final class AutoFocus {
      * to like any other, and it is roughly how a helicoid moves anyway: the far half of the
      * scale is a sliver of the ring's travel.
      */
+    /**
+     * The fraction of the nominal rack speed {@link SnapmaticaClient#afSpeed} asks for.
+     *
+     * <p>Half and double. A wider span was tempting and is wrong at both ends: much slower and
+     * the lens never arrives inside a long exposure, so every such photograph is taken
+     * mid-rack; much faster and the step ceiling stops capping anything, which is the only
+     * thing keeping a close-to-infinity rack from teleporting in a single tick.
+     */
+    private static float afSpeedScale() {
+        return switch (SnapmaticaClient.afSpeed) {
+            case 0  -> 0.5f;
+            case 2  -> 2.0f;
+            default -> 1.0f;
+        };
+    }
+
     private static float rackDioptric(float current, float target) {
         float cur = toDiopters(current);
         float tar = toDiopters(target);
@@ -221,8 +292,12 @@ public final class AutoFocus {
         // a rack out to infinity always completed in a single tick: the one step anyone would
         // notice. Tighter than this only adds an invisible tail and delays the readout.
         if (Math.abs(diff) <= 1e-5f) return target;
-        float step = diff * RACK_RATE;
-        float ceil = RACK_MAX_DIOPTRE;
+        // Rate and ceiling scale TOGETHER, so the shape of the rack is unchanged and only
+        // its speed moves: a slow rack is the same easing curve taken more gently, not a
+        // differently-shaped one that would set off at the same pace and then crawl.
+        float k = afSpeedScale();
+        float step = diff * RACK_RATE * k;
+        float ceil = RACK_MAX_DIOPTRE * k;
         if (step >  ceil) step =  ceil;
         if (step < -ceil) step = -ceil;
         return fromDiopters(cur + step);
