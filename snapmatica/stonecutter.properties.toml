@@ -1,5 +1,5 @@
 # See https://stonecutter.kikugie.dev/wiki/config/properties
-mod_version = "1.3.0"
+mod_version = "1.4.0"
 maven_group = "dev.shunti.snapmatica"
 archives_base_name = "snapmatica"
 

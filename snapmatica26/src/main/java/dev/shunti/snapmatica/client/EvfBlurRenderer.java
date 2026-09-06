@@ -62,6 +62,22 @@ public final class EvfBlurRenderer {
     private static int nearFboB = -1, nearTexB = -1;   // background (holes filled)
     private static int nearFboC = -1, nearTexC = -1;   // separable-blur temp
     private static int nearW = 0, nearH = 0;
+
+    /**
+     * Full-resolution pixels along a tile edge of the reach map.
+     *
+     * <p>16 measured best of 8, 16, 24 and 32 over synthetic leaf, fence, far-blob and pillar
+     * scenes, and the two ends fail for opposite reasons. Smaller tiles make the dilation
+     * quadratically dearer -- at 8 px and a 300 px blur it spends 93 taps per screen pixel,
+     * which is the 96-tap scan it replaced -- while larger ones coarsen the reach and hand the
+     * gather a radius it did not need: at 32 px the isolated-leaf scene costs three times what
+     * it does at 16, purely in gather taps bought by the over-estimate.
+     */
+    private static final int TILE_PX = 16;
+
+    private static int tileFboA = -1, tileTexA = -1;   // per-tile maxima
+    private static int tileFboB = -1, tileTexB = -1;   // the same, spread to everything they reach
+    private static int tileW = 0, tileH = 0;
     // 1/2 rather than 1/4. At quarter resolution the wide Gaussian below had so few texels to
     // work with that a defocused foreground read as smeared paint rather than as bokeh — the
     // "ネットリ" look. Half resolution keeps the layer cheap (it is a separable blur over a
@@ -105,6 +121,9 @@ public final class EvfBlurRenderer {
     private static int locPixelSize  = -1;
     private static int locFocusDist  = -1;
     private static int locAfMode     = -1;
+    private static int locTileSamp   = -1;
+    private static int locTileDims   = -1;
+    private static int locTilePx     = -1;
     private static int locAfPoint    = -1;
     private static int locNearDownscale = -1;
     private static int locNearLayer  = -1;
@@ -791,6 +810,12 @@ public final class EvfBlurRenderer {
         int prevSampler5 = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
         GL33.glBindSampler(5, 0);
         //?}
+        GL13.glActiveTexture(GL13.GL_TEXTURE6);
+        int prevTex6 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        //? if >=1.21.10 {
+        int prevSampler6 = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
+        GL33.glBindSampler(6, 0);
+        //?}
         int[] prevViewport   = new int[4];
         int[] prevScissorBox = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT,    prevViewport);
@@ -815,6 +840,7 @@ public final class EvfBlurRenderer {
         GL20.glUniform1i(locNoiseSamp, 2);
         GL20.glUniform1i(locNearSamp, 3);   // foreground bound to unit 3 before composite
         GL20.glUniform1i(locBgSamp, 4);     // background bound to unit 4 before composite
+        GL20.glUniform1i(locTileSamp, 6);   // reach map; rebound between its two passes
 
         // frame and does not need it, since nothing is being kept.
         // Unit 5: the scene depth as it stands right now, against which DepthSampler's copy is
@@ -998,6 +1024,36 @@ public final class EvfBlurRenderer {
         // ── Full-res passes (scissored to viewfinder + bleed) ────────────────────────
         GL20.glUniform2f(locPixelSize, 1.0f / fbW, 1.0f / fbH);
 
+        // ── The reach map, built before anything that reads it ───────────────────────
+        //
+        // Two tile-resolution passes replacing the 96 depth taps the gather used to spend per
+        // pixel working out what could reach it — see the note above tileBuild in the shader.
+        // Both run over the WHOLE map with no scissor: a tile just outside the viewfinder
+        // rectangle is still a neighbour of tiles inside it, and clipping the map to the frame
+        // would make the outer ring of the picture forget every foreground beyond its edge.
+        //
+        // PixelSize is deliberately left at the full-resolution value set just above even
+        // though the target is the tile buffer: the build pass reads the DEPTH buffer, which is
+        // full resolution, and the only coordinates it needs in tile space come from
+        // gl_FragCoord.
+        GL20.glUniform1f(locTilePx, (float) TILE_PX);
+        GL20.glUniform2f(locTileDims, (float) tileW, (float) tileH);
+        GL11.glViewport(0, 0, tileW, tileH);
+
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, tileFboA);
+        GL20.glUniform1i(locPass, 8);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+
+        GL13.glActiveTexture(GL13.GL_TEXTURE6);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, tileTexA);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, tileFboB);
+        GL20.glUniform1i(locPass, 9);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+
+        // The gather reads the DILATED map, so leave that one bound for the rest of the run.
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, tileTexB);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+
         double scale = mc.getWindow().getGuiScale();
         int scX = (int)(fx  * scale);
         int scY = fbH - (int)(fy2 * scale);
@@ -1106,6 +1162,11 @@ public final class EvfBlurRenderer {
         GL11.glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
         if (depthWasEnabled) GL11.glEnable(GL11.GL_DEPTH_TEST);
         if (blendWasEnabled) GL11.glEnable(GL11.GL_BLEND);
+        GL13.glActiveTexture(GL13.GL_TEXTURE6);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex6);
+        //? if >=1.21.10 {
+        GL33.glBindSampler(6, prevSampler6);
+        //?}
         GL13.glActiveTexture(GL13.GL_TEXTURE5);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex5);
         //? if >=1.21.10 {
@@ -1470,7 +1531,53 @@ public final class EvfBlurRenderer {
         int nw = Math.max(1, fbW / NEAR_DOWNSCALE);
         int nh = Math.max(1, fbH / NEAR_DOWNSCALE);
         if (nearFboA == -1 || nearW != nw || nearH != nh) initNear(nw, nh);
+        int tw = Math.max(1, (fbW + TILE_PX - 1) / TILE_PX);
+        int th = Math.max(1, (fbH + TILE_PX - 1) / TILE_PX);
+        if (tileFboA == -1 || tileW != tw || tileH != th) initTiles(tw, th);
         if (noiseTex == -1) initNoise();
+    }
+
+    /**
+     * The two tile-resolution buffers the reach map is built in.
+     *
+     * <p>RGBA16F rather than the RGBA8 the near-field layers use, because these hold a circle
+     * of confusion in pixels and a depth in blocks, not a colour: an 8-bit channel would
+     * quantise a 300 px circle into steps of 1.2 px and a 900-block depth into steps of 3.5,
+     * and every tile boundary would become a visible step in the gather radius. Half float
+     * carries a tenth of a pixel at 300 and half a block at 900, and its range reaches the
+     * 60000 sentinel the dilation uses for "no foreground found here".
+     *
+     * <p>NEAREST, and never filtered: every read of these is a texelFetch of one exact tile.
+     * Interpolating between two tiles would blend a reach with a sentinel and invent a
+     * foreground halfway between a tile that has one and a tile that does not.
+     */
+    private static void initTiles(int w, int h) {
+        if (tileFboA != -1) {
+            GL30.glDeleteFramebuffers(tileFboA); GL11.glDeleteTextures(tileTexA);
+            GL30.glDeleteFramebuffers(tileFboB); GL11.glDeleteTextures(tileTexB);
+        }
+        int[] tex = new int[2];
+        int[] fbo = new int[2];
+        for (int i = 0; i < 2; i++) {
+            int t = GL11.glGenTextures();
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, t);
+            GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, w, h, 0,
+                    GL11.GL_RGBA, GL11.GL_FLOAT, (java.nio.ByteBuffer) null);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+            int f = GL30.glGenFramebuffers();
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, f);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                    GL11.GL_TEXTURE_2D, t, 0);
+            tex[i] = t; fbo[i] = f;
+        }
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+        tileTexA = tex[0]; tileFboA = fbo[0];
+        tileTexB = tex[1]; tileFboB = fbo[1];
+        tileW = w; tileH = h;
     }
 
     /** Low-res RGBA8 ping-pong pair for the near-field foreground (LINEAR so the composite
@@ -1569,6 +1676,9 @@ public final class EvfBlurRenderer {
             locPixelSize = GL20.glGetUniformLocation(program, "PixelSize");
             locFocusDist = GL20.glGetUniformLocation(program, "FocusDist");
             locAfMode    = GL20.glGetUniformLocation(program, "AfMode");
+            locTileSamp  = GL20.glGetUniformLocation(program, "TileSampler");
+            locTileDims  = GL20.glGetUniformLocation(program, "TileDims");
+            locTilePx    = GL20.glGetUniformLocation(program, "TilePx");
             locAfPoint   = GL20.glGetUniformLocation(program, "AfPoint");
             locNearDownscale = GL20.glGetUniformLocation(program, "NearDownscale");
             locNearLayer = GL20.glGetUniformLocation(program, "NearLayer");
