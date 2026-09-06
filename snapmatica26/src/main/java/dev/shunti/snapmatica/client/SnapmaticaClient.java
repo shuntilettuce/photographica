@@ -1016,8 +1016,13 @@ public class SnapmaticaClient implements ClientModInitializer {
             // at the first solid face and never sees a mob standing in front of one, so the
             // focus went to the wall behind whatever you were actually looking at. Always the
             // single centre ray: the AF-area setting is the camera's, and this mode is not it.
+            // Looking PAST foliage, which the camera does not do. A sunflower or a rose
+            // bush reaches eye height and is walked straight through, so out in a meadow the
+            // nearest thing on this ray is a petal a foot away every few steps — and the world
+            // behind it drops out of focus each time, for no reason the screen can show. With
+            // the camera up a flower may be the subject; here there is no way to say so.
             double d = PhotoCapture.nearestSubjectDistance(mc, eye,
-                    camera.yRot(), camera.xRot(), maxDist, new float[][]{{0, 0}});
+                    camera.yRot(), camera.xRot(), maxDist, new float[][]{{0, 0}}, true);
             // At maxDist the search found nothing — sky, or beyond its reach. Park it there
             // rather than at this mod's infinity sentinel: the ambient mode has no infinity
             // mark to rack to, and a finite far distance keeps the thin-lens maths ordinary.

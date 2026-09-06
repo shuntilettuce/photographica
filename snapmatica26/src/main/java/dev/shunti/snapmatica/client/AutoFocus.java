@@ -175,10 +175,37 @@ public final class AutoFocus {
      * block. A camera cannot focus on something it cannot see; treating a barrier as opaque
      * would rack the lens onto empty air with nothing on screen to justify it.
      */
-    private static boolean isSeeThrough(net.minecraft.world.level.block.Block b) {
+    private static boolean isSeeThrough(net.minecraft.world.level.block.state.BlockState st) {
+        net.minecraft.world.level.block.Block b = st.getBlock();
         return b instanceof net.minecraft.world.level.block.TransparentBlock   // glass, stained, tinted
                 || b instanceof net.minecraft.world.level.block.IronBarsBlock      // panes, iron bars
                 || b instanceof net.minecraft.world.level.block.BarrierBlock;  // invisible collision-only
+    }
+
+    /**
+     * Foliage the lens looks PAST rather than at: grass, ferns, flowers, saplings, crops.
+     *
+     * <p>The same rule as glass, for the same reason -- it is between the camera and the subject
+     * rather than being the subject. It matters far more than glass does, because you cannot
+     * walk into a window. A sunflower or a rose bush is two blocks tall, reaches eye height and
+     * is walked straight through, so out in a meadow the nearest thing on the ray is a petal
+     * thirty centimetres away every few steps: the world drops out of focus, comes back, and
+     * drops out again for as long as you keep walking, with nothing on screen to explain why.
+     *
+     * <p>Tags rather than block classes, which is not a style preference. The plant classes have
+     * been renamed more than once across the seven versions this builds for, and a class that
+     * fails to resolve is a broken build in one target while the other six pass. Tags are data,
+     * carry the same names throughout, and say what is meant: REPLACEABLE is the walk-through
+     * vegetation (short and tall grass, both ferns, dead bush, vines, seagrass), FLOWERS already
+     * contains the tall ones -- sunflower, lilac, rose bush, peony -- and SAPLINGS and CROPS
+     * finish the set. Blocks a camera would frame rather than look past, a lantern or a banner
+     * or a sign, are in none of them, even though they too have no collision.
+     */
+    private static boolean isFoliage(net.minecraft.world.level.block.state.BlockState st) {
+        return st.is(net.minecraft.tags.BlockTags.REPLACEABLE)
+                || st.is(net.minecraft.tags.BlockTags.FLOWERS)
+                || st.is(net.minecraft.tags.BlockTags.SAPLINGS)
+                || st.is(net.minecraft.tags.BlockTags.CROPS);
     }
 
     /**
@@ -197,15 +224,38 @@ public final class AutoFocus {
      */
     public static net.minecraft.world.phys.BlockHitResult raycastThroughGlass(
             Minecraft mc, Vec3 eye, Vec3 look, double maxDist) {
+        return raycastThroughGlass(mc, eye, look, maxDist, false);
+    }
+
+    /**
+     * The same, optionally looking past foliage as well as past glass.
+     *
+     * <p>Only the ambient lens asks for it. With the camera up, a flower is a subject you may
+     * well have raised the camera FOR, and there is an AF point to put on it and a manual ring
+     * behind that; during ordinary play there is no such choice, and the grass you are walking
+     * through is never what you were looking at.
+     */
+    public static net.minecraft.world.phys.BlockHitResult raycastThroughGlass(
+            Minecraft mc, Vec3 eye, Vec3 look, double maxDist,
+            boolean throughFoliage) {
         Vec3 start = eye;
         Vec3 end   = eye.add(look.scale(maxDist));
         net.minecraft.world.phys.BlockHitResult hit = null;
-        for (int layer = 0; layer < 8; layer++) {
+        // Eight layers was sized for glass, where two or three panes is already an unusual
+        // shot. Foliage is not like that: at eye height a ray crossing a meadow passes through
+        // the upper half of one plant after another, and each half of a two-block flower is a
+        // block of its own, so eight is spent within a few metres and the search gives up on a
+        // petal after all. Only raised for the foliage case -- each layer is another full-length
+        // raycast, and the ambient query already runs at 10 Hz.
+        int maxLayers = throughFoliage ? 24 : 8;
+        for (int layer = 0; layer < maxLayers; layer++) {
             hit = mc.level.clip(new net.minecraft.world.level.ClipContext(start, end,
                     net.minecraft.world.level.ClipContext.Block.OUTLINE,
                     net.minecraft.world.level.ClipContext.Fluid.NONE, mc.player));
             if (hit == null || hit.getType() == net.minecraft.world.phys.HitResult.Type.MISS) return hit;
-            if (!isSeeThrough(mc.level.getBlockState(hit.getBlockPos()).getBlock())) return hit;
+            net.minecraft.world.level.block.state.BlockState hitState = mc.level.getBlockState(hit.getBlockPos());
+            if (!isSeeThrough(hitState)
+                    && !(throughFoliage && isFoliage(hitState))) return hit;
 
             // Walk out of the block we just hit before resuming, otherwise the next cast
             // starts inside it and reports the very same block again.

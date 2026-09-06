@@ -725,13 +725,23 @@ public final class PhotoCapture {
     static double nearestSubjectDistance(MinecraftClient mc, net.minecraft.util.math.Vec3d eye,
                                          float baseYaw, float basePitch, double maxDist,
                                          float[][] offsets) {
+        return nearestSubjectDistance(mc, eye, baseYaw, basePitch, maxDist, offsets, false);
+    }
+
+    /**
+     * The same search, optionally looking past foliage — see
+     * {@link AutoFocus#raycastThroughGlass(MinecraftClient, Vec3d, Vec3d, double, boolean)}.
+     */
+    static double nearestSubjectDistance(MinecraftClient mc, net.minecraft.util.math.Vec3d eye,
+                                         float baseYaw, float basePitch, double maxDist,
+                                         float[][] offsets, boolean throughFoliage) {
         double best = maxDist;
         for (float[] o : offsets) {
             net.minecraft.util.math.Vec3d look = net.minecraft.util.math.Vec3d.fromPolar(
                     basePitch + o[1], baseYaw + o[0]);
             net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
             net.minecraft.util.hit.BlockHitResult blockHit =
-                    AutoFocus.raycastThroughGlass(mc, eye, look, maxDist);
+                    AutoFocus.raycastThroughGlass(mc, eye, look, maxDist, throughFoliage);
             double bestDist = (blockHit != null
                     && blockHit.getType() != net.minecraft.util.hit.HitResult.Type.MISS)
                     ? eye.distanceTo(blockHit.getPos()) : maxDist;
