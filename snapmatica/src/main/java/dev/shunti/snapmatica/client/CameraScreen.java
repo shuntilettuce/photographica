@@ -402,12 +402,6 @@ public class CameraScreen extends Screen {
                     SnapmaticaConfig.save(); },
                 true));
 
-        out.add(new Item("snapmatica.camera.aperture_debug",
-                () -> SnapmaticaClient.apertureDebugSamples ? "ON" : "OFF",
-                step -> { SnapmaticaClient.apertureDebugSamples = !SnapmaticaClient.apertureDebugSamples;
-                    SnapmaticaConfig.save(); },
-                true));
-
         out.add(new Item("snapmatica.camera.aperture_samples",
                 () -> Integer.toString(SnapmaticaClient.apertureSamples),
                 step -> { int idx = findClosestI(APERTURE_SAMPLES, SnapmaticaClient.apertureSamples);

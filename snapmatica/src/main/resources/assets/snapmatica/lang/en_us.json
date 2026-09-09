@@ -105,7 +105,6 @@
   "snapmatica.camera.sec_aperture_int": "APERTURE INTEGRATION",
   "snapmatica.camera.aperture_integration": "Integrate Aperture",
   "snapmatica.camera.aperture_samples": "Pupil Samples",
-  "snapmatica.camera.aperture_debug": "Save Every Sample",
   "snapmatica.gallery.cols": "Show: %s",
   "snapmatica.gallery.cols_auto": "Auto"
 }

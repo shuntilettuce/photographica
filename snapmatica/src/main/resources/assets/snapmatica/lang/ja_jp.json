@@ -105,7 +105,6 @@
   "snapmatica.camera.sec_aperture_int": "絞り積分",
   "snapmatica.camera.aperture_integration": "絞りを積分する",
   "snapmatica.camera.aperture_samples": "瞳サンプル数",
-  "snapmatica.camera.aperture_debug": "全サンプルを保存",
   "snapmatica.gallery.cols": "表示数: %s",
   "snapmatica.gallery.cols_auto": "自動"
 }

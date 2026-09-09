@@ -138,6 +138,13 @@ public class SnapmaticaClient implements ClientModInitializer {
      * the parallax moved at all, whether a shader pack's adaptation re-metered between samples,
      * whether some viewpoints landed inside geometry. With this on, the sub-frames are there to
      * be looked at one by one, unnormalised, next to a text index of their offsets and gains.
+     *
+     * <p>Reachable only by editing {@code apertureDebugSamples} in the config file — it had a
+     * row on the settings screen for a while, and that was a mistake that shipped. One press of
+     * the shutter writes a folder of sixty-four full-resolution frames, which is the correct
+     * behaviour for the question it answers and an unpleasant surprise for anyone who turned it
+     * on to find out what it did. A setting whose honest label would be "fill the disk" does not
+     * belong next to the aperture.
      */
     public static boolean apertureDebugSamples = false;
 
