@@ -186,6 +186,108 @@ def do_release(version):
         print('  published %s' % p['version_number'])
 
 
+def swap_plan(s, version):
+    """Which published files differ from what is built here, for a version already out."""
+    pub = {v['version_number']: v for v in existing(s)
+           if v['version_number'].startswith(version + '+')}
+    out = []
+    for suffix, _, d in JARS:
+        num = '%s+%s' % (version, suffix)
+        if num not in pub:
+            sys.exit('%s is not published; use "release", not "swap".' % num)
+        p = os.path.join(d, 'snapmatica-%s.jar' % num)
+        if not os.path.isfile(p):
+            sys.exit('not built: ' + p)
+        v = pub[num]
+        f = v['files'][0]
+        new = sha512(p)
+        if new != f['hashes']['sha512']:
+            out.append({'version': v, 'path': p, 'old_sha': f['hashes']['sha512'],
+                        'new_sha': new, 'name': os.path.basename(p)})
+    return out
+
+
+def show_swap(version):
+    s = session(required=False)
+    plan = swap_plan(s, version)
+    print('SWAP %s -- %d published files would be REPLACED in place\n' % (version, len(plan)))
+    print('The version entries, their numbers, dates and download counts survive; only the')
+    print('attached jar changes. Anyone who already downloaded keeps what they have.\n')
+    for e in plan:
+        print('  %-22s  %s' % (e['version']['version_number'], e['name']))
+        print('    was %s...  (%d downloads)' % (e['old_sha'][:24], e['version']['downloads']))
+        print('    now %s...' % e['new_sha'][:24])
+    if not plan:
+        print('  nothing differs; the published files already match this build.')
+
+
+def placeholder_jar():
+    """A tiny real jar whose only job is to hold a version's file slot open.
+
+    Needed because Modrinth forbids both halves of the obvious swap: uploading the
+    replacement first fails with "Duplicate files are not allowed" (the filename is
+    already taken), and deleting the old one first fails with "Versions must have at
+    least one file uploaded to them". So something has to occupy the slot in between.
+
+    It must be a DISTINCT file, not another copy of the replacement, and that is the
+    part that is easy to get wrong: files are deleted by hash, so two attachments
+    with identical bytes cannot be told apart and the delete removes whichever the
+    server picks. Doing exactly that once left a version carrying the right jar under
+    the wrong name.
+    """
+    import zipfile
+    p = os.path.join(HERE, '.swap-placeholder.jar')
+    if not os.path.isfile(p):
+        with zipfile.ZipFile(p, 'w') as z:
+            z.writestr('META-INF/MANIFEST.MF',
+                       'Manifest-Version: 1.0\n'
+                       'Comment: transient placeholder, held for seconds during a file swap\n')
+    return p
+
+
+def do_swap(version):
+    """Replace each published jar in place, keeping the version, its date and its downloads.
+
+    Four calls per version, and the order is forced by the two rules above:
+
+        1. attach the placeholder under a name of its own   -> 2 files
+        2. delete the old jar by its hash                   -> 1 file
+        3. attach the replacement under the real name       -> 2 files
+        4. delete the placeholder by ITS hash               -> 1 file
+
+    Never fewer than one file, and every hash in play is distinct, so no delete is
+    ever ambiguous. A failure part-way leaves the version carrying two jars or a
+    placeholder, both of which are visible in the API and fixable by rerunning.
+    """
+    s = session()
+    ph = placeholder_jar()
+    ph_sha = sha512(ph)
+
+    def attach(vid, path, filename, label):
+        with open(path, 'rb') as fh:
+            r = s.post('%s/version/%s/file' % (API, vid),
+                       data={'data': json.dumps({'file_parts': ['file']})},
+                       files={'file': (filename, fh, 'application/java-archive')},
+                       timeout=180)
+        if r.status_code >= 300:
+            sys.exit('FAILED (%s) on %s: %s %s' % (label, vid, r.status_code, r.text[:400]))
+
+    def drop(vid, sha, label):
+        r = s.delete('%s/version_file/%s' % (API, sha),
+                     params={'algorithm': 'sha512', 'version_id': vid}, timeout=60)
+        if r.status_code >= 300:
+            sys.exit('FAILED (%s) on %s: %s %s' % (label, vid, r.status_code, r.text[:400]))
+
+    for e in swap_plan(s, version):
+        vid = e['version']['id']
+        hold = e['name'][:-4] + '.swap.jar'
+        attach(vid, ph, hold, 'placeholder in')
+        drop(vid, e['old_sha'], 'old jar out')
+        attach(vid, e['path'], e['name'], 'replacement in')
+        drop(vid, ph_sha, 'placeholder out')
+        print('  swapped %s' % e['version']['version_number'])
+
+
 def repair_plan(s):
     """What the backfill would touch, computed from what is actually published."""
     vs = existing(s)
@@ -240,25 +342,34 @@ def do_repair(kind):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('action', choices=['plan', 'plan-repair', 'release',
-                                       'repair-deps', 'repair-changelogs'])
+    ap.add_argument('action', choices=['plan', 'plan-repair', 'plan-swap', 'release',
+                                       'repair-deps', 'repair-changelogs', 'swap'])
     ap.add_argument('version', nargs='?')
     ap.add_argument('--publish', action='store_true',
                     help='actually send. Without it nothing leaves this machine.')
     a = ap.parse_args()
 
-    if a.action in ('plan', 'release') and not a.version:
+    if a.action in ('plan', 'release', 'plan-swap', 'swap') and not a.version:
         sys.exit('which version?  e.g.  python tools/modrinth.py plan 1.3.1')
 
     if a.action == 'plan':
         show_release(a.version)
     elif a.action == 'plan-repair':
         show_repair()
+    elif a.action == 'plan-swap':
+        show_swap(a.version)
     elif not a.publish:
         print('--publish not given, so nothing was sent. This is what it would do:\n')
-        (show_release(a.version) if a.action == 'release' else show_repair())
+        if a.action == 'release':
+            show_release(a.version)
+        elif a.action == 'swap':
+            show_swap(a.version)
+        else:
+            show_repair()
     elif a.action == 'release':
         do_release(a.version)
+    elif a.action == 'swap':
+        do_swap(a.version)
     elif a.action == 'repair-deps':
         do_repair('deps')
     else:
