@@ -647,6 +647,18 @@ vec4 tileDilate() {
     return vec4(reach, fgMin, 0.0, 1.0);
 }
 
+/**
+ * What the gather writes: light on the way back out to an 8-bit sRGB buffer.
+ *
+ * <p>Everything inside the gather is linear now (see Pass 10), and everything downstream of it
+ * -- the composite, chromatic aberration, peaking, the sensor curves -- still works in the
+ * encoded values it always did. This is the single seam between the two, so every one of the
+ * gather's exits goes through it rather than writing fragColor directly.
+ */
+vec4 gatherOut(vec3 lin, float a) {
+    return vec4(linearToSrgb(max(lin, 0.0)), a);
+}
+
 void main() {
     // ── Pass 5 / 6: DynamicRangeSim, applied as its own final step ───────────────────
     // Not folded into the composite pass below any more — focus peaking's own edge detector
@@ -716,6 +728,36 @@ void main() {
     // the whole buffer (unscissored -- a tile just outside the viewfinder is still a neighbour
     // of one inside it), and both need gFocus, which is why they sit here rather than with the
     // cheap passes above.
+
+/*
+ * ── Pass 10: the scene, in light ────────────────────────────────────────────────────────
+ *
+ * A lens integrates RADIANCE over its aperture. The gather below averages a few hundred taps,
+ * and those taps used to be sRGB-encoded bytes: averaging encoded numbers is not averaging
+ * light, and the two disagree most where the samples differ most -- which is exactly what a
+ * bokeh disc straddling a highlight is.
+ *
+ * Measured against the correct answer, a disc with a specular in a tenth of it came out 1.86
+ * stops dark; a torch against night ground with a twentieth covered, 2.48 stops. Two mid-greys
+ * disagree by 0.08. So the error hid in ordinary scenes and appeared exactly on the bokeh balls
+ * the mod exists to draw -- they were dim and muddy, and no amount of aperture fixed it.
+ *
+ * The obvious repair is not available: GL_SRGB8_ALPHA8 would have the texture unit linearise
+ * every read for free, but what the gather reads is Minecraft's own framebuffer, whose format
+ * is not ours to choose. Converting per tap is worse than it sounds -- it is a pow, several
+ * hundred times per pixel. So the conversion happens once, here, into a buffer the gather then
+ * samples in linear.
+ *
+ * R11F_G11F_B10F rather than RGBA16F: thirty-two bits per pixel, the same as the RGBA8 it
+ * replaces, so several hundred taps per pixel cost exactly the bandwidth they did before,
+ * where a half-float RGBA would have doubled it. There is no alpha, and the gather's taps
+ * never wanted one.
+ */
+    if (Pass == 10) {
+        fragColor = vec4(srgbToLinear(texture(InSampler, texCoord).rgb), 1.0);
+        return;
+    }
+
     if (Pass == 8) { fragColor = tileBuild();  return; }
     if (Pass == 9) { fragColor = tileDilate(); return; }
 
@@ -980,10 +1022,10 @@ void main() {
     // Nothing to defocus — but the copy pass still has to run, because it is what applies the
     // distortion. Hand it the scene unchanged rather than walk 96 depth taps per pixel to
     // rediscover that every circle of confusion is sub-pixel.
-    if (DoGather == 0) { fragColor = vec4(centre.rgb, 1.0); return; }
+    if (DoGather == 0) { fragColor = gatherOut(centre.rgb, 1.0); return; }
     // See drawnAfterDepthCopy: this pixel has no depth of its own in the copy, so there is no
     // honest circle of confusion to gather with. Keep it exactly as rendered.
-    if (drawnAfterDepthCopy(texCoord)) { fragColor = vec4(centre.rgb, 1.0); return; }
+    if (drawnAfterDepthCopy(texCoord)) { fragColor = gatherOut(centre.rgb, 1.0); return; }
 
     float depthM = linearDepth(texture(DepthSampler, texCoord).r);
     float cocP   = cocGather(depthM);
@@ -1010,7 +1052,7 @@ void main() {
     // that first tap just outside the disc — weight exactly zero, not merely small — and 0.07
     // of gathered blur is a true circle of 0.36 px, which no pixel can show.
     if (cocP < 0.07 && !hasNearFg) {   // sharp, nothing blooming over it → leave crisp
-        fragColor = vec4(centre.rgb, 1.0);   // alpha 1 = fully sampled, needs no denoise
+        fragColor = gatherOut(centre.rgb, 1.0);   // alpha 1 = fully sampled, no denoise
         return;
     }
 
@@ -1301,6 +1343,6 @@ void main() {
     float covNoise   = sqrt(max(na * (1.0 - na), 0.0) / float(nTaps));
     float need       = max(1.0 - confidence, clamp(covNoise * 12.0, 0.0, 1.0));
     fragColor = (wsum > 0.001)
-        ? vec4((nearCol * wNear + underCol * wUnder) / wsum, 1.0 - need)
-        : vec4(centre.rgb, 1.0);
+        ? gatherOut((nearCol * wNear + underCol * wUnder) / wsum, 1.0 - need)
+        : gatherOut(centre.rgb, 1.0);
 }

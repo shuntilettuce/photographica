@@ -75,6 +75,17 @@ public final class EvfBlurRenderer {
      */
     private static final int TILE_PX = 16;
 
+    /**
+     * The scene converted to light, for the gather to average in the space light lives in.
+     *
+     * <p>R11F_G11F_B10F: thirty-two bits, the same as the RGBA8 it stands in for, so the
+     * gather's several hundred taps per pixel cost the bandwidth they always did. A half-float
+     * RGBA would have doubled it for precision no 8-bit source can supply, and an 8-bit LINEAR
+     * buffer would crush the shadows — which is the entire reason sRGB encoding exists.
+     */
+    private static int linFbo = -1, linTex = -1;
+    private static int linW = 0, linH = 0;
+
     private static int tileFboA = -1, tileTexA = -1;   // per-tile maxima
     private static int tileFboB = -1, tileTexB = -1;   // the same, spread to everything they reach
     private static int tileW = 0, tileH = 0;
@@ -1090,12 +1101,25 @@ public final class EvfBlurRenderer {
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
         GL11.glScissor(expX, expY, expW, expH);
 
-        // Gather: 3-layer disc bokeh, main → aux. (Pass 0, BlurDir.x = 1 → gather.)
+        // The scene into light first, once, so the gather can average radiance instead of
+        // gamma-encoded numbers — see Pass 10 in the shader for what that was costing. Cheaper
+        // to do here than per tap: the conversion is a pow, and the gather takes hundreds of
+        // taps per pixel.
+        GL20.glUniform1i(locPass, 10);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, linFbo);
+        GL11.glViewport(0, 0, fbW, fbH);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, mainTex);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+
+        // Gather: 3-layer disc bokeh, linear scene → aux. (Pass 0, BlurDir.x = 1 → gather.)
+        // Reads linTex, and converts back on the way out through gatherOut, so everything
+        // downstream still receives the encoded values it has always worked in.
         GL20.glUniform1i(locPass, 0);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, auxFbo);
         GL11.glViewport(0, 0, fbW, fbH);
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, mainTex);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, linTex);
         GL20.glUniform2f(locBlurDir, 1.0f, 0.0f);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
@@ -1552,7 +1576,32 @@ public final class EvfBlurRenderer {
         int tw = Math.max(1, (fbW + TILE_PX - 1) / TILE_PX);
         int th = Math.max(1, (fbH + TILE_PX - 1) / TILE_PX);
         if (tileFboA == -1 || tileW != tw || tileH != th) initTiles(tw, th);
+        if (linFbo == -1 || linW != fbW || linH != fbH) initLinear(fbW, fbH);
         if (noiseTex == -1) initNoise();
+    }
+
+    /** Full-resolution linear copy of the scene — see {@link #linTex}. */
+    private static void initLinear(int w, int h) {
+        if (linFbo != -1) {
+            GL30.glDeleteFramebuffers(linFbo);
+            GL11.glDeleteTextures(linTex);
+        }
+        linTex = GL11.glGenTextures();
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, linTex);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_R11F_G11F_B10F, w, h, 0,
+                GL11.GL_RGB, GL11.GL_FLOAT, (java.nio.ByteBuffer) null);
+        // LINEAR, because the gather samples at arbitrary sub-pixel offsets and always did.
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+        linFbo = GL30.glGenFramebuffers();
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, linFbo);
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                GL11.GL_TEXTURE_2D, linTex, 0);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+        linW = w; linH = h;
     }
 
     /**
