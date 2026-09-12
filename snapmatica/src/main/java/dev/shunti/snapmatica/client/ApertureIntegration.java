@@ -340,6 +340,20 @@ public final class ApertureIntegration {
     public static boolean isActive() { return active; }
 
     /**
+     * Whether the particles should be standing still right now.
+     *
+     * <p>True only while the samples are being read out, which is after the exposure has been
+     * recorded and before the burst ends. During the recording the shutter is genuinely open
+     * and real time IS exposure time, so particles move then exactly as they should; it is the
+     * readout afterwards that is supposed to take no time at all, and used to let them walk
+     * through it. See {@code ParticleTimeMixin}.
+     */
+    public static boolean holdParticles() {
+        return active && !EntityExposure.isRecording();
+    }
+
+
+    /**
      * Whether a shutter press should take this path at all.
      *
      * <p>Needs a lens (there is no pupil without one) and needs the setting on.

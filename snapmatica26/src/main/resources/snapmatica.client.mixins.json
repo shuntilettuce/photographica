@@ -16,7 +16,8 @@
     "EntityExposureMixin",
     "IrisTimerMixin",
     "CloudTimeMixin",
-    "WorldTimeMixin"
+    "WorldTimeMixin",
+    "ParticleTimeMixin"
   ],
   "injectors": {
     "defaultRequire": 1
