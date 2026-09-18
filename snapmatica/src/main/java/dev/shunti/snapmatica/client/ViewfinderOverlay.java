@@ -27,8 +27,10 @@ public final class ViewfinderOverlay {
             "30\"","15\"","8\"","4\"","2\"","1\"",
             "1/2","1/4","1/8","1/15","1/30","1/60",
             "1/125","1/250","1/500","1/1000","1/2000","1/4000"};
-    private static final String[] LENS_NAMES =
-            {"No Lens","50mm Prime","24-70mm Zoom","35mm Prime","85mm Prime","14mm UWA","70-200mm Zoom","100mm Macro"};
+    private static final String[] LENS_KEYS = {
+            "lens.snapmatica.none", "lens.snapmatica.prime_50mm", "lens.snapmatica.zoom_24_70mm",
+            "lens.snapmatica.prime_35mm", "lens.snapmatica.prime_85mm", "lens.snapmatica.uwa_14mm",
+            "lens.snapmatica.zoom_70_200mm", "lens.snapmatica.macro_100mm"};
 
     //? if >=26 {
     /*public static void extractRenderState(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
@@ -106,7 +108,7 @@ public final class ViewfinderOverlay {
         TextRenderer tr=mc.textRenderer;
         //?}
         boolean hasLens=SnapmaticaClient.lensType!=0;
-        String fp=hasLens?(SnapmaticaClient.focalLengthMm+"mm"):"No Lens";
+        String fp=hasLens?(SnapmaticaClient.focalLengthMm+"mm"):Lang.tr("lens.snapmatica.none");
         int em = SnapmaticaClient.exposureMode;
         int si = clampIdx((em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx, SHUTTERS.length);
         float dispAp = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
@@ -125,12 +127,12 @@ public final class ViewfinderOverlay {
 
         // Lens label
         //? if >=26 {
-        /*ctx.text(tr, LENS_NAMES[
-                Math.max(0,Math.min(LENS_NAMES.length-1,SnapmaticaClient.lensType))],
+        /*ctx.text(tr, Lang.tr(LENS_KEYS[
+                Math.max(0,Math.min(LENS_KEYS.length-1,SnapmaticaClient.lensType))]),
                 fx+6,fy+4,0xFF9A8D72, true);*/
         //?} else {
-        ctx.drawTextWithShadow(tr,Text.literal(LENS_NAMES[
-                Math.max(0,Math.min(LENS_NAMES.length-1,SnapmaticaClient.lensType))]),
+        ctx.drawTextWithShadow(tr,Text.literal(Lang.tr(LENS_KEYS[
+                Math.max(0,Math.min(LENS_KEYS.length-1,SnapmaticaClient.lensType))])),
                 fx+6,fy+4,0xFF9A8D72);
         //?}
 
@@ -139,9 +141,9 @@ public final class ViewfinderOverlay {
             double safe=1.0/SnapmaticaClient.focalLengthMm;
             if (SnapmaticaClient.SHUTTER_SECONDS[si]>safe*1.5)
                 //? if >=26 {
-                /*ctx.text(tr, "WARN Blur", fx+6, fy+4+tr.lineHeight+2, 0xFFFF5555, true);*/
+                /*ctx.text(tr, Lang.tr("hud.snapmatica.warn_blur"), fx+6, fy+4+tr.lineHeight+2, 0xFFFF5555, true);*/
                 //?} else {
-                ctx.drawTextWithShadow(tr,Text.literal("WARN Blur"),
+                ctx.drawTextWithShadow(tr,Text.literal(Lang.tr("hud.snapmatica.warn_blur")),
                         fx+6,fy+4+tr.fontHeight+2,0xFFFF5555);
                 //?}
         }

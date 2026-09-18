@@ -3,5 +3,27 @@
   "key.snapmatica.settings": "Open Camera Settings",
   "key.snapmatica.viewfinder_sneak": "Toggle Viewfinder (Sneak)",
   "category.snapmatica": "Snapmatica",
-  "key.category.snapmatica.snapmatica": "Snapmatica"
+  "key.category.snapmatica.snapmatica": "Snapmatica",
+
+  "screen.snapmatica.camera": "Camera Settings",
+  "screen.snapmatica.title": "SNAPMATICA CAMERA",
+  "screen.snapmatica.close": "Close",
+  "screen.snapmatica.aperture": "Aperture",
+  "screen.snapmatica.shutter": "Shutter",
+  "screen.snapmatica.iso": "ISO",
+  "screen.snapmatica.focus": "Focus",
+  "screen.snapmatica.exposure_mode": "Exp. Mode",
+  "screen.snapmatica.focus_mode": "Focus Mode",
+  "screen.snapmatica.auto": "AUTO",
+
+  "hud.snapmatica.warn_blur": "WARN Blur",
+
+  "lens.snapmatica.none": "No Lens",
+  "lens.snapmatica.prime_50mm": "50mm Prime",
+  "lens.snapmatica.zoom_24_70mm": "24-70mm Zoom",
+  "lens.snapmatica.prime_35mm": "35mm Prime",
+  "lens.snapmatica.prime_85mm": "85mm Prime",
+  "lens.snapmatica.uwa_14mm": "14mm UWA",
+  "lens.snapmatica.zoom_70_200mm": "70-200mm Zoom",
+  "lens.snapmatica.macro_100mm": "100mm Macro"
 }

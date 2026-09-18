@@ -3,5 +3,27 @@
   "key.snapmatica.settings": "カメラ設定を開く",
   "key.snapmatica.viewfinder_sneak": "ビューファインダー切り替え（スニーク）",
   "category.snapmatica": "Snapmatica",
-  "key.category.snapmatica.snapmatica": "Snapmatica"
+  "key.category.snapmatica.snapmatica": "Snapmatica",
+
+  "screen.snapmatica.camera": "カメラ設定",
+  "screen.snapmatica.title": "SNAPMATICA CAMERA",
+  "screen.snapmatica.close": "閉じる",
+  "screen.snapmatica.aperture": "絞り",
+  "screen.snapmatica.shutter": "シャッター",
+  "screen.snapmatica.iso": "ISO感度",
+  "screen.snapmatica.focus": "フォーカス",
+  "screen.snapmatica.exposure_mode": "露出モード",
+  "screen.snapmatica.focus_mode": "フォーカスモード",
+  "screen.snapmatica.auto": "オート",
+
+  "hud.snapmatica.warn_blur": "手ブレ注意",
+
+  "lens.snapmatica.none": "レンズなし",
+  "lens.snapmatica.prime_50mm": "50mm 単焦点",
+  "lens.snapmatica.zoom_24_70mm": "24-70mm ズーム",
+  "lens.snapmatica.prime_35mm": "35mm 単焦点",
+  "lens.snapmatica.prime_85mm": "85mm 単焦点",
+  "lens.snapmatica.uwa_14mm": "14mm 超広角",
+  "lens.snapmatica.zoom_70_200mm": "70-200mm ズーム",
+  "lens.snapmatica.macro_100mm": "100mm マクロ"
 }

@@ -44,9 +44,9 @@ public class CameraScreen extends Screen {
 
     public CameraScreen() {
         //? if >=26 {
-        /*super(Component.literal("Camera Settings"));*/
+        /*super(Component.literal(Lang.tr("screen.snapmatica.camera")));*/
         //?} else {
-        super(Text.literal("Camera Settings"));
+        super(Text.literal(Lang.tr("screen.snapmatica.camera")));
         //?}
     }
 
@@ -63,8 +63,8 @@ public class CameraScreen extends Screen {
 
         // Aperture
         boolean apAuto = exposureMode == EXP_TV || exposureMode == EXP_P;
-        addRow2(cx, top + row++ * rowHeight, "Aperture",
-                () -> apAuto ? "AUTO" : "F" + fmt(SnapmaticaClient.aperture),
+        addRow2(cx, top + row++ * rowHeight, Lang.tr("screen.snapmatica.aperture"),
+                () -> apAuto ? Lang.tr("screen.snapmatica.auto") : "F" + fmt(SnapmaticaClient.aperture),
                 btnWidth,
                 step -> { int idx = findClosest(APERTURES, SnapmaticaClient.aperture);
                     idx = clampStep(idx, step, APERTURES.size()); SnapmaticaClient.aperture = APERTURES.get(idx); SnapmaticaClient.updateAutoValues(); },
@@ -72,14 +72,14 @@ public class CameraScreen extends Screen {
 
         // Shutter
         boolean ssAuto = exposureMode == EXP_AV || exposureMode == EXP_P;
-        addRow2(cx, top + row++ * rowHeight, "Shutter",
-                () -> ssAuto ? "AUTO" : SHUTTERS[clampIdx(SnapmaticaClient.shutterSpeedIdx, SHUTTERS.length)],
+        addRow2(cx, top + row++ * rowHeight, Lang.tr("screen.snapmatica.shutter"),
+                () -> ssAuto ? Lang.tr("screen.snapmatica.auto") : SHUTTERS[clampIdx(SnapmaticaClient.shutterSpeedIdx, SHUTTERS.length)],
                 btnWidth,
                 step -> { SnapmaticaClient.shutterSpeedIdx = clampStep(SnapmaticaClient.shutterSpeedIdx, step, SHUTTERS.length); },
                 !ssAuto);
 
         // ISO
-        addRow2(cx, top + row++ * rowHeight, "ISO",
+        addRow2(cx, top + row++ * rowHeight, Lang.tr("screen.snapmatica.iso"),
                 () -> "ISO " + ISOS.get(clampIdx(findClosestInt(ISOS, SnapmaticaClient.iso), ISOS.size())),
                 btnWidth,
                 step -> { int idx = findClosestInt(ISOS, SnapmaticaClient.iso);
@@ -89,7 +89,7 @@ public class CameraScreen extends Screen {
         // Focus
         boolean focusAuto = SnapmaticaClient.focusMode != FOCUS_MF;
         String focusAutoLabel = SnapmaticaClient.focusMode == FOCUS_MOB ? "MOB" : "AF";
-        addRow2(cx, top + row++ * rowHeight, "Focus",
+        addRow2(cx, top + row++ * rowHeight, Lang.tr("screen.snapmatica.focus"),
                 () -> focusAuto ? focusAutoLabel : fmtFocus(SnapmaticaClient.focusDistance),
                 btnWidth,
                 step -> { int idx = findClosest(FOCUS_VALUES, SnapmaticaClient.focusDistance);
@@ -97,14 +97,14 @@ public class CameraScreen extends Screen {
                 !focusAuto);
 
         // Exposure mode
-        addRow2(cx, top + row++ * rowHeight, "Exp. Mode",
+        addRow2(cx, top + row++ * rowHeight, Lang.tr("screen.snapmatica.exposure_mode"),
                 () -> EXP_MODE_LABELS[clampIdx(SnapmaticaClient.exposureMode, EXP_MODE_LABELS.length)],
                 btnWidth,
                 step -> { SnapmaticaClient.exposureMode = clampStep(SnapmaticaClient.exposureMode, step, EXP_MODE_LABELS.length); SnapmaticaClient.updateAutoValues(); },
                 true);
 
         // Focus mode
-        addRow2(cx, top + row++ * rowHeight, "Focus Mode",
+        addRow2(cx, top + row++ * rowHeight, Lang.tr("screen.snapmatica.focus_mode"),
                 () -> FOCUS_MODE_LABELS[clampIdx(SnapmaticaClient.focusMode, FOCUS_MODE_LABELS.length)],
                 btnWidth,
                 step -> { SnapmaticaClient.focusMode = clampStep(SnapmaticaClient.focusMode, step, FOCUS_MODE_LABELS.length); },
@@ -113,10 +113,10 @@ public class CameraScreen extends Screen {
 
         // Close button
         //? if >=26 {
-        /*addRenderableWidget(Button.builder(Component.literal("Close"), b -> onClose())
+        /*addRenderableWidget(Button.builder(Component.literal(Lang.tr("screen.snapmatica.close")), b -> onClose())
                 .bounds(cx - 40, top + row * rowHeight + 16, 80, 20).build());*/
         //?} else {
-        addDrawableChild(ButtonWidget.builder(Text.literal("Close"), b -> close())
+        addDrawableChild(ButtonWidget.builder(Text.literal(Lang.tr("screen.snapmatica.close")), b -> close())
                 .dimensions(cx - 40, top + row * rowHeight + 16, 80, 20).build());
         //?}
     }
@@ -174,7 +174,7 @@ public class CameraScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         extractBackground(ctx, mouseX, mouseY, delta);
-        ctx.centeredText(font, Component.literal("SNAPMATICA CAMERA"), width / 2, 10, 0xFFE8DCC4);
+        ctx.centeredText(font, Component.literal(Lang.tr("screen.snapmatica.title")), width / 2, 10, 0xFFE8DCC4);
         super.extractRenderState(ctx, mouseX, mouseY, delta);
     }
 
@@ -189,7 +189,7 @@ public class CameraScreen extends Screen {
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
         renderBackground(ctx, mouseX, mouseY, delta);
-        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("SNAPMATICA CAMERA"), width / 2, 10, 0xFFE8DCC4);
+        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(Lang.tr("screen.snapmatica.title")), width / 2, 10, 0xFFE8DCC4);
         super.render(ctx, mouseX, mouseY, delta);
     }
 
