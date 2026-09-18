@@ -1,5 +1,6 @@
 package dev.hitom.photographica.client.screen;
 
+import dev.hitom.photographica.client.render.PhotoTextureCache;
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.component.ModDataComponents;
 import dev.hitom.photographica.component.PhotoData;
@@ -182,8 +183,9 @@ public class SdCardBrowserScreen extends Screen {
 
         // Delete PNG from disk
         Minecraft mc = Minecraft.getInstance();
-        File file = new File(mc.gameDirectory, "photographica/photos/" + photoId + ".png");
-        file.delete();
+        File file = PhotoTextureCache.findPhotoFile(
+                new File(mc.gameDirectory, "photographica/photos"), photoId);
+        if (file != null) file.delete();
 
         // Release cached thumbnail texture
         if (thumb != null && loadedForIndex == index) {
@@ -216,8 +218,9 @@ public class SdCardBrowserScreen extends Screen {
         loadedForIndex = index;
 
         Minecraft mc = Minecraft.getInstance();
-        File file = new File(mc.gameDirectory, "photographica/photos/" + data.id() + ".png");
-        if (!file.isFile()) {
+        File file = PhotoTextureCache.findPhotoFile(
+                new File(mc.gameDirectory, "photographica/photos"), data.id());
+        if (file == null) {
             thumbMissing = true;
             return;
         }

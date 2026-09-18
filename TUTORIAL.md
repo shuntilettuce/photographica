@@ -33,7 +33,7 @@ A Minecraft mod that brings realistic camera simulation to the game. Shoot with 
 | インストール | クライアント・サーバー両方 | Both client and server |
 
 > **シェーダー対応** — Iris + Photon での動作確認済み。シェーダー使用時もエフェクトが正しく合成されます。  
-> **Shader support** — Tested with Iris + Photon. Effects are correctly composited in the captured PNG even with shaders active.
+> **Shader support** — Tested with Iris + Photon. Effects are correctly composited in the captured JPEG even with shaders active.
 
 ---
 
@@ -216,7 +216,7 @@ Shift長押し → ファインダーモード / Hold Shift → viewfinder
   ↓
 右クリック → 撮影 / Right-click → shoot
   ↓
-.minecraft/photographica/photos/ に PNG 保存 / PNG saved
+.minecraft/photographica/photos/ に JPEG 保存 / JPEG saved
 ```
 
 ### SDカードブラウザ / SD Card Browser
@@ -226,7 +226,7 @@ Press **SD Card (n)** in the settings screen.
 
 - サムネイル表示・全画面表示 / Thumbnail and full-screen view
 - 撮影メタデータ確認（F値・SS・ISO・焦点距離・座標）/ Metadata display
-- 1枚ずつ削除（ディスクのファイルも削除）/ Per-photo deletion (removes PNG from disk)
+- 1枚ずつ削除（ディスクのファイルも削除）/ Per-photo deletion (removes the file from disk)
 
 ### SDカード容量 / SD Card Capacity
 
@@ -344,15 +344,15 @@ Place on the floor, right-click with a Photo item.
 右クリック → 写真を設置 / スニーク + 右クリック → 取り出し  
 Right-click to insert · Sneak + right-click to remove
 
-> 写真は PNG ファイルと紐付いています。ファイルを削除すると額縁の表示も消えます。マルチプレイでは各プレイヤーの `photographica/photos/` フォルダに PNG が必要です。  
-> Photos are linked to PNG files. Deleting the file blanks the frame. In multiplayer each player needs the PNG in their own `photographica/photos/` folder.
+> 写真は画像ファイルと紐付いています。ファイルを削除すると額縁の表示も消えます。マルチプレイでは各プレイヤーの `photographica/photos/` フォルダに画像ファイルが必要です。  
+> Photos are linked to image files. Deleting the file blanks the frame. In multiplayer each player needs the file in their own `photographica/photos/` folder.
 
 ---
 
 ## 11. 撮影エフェクト / Photo Effects
 
-以下のエフェクトは**撮影時に PNG に焼き込まれます**（リアルタイム表示とは独立）。  
-All effects are **baked into the PNG at capture time**, independent of real-time rendering.
+以下のエフェクトは**撮影時に画像へ焼き込まれます**（リアルタイム表示とは独立）。  
+All effects are **baked into the image at capture time**, independent of real-time rendering.
 
 | エフェクト / Effect | 条件 / Condition | 内容 / Description |
 |---|---|---|
@@ -381,16 +381,16 @@ All effects are **baked into the PNG at capture time**, independent of real-time
 → DoF blur only fires at f/5.6 or wider. No bokeh at f/8+.
 
 **Q: 「ファイルが見つかりません」と表示される — "Photo file not found"**  
-→ `.minecraft/photographica/photos/` を確認。マルチプレイでは各自のフォルダに PNG が必要です。  
-→ Check `.minecraft/photographica/photos/`. In multiplayer each player needs their own copy of the PNG.
+→ `.minecraft/photographica/photos/` を確認。マルチプレイでは各自のフォルダに画像ファイルが必要です。  
+→ Check `.minecraft/photographica/photos/`. In multiplayer each player needs their own copy of the file.
 
 **Q: 現像したのに写真が全部白い — Developed film all white**  
 → フィルムの取り出し・装填を**明るさ8以上**の場所で行うと光被りが発生します。**明るさ7以下の暗所**か**ポータブル暗室**内で着脱してください。  
 → Fogging occurs when loading/unloading film at **light level ≥ 8**. Always do film changes at **light level ≤ 7** or inside a **portable darkroom**.
 
 **Q: ネガプレビューが「NO FILE」 — Negative shows "NO FILE"**  
-→ `photographica/photos/` に PNG があるか確認。現像直後は 2 秒ほど待つと自動で再読み込みされます。  
-→ Check the PNG exists in `photographica/photos/`. After developing, wait ~2 seconds — the cache retries automatically.
+→ `photographica/photos/` に画像ファイルがあるか確認。現像直後は 2 秒ほど待つと自動で再読み込みされます。  
+→ Check the file exists in `photographica/photos/`. After developing, wait ~2 seconds — the cache retries automatically.
 
 **Q: 動画撮影で「FFmpeg が見つかりません」 — "FFmpeg not found"**  
 → [https://ffmpeg.org/](https://ffmpeg.org/) からダウンロードしてシステムの PATH に追加してください。  
@@ -403,7 +403,7 @@ All effects are **baked into the PNG at capture time**, independent of real-time
 ```
 .minecraft/
 └── photographica/
-    ├── photos/     ← 写真 PNG / Photo PNGs  (yyyy-MM-dd_HH-mm-ss_<uuid>.png)
+    ├── photos/     ← 写真 JPEG / Photo JPEGs  (yyyy-MM-dd_HH-mm-ss_<uuid>.jpg)
     └── videos/     ← 動画 mp4 / Video MP4s
 ```
 

@@ -5,6 +5,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
@@ -17,6 +18,7 @@ import org.lwjgl.opengl.GL11;
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.time.OffsetDateTime;
 import java.util.Date;
 
 @Environment(EnvType.CLIENT)
@@ -77,10 +79,16 @@ public final class PhotoCapture {
         pendingDepthFbW = 0;
         pendingDepthFbH = 0;
 
-        Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> processScreenshot(mc, raw, capturedDepth, capturedFbW, capturedFbH));
+        // Gathered now, not in the callback: it runs after the GPU copy lands, by which
+        // point the player may have moved away from where the shot was composed.
+        final PhotoWriter.Shot shot = buildShot(mc);
+
+        Screenshot.takeScreenshot(mc.getMainRenderTarget(),
+                raw -> processScreenshot(mc, raw, capturedDepth, capturedFbW, capturedFbH, shot));
     }
 
-    private static void processScreenshot(Minecraft mc, NativeImage raw, float[] linearDepth, int fbW, int fbH) {
+    private static void processScreenshot(Minecraft mc, NativeImage raw, float[] linearDepth,
+                                          int fbW, int fbH, PhotoWriter.Shot shot) {
         int   w    = raw.getWidth();
         int   h    = raw.getHeight();
         float targetAspect = 3f / 2f;
@@ -103,22 +111,163 @@ public final class PhotoCapture {
         }
         raw.close();
 
-        NativeImage processed = applyPhotoEffects(cropped, linearDepth, fbW, fbH);
+        NativeImage effects = applyPhotoEffects(cropped, linearDepth, fbW, fbH);
         cropped.close();
+
+        // Match Photographica's output size. Saving at the raw framebuffer size meant a
+        // 4K display produced enormous files for no visible gain at normal viewing size.
+        NativeImage processed = boxDownsample(effects, MAX_WIDTH);
+        if (processed != effects) effects.close();
 
         String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
         File snapDir = new File(mc.gameDirectory, "snapmatica/photos");
         snapDir.mkdirs();
-        File outFile = new File(snapDir, timestamp + ".png");
+        File outFile = uniqueOutputFile(snapDir, timestamp);
 
         try {
-            processed.writeToFile(outFile.toPath());
+            PhotoWriter.write(toRgb(processed), processed.getWidth(), processed.getHeight(), outFile, shot);
             System.out.println("[Snapmatica] Photo saved: " + outFile.getAbsolutePath());
         } catch (IOException e) {
             System.err.println("[Snapmatica] Failed to save photo: " + e.getMessage());
         } finally {
             processed.close();
         }
+    }
+
+    /** Maximum width photos are written at; anything wider is scaled down to it. */
+    private static final int MAX_WIDTH = 1280;
+
+    /**
+     * Timestamped name, with a numeric suffix when one already exists for that second.
+     * The name used to be the timestamp alone, so a second shot inside the same second
+     * silently overwrote the first.
+     */
+    private static File uniqueOutputFile(File dir, String timestamp) {
+        File f = new File(dir, timestamp + PhotoWriter.EXTENSION);
+        for (int n = 2; f.exists() && n < 1000; n++) {
+            f = new File(dir, timestamp + "_" + n + PhotoWriter.EXTENSION);
+        }
+        return f;
+    }
+
+    /**
+     * Packs the image into RGB ints for {@link PhotoWriter}. Alpha is dropped here:
+     * a photo is always opaque, and the framebuffer readback is not guaranteed to
+     * hand back a full alpha channel with every shader pack.
+     */
+    private static int[] toRgb(NativeImage img) {
+        int w = img.getWidth();
+        int h = img.getHeight();
+        int[] rgb = new int[w * h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                // NativeImage.getPixel() is ARGB, so masking off alpha leaves RGB in place.
+                // The effect passes above name the low byte "r", but every one of them
+                // treats the three colour channels identically, so the labels never mattered
+                // there. They matter here, which is why this reads the pixel directly.
+                rgb[y * w + x] = img.getPixel(x, y) & 0x00FFFFFF;
+            }
+        }
+        return rgb;
+    }
+
+    /** Box filter down to {@code maxWidth}. Returns {@code src} when it is already small enough. */
+    private static NativeImage boxDownsample(NativeImage src, int maxWidth) {
+        int sw = src.getWidth();
+        int sh = src.getHeight();
+        if (sw <= maxWidth) return src;
+        int dw = maxWidth;
+        int dh = Math.max(1, Math.round((float) sh * dw / sw));
+        NativeImage dst = new NativeImage(dw, dh, false);
+        float xScale = (float) sw / dw;
+        float yScale = (float) sh / dh;
+        for (int y = 0; y < dh; y++) {
+            int sy0 = (int) Math.floor(y * yScale);
+            int sy1 = Math.min(sh, (int) Math.ceil((y + 1) * yScale));
+            if (sy1 <= sy0) sy1 = sy0 + 1;
+            for (int x = 0; x < dw; x++) {
+                int sx0 = (int) Math.floor(x * xScale);
+                int sx1 = Math.min(sw, (int) Math.ceil((x + 1) * xScale));
+                if (sx1 <= sx0) sx1 = sx0 + 1;
+                long aa = 0, ra = 0, ga = 0, ba = 0;
+                int n = 0;
+                for (int sy = sy0; sy < sy1; sy++) {
+                    for (int sx = sx0; sx < sx1; sx++) {
+                        int c = getPixel(src, sx, sy);
+                        aa += (c >>> 24) & 0xFF;
+                        ra += (c >>> 16) & 0xFF;
+                        ga += (c >>> 8) & 0xFF;
+                        ba += c & 0xFF;
+                        n++;
+                    }
+                }
+                setPixel(dst, x, y, (((int) (aa / n)) << 24)
+                        | (((int) (ra / n)) << 16)
+                        | (((int) (ga / n)) << 8)
+                        | ((int) (ba / n)));
+            }
+        }
+        return dst;
+    }
+
+    /** Collects the shooting information written into the photo's Exif block. */
+    private static PhotoWriter.Shot buildShot(Minecraft mc) {
+        int em = SnapmaticaClient.exposureMode;
+        int shutterIdx = (em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx;
+        double shutterSec = SnapmaticaClient.SHUTTER_SECONDS[
+                Math.max(0, Math.min(SnapmaticaClient.SHUTTER_SECONDS.length - 1, shutterIdx))];
+        float aperture = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
+
+        String artist = mc.player != null ? mc.player.getGameProfile().getName() : "";
+        String where = "";
+        if (mc.level != null && mc.player != null) {
+            BlockPos pos = mc.player.blockPosition();
+            where = mc.level.dimension().identifier()
+                    + " (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
+        }
+        String lens = SnapmaticaClient.lensType == 0 ? "" : SnapmaticaClient.lensName(SnapmaticaClient.lensType);
+        String comment = "Lens: " + (lens.isEmpty() ? "none" : lens)
+                + " / Mode: " + exposureModeName(em)
+                + " / Focus: " + focusModeName(SnapmaticaClient.focusMode);
+        return new PhotoWriter.Shot(
+                "Mirrorless Digital",
+                lens,
+                PhotoWriter.softwareTag("snapmatica"),
+                artist,
+                where,
+                comment,
+                shutterSec,
+                aperture,
+                SnapmaticaClient.iso,
+                SnapmaticaClient.focalLengthMm,
+                exifExposureProgram(em),
+                OffsetDateTime.now());
+    }
+
+    private static int exifExposureProgram(int exposureMode) {
+        return switch (exposureMode) {
+            case 1  -> PhotoWriter.PROGRAM_APERTURE_PRIORITY;
+            case 2  -> PhotoWriter.PROGRAM_SHUTTER_PRIORITY;
+            case 3  -> PhotoWriter.PROGRAM_NORMAL;
+            default -> PhotoWriter.PROGRAM_MANUAL;
+        };
+    }
+
+    private static String exposureModeName(int exposureMode) {
+        return switch (exposureMode) {
+            case 1  -> "Av";
+            case 2  -> "Tv";
+            case 3  -> "P";
+            default -> "M";
+        };
+    }
+
+    private static String focusModeName(int focusMode) {
+        return switch (focusMode) {
+            case 1  -> "AF";
+            case 2  -> "MOB";
+            default -> "MF";
+        };
     }
 
     public static void onWorldRenderEnd() {

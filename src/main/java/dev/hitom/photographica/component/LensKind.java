@@ -83,4 +83,18 @@ public final class LensKind {
 			default -> "レンズなし";
 		};
 	}
+
+	/** ASCII lens name for Exif fields, which cannot carry the Japanese display names. */
+	public static String exifName(int lensType) {
+		return switch (lensType) {
+			case PRIME_50MM  -> "50mm Prime";
+			case ZOOM_24_70  -> "24-70mm Zoom";
+			case PRIME_35MM  -> "35mm Prime";
+			case PRIME_85MM  -> "85mm Prime";
+			case PRIME_14MM  -> "14mm Ultra-Wide Prime";
+			case ZOOM_70_200 -> "70-200mm Telephoto Zoom";
+			case MACRO_100   -> "100mm Macro";
+			default -> "";
+		};
+	}
 }

@@ -19,7 +19,7 @@ import java.util.UUID;
 
 /**
  * Client-side cache mapping photo UUIDs to registered GPU texture identifiers.
- * Photos are loaded from <gameDir>/photographica/photos/<uuid>.png on first use
+ * Photos are loaded from <gameDir>/photographica/photos/<datetime>_<uuid>.jpg on first use
  * and registered with Minecraft's TextureManager for fast re-use.
  */
 @Environment(EnvType.CLIENT)
@@ -76,15 +76,28 @@ public final class PhotoTextureCache {
         }
     }
 
+    /**
+     * Extensions a photo may carry. Photos are written as JPEG so they keep their Exif
+     * metadata, but PNGs written by earlier versions are still on players' disks and
+     * must keep loading. Ordered by preference: a JPEG wins if both somehow exist.
+     */
+    private static final String[] PHOTO_EXTENSIONS = { ".jpg", ".jpeg", ".png" };
+
     public static @Nullable File findPhotoFile(File dir, UUID photoId) {
         if (!dir.isDirectory()) return null;
-        // New format: <datetime>_<uuid_no_dashes>.png
-        String suffix = "_" + photoId.toString().replace("-", "") + ".png";
-        File[] matches = dir.listFiles((d, name) -> name.endsWith(suffix));
-        if (matches != null && matches.length > 0) return matches[0];
-        // Legacy format: <uuid>.png
-        File legacy = new File(dir, photoId + ".png");
-        return legacy.exists() ? legacy : null;
+        String bare = photoId.toString().replace("-", "");
+        // Current format: <datetime>_<uuid_no_dashes>.<ext>
+        for (String ext : PHOTO_EXTENSIONS) {
+            String suffix = "_" + bare + ext;
+            File[] matches = dir.listFiles((d, name) -> name.endsWith(suffix));
+            if (matches != null && matches.length > 0) return matches[0];
+        }
+        // Legacy format: <uuid>.<ext>
+        for (String ext : PHOTO_EXTENSIONS) {
+            File legacy = new File(dir, photoId + ext);
+            if (legacy.exists()) return legacy;
+        }
+        return null;
     }
 
     /** Call when leaving a world so stale textures from a previous session are discarded. */

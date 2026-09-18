@@ -1,5 +1,6 @@
 package dev.hitom.photographica.client.screen;
 
+import dev.hitom.photographica.client.render.PhotoTextureCache;
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.FilmRollData;
@@ -174,8 +175,9 @@ public class FilmStripScreen extends Screen {
         loadedForIndex = index;
 
         Minecraft mc = Minecraft.getInstance();
-        File file = new File(mc.gameDirectory, "photographica/photos/" + data.id() + ".png");
-        if (!file.isFile()) {
+        File file = PhotoTextureCache.findPhotoFile(
+                new File(mc.gameDirectory, "photographica/photos"), data.id());
+        if (file == null) {
             thumbMissing = true;
             return;
         }

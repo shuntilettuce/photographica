@@ -973,6 +973,8 @@ public final class VideoRecorder {
                         "-framerate", String.valueOf(currentFps),
                         "-i", new File(processedDir, "frame_%04d.png").getAbsolutePath(),
                         "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
+                        // Moves the index to the front so the file plays while it downloads.
+                        "-movflags", "+faststart",
                         outPath);
                 pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
                 pb.redirectError(ProcessBuilder.Redirect.DISCARD);
@@ -1056,12 +1058,21 @@ public final class VideoRecorder {
 
     // ── Image utilities ────────────────────────────────────────────────────────
 
+    /**
+     * Crops to 16:9, rounding both edges down to an even number of pixels. yuv420p
+     * subsamples chroma 2x2, so libx264 refuses odd dimensions: a window narrower than
+     * the 1280 downsample target could otherwise produce something like 1000x563, and
+     * the whole encode failed back to a directory of PNGs.
+     */
     private static NativeImage cropTo16x9(NativeImage src) {
         int w = src.getWidth(), h = src.getHeight();
         float aspect = 16f / 9f;
         int tW, tH;
         if ((float) w / h > aspect) { tH = h; tW = Math.round(h * aspect); }
         else                         { tW = w; tH = Math.round(w / aspect); }
+        tW &= ~1;
+        tH &= ~1;
+        if (tW <= 0 || tH <= 0) return src;
         if (tW == w && tH == h) return src;
         int offX = (w - tW) / 2, offY = (h - tH) / 2;
         NativeImage dst = new NativeImage(tW, tH, false);
@@ -1074,7 +1085,8 @@ public final class VideoRecorder {
     private static NativeImage boxDownsample(NativeImage src, int maxWidth) {
         int sw = src.getWidth(), sh = src.getHeight();
         if (sw <= maxWidth) return src;
-        int dw = maxWidth, dh = Math.max(1, Math.round((float) sh * dw / sw));
+        // Even dimensions for the same reason cropTo16x9 rounds down: yuv420p needs them.
+        int dw = maxWidth & ~1, dh = Math.max(2, Math.round((float) sh * dw / sw)) & ~1;
         NativeImage dst = new NativeImage(dw, dh, false);
         float xS = (float) sw / dw, yS = (float) sh / dh;
         for (int y = 0; y < dh; y++) {
