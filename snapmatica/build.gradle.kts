@@ -36,12 +36,19 @@ repositories {
 dependencies {
     minecraft("com.mojang:minecraft:$mcVersion")
     if (isModern) {
-        mappings(loom.officialMojangMappings())
+        // 26 builds against Mojang's own mappings, which Loom applies without
+        // being asked, and it remaps mods off the plain configurations.
+        implementation("net.fabricmc:fabric-loader:$loaderVersion")
+        implementation("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
     } else {
-        mappings("net.fabricmc:yarn:${extra["yarn_mappings"] as String}:v2")
+        // Named rather than called through a generated accessor: Loom 1.16 only
+        // generates one for `minecraft`, so `mappings(...)` and
+        // `modImplementation(...)` do not compile even though the
+        // configurations are there for the yarn-mapped versions.
+        "mappings"("net.fabricmc:yarn:${extra["yarn_mappings"] as String}:v2")
+        "modImplementation"("net.fabricmc:fabric-loader:$loaderVersion")
+        "modImplementation"("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
     }
-    modImplementation("net.fabricmc:fabric-loader:$loaderVersion")
-    modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
 }
 
 tasks.processResources {
