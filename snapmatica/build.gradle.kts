@@ -49,11 +49,8 @@ base {
     archivesName = extra["archives_base_name"] as String
 }
 
-if (!isModern) {
-    // Groovy, so that it binds to whichever Loom extension is on the classpath
-    // instead of being compiled against one of the two APIs.
-    apply(from = rootProject.file("gradle/loom-legacy.gradle"))
-}
+// Applies to every version: the refmap name has to match the mixin config.
+apply(from = rootProject.file("gradle/loom-mixin.gradle"))
 
 repositories {
     mavenCentral()

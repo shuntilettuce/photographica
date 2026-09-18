@@ -1,0 +1,19 @@
+// The mixin config declares `"refmap": "snapmatica.refmap.json"`, so Loom has to
+// generate the refmap under exactly that name rather than under whatever it
+// derives by default. A mismatch is invisible at build time and only shows up
+// as mixins failing to apply once the game loads.
+//
+// Written in Groovy on purpose: it resolves `loom` dynamically at execution
+// time, so it binds to whichever Loom version the subproject put on its
+// buildscript classpath instead of compiling against one of the two APIs.
+//
+// Note there is deliberately no `useLegacyMixinAp` here. Loom 1.12+ defaults it
+// off and remaps mixins with tiny remapper instead, and turning it back on
+// makes remapJar scan every project in the build for mixin mappings
+// (FabricMC/fabric-loom#1477) — which, with two Loom versions loaded in one
+// build, dies on the subproject belonging to the other one.
+loom {
+    mixin {
+        defaultRefmapName = 'snapmatica.refmap.json'
+    }
+}
