@@ -2,11 +2,18 @@ package dev.shunti.snapmatica.client;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+//? if >=26 {
+/*import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;*/
+//?} else {
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.text.Text;
+//?}
 
 /**
  * Viewfinder overlay + blackout/flash effects + EVF live preview.
@@ -23,11 +30,19 @@ public final class ViewfinderOverlay {
     private static final String[] LENS_NAMES =
             {"No Lens","50mm Prime","24-70mm Zoom","35mm Prime","85mm Prime","14mm UWA","70-200mm Zoom","100mm Macro"};
 
+    //? if >=26 {
+    /*public static void extractRenderState(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.options.hideGui) return;
+        long now = System.currentTimeMillis();
+        int sw = ctx.guiWidth(), sh = ctx.guiHeight();*/
+    //?} else {
     public static void render(DrawContext ctx, RenderTickCounter tickCounter) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.options.hudHidden) return;
         long now = System.currentTimeMillis();
         int sw = ctx.getScaledWindowWidth(), sh = ctx.getScaledWindowHeight();
+    //?}
 
         if (now < PhotoCapture.mirrorEndMs) { ctx.fill(0,0,sw,sh,0xFF000000); return; }
         if (now < PhotoCapture.flashEndMs) {
@@ -35,8 +50,13 @@ public final class ViewfinderOverlay {
             if (d > 0) { int a = (int)Math.min(200L,(PhotoCapture.flashEndMs-now)*200L/d); if (a>0) ctx.fill(0,0,sw,sh,(a<<24)|0x00FFFFFF); }
             return;
         }
+        //? if >=26 {
+        /*if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isShiftKeyDown()) return;
+        if (mc.screen != null) return;*/
+        //?} else {
         if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isSneaking()) return;
         if (mc.currentScreen != null) return;
+        //?}
 
         float aspect = 3f/2f;
         int fh = (int)(sh*0.86f), fw = (int)(fh*aspect);
@@ -80,45 +100,76 @@ public final class ViewfinderOverlay {
         ctx.fill(cx,cy+3,cx+1,cy+10,rc);
 
         // Info text
+        //? if >=26 {
+        /*Font tr = mc.font;*/
+        //?} else {
         TextRenderer tr=mc.textRenderer;
+        //?}
         boolean hasLens=SnapmaticaClient.lensType!=0;
         String fp=hasLens?(SnapmaticaClient.focalLengthMm+"mm"):"No Lens";
         int em = SnapmaticaClient.exposureMode;
         int si = clampIdx((em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx, SHUTTERS.length);
         float dispAp = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
+        //? if >=26 {
+        /*ctx.text(tr, String.format("F%s  %s  ISO%d  %s",
+                fmt(dispAp),SHUTTERS[si],SnapmaticaClient.iso,fp),
+                fx+6,fy2-tr.lineHeight-14,0xFFE8DCC4, true);*/
+        //?} else {
         ctx.drawTextWithShadow(tr,Text.literal(String.format("F%s  %s  ISO%d  %s",
                 fmt(dispAp),SHUTTERS[si],SnapmaticaClient.iso,fp)),
                 fx+6,fy2-tr.fontHeight-14,0xFFE8DCC4);
+        //?}
 
         // Exposure meter
         renderExposureMeter(ctx, fx, fx2, fy2);
 
         // Lens label
+        //? if >=26 {
+        /*ctx.text(tr, LENS_NAMES[
+                Math.max(0,Math.min(LENS_NAMES.length-1,SnapmaticaClient.lensType))],
+                fx+6,fy+4,0xFF9A8D72, true);*/
+        //?} else {
         ctx.drawTextWithShadow(tr,Text.literal(LENS_NAMES[
                 Math.max(0,Math.min(LENS_NAMES.length-1,SnapmaticaClient.lensType))]),
                 fx+6,fy+4,0xFF9A8D72);
+        //?}
 
         // Shake warning
         if (hasLens) {
             double safe=1.0/SnapmaticaClient.focalLengthMm;
             if (SnapmaticaClient.SHUTTER_SECONDS[si]>safe*1.5)
+                //? if >=26 {
+                /*ctx.text(tr, "WARN Blur", fx+6, fy+4+tr.lineHeight+2, 0xFFFF5555, true);*/
+                //?} else {
                 ctx.drawTextWithShadow(tr,Text.literal("WARN Blur"),
                         fx+6,fy+4+tr.fontHeight+2,0xFFFF5555);
+                //?}
         }
 
         // Mode indicator
         String[] el={"M","Av","Tv","P"};
         String[] fl2={"MF","AF","MOB"};
+        //? if >=26 {
+        /*ctx.text(tr,
+                el[clampIdx(SnapmaticaClient.exposureMode,4)]
+                +" | "+fl2[clampIdx(SnapmaticaClient.focusMode,3)],
+                fx+6,fy+4+tr.lineHeight*2+4,0xFFCCCCFF, true);*/
+        //?} else {
         ctx.drawTextWithShadow(tr,Text.literal(
                 el[clampIdx(SnapmaticaClient.exposureMode,4)]
                 +" | "+fl2[clampIdx(SnapmaticaClient.focusMode,3)]),
                 fx+6,fy+4+tr.fontHeight*2+4,0xFFCCCCFF);
+        //?}
 
     }
 
     // ── EVF live preview ────────────────────────────────────────────────────────
 
+    //? if >=26 {
+    /*private static void renderEvfPreview(GuiGraphicsExtractor ctx, int fx, int fy, int fx2, int fy2) {*/
+    //?} else {
     private static void renderEvfPreview(DrawContext ctx, int fx, int fy, int fx2, int fy2) {
+    //?}
         // 1. Exposure tint
         double ev = computeEvDeviation();
         double ae = Math.abs(ev);
@@ -170,7 +221,11 @@ public final class ViewfinderOverlay {
 
     // ── Exposure meter ──────────────────────────────────────────────────────────
 
+    //? if >=26 {
+    /*private static void renderExposureMeter(GuiGraphicsExtractor ctx, int fx, int fx2, int fy2) {*/
+    //?} else {
     private static void renderExposureMeter(DrawContext ctx, int fx, int fx2, int fy2) {
+    //?}
         final int MW = 120;
         int mx = (fx + fx2 - MW) / 2;
         int mcx = mx + MW / 2;
@@ -230,8 +285,13 @@ public final class ViewfinderOverlay {
         if (ap <= 11f) return 0.05f; return 0.02f;
     }
 
+    //? if >=26 {
+    /*private static void drawBracket(GuiGraphicsExtractor ctx, int ax, int ay, int len, int t,
+                                    int dx, int dy, int color) {*/
+    //?} else {
     private static void drawBracket(DrawContext ctx, int ax, int ay, int len, int t,
                                     int dx, int dy, int color) {
+    //?}
         ctx.fill(dx>0?ax:ax-len, dy>0?ay:ay-t, dx>0?ax+len:ax, dy>0?ay+t:ay, color);
         ctx.fill(dx>0?ax:ax-t, dy>0?ay:ay-len, dx>0?ax+t:ax, dy>0?ay+len:ay, color);
     }

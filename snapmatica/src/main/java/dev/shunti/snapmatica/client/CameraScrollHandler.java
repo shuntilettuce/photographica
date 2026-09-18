@@ -2,8 +2,13 @@ package dev.shunti.snapmatica.client;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+//? if >=26 {
+/*import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.Minecraft;*/
+//?} else {
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.util.InputUtil;
+//?}
 import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
@@ -42,15 +47,29 @@ public final class CameraScrollHandler {
 
     /** Positive delta = scroll up. Returns true if consumed. */
     public static boolean onScroll(double delta) {
+        //? if >=26 {
+        /*Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.screen != null) return false;
+
+        // Only active while sneaking with viewfinder mode enabled
+        if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isShiftKeyDown()) return false;*/
+        //?} else {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.currentScreen != null) return false;
 
         // Only active while sneaking with viewfinder mode enabled
         if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isSneaking()) return false;
+        //?}
 
         int dir = delta > 0 ? 1 : -1;
 
-        //? if >=1.21.11 {
+        //? if >=26 {
+        /*com.mojang.blaze3d.platform.Window win = mc.getWindow();
+        boolean ctrl = InputConstants.isKeyDown(win, GLFW.GLFW_KEY_LEFT_CONTROL)
+                || InputConstants.isKeyDown(win, GLFW.GLFW_KEY_RIGHT_CONTROL);
+        boolean alt = InputConstants.isKeyDown(win, GLFW.GLFW_KEY_LEFT_ALT)
+                || InputConstants.isKeyDown(win, GLFW.GLFW_KEY_RIGHT_ALT);*/
+        //?} else if >=1.21.11 {
         /*boolean ctrl = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
                 || InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
         boolean alt = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)

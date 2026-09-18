@@ -1,7 +1,11 @@
 package dev.shunti.snapmatica.client.mixin;
 
 import dev.shunti.snapmatica.client.PhotoCapture;
+//? if >=26 {
+/*import net.minecraft.client.renderer.entity.EntityRenderer;*/
+//?} else {
 import net.minecraft.client.render.entity.EntityRenderer;
+//?}
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -14,7 +18,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class EntityRendererMixin {
 
     @Inject(
+            //? if >=26 {
+            /*method = "submitNameTag",*/
+            //?} else {
             method = "renderLabelIfPresent",
+            //?}
             at = @At("HEAD"),
             cancellable = true,
             require = 0

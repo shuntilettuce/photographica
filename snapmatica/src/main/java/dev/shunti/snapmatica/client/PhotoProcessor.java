@@ -1,11 +1,13 @@
 package dev.shunti.snapmatica.client;
 
-import net.minecraft.client.MinecraftClient;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 
 /**
  * Post‑processing applied to the raw screenshot before saving.
  * Computes exposure compensation and depth‑of‑field blur.
  */
+@Environment(EnvType.CLIENT)
 public final class PhotoProcessor {
 
     private PhotoProcessor() {}

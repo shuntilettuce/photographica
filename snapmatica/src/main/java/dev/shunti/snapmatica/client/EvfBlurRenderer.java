@@ -2,8 +2,10 @@ package dev.shunti.snapmatica.client;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+//? if <26 {
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
+//?}
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -11,7 +13,15 @@ import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
-//? if >=1.21.11 {
+//? if >=26 {
+/*import com.mojang.blaze3d.opengl.GlTexture;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.textures.GpuTexture;
+import net.minecraft.client.Minecraft;
+import org.lwjgl.opengl.GL14;
+import org.lwjgl.opengl.GL33;
+import org.lwjgl.opengl.GL43;*/
+//?} else if >=1.21.11 {
 /*import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL33;
 import org.lwjgl.opengl.GL43;*/
@@ -63,7 +73,48 @@ public final class EvfBlurRenderer {
 
     /** GPU-side depth buffer copy. Call during WorldRenderEvents.LAST. */
     public static void captureDepth(int fbW, int fbH) {
-        //? if >=1.21.11 {
+        //? if >=26 {
+        /*// In 1.21.11, GameRenderer clears the depth texture before HUD rendering,
+        // so we can't borrow the GL ID — we must copy before it gets cleared.
+        com.mojang.blaze3d.pipeline.RenderTarget mainFb_ =
+                net.minecraft.client.Minecraft.getInstance().getMainRenderTarget();
+        if (mainFb_ == null) return;
+        com.mojang.blaze3d.textures.GpuTexture depthGpu_ = mainFb_.getDepthTexture();
+        if (!(depthGpu_ instanceof com.mojang.blaze3d.opengl.GlTexture glDepth_)) return;
+        int srcDepthId_ = glDepth_.glId();
+        if (srcDepthId_ <= 0) return;
+        int fw_ = mainFb_.width;
+        int fh_ = mainFb_.height;
+        if (fw_ <= 0 || fh_ <= 0) return;
+        int prevActiveTU_ = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        int prevTex2D_    = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        if (depthTex == -1 || depthTexW != fw_ || depthTexH != fh_) {
+            if (depthTex != -1) GL11.glDeleteTextures(depthTex);
+            depthTex = GL11.glGenTextures();
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTex);
+            // Match the scene depth attachment's internal format (DEPTH32 =
+            // GL_DEPTH_COMPONENT32, fixed-point — NOT 32F). glCopyImageSubData
+            // requires both textures to share a format size class, so a 32F copy
+            // target silently fails (GL_INVALID_OPERATION), leaving garbage depth.
+            GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL14.GL_DEPTH_COMPONENT32,
+                    fw_, fh_, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_UNSIGNED_INT,
+                    (java.nio.ByteBuffer) null);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, 0);
+            depthTexW = fw_;
+            depthTexH = fh_;
+        }
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTex2D_);
+        GL13.glActiveTexture(prevActiveTU_);
+        GL43.glCopyImageSubData(
+                srcDepthId_, GL11.GL_TEXTURE_2D, 0, 0, 0, 0,
+                depthTex,    GL11.GL_TEXTURE_2D, 0, 0, 0, 0,
+                fw_, fh_, 1);*/
+        //?} else if >=1.21.11 {
         /*// In 1.21.11, GameRenderer clears the depth texture before HUD rendering,
         // so we can't borrow the GL ID — we must copy before it gets cleared.
         net.minecraft.client.gl.Framebuffer mainFb_ =
@@ -149,19 +200,35 @@ public final class EvfBlurRenderer {
         float maxBlurPx = Math.min(80.0f / (aperture * aperture), 32.0f);
         if (maxBlurPx < 0.5f) return;
 
+        //? if >=26 {
+        /*Minecraft mc = Minecraft.getInstance();
+        RenderTarget mainFb = mc.getMainRenderTarget();
+        GpuTexture gpuTex = mainFb.getColorTexture();
+        if (!(gpuTex instanceof GlTexture glTex)) return;
+        int mainTex = glTex.glId();
+        if (mainTex == 0) return;
+
+        int fbW = mainFb.width;
+        int fbH = mainFb.height;*/
+        //?} else if >=1.21.11 {
+        /*MinecraftClient mc = MinecraftClient.getInstance();
+        Framebuffer mainFb = mc.getFramebuffer();
+        com.mojang.blaze3d.textures.GpuTexture gpuTex = mainFb.getColorAttachment();
+        if (!(gpuTex instanceof net.minecraft.client.texture.GlTexture glTex)) return;
+        int mainTex = glTex.getGlId();
+        if (mainTex == 0) return;
+
+        int fbW = mainFb.textureWidth;
+        int fbH = mainFb.textureHeight;*/
+        //?} else {
         MinecraftClient mc = MinecraftClient.getInstance();
         Framebuffer mainFb = mc.getFramebuffer();
-        //? if >=1.21.11 {
-        /*com.mojang.blaze3d.textures.GpuTexture gpuTex = mainFb.getColorAttachment();
-        if (!(gpuTex instanceof net.minecraft.client.texture.GlTexture glTex)) return;
-        int mainTex = glTex.getGlId();*/
-        //?} else {
         int mainTex = mainFb.getColorAttachment();
-        //?}
         if (mainTex == 0) return;
 
         int fbW = mainFb.textureWidth;
         int fbH = mainFb.textureHeight;
+        //?}
         if (fbW <= 0 || fbH <= 0) return;
 
         ensureInit(fbW, fbH);
@@ -222,7 +289,11 @@ public final class EvfBlurRenderer {
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
         // Pass 2: Vertical blur, aux → main (scissored to viewfinder region)
+        //? if >=26 {
+        /*double scale = mc.getWindow().getGuiScale();*/
+        //?} else {
         double scale = mc.getWindow().getScaleFactor();
+        //?}
         int scX = (int)(fx  * scale);
         int scY = fbH - (int)(fy2 * scale);
         int scW = (int)((fx2 - fx) * scale);

@@ -4,31 +4,50 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+//? if >=26 {
+/*import com.mojang.blaze3d.platform.InputConstants;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.resources.Identifier;*/
+//?} else if >=1.21.11 {
+/*import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-//? if >=1.21.11 {
-/*import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.minecraft.util.Identifier;*/
-//?} else {
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-//?}
-import net.minecraft.client.MinecraftClient;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.util.Identifier;*/
+//?} else {
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
+//?}
 import org.lwjgl.glfw.GLFW;
 
 @Environment(EnvType.CLIENT)
 public class SnapmaticaClient implements ClientModInitializer {
 
-    //? if >=1.21.11 {
+    //? if >=26 {
+    /*private static final KeyMapping.Category SNAPMATICA_CATEGORY =
+            new KeyMapping.Category(Identifier.fromNamespaceAndPath("snapmatica", "snapmatica"));*/
+    //?} else if >=1.21.11 {
     /*private static final KeyBinding.Category SNAPMATICA_CATEGORY =
             KeyBinding.Category.create(Identifier.of("snapmatica", "snapmatica"));*/
     //?}
 
     // ── Key Bindings ─────────────────────────────────────────────────────────────
+    //? if >=26 {
+    /*private static KeyMapping shootKey;
+    private static KeyMapping settingsKey;
+    private static KeyMapping viewfinderSneakKey;  // toggle sneak-to-viewfinder mode*/
+    //?} else {
     private static KeyBinding shootKey;
     private static KeyBinding settingsKey;
     private static KeyBinding viewfinderSneakKey;  // toggle sneak-to-viewfinder mode
+    //?}
     // ── Camera state (client-side only, no server sync needed) ───────────────────
     public static float aperture = 5.6f;
     public static int shutterSpeedIdx = 10;      // index into SHUTTER_SECONDS[] (1/30)
@@ -58,7 +77,14 @@ public class SnapmaticaClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         // ── Register key bindings ───────────────────────────────────────────────
-        //? if >=1.21.11 {
+        //? if >=26 {
+        /*shootKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.snapmatica.shoot",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_P,
+                SNAPMATICA_CATEGORY
+        ));*/
+        //?} else if >=1.21.11 {
         /*shootKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.shoot",
                 InputUtil.Type.KEYSYM,
@@ -74,7 +100,14 @@ public class SnapmaticaClient implements ClientModInitializer {
         ));
         //?}
 
-        //? if >=1.21.11 {
+        //? if >=26 {
+        /*settingsKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.snapmatica.settings",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_UNKNOWN,
+                SNAPMATICA_CATEGORY
+        ));*/
+        //?} else if >=1.21.11 {
         /*settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.settings",
                 InputUtil.Type.KEYSYM,
@@ -90,7 +123,14 @@ public class SnapmaticaClient implements ClientModInitializer {
         ));
         //?}
 
-        //? if >=1.21.11 {
+        //? if >=26 {
+        /*viewfinderSneakKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.snapmatica.viewfinder_sneak",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_UNKNOWN,
+                SNAPMATICA_CATEGORY
+        ));*/
+        //?} else if >=1.21.11 {
         /*viewfinderSneakKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.viewfinder_sneak",
                 InputUtil.Type.KEYSYM,
@@ -111,17 +151,29 @@ public class SnapmaticaClient implements ClientModInitializer {
             if (client.player == null) return;
 
             // Toggle the sneak-to-viewfinder mode
+            //? if >=26 {
+            /*while (viewfinderSneakKey.consumeClick()) {*/
+            //?} else {
             while (viewfinderSneakKey.wasPressed()) {
+            //?}
                 viewfinderSneakEnabled = !viewfinderSneakEnabled;
             }
 
             // Shoot key
+            //? if >=26 {
+            /*if (shootKey.consumeClick()) {*/
+            //?} else {
             if (shootKey.wasPressed()) {
+            //?}
                 PhotoCapture.take();
             }
 
             // Settings key
+            //? if >=26 {
+            /*if (settingsKey.consumeClick()) {*/
+            //?} else {
             if (settingsKey.wasPressed()) {
+            //?}
                 client.setScreen(new CameraScreen());
             }
 
@@ -132,10 +184,21 @@ public class SnapmaticaClient implements ClientModInitializer {
         });
 
         // ── HUD overlay (viewfinder, blackout, flash) ───────────────────────────
+        //? if >=26 {
+        /*HudElementRegistry.addFirst(
+                Identifier.fromNamespaceAndPath("snapmatica", "viewfinder"),
+                ViewfinderOverlay::extractRenderState
+        );*/
+        //?} else {
         HudRenderCallback.EVENT.register(ViewfinderOverlay::render);
+        //?}
 
         // ── World render end (depth capture, etc.) ──────────────────────────────
-        //? if >=1.21.11 {
+        //? if >=26 {
+        /*LevelRenderEvents.END_MAIN.register(ctx -> {
+            PhotoCapture.onWorldRenderEnd();
+        });*/
+        //?} else if >=1.21.11 {
         /*WorldRenderEvents.END_MAIN.register(ctx -> {
             PhotoCapture.onWorldRenderEnd();
         });*/

@@ -17,3 +17,9 @@ fabric_version = "0.110.5+1.21.4"
 yarn_mappings = "1.21.11+build.6"
 loader_version = "0.16.14"
 fabric_version = "0.141.1+1.21.11"
+
+# 26.1.2 ships Mojang's own mappings, so there is no yarn_mappings entry here;
+# build.gradle.kts picks loom.officialMojangMappings() for >=26.
+["26.1.2"]
+loader_version = "0.19.2"
+fabric_version = "0.149.1+26.1.2"

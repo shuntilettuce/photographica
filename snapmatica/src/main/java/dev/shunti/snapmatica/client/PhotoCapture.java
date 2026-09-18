@@ -3,10 +3,23 @@ package dev.shunti.snapmatica.client;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+//? if >=26 {
+/*import com.mojang.blaze3d.platform.NativeImage;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;*/
+//?} else {
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.util.ScreenshotRecorder;
 import org.lwjgl.BufferUtils;
+//?}
 import org.lwjgl.opengl.GL11;
 
 import java.io.File;
@@ -53,7 +66,11 @@ public final class PhotoCapture {
     }
 
     public static void take() {
+        //? if >=26 {
+        /*Minecraft mc = Minecraft.getInstance();*/
+        //?} else {
         MinecraftClient mc = MinecraftClient.getInstance();
+        //?}
         if (mc.player == null) return;
 
         long now = System.currentTimeMillis();
@@ -77,7 +94,11 @@ public final class PhotoCapture {
         if (!capturePending) return;
         capturePending = false;
 
+        //? if >=26 {
+        /*Minecraft mc = Minecraft.getInstance();*/
+        //?} else {
         MinecraftClient mc = MinecraftClient.getInstance();
+        //?}
         if (mc.player == null) return;
 
         // Depth was already captured in onWorldRenderEnd() while the depth buffer was valid.
@@ -88,7 +109,9 @@ public final class PhotoCapture {
         pendingDepthFbW = 0;
         pendingDepthFbH = 0;
 
-        //? if >=1.21.11 {
+        //? if >=26 {
+        /*Screenshot.takeScreenshot(mc.getMainRenderTarget(), raw -> processScreenshot(mc, raw, capturedDepth, capturedFbW, capturedFbH));*/
+        //?} else if >=1.21.11 {
         /*ScreenshotRecorder.takeScreenshot(mc.getFramebuffer(), raw -> processScreenshot(mc, raw, capturedDepth, capturedFbW, capturedFbH));*/
         //?} else {
         NativeImage raw;
@@ -102,7 +125,11 @@ public final class PhotoCapture {
         //?}
     }
 
+    //? if >=26 {
+    /*private static void processScreenshot(Minecraft mc, NativeImage raw, float[] linearDepth, int fbW, int fbH) {*/
+    //?} else {
     private static void processScreenshot(MinecraftClient mc, NativeImage raw, float[] linearDepth, int fbW, int fbH) {
+    //?}
         // ── Crop to 3:2 aspect ratio ────────────────────────────────────────────
         int w = raw.getWidth();
         int h = raw.getHeight();
@@ -131,12 +158,20 @@ public final class PhotoCapture {
 
         // ── Save to disk ────────────────────────────────────────────────────────
         String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
+        //? if >=26 {
+        /*File snapDir = new File(mc.gameDirectory, "snapmatica/photos");*/
+        //?} else {
         File snapDir = new File(mc.runDirectory, "snapmatica/photos");
+        //?}
         snapDir.mkdirs();
         File outFile = new File(snapDir, timestamp + ".png");
 
         try {
+            //? if >=26 {
+            /*processed.writeToFile(outFile.toPath());*/
+            //?} else {
             processed.writeTo(outFile);
+            //?}
             System.out.println("[Snapmatica] Photo saved: " + outFile.getAbsolutePath());
         } catch (IOException e) {
             System.err.println("[Snapmatica] Failed to save photo: " + e.getMessage());
@@ -154,10 +189,63 @@ public final class PhotoCapture {
      * viewport query via glGetIntegerv(GL_VIEWPORT) and GL error clearing.
      */
     public static void onWorldRenderEnd() {
+        //? if >=26 {
+        /*Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || !mc.player.isShiftKeyDown()) return;*/
+        //?} else {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || !mc.player.isSneaking()) return;
+        //?}
 
-        //? if >=1.21.11 {
+        //? if >=26 {
+        /*// Depth lives in a GpuTexture rather than the legacy default FBO depth
+        // attachment, and mc.hitResult is capped at interaction reach, so do our own
+        // long-range raycast (blocks + entities) to keep focus tracking distant subjects.
+        final double maxDist = 1000.0;
+        Vec3 eye  = mc.player.getEyePosition();
+        Vec3 look = mc.player.getViewVector(1.0f);
+        Vec3 end  = eye.add(look.scale(maxDist));
+
+        BlockHitResult blockHit = mc.level.clip(
+                new ClipContext(eye, end,
+                        ClipContext.Block.OUTLINE,
+                        ClipContext.Fluid.NONE, mc.player));
+        double bestDist = (blockHit != null
+                && blockHit.getType() != HitResult.Type.MISS)
+                ? eye.distanceTo(blockHit.getLocation()) : maxDist;
+
+        AABB searchBox = mc.player.getBoundingBox()
+                .expandTowards(look.scale(maxDist)).inflate(1.0);
+        EntityHitResult entityHit = ProjectileUtil.getEntityHitResult(
+                mc.player, eye, end, searchBox,
+                e -> !e.isSpectator() && e.isAlive(), bestDist * bestDist);
+        if (entityHit != null) {
+            double eDist = eye.distanceTo(entityHit.getLocation());
+            if (eDist < bestDist) bestDist = eDist;
+        }
+        // Nothing within range (sky / far horizon) -> treat as infinity so AF can
+        // reach the 999 stop.
+        lastSceneDepthBlocks = (bestDist < maxDist) ? (float) bestDist : 999.0f;
+
+        // Still capture the depth texture for the EVF blur shader.
+        int[] viewport = new int[4];
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
+        int vpW = viewport[2];
+        int vpH = viewport[3];
+        if (vpW > 0 && vpH > 0) {
+            EvfBlurRenderer.currentDepthFar = Math.max(
+                    mc.options.renderDistance().get() * 64f, 256f);
+            EvfBlurRenderer.captureDepth(vpW, vpH);
+            if (capturePending) {
+                float[] depth = EvfBlurRenderer.readLinearDepthCpu(vpW, vpH);
+                if (depth != null) {
+                    pendingLinearDepth = depth;
+                    pendingDepthFbW    = vpW;
+                    pendingDepthFbH    = vpH;
+                }
+            }
+        }*/
+        //?} else if >=1.21.11 {
         /*// In 1.21.11 glReadPixels(GL_DEPTH_COMPONENT) no longer reads the scene depth
         // because depth lives in a GpuTexture, not the legacy default FBO depth attachment.
         // mc.crosshairTarget is capped at interaction reach (~4.5 blocks), so it MISSes
@@ -411,7 +499,10 @@ public final class PhotoCapture {
 
     // ── Pixel access (NativeImage format changed in 1.21.4) ─────────────────────
 
-    //? if >=1.21.4 {
+    //? if >=26 {
+    /*private static int getPixelAbgr(NativeImage img, int x, int y) { return img.getPixel(x, y); }
+    private static void setPixelAbgr(NativeImage img, int x, int y, int abgr) { img.setPixel(x, y, abgr); }*/
+    //?} else if >=1.21.4 {
     /*private static int getPixelAbgr(NativeImage img, int x, int y) {
         int argb = img.getColorArgb(x, y);
         int a = (argb >>> 24) & 0xFF; int r = (argb >>> 16) & 0xFF;

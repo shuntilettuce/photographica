@@ -2,10 +2,17 @@ package dev.shunti.snapmatica.client;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+//? if >=26 {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;*/
+//?} else {
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
+//?}
 
 import java.util.List;
 
@@ -36,7 +43,11 @@ public class CameraScreen extends Screen {
     private static final int FOCUS_MOB = 2;
 
     public CameraScreen() {
+        //? if >=26 {
+        /*super(Component.literal("Camera Settings"));*/
+        //?} else {
         super(Text.literal("Camera Settings"));
+        //?}
     }
 
     @Override
@@ -101,8 +112,13 @@ public class CameraScreen extends Screen {
 
 
         // Close button
+        //? if >=26 {
+        /*addRenderableWidget(Button.builder(Component.literal("Close"), b -> onClose())
+                .bounds(cx - 40, top + row * rowHeight + 16, 80, 20).build());*/
+        //?} else {
         addDrawableChild(ButtonWidget.builder(Text.literal("Close"), b -> close())
                 .dimensions(cx - 40, top + row * rowHeight + 16, 80, 20).build());
+        //?}
     }
 
     private void addRow2(int cx, int y, String label, java.util.function.Supplier<String> value,
@@ -110,6 +126,25 @@ public class CameraScreen extends Screen {
         int gap = 4;
         int halfTotal = 20 + gap + btnWidth + gap + 20;
 
+        //? if >=26 {
+        /*Button left = Button.builder(Component.literal("◀"),
+                        b -> { step.accept(-1); rebuildWidgets(); })
+                .bounds(cx - halfTotal, y, 20, 20).build();
+        left.active = editable;
+        addRenderableWidget(left);
+
+        Button centre = Button.builder(
+                        Component.literal(label + ": " + value.get()), b -> {})
+                .bounds(cx - halfTotal + 20 + gap, y, btnWidth, 20).build();
+        centre.active = false;
+        addRenderableWidget(centre);
+
+        Button right = Button.builder(Component.literal("▶"),
+                        b -> { step.accept(1); rebuildWidgets(); })
+                .bounds(cx + halfTotal - 20, y, 20, 20).build();
+        right.active = editable;
+        addRenderableWidget(right);*/
+        //?} else {
         ButtonWidget left = ButtonWidget.builder(Text.literal("◀"),
                         b -> { step.accept(-1); clearAndInit(); })
                 .dimensions(cx - halfTotal, y, 20, 20).build();
@@ -127,8 +162,25 @@ public class CameraScreen extends Screen {
                 .dimensions(cx + halfTotal - 20, y, 20, 20).build();
         right.active = editable;
         addDrawableChild(right);
+        //?}
     }
 
+    //? if >=26 {
+    /*@Override
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+        ctx.fill(0, 0, this.width, this.height, 0xC0101010);
+    }
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+        extractBackground(ctx, mouseX, mouseY, delta);
+        ctx.centeredText(font, Component.literal("SNAPMATICA CAMERA"), width / 2, 10, 0xFFE8DCC4);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
+    }
+
+    @Override
+    public boolean isPauseScreen() { return false; }*/
+    //?} else {
     @Override
     public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, 0xC0101010);
@@ -143,6 +195,7 @@ public class CameraScreen extends Screen {
 
     @Override
     public boolean shouldPause() { return false; }
+    //?}
 
     // ── Helpers ─────────────────────────────────────────────────────────────────
 

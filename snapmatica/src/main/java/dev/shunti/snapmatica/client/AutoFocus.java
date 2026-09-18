@@ -2,9 +2,15 @@ package dev.shunti.snapmatica.client;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+//? if >=26 {
+/*import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.Vec3;*/
+//?} else {
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.math.Vec3d;
+//?}
 
 import java.util.List;
 
@@ -34,9 +40,15 @@ public final class AutoFocus {
     // cos(5°) — entities must be within this cone of the look direction
     private static final double MOB_CONE_COS = Math.cos(Math.toRadians(5.0));
 
+    //? if >=26 {
+    /*public static void tick(Minecraft mc) {
+        if (mc.player == null || mc.level == null) return;
+        if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isShiftKeyDown()) return;*/
+    //?} else {
     public static void tick(MinecraftClient mc) {
         if (mc.player == null || mc.world == null) return;
         if (!SnapmaticaClient.viewfinderSneakEnabled || !mc.player.isSneaking()) return;
+    //?}
         if (SnapmaticaClient.focusMode == FOCUS_MF) return;
 
         float targetDepth;
@@ -67,6 +79,40 @@ public final class AutoFocus {
         return best;
     }
 
+    //? if >=26 {
+    /*private static Float nearestMobInCone(Minecraft mc) {
+        if (mc.player == null || mc.level == null) return null;
+        Vec3 eye  = mc.player.getEyePosition();
+        Vec3 look = mc.player.getViewVector(1.0f);
+
+        double best = Double.MAX_VALUE;
+        for (LivingEntity e : mc.level.getEntitiesOfClass(LivingEntity.class,
+                mc.player.getBoundingBox().inflate(50.0),
+                ent -> ent != mc.player && ent.isAlive())) {
+            Vec3 toEnt = e.position().add(0, e.getBbHeight() * 0.5, 0).subtract(eye);
+            double dist = toEnt.length();
+            if (dist < 0.1) continue;
+            if (toEnt.normalize().dot(look) >= MOB_CONE_COS && dist < best) best = dist;
+        }
+        return best < Double.MAX_VALUE ? (float) best : null;
+    }*/
+    //?} else if >=1.21.11 {
+    /*private static Float nearestMobInCone(MinecraftClient mc) {
+        if (mc.player == null || mc.world == null) return null;
+        Vec3d eye = mc.player.getEyePos();
+        Vec3d look = mc.player.getRotationVec(1.0f);
+
+        double best = Double.MAX_VALUE;
+        for (LivingEntity e : mc.world.getEntitiesByClass(LivingEntity.class,
+                mc.player.getBoundingBox().expand(50.0), ent -> ent != mc.player && ent.isAlive())) {
+            Vec3d toEnt = e.getEntityPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);
+            double dist = toEnt.length();
+            if (dist < 0.1) continue;
+            if (toEnt.normalize().dotProduct(look) >= MOB_CONE_COS && dist < best) best = dist;
+        }
+        return best < Double.MAX_VALUE ? (float) best : null;
+    }*/
+    //?} else {
     private static Float nearestMobInCone(MinecraftClient mc) {
         if (mc.player == null || mc.world == null) return null;
         Vec3d eye = mc.player.getEyePos();
@@ -75,15 +121,12 @@ public final class AutoFocus {
         double best = Double.MAX_VALUE;
         for (LivingEntity e : mc.world.getEntitiesByClass(LivingEntity.class,
                 mc.player.getBoundingBox().expand(50.0), ent -> ent != mc.player && ent.isAlive())) {
-            //? if >=1.21.11 {
-            /*Vec3d toEnt = e.getEntityPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);*/
-            //?} else {
             Vec3d toEnt = e.getPos().add(0, e.getHeight() * 0.5, 0).subtract(eye);
-            //?}
             double dist = toEnt.length();
             if (dist < 0.1) continue;
             if (toEnt.normalize().dotProduct(look) >= MOB_CONE_COS && dist < best) best = dist;
         }
         return best < Double.MAX_VALUE ? (float) best : null;
     }
+    //?}
 }
