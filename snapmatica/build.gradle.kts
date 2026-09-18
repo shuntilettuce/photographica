@@ -1,11 +1,29 @@
+// Stonecutter gives each Minecraft version its own subproject, named after the
+// version, and the four versions do not share a toolchain. 1.21.x is built with
+// yarn mappings, which only Loom 1.13 still offers; 26 uses Mojang's own
+// mappings, which need Loom 1.16. One `plugins {}` block can only name a single
+// Loom, so Loom goes on the buildscript classpath and is applied per version.
+buildscript {
+    val isModern = project.name.substringBefore('.').toInt() >= 26
+    repositories {
+        maven("https://maven.fabricmc.net/") { name = "Fabric" }
+        mavenCentral()
+    }
+    dependencies {
+        // The plugin marker carries Gradle API-version attributes that differ
+        // between the two Looms; depending on the artifact directly sidesteps
+        // that variant selection entirely.
+        classpath("net.fabricmc:fabric-loom:" + if (isModern) "1.16-SNAPSHOT" else "1.13-SNAPSHOT")
+    }
+}
+
 plugins {
-    id("net.fabricmc.fabric-loom") version "1.16-SNAPSHOT"
+    // Declared here, before Loom applies it, so that this script keeps the
+    // type-safe accessors for `java`, `base`, `processResources` and publishing.
+    id("java")
     id("maven-publish")
 }
 
-// Stonecutter gives each Minecraft version its own subproject, named after the
-// version. Reading it from the project rather than from stonecutter.current
-// keeps every subproject building the version it is actually named for.
 val mcVersion     = project.name
 val loaderVersion = extra["loader_version"] as String
 val fabricVersion = extra["fabric_version"] as String
@@ -19,6 +37,9 @@ val javaTarget = if (isModern) 25 else 21
 // dependency handler, which carries none of the version properties.
 val yarnMappings = if (isModern) null else extra["yarn_mappings"] as String
 
+// Loom 1.13 registers itself as `fabric-loom`, 1.16 as `net.fabricmc.fabric-loom`.
+apply(plugin = if (isModern) "net.fabricmc.fabric-loom" else "fabric-loom")
+
 logger.lifecycle("snapmatica: $mcVersion (mappings=${yarnMappings ?: "mojang"}, java=$javaTarget)")
 
 version = "$modVersion+$mcVersion"
@@ -29,12 +50,9 @@ base {
 }
 
 if (!isModern) {
-    loom {
-        mixin {
-            useLegacyMixinAp.set(true)
-            add(sourceSets.main.get(), "snapmatica.refmap.json")
-        }
-    }
+    // Groovy, so that it binds to whichever Loom extension is on the classpath
+    // instead of being compiled against one of the two APIs.
+    apply(from = rootProject.file("gradle/loom-legacy.gradle"))
 }
 
 repositories {
@@ -42,17 +60,15 @@ repositories {
 }
 
 dependencies {
-    minecraft("com.mojang:minecraft:$mcVersion")
+    // Named rather than called through generated accessors: Loom is applied
+    // from the buildscript classpath, so no accessors are generated for it.
+    "minecraft"("com.mojang:minecraft:$mcVersion")
     if (isModern) {
-        // 26 builds against Mojang's own mappings, which Loom applies without
-        // being asked, and it remaps mods off the plain configurations.
+        // Loom 1.16 applies Mojang's mappings without being asked, and remaps
+        // mods off the plain configurations.
         implementation("net.fabricmc:fabric-loader:$loaderVersion")
         implementation("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
     } else {
-        // Named rather than called through a generated accessor: Loom 1.16 only
-        // generates one for `minecraft`, so `mappings(...)` and
-        // `modImplementation(...)` do not compile even though the
-        // configurations are there for the yarn-mapped versions.
         "mappings"("net.fabricmc:yarn:$yarnMappings:v2")
         "modImplementation"("net.fabricmc:fabric-loader:$loaderVersion")
         "modImplementation"("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
