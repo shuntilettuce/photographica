@@ -2,10 +2,6 @@
 
 A photography mod that brings realistic camera simulation to Minecraft. Take photos with film or digital cameras, develop your negatives in a darkroom, and print photographs to display in your world.
 
-> **Note:** This mod is currently available in Japanese only. The English version is coming soon.
-
----
-
 ## Features
 
 ### Camera Types
@@ -43,8 +39,8 @@ A photography mod that brings realistic camera simulation to Minecraft. Take pho
 
 ## Requirements
 
-- Minecraft **1.21.1**
-- Fabric Loader **≥ 0.16.0**
+- Minecraft **1.21.1**, **1.21.4**, **1.21.11** or **26.1.2**
+- Fabric Loader **≥ 0.16.0** (**≥ 0.19.2** on 26.1.2)
 - Fabric API
 
 Both client and server must have the mod installed for multiplayer.

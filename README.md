@@ -4,11 +4,18 @@ A photography mod that brings realistic camera simulation to Minecraft. Take pho
 
 ## Requirements
 
-- Minecraft **1.21.1**
-- Fabric Loader **≥ 0.16.0**
+- Minecraft **1.21.1**, **1.21.4**, **1.21.11** or **26.1.2**
+- Fabric Loader **≥ 0.16.0** (**≥ 0.19.2** on 26.1.2)
 - [Fabric API](https://modrinth.com/mod/fabric-api)
+- Java 21 (Java 25 on 26.1.2)
 
 Both client and server must have the mod installed for multiplayer.
+
+## Also in this repository
+
+[Snapmatica](snapmatica/README.md) — the client-only sibling. Same camera
+simulation, no items, blocks or server side: bind a key and it saves a
+processed screenshot.
 
 ## Features
 
@@ -50,6 +57,10 @@ Both client and server must have the mod installed for multiplayer.
 ```
 
 The output JAR will be at `build/libs/photographica-<version>.jar`.
+
+1.21.1, 1.21.4 and 1.21.11 are built from `src/` with
+[Stonecutter](https://stonecutter.kikugie.dev/); 26.1.2 is still a separate
+copy under `photographica26/`.
 
 ## Development
 

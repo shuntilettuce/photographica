@@ -1,0 +1,53 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  snapmatica:
+    name: snapmatica ${{ matrix.minecraft }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every Minecraft version snapmatica/settings.gradle.kts declares.
+        minecraft: ["1.21.1", "1.21.4", "1.21.11", "26.1.2"]
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1.21.x compiles against Java 21, 26.1.2 against Java 25. Both are
+      # installed so Gradle's toolchain resolution can pick either.
+      - name: Set up JDKs
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            25
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Printed on every run so the Stonecutter project paths are visible in the
+      # log if the build step below ever stops matching them.
+      - name: List Stonecutter projects
+        working-directory: snapmatica
+        run: ./gradlew projects
+
+      - name: Build
+        working-directory: snapmatica
+        run: ./gradlew ":${{ matrix.minecraft }}:build" --stacktrace
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapmatica-${{ matrix.minecraft }}
+          path: snapmatica/versions/${{ matrix.minecraft }}/build/libs/*.jar
+          if-no-files-found: warn
