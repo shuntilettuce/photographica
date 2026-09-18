@@ -9,8 +9,11 @@ import net.minecraft.util.Uuids;
 import java.util.UUID;
 
 /**
- * Metadata stored on a photo item. The actual PNG lives on disk at
- * <gameDir>/photographica/photos/<id>.png — keyed by {@link #id()}.
+ * Metadata stored on a photo item. The actual image lives on disk at
+ * <gameDir>/photographica/photos/<datetime>_<id>.jpg — keyed by {@link #id()}
+ * and located with PhotoTextureCache.findPhotoFile, which also still accepts the
+ * .png files earlier versions wrote. The same values are written into the file's
+ * Exif block so they survive being copied out of the game directory.
  *
  * fogged: true when the film was exposed to light during loading/unloading or
  *         when developed under non-zero light level. The viewer renders a

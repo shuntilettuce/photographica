@@ -46,4 +46,16 @@ public final class FilmKind {
 			default           -> "デジタル";
 		};
 	}
+
+	/** ASCII film name for Exif fields, which cannot carry the Japanese display names. */
+	public static String exifName(int filmType) {
+		return switch (filmType) {
+			case COLOR_400    -> "Color ISO400 (36exp)";
+			case COLOR_100    -> "Color ISO100 (36exp)";
+			case COLOR_1600   -> "Color ISO1600 (36exp)";
+			case BW_400       -> "B&W ISO400 (36exp)";
+			case COLOR_400_24 -> "Color ISO400 (24exp)";
+			default           -> "Digital";
+		};
+	}
 }

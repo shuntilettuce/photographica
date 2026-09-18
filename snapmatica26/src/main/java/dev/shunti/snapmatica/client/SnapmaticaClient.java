@@ -35,6 +35,16 @@ public class SnapmaticaClient implements ClientModInitializer {
 
     public static boolean viewfinderSneakEnabled = true;
 
+    /** Lens names. ASCII, so they go straight into the photo's Exif fields. */
+    public static final String[] LENS_NAMES = {
+            "No Lens", "50mm Prime", "24-70mm Zoom", "35mm Prime",
+            "85mm Prime", "14mm UWA", "70-200mm Zoom", "100mm Macro"
+    };
+
+    public static String lensName(int lens) {
+        return LENS_NAMES[Math.max(0, Math.min(LENS_NAMES.length - 1, lens))];
+    }
+
     public static final double[] SHUTTER_SECONDS = {
             30.0, 15.0, 8.0, 4.0, 2.0, 1.0,
             0.5, 0.25, 0.125, 1.0/15, 1.0/30, 1.0/60,

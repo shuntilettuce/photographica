@@ -35,7 +35,7 @@ A photography mod that brings realistic camera simulation to Minecraft. Take pho
 - Preview developed negatives as inverted thumbnails by right-clicking the film roll
 
 ### Digital Workflow
-- Photos saved as PNG files in `.minecraft/photographica/photos/`
+- Photos saved as JPEG files in `.minecraft/photographica/photos/`, with the aperture, shutter speed, ISO, lens, photographer and capture time written into Exif
 - SD card browser with thumbnail preview, metadata display, and per-photo deletion
 - Shader-compatible capture (tested with Iris + Photon)
 
@@ -53,7 +53,7 @@ Both client and server must have the mod installed for multiplayer.
 
 ## Notes
 
-Photos are stored as PNG files on the **client** machine. Deleting a photo in-game also removes the file from disk.
+Photos are stored as JPEG files on the **client** machine, carrying their shooting information in Exif so any photo viewer can read it. Deleting a photo in-game also removes the file from disk.
 
 ---
 
@@ -81,7 +81,7 @@ Open **Options → Controls → Photographica** and bind the following keys:
    - **Ctrl + Scroll** — Aperture
    - **Alt + Scroll** — Shutter speed
    - **Ctrl + Alt + Scroll** — Manual focus distance
-4. **Shoot** — **Right-click** to take a photo. The image is saved as a PNG to `.minecraft/photographica/photos/`.
+4. **Shoot** — **Right-click** to take a photo. The image is saved as a JPEG to `.minecraft/photographica/photos/`.
 5. **Browse photos** — Open the settings screen and click **SD Card (n)** to view thumbnails, check metadata, and delete photos.
 6. **Print** — Place an **SD Printer** block. Insert the SD card and paper, then activate the block to produce displayable Photo items.
 
@@ -126,7 +126,7 @@ Open **Options → Controls → Photographica** and bind the following keys:
    - **Ctrl + スクロール** — 絞り
    - **Alt + スクロール** — シャッタースピード
    - **Ctrl + Alt + スクロール** — MFピント距離
-4. **撮影** — **右クリック**でシャッターを切る。`.minecraft/photographica/photos/` にPNGで保存される。
+4. **撮影** — **右クリック**でシャッターを切る。`.minecraft/photographica/photos/` にJPEG（Exif付き）で保存される。
 5. **写真の確認** — 設定画面の **SDカード（n枚）** ボタンからサムネイル・メタデータの確認・削除ができる。
 6. **プリント** — **SDプリンター**ブロックにSDカードと紙をセットして起動すると、飾れるフォトアイテムが作成される。
 

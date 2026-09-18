@@ -22,7 +22,7 @@ import java.util.UUID;
 
 /**
  * Displays a captured photo. The PNG is loaded from
- * <gameDir>/photographica/photos/<uuid>.png and resampled (box filter) so the
+ * <gameDir>/photographica/photos/<datetime>_<uuid>.jpg and resampled (box filter) so the
  * texture resolution matches the on-screen physical pixel size — that way the
  * GPU samples it at 1:1 and the photo stays crisp regardless of GUI scale.
  * The texture is regenerated whenever init() runs (open / window resize).
@@ -64,7 +64,7 @@ public class PhotoViewerScreen extends Screen {
 		File photoDir = new File(mc.runDirectory, "photographica/photos");
 		File file = PhotoTextureCache.findPhotoFile(photoDir, id);
 		if (file == null) {
-			Photographica.LOGGER.warn("Photo PNG not found for UUID: {}", id);
+			Photographica.LOGGER.warn("Photo file not found for UUID: {}", id);
 			missing = true;
 			return;
 		}

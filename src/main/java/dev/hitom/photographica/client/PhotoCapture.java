@@ -26,11 +26,14 @@ import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.item.ItemStack;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+import net.minecraft.util.math.BlockPos;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.FloatBuffer;
 import java.text.SimpleDateFormat;
+import java.time.OffsetDateTime;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
@@ -442,6 +445,9 @@ public final class PhotoCapture {
 		final float[] fLinearDepth = linearDepth;
 		final int fFbW = fbW;
 		final int fFbH = fbH;
+		// Captured now, not in the callback: by the time the GPU copy lands the player
+		// may have moved away from where the shot was composed.
+		final PhotoWriter.Shot fShot = buildShot(mc, settings);
 		// Restore camera synchronously — the framebuffer already contains the armor stand
 		// frame, so the GPU copy will succeed even after we hand control back to the player.
 		if (fCaptureStandId >= 0) {
@@ -462,13 +468,8 @@ public final class PhotoCapture {
 				cropped = cropTo3to2(raw);
 				downsampled = boxDownsample(cropped, 1280);
 				processed = applyPhotographicEffects(downsampled, fSettings, fLinearDepth, fFbW, fFbH, fCaptureStandId < 0);
-				File dir = new File(mc.runDirectory, "photographica/photos");
-				if (!dir.exists() && !dir.mkdirs()) {
-					Photographica.LOGGER.error("Could not create photo dir: {}", dir);
-					return;
-				}
-				File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + "_" + fId.toString().replace("-", "") + ".png");
-				processed.writeTo(outFile);
+				File outFile = savePhoto(mc, processed, fId, fShot);
+				if (outFile == null) return;
 				Photographica.LOGGER.info("Photo saved: {} ({}x{})",
 						outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
 			} catch (IOException e) {
@@ -511,13 +512,8 @@ public final class PhotoCapture {
 			cropped = cropTo3to2(raw);
 			downsampled = boxDownsample(cropped, 1280);
 			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH, captureStandId < 0);
-			File dir = new File(mc.runDirectory, "photographica/photos");
-			if (!dir.exists() && !dir.mkdirs()) {
-				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
-				return;
-			}
-			File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + "_" + id.toString().replace("-", "") + ".png");
-			processed.writeTo(outFile);
+			File outFile = savePhoto(mc, processed, id, buildShot(mc, settings));
+			if (outFile == null) return;
 			Photographica.LOGGER.info("Photo saved: {} ({}x{})",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
 		} catch (IOException e) {
@@ -725,13 +721,8 @@ public final class PhotoCapture {
 		try {
 			// Skip synthetic motion blur — real blur is already baked into the accumulation.
 			processed = applyPhotographicEffects(averaged, settings, depth, depthFbW, depthFbH, false);
-			File dir = new File(mc.runDirectory, "photographica/photos");
-			if (!dir.exists() && !dir.mkdirs()) {
-				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
-				return;
-			}
-			File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + "_" + id.toString().replace("-", "") + ".png");
-			processed.writeTo(outFile);
+			File outFile = savePhoto(mc, processed, id, buildShot(mc, settings));
+			if (outFile == null) return;
 			Photographica.LOGGER.info("Long-exposure photo saved: {} ({}x{}, {} frames accumulated)",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight(), n);
 		} catch (IOException e) {
@@ -1613,6 +1604,101 @@ public final class PhotoCapture {
 			}
 		}
 		return result;
+	}
+
+	// ── Saving ─────────────────────────────────────────────────────────────────
+
+	/**
+	 * Packs the image into RGB ints for {@link PhotoWriter}. Alpha is dropped here:
+	 * a photo is always opaque, and the framebuffer readback is not guaranteed to
+	 * hand back a full alpha channel on every version or with every shader pack.
+	 */
+	private static int[] toRgb(NativeImage img) {
+		int w = img.getWidth();
+		int h = img.getHeight();
+		int[] rgb = new int[w * h];
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				int abgr = getPixelAbgr(img, x, y);
+				int r = abgr & 0xFF;
+				int g = (abgr >>> 8) & 0xFF;
+				int b = (abgr >>> 16) & 0xFF;
+				rgb[y * w + x] = (r << 16) | (g << 8) | b;
+			}
+		}
+		return rgb;
+	}
+
+	/** Collects the shooting information written into the photo's Exif block. */
+	private static PhotoWriter.Shot buildShot(MinecraftClient mc, CameraSettings settings) {
+		String artist = mc.player != null ? mc.player.getGameProfile().getName() : "";
+		String where = "";
+		if (mc.world != null && mc.player != null) {
+			BlockPos pos = mc.player.getBlockPos();
+			where = mc.world.getRegistryKey().getValue()
+					+ " (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
+		}
+		String lens = LensKind.exifName(settings.lensType());
+		String comment = "Lens: " + (lens.isEmpty() ? "none" : lens)
+				+ " / Film: " + FilmKind.exifName(settings.filmType())
+				+ " / Mode: " + exposureModeName(settings.exposureMode())
+				+ " / Focus: " + focusModeName(settings.focusMode());
+		return new PhotoWriter.Shot(
+				settings.isFilm() ? "Film SLR" : "Mirrorless Digital",
+				lens,
+				PhotoWriter.softwareTag(Photographica.MOD_ID),
+				artist,
+				where,
+				comment,
+				settings.shutterSeconds(),
+				settings.aperture(),
+				settings.iso(),
+				settings.focalLengthMm(),
+				exifExposureProgram(settings.exposureMode()),
+				OffsetDateTime.now());
+	}
+
+	private static int exifExposureProgram(int exposureMode) {
+		return switch (exposureMode) {
+			case CameraSettings.EXP_AV -> PhotoWriter.PROGRAM_APERTURE_PRIORITY;
+			case CameraSettings.EXP_TV -> PhotoWriter.PROGRAM_SHUTTER_PRIORITY;
+			case CameraSettings.EXP_P  -> PhotoWriter.PROGRAM_NORMAL;
+			default -> PhotoWriter.PROGRAM_MANUAL;
+		};
+	}
+
+	private static String exposureModeName(int exposureMode) {
+		return switch (exposureMode) {
+			case CameraSettings.EXP_AV -> "Av";
+			case CameraSettings.EXP_TV -> "Tv";
+			case CameraSettings.EXP_P  -> "P";
+			default -> "M";
+		};
+	}
+
+	private static String focusModeName(int focusMode) {
+		return switch (focusMode) {
+			case CameraSettings.FOCUS_AF  -> "AF";
+			case CameraSettings.FOCUS_MOB -> "MOB";
+			default -> "MF";
+		};
+	}
+
+	/**
+	 * Writes the finished photo to disk. Returns the file written, or null when the
+	 * photo directory could not be created.
+	 */
+	private static @Nullable File savePhoto(MinecraftClient mc, NativeImage image,
+	                                        UUID id, PhotoWriter.Shot shot) throws IOException {
+		File dir = new File(mc.runDirectory, "photographica/photos");
+		if (!dir.exists() && !dir.mkdirs()) {
+			Photographica.LOGGER.error("Could not create photo dir: {}", dir);
+			return null;
+		}
+		File outFile = new File(dir, new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date())
+				+ "_" + id.toString().replace("-", "") + PhotoWriter.EXTENSION);
+		PhotoWriter.write(toRgb(image), image.getWidth(), image.getHeight(), outFile, shot);
+		return outFile;
 	}
 
 	/** Box-filter downsample to a max width (preserving aspect). Returns src if already small enough. */

@@ -1,5 +1,6 @@
 package dev.hitom.photographica.client.screen;
 
+import dev.hitom.photographica.client.render.PhotoTextureCache;
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.component.PhotoData;
 import net.fabricmc.api.EnvType;
@@ -58,9 +59,10 @@ public class PhotoViewerScreen extends Screen {
     private void loadImage() {
         UUID id = data.id();
         Minecraft mc = Minecraft.getInstance();
-        File file = new File(mc.gameDirectory, "photographica/photos/" + id + ".png");
-        if (!file.isFile()) {
-            Photographica.LOGGER.warn("Photo PNG not found: {}", file);
+        File file = PhotoTextureCache.findPhotoFile(
+                new File(mc.gameDirectory, "photographica/photos"), id);
+        if (file == null) {
+            Photographica.LOGGER.warn("Photo file not found for {}", id);
             missing = true;
             return;
         }
