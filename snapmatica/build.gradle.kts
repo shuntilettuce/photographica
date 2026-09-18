@@ -3,8 +3,10 @@ plugins {
     id("maven-publish")
 }
 
-val sc = stonecutter
-val mcVersion     = sc.current.version
+// Stonecutter gives each Minecraft version its own subproject, named after the
+// version. Reading it from the project rather than from stonecutter.current
+// keeps every subproject building the version it is actually named for.
+val mcVersion     = project.name
 val loaderVersion = extra["loader_version"] as String
 val fabricVersion = extra["fabric_version"] as String
 val modVersion    = extra["mod_version"]    as String
@@ -12,6 +14,12 @@ val modVersion    = extra["mod_version"]    as String
 // 26 dropped yarn in favour of Mojang's own mappings, and moved to Java 25.
 val isModern   = mcVersion.substringBefore('.').toInt() >= 26
 val javaTarget = if (isModern) 25 else 21
+
+// Read here, at project scope: inside dependencies {} `extra` belongs to the
+// dependency handler, which carries none of the version properties.
+val yarnMappings = if (isModern) null else extra["yarn_mappings"] as String
+
+logger.lifecycle("snapmatica: $mcVersion (mappings=${yarnMappings ?: "mojang"}, java=$javaTarget)")
 
 version = "$modVersion+$mcVersion"
 group   = extra["maven_group"] as String
@@ -45,7 +53,7 @@ dependencies {
         // generates one for `minecraft`, so `mappings(...)` and
         // `modImplementation(...)` do not compile even though the
         // configurations are there for the yarn-mapped versions.
-        "mappings"("net.fabricmc:yarn:${extra["yarn_mappings"] as String}:v2")
+        "mappings"("net.fabricmc:yarn:$yarnMappings:v2")
         "modImplementation"("net.fabricmc:fabric-loader:$loaderVersion")
         "modImplementation"("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
     }
