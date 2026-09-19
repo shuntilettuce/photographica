@@ -35,6 +35,8 @@ public class GalleryScreen extends Screen {
     private static final int HINT_H           = 14;   // the one-line hint under the grid
     private static final int BUTTON_H         = 20;
     private static final int FOOTER_H         = HINT_H + BUTTON_H + 10;
+    /** Space between the shot-settings column and the picture. */
+    private static final int EXIF_GAP         = 10;
 
     private List<MediaLibrary.Entry> entries = List.of();
     private int scroll = 0;
@@ -367,8 +369,17 @@ public class GalleryScreen extends Screen {
         Identifier tex = MediaLibrary.texture(e);
 
         int top = HEADER_H, bottom = height - FOOTER_H;
+        // The metadata gets a column of its own on the left and the picture takes what is left,
+        // rather than a panel laid over the picture. A 3:2 frame in a 16:9 window already leaves
+        // margin on both sides, so on any normal window this costs the image nothing -- it only
+        // moves the letterboxing. (The 1.21 viewer has always had this; the 26 port lost it,
+        // while MediaLibrary kept reading the EXIF for a screen that no longer asked.)
+        List<String> exifLines = exifLines(e);
+        int exifW = exifPanelWidth(exifLines);
+        int imgLeft = PAD + (exifW > 0 ? exifW + EXIF_GAP : 0);
         if (tex != null) {
-            drawFitted(ctx, tex, PAD, top, width - PAD * 2, bottom - top, MediaLibrary.aspect(e));
+            drawFitted(ctx, tex, imgLeft, top, width - imgLeft - PAD, bottom - top,
+                    MediaLibrary.aspect(e));
         } else {
             ctx.centeredText(font,
                     Component.translatable(e.video() ? "snapmatica.gallery.preparing"
@@ -380,8 +391,60 @@ public class GalleryScreen extends Screen {
         String pos = (viewing + 1) + " / " + entries.size();
         ctx.text(font, pos, width - PAD - font.width(pos) - 2, 10, 0xFF7A7A85);
 
+        drawExifPanel(ctx, exifLines, exifW, top, bottom);
+
         ctx.centeredText(font, Component.translatable("snapmatica.gallery.help_viewer"),
                 width / 2, height - FOOTER_H + 3, CameraUi.CREAM_DIM);
+    }
+
+    /**
+     * What the shot was taken at, read back out of the file itself rather than from the current
+     * camera state -- the settings have almost certainly moved since, and the point of the panel
+     * is to say what THIS photograph used.
+     *
+     * <p>Empty for anything with no readable metadata (a video, or a PNG saved before this mod
+     * wrote any), in which case no column is reserved and the picture uses the full width.
+     */
+    private List<String> exifLines(MediaLibrary.Entry e) {
+        PhotoExif.Info info = MediaLibrary.exif(e);
+        List<String> lines = new java.util.ArrayList<>();
+        if (info == null) return lines;
+        if (info.exposure() != null) lines.add(info.exposure());
+        if (info.lens() != null)     lines.add(info.lens());
+        if (info.mode() != null)     lines.add(info.mode());
+        if (info.taken() != null)    lines.add(info.taken());
+        return lines;
+    }
+
+    /** Width the panel needs, or 0 when there is nothing to show. */
+    private int exifPanelWidth(List<String> lines) {
+        if (lines.isEmpty()) return 0;
+        int w = 0;
+        for (String l : lines) w = Math.max(w, font.width(l));
+        return w + 12;
+    }
+
+    /** Draws the panel in its reserved column, vertically centred against the picture. */
+    private void drawExifPanel(GuiGraphicsExtractor ctx, List<String> lines, int panelW,
+                               int top, int bottom) {
+        if (lines.isEmpty()) return;
+        int lineH = font.lineHeight + 2;
+        int panelH = lines.size() * lineH + 8;
+        int px = PAD;
+        int py = top + (bottom - top - panelH) / 2;
+
+        ctx.fill(px, py, px + panelW, py + panelH, 0x50101014);
+        // A hairline down the left edge, so the block reads as a label rather than as a
+        // rectangle that happens to be sitting there.
+        ctx.fill(px, py, px + 1, py + panelH, 0x80E8DCC4);
+
+        int ty = py + 4;
+        for (int i = 0; i < lines.size(); i++) {
+            // The exposure triangle is the line anyone actually looks for, so it gets the
+            // readable colour and the rest recede.
+            ctx.text(font, lines.get(i), px + 6, ty, i == 0 ? 0xFFE8DCC4 : 0xFF9A9AA5);
+            ty += lineH;
+        }
     }
 
     /** Draws the texture centred and letterboxed inside the box, never stretched. */
