@@ -189,12 +189,27 @@ public final class VideoRecorder {
         else if (!postProcessing) startRecording();
     }
 
+    /** {@code ts}, or {@code ts_2}, {@code ts_3}, ... -- whichever no earlier take is using. */
+    private static String uniqueSessionId(MinecraftClient mc, String ts) {
+        for (int n = 1; ; n++) {
+            String id = (n == 1) ? ts : ts + "_" + n;
+            if (!new File(mc.runDirectory, "snapmatica/video_temp/" + id).exists()
+                    && !new File(mc.runDirectory, "snapmatica/videos/" + id + ".mp4").exists()
+                    && !new File(mc.runDirectory, "snapmatica/videos/" + id).exists()) {
+                return id;
+            }
+        }
+    }
+
     public static void startRecording() {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
 
         String ts = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
-        sessionId = ts;
+        // The folder for a take is named after the second it started in, and mkdirs() refuses a
+        // folder that already exists -- so a second take started in the same second as the last
+        // one used to fail to start at all. Suffix it instead.
+        sessionId = uniqueSessionId(mc, ts);
 
         // currentFps is deliberately left alone — it holds whatever the recorder screen was
         // set to, and resetting it here silently threw that choice away on every take.
@@ -618,7 +633,10 @@ public final class VideoRecorder {
             cmd.addAll(List.of(
                     "-threads", Integer.toString(encodeThreads()),
                     "-c:v", "libx264", "-preset", "veryfast",
-                    "-crf", "18", "-pix_fmt", "yuv420p"));
+                    "-crf", "18", "-pix_fmt", "yuv420p",
+                    // Index at the front of the file, so a browser or chat app can start
+                    // playing before the whole thing has downloaded.
+                    "-movflags", "+faststart"));
             // Real machine-readable progress on stdout instead of guessing elapsed-time
             // against an assumed duration — the old estimate capped out at 98% on its own
             // fixed schedule regardless of how far the encode had actually gotten, so
@@ -682,10 +700,16 @@ public final class VideoRecorder {
         int cW, cH;
         if ((float) w / h > aspect) { cH = h; cW = Math.round(h * aspect); }
         else                        { cW = w; cH = Math.round(w / aspect); }
+        // Both sides EVEN. The encoder writes yuv420p, which stores colour at half resolution in
+        // 2x2 blocks, and libx264 rejects an odd width or height outright -- the whole encode
+        // failed and fell back to a folder of PNGs. It happened on ordinary windows: 1920x1009
+        // cropped to 16:9 is 1794x1009. Trimming a row keeps the whole-pixel path below intact.
+        cW &= ~1;
+        cH &= ~1;
         int offX = (w - cW) / 2, offY = (h - cH) / 2;
 
-        int dw = Math.min(maxWidth, cW);
-        int dh = Math.max(1, Math.round((float) cH * dw / cW));
+        int dw = Math.max(2, Math.min(maxWidth, cW) & ~1);
+        int dh = Math.max(2, Math.round((float) cH * dw / cW) & ~1);
         NativeImage dst = new NativeImage(dw, dh, false);
 
         // Whole-pixel copy when no scaling is needed — avoids the averaging arithmetic.

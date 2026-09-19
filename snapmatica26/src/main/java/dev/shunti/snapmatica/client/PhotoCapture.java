@@ -435,7 +435,16 @@ public final class PhotoCapture {
             case SnapmaticaClient.PHOTO_FORMAT_DNG -> "dng";
             default -> "png";
         };
-        File outFile = new File(snapDir, timestamp + "." + ext);
+        // Claimed rather than assumed: the name is the time to the second, so two shots in the
+        // same second used to get the same name and the second silently replaced the first.
+        File outFile;
+        try {
+            outFile = claimPhotoFile(snapDir, timestamp, ext);
+        } catch (IOException e) {
+            System.err.println("[Snapmatica] Failed to save photo: " + e.getMessage());
+            processed.close();
+            return;
+        }
 
         // The settings the shot was actually taken at, for the file's own metadata block —
         // all three formats carry it, each in its own container. See PhotoExif.
@@ -521,6 +530,21 @@ public final class PhotoCapture {
      *  ({@code ImageIO.read}) on this exact runtime, which is what confirms ImageIO's plugin
      *  codecs (reading AND writing) work without a display here, unlike AWT's GUI/Toolkit
      *  classes (see this project's own notes on that distinction). */
+    /**
+     * A photo file name nothing else has, reserved on disk before anything is written to it.
+     *
+     * <p>{@code createNewFile} is the check and the claim in one step, so two captures finishing
+     * at once cannot both see a name as free. The first shot of a second keeps the plain
+     * timestamp; later ones get {@code _2}, {@code _3}, ... so the files still sort in order.
+     */
+    private static File claimPhotoFile(File dir, String stamp, String ext) throws IOException {
+        for (int n = 1; ; n++) {
+            File f = new File(dir, (n == 1 ? stamp : stamp + "_" + n) + "." + ext);
+            if (f.createNewFile()) return f;
+            if (n > 999) throw new IOException("no free file name for " + stamp);
+        }
+    }
+
     private static void writeJpg(NativeImage img, File outFile, PhotoExif exif) throws IOException {
         int w = img.getWidth(), h = img.getHeight();
         java.awt.image.BufferedImage buffered =
