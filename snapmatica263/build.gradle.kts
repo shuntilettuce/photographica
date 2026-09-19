@@ -6,7 +6,7 @@ plugins {
 val mcVersion     = "26.3"
 val loaderVersion = "0.19.5"
 val fabricVersion = "0.160.5+26.3"
-val modVersion    = "1.3.1"
+val modVersion    = "1.3.2"
 
 version = "$modVersion+$mcVersion"
 group   = "dev.shunti"

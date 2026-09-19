@@ -44,6 +44,7 @@ UA = 'shuntilettuce/snapmatica-publisher (sunnyhorse.minecraft@gmail.com)'
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)                       # .../snapmatica
 SIBLING26 = os.path.join(os.path.dirname(ROOT), 'snapmatica26')
+SIBLING263 = os.path.join(os.path.dirname(ROOT), 'snapmatica263')
 
 # jar suffix -> the game versions that jar is for. The suffix is what Stonecutter
 # already writes into the filename, so this is the only place the matrix is stated.
@@ -55,6 +56,7 @@ JARS = [
     ('1.21.10',       ['1.21.10'],          os.path.join(ROOT, 'versions/1.21.10/build/libs')),
     ('1.21.11',       ['1.21.11'],          os.path.join(ROOT, 'versions/1.21.11/build/libs')),
     ('26.1.2',        ['26.1.2'],           os.path.join(SIBLING26, 'build/libs')),
+    ('26.3',          ['26.3'],             os.path.join(SIBLING263, 'build/libs')),
 ]
 
 
@@ -114,7 +116,7 @@ def sha512(path):
 
 
 def collect(version):
-    """The seven jars for a release, or an explanation of which one is missing."""
+    """Every jar for a release, or an explanation of which one is missing."""
     out, missing = [], []
     for suffix, game_versions, d in JARS:
         name = 'snapmatica-%s+%s.jar' % (version, suffix)

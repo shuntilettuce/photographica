@@ -1,5 +1,5 @@
 # See https://stonecutter.kikugie.dev/wiki/config/properties
-mod_version = "1.3.1"
+mod_version = "1.3.2"
 maven_group = "dev.shunti.snapmatica"
 archives_base_name = "snapmatica"
 
@@ -22,7 +22,7 @@ fabric_version = "0.116.0+1.21.1"
 # 1.21 is byte-for-byte the same target as 1.21.1 for this mod — the version matrix was built
 # and every branch compiled with zero `//? if` additions — so one jar covers both.
 mc_range = "1.21-1.21.1"
-minecraft_range = "~1.21.1"
+minecraft_range = ">=1.21 <=1.21.1"
 
 ["1.21.3"]
 yarn_mappings = "1.21.3+build.2"
@@ -31,7 +31,7 @@ fabric_version = "0.114.1+1.21.3"
 # The real API boundary is 1.21.2, not 1.21.4: the projection-matrix accessor, NativeImage's
 # pixel access and DrawContext.drawTexture all change here, so this jar covers 1.21.2 as well.
 mc_range = "1.21.2-1.21.3"
-minecraft_range = "~1.21.3"
+minecraft_range = ">=1.21.2 <=1.21.3"
 
 ["1.21.4"]
 yarn_mappings = "1.21.4+build.8"
