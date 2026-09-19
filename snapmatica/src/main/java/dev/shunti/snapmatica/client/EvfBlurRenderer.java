@@ -149,6 +149,7 @@ public final class EvfBlurRenderer {
     private static int locFar        = -1;
     private static int locFocalLen   = -1;
     private static int locAperture   = -1;
+    private static int locDiffractionN = -1;
     private static int locPxPerMm    = -1;
     private static int locDofScale   = -1;
     private static int locDistortK   = -1;
@@ -213,6 +214,25 @@ public final class EvfBlurRenderer {
 
     
     
+    /**
+     * The f-number the Airy disc is computed from.
+     *
+     * <p>Normally the one the gather is handed. During an aperture burst the gather is handed a
+     * sub-aperture instead — one cell of the pupil, f/N times sqrt(samples) — so that its
+     * defocus fills the gap between neighbouring samples. Diffraction took that number too, and
+     * a cell's Airy disc is sqrt(samples) times the lens's: f/12 over 64 samples diffracted like
+     * f/96, 5.4 px across on a 1009 px frame, over the whole picture, focal plane included. At
+     * f/12 itself it is 0.7 px and invisible, which is why only the burst went soft, and why it
+     * showed with the stopped-down long lenses and not with a 35 mm at f/4.
+     */
+    static float diffractionFNumber(float gatherAperture) {
+        if (ApertureIntegration.isActive()) {
+            float lens = ApertureIntegration.latchedLensFNumber();
+            if (lens > 0f) return lens;
+        }
+        return gatherAperture;
+    }
+
     /** Thin-lens CoC in pixels for one subject distance — the shader's formula, on the CPU. */
     private static float cocPxAt(float depthBlocks, float focusDist, float aperture,
                                  float focalLenMm, float dofScaleMm, float pxPerMm) {
@@ -228,7 +248,7 @@ public final class EvfBlurRenderer {
         // Diffraction floor, added in quadrature exactly as the shader does — otherwise the
         // CPU-side ceiling would fall below the blur the shader actually produces at narrow
         // apertures, and clamp away the softening that is the whole point of modelling it.
-        float airyMM = 2.44f * 0.00055f * aperture;
+        float airyMM = 2.44f * 0.00055f * diffractionFNumber(aperture);
         return (float) Math.sqrt(cocMM * cocMM + airyMM * airyMM) * pxPerMm;
     }
 
@@ -940,6 +960,7 @@ public final class EvfBlurRenderer {
         GL20.glUniform1f(locFar, currentDepthFar);
         GL20.glUniform1f(locFocalLen, focalLenMm);
         GL20.glUniform1f(locAperture, aperture);
+        GL20.glUniform1f(locDiffractionN, diffractionFNumber(aperture));
         GL20.glUniform1f(locPxPerMm, pxPerMm);      // the frame's height in mm maps to fbH px
         GL20.glUniform1f(locDofScale, dofScaleMm);
         GL20.glUniform1f(locDistortK, distortK);
@@ -1760,6 +1781,7 @@ public final class EvfBlurRenderer {
             locFar       = GL20.glGetUniformLocation(program, "Far");
             locFocalLen  = GL20.glGetUniformLocation(program, "FocalLenMm");
             locAperture  = GL20.glGetUniformLocation(program, "Aperture");
+            locDiffractionN = GL20.glGetUniformLocation(program, "DiffractionFNumber");
             locPxPerMm   = GL20.glGetUniformLocation(program, "PxPerMm");
             locDofScale  = GL20.glGetUniformLocation(program, "DofScale");
             locCaK       = GL20.glGetUniformLocation(program, "CaK");

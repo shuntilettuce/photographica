@@ -204,6 +204,7 @@ public final class ApertureIntegration {
     private static volatile float gatherDiameterBlocks = 0f; // the part one sub-frame blurs by
     private static volatile float focalMmAtArm     = 50f;
     private static volatile float mmPerBlockAtArm  = 375f;
+    private static volatile float lensFNumberAtArm = 0f;
 
     // ── The exposure clock ──────────────────────────────────────────────────────────────────
     /**
@@ -402,6 +403,17 @@ public final class ApertureIntegration {
      *  is registering every sub-frame against. */
     public static float latchedFocusBlocks() { return focusBlocks; }
 
+    /**
+     * The f-number of the whole lens, latched at shutter press — NOT {@link #subApertureFNumber}.
+     *
+     * <p>The sub-aperture is a bookkeeping device for how much defocus the gather adds between
+     * pupil samples. Diffraction is not defocus: it is set by the aperture the light actually
+     * passes through, and that is the full pupil at the f-number on the dial. Each sub-frame
+     * blurred by the full lens's Airy disc sums to the full image blurred by it once, which is
+     * the right answer; blurred by a cell's, it is eight times too wide at 64 samples.
+     */
+    public static float latchedLensFNumber() { return lensFNumberAtArm; }
+
     // ── The burst ───────────────────────────────────────────────────────────────
 
     /**
@@ -455,6 +467,7 @@ public final class ApertureIntegration {
         focalMmAtArm    = SnapmaticaClient.focalLengthMm;
         mmPerBlockAtArm = Math.max(1e-4f, SnapmaticaClient.dofScaleMm);
         float fnum   = Math.max(0.1f, SnapmaticaClient.aperture);
+        lensFNumberAtArm = fnum;
         double rV    = Math.max(1e-4, SnapmaticaClient.imageDistanceMm(focalMmAtArm));
         double tV    = SnapmaticaClient.imageDistanceMmPhysical(focalMmAtArm);
         radiusFullBlocks = (float) ((focalMmAtArm / fnum) * 0.5f / mmPerBlockAtArm * (tV / rV));

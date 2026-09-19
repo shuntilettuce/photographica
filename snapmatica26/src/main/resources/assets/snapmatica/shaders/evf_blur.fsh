@@ -29,7 +29,8 @@ uniform float MaxBlurPx;         // max blur radius in framebuffer pixels (perf 
 uniform float Near;              // near clip plane in blocks
 uniform float Far;               // far clip plane in blocks
 uniform float FocalLenMm;        // lens focal length in mm
-uniform float Aperture;          // f-number (N)
+uniform float Aperture;          // f-number (N) the gather's defocus uses
+uniform float DiffractionFNumber; // the LENS's f-number; differs from Aperture only in a burst
 uniform float PxPerMm;           // framebuffer pixels per mm of sensor height
 uniform float DofScale;          // mm of subject distance per Minecraft block
 uniform float DistortK;          // radial distortion: >0 barrel, <0 pincushion, 0 off
@@ -235,7 +236,9 @@ float resolveFocus() {
  * <p>550 nm, the middle of the visible band.
  */
 float airyDiscMM() {
-    return 2.44 * 0.00055 * Aperture;
+    // The lens's own f-number, not Aperture: during an aperture burst Aperture is one pupil
+    // cell's, and diffraction belongs to the whole pupil (EvfBlurRenderer.diffractionFNumber).
+    return 2.44 * 0.00055 * DiffractionFNumber;
 }
 
 /**
