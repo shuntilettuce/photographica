@@ -377,9 +377,24 @@ public class SnapmaticaClient implements ClientModInitializer {
      */
     public static float sensorCropFactor = 1.0f;
 
-    /** Height of the simulated frame in mm — 24 mm at full frame, scaled by the crop factor. */
+    /**
+     * Height of the FRAME in mm: 24 mm across a landscape full frame, 36 mm across a portrait
+     * one, scaled by the crop factor.
+     *
+     * <p>The orientation belongs here because this number is what the picture's pixels are
+     * measured against, and the field of view already reads it that way: GameRendererMixin
+     * anchors on 18 mm of half-frame in portrait and 12 mm in landscape, so the rendered frame
+     * really is 36 mm tall when the camera is turned. Returning 24 either way made the blur
+     * scale, the AF point's angles and the motion smear all work in a frame 1.5x smaller than
+     * the one being rendered — every portrait photograph came back blurred half again as much
+     * as its aperture calls for, which is most of what made an aperture burst (whose parallax
+     * is geometry and never had the error) look weak beside an ordinary shot of the same scene.
+     *
+     * <p>The ambient mode is not affected: it passes a plain 24 mm of its own, because it is
+     * drawn at the game's own field of view rather than in the camera's frame.
+     */
     public static float sensorHeightMm() {
-        return 24.0f / Math.max(0.2f, sensorCropFactor);
+        return (portraitOrientation ? 36.0f : 24.0f) / Math.max(0.2f, sensorCropFactor);
     }
 
     /**
