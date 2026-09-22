@@ -1,0 +1,27 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "refmap": "snapmatica.refmap.json",
+  "package": "dev.shunti.snapmatica.client.mixin",
+  "compatibilityLevel": "${mixin_compat_level}",
+  "client": [
+    "GameRendererMixin",
+    "GameRendererInvoker",
+    "HeldItemRendererMixin",
+    "MouseMixin",
+    "WorldRendererMixin",
+    "EntityRendererMixin",
+    "PlayerEntityRendererMixin",
+    "CameraMixin",
+    "InGameHudMixin",
+    "WorldTimeMixin",
+    "CloudTimeMixin",
+    "IrisTimerMixin",
+    "EntityExposureMixin",
+    "ExposureInputMixin",
+    "ParticleTimeMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
