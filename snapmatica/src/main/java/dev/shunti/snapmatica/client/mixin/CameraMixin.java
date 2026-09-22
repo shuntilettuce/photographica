@@ -205,9 +205,32 @@ public abstract class CameraMixin {
         // Left as two separate signs rather than tidied into one because they genuinely are two
         // conventions, and the next person to touch this should see that one of them was only
         // ever settled by measurement.
+        //
+        // And the yaw sign is a VERSION branch, because Camera's own basis was redefined in
+        // 1.21 — the same boundary moveBy's descriptor changes at, above:
+        //
+        //   1.20.1  moveBy(f,v,h) = f*horizontalPlane + v*verticalPlane + h*diagonalPlane
+        //           setRotation    rotationYXZ(-yaw, +pitch, 0)
+        //   1.21+   moveBy(f,v,h) = (h, v, -f) rotated by
+        //           setRotation    rotationYXZ(PI - yaw, -pitch, -roll)
+        //
+        // At yaw=pitch=0 the same horizontal argument sends the camera to world +X on 1.20.1
+        // and to world -X on 1.21: the PI in 1.21's yaw is a half turn about Y, which flips
+        // camera-space +X, and +Z with it, which the -f then flips back, so forward is
+        // unchanged. The pupil STEP therefore reverses across that boundary while the toe-in
+        // that has to cancel it does not — so below 1.21 the correction ran the wrong way and
+        // DOUBLED the drift instead of removing it. Pitch is untouched by the redefinition,
+        // which is why only one axis smeared and why this survived so long: a burst on 1.20.1
+        // came back with its sub-frames displaced up to 139 px horizontally and exactly 0 px
+        // vertically. With the sign matched to the basis, the same burst registers to within
+        // 2 px, the residual a first-order toe-in is expected to leave.
         float dYaw   = (float) Math.atan(ox / focus) * TO_DEG;
         float dPitch = (float) Math.atan(oy / focus) * TO_DEG;
+        //? if >=1.21 {
         setRotation(getYaw() - dYaw, getPitch() + dPitch);
+        //?} else {
+        /*setRotation(getYaw() + dYaw, getPitch() + dPitch);
+        *///?}
     }
 
     //? if >=1.21.11 {
