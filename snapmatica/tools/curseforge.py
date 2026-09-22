@@ -79,30 +79,51 @@ def session():
 
 
 def game_versions(s):
+    """(versions, typeSlugById). Both are needed: a name alone is ambiguous."""
     r = s.get('%s/game/versions' % API, timeout=60)
     if r.status_code >= 300:
         sys.exit('GET /game/versions failed: %s %s' % (r.status_code, r.text[:300]))
-    return r.json()
+    t = s.get('%s/game/version-types' % API, timeout=60)
+    if t.status_code >= 300:
+        sys.exit('GET /game/version-types failed: %s %s' % (t.status_code, t.text[:300]))
+    return r.json(), {x['id']: x['slug'] for x in t.json()}
 
 
-def resolve(all_versions, name):
-    """The single id CurseForge knows `name` by, or an error naming the choices.
+# Every Minecraft version name exists three times over: once under the Java
+# Edition group for its own major release (slug minecraft-1-21 and friends),
+# once under `addons`, which is BEDROCK, and once under a legacy type that
+# /game/version-types does not even list. Picking by name alone would publish a
+# Java mod as a Bedrock addon roughly one time in three. So the type is part of
+# the question, and it is asked by slug rather than by a magic number.
+KIND_SLUG = {
+    'mc': lambda slug: slug.startswith('minecraft-'),
+    'modloader': lambda slug: slug == 'modloader',
+    'environment': lambda slug: slug == 'environment',
+}
 
-    Exact match only, and ambiguity is fatal. A wrong id here does not fail --
-    it publishes the jar against the wrong Minecraft version or the wrong
-    loader, which is worse than not publishing at all.
+
+def resolve(all_versions, type_slug, name, kind):
+    """The one id CurseForge knows `name` by for `kind`, or an error.
+
+    Exact match only, and ambiguity is still fatal after the type filter. A
+    wrong id here does not fail -- it publishes the jar against the wrong
+    Minecraft version or the wrong loader, which is worse than not publishing.
     """
-    hits = [v for v in all_versions if v['name'] == name]
+    want = KIND_SLUG[kind]
+    hits = [v for v in all_versions
+            if v['name'] == name and want(type_slug.get(v['gameVersionTypeID'], ''))]
     if not hits:
-        near = sorted({v['name'] for v in all_versions
-                       if name.lower() in v['name'].lower()})[:8]
-        sys.exit('CurseForge has no game version named %r.%s'
-                 % (name, ('  Did you mean: %s' % ', '.join(near)) if near else ''))
+        seen = [(v['id'], type_slug.get(v['gameVersionTypeID'], '?'))
+                for v in all_versions if v['name'] == name]
+        sys.exit('CurseForge has no %s named %r.%s'
+                 % (kind, name,
+                    ('  It does have: %s' % ', '.join('id %s under %r' % s for s in seen))
+                    if seen else ''))
     if len(hits) > 1:
-        sys.exit('%r is ambiguous on CurseForge -- %s. Narrow it in the script '
-                 'by gameVersionTypeID before publishing anything.'
-                 % (name, ', '.join('id %s (type %s)' % (h['id'], h['gameVersionTypeID'])
-                                    for h in hits)))
+        sys.exit('%r is still ambiguous as a %s -- %s'
+                 % (name, kind,
+                    ', '.join('id %s (%s)' % (h['id'], type_slug[h['gameVersionTypeID']])
+                              for h in hits)))
     return hits[0]['id']
 
 
@@ -125,12 +146,17 @@ def collect(version, loaders=None):
     return out
 
 
-def payloads(version, all_versions, loaders=None, release_type=None):
+def payloads(version, resolved, loaders=None, release_type=None):
+    """`resolved` is (versions, typeSlugById) from game_versions, or None."""
     logs = changelogs()
     out = []
     for j in collect(version, loaders):
-        names = list(j['mc']) + [LOADER_NAME[l] for l in j['loaders']] + [ENVIRONMENT]
-        ids = [resolve(all_versions, n) for n in names] if all_versions else []
+        wanted = ([(n, 'mc') for n in j['mc']]
+                  + [(LOADER_NAME[l], 'modloader') for l in j['loaders']]
+                  + [(ENVIRONMENT, 'environment')])
+        names = [n for n, _k in wanted]
+        ids = [resolve(resolved[0], resolved[1], n, k)
+               for n, k in wanted] if resolved else []
         meta = {
             'displayName': j['number'],
             'changelog': logs.get(j['number'], ''),
@@ -150,7 +176,7 @@ def payloads(version, all_versions, loaders=None, release_type=None):
 
 
 def show_versions(s):
-    vs = game_versions(s)
+    vs, slug = game_versions(s)
     by_type = {}
     for v in vs:
         by_type.setdefault(v['gameVersionTypeID'], []).append(v)
@@ -159,13 +185,16 @@ def show_versions(s):
     for t, group in sorted(by_type.items()):
         names = [g['name'] for g in group]
         mark = ' <-- loader/environment' if wanted & set(names) else ''
-        print('  type %-8s %3d entries%s' % (t, len(group), mark))
+        print('  %-18s (type %-6s) %4d entries%s'
+              % (slug.get(t, '?unlisted?'), t, len(group), mark))
         print('      %s' % ', '.join(sorted(names)[:12]))
-    print('\nnames this script needs:')
-    for n in sorted(wanted):
-        hits = [v for v in vs if v['name'] == n]
-        print('  %-10s %s' % (n, ', '.join('id %s (type %s)' % (h['id'], h['gameVersionTypeID'])
-                                           for h in hits) or 'NOT FOUND'))
+    print('\nnames this script needs, resolved the way a release resolves them:')
+    for n, kind in ([(x, 'modloader') for x in sorted(LOADER_NAME.values())]
+                    + [(ENVIRONMENT, 'environment')]):
+        print('  %-10s %-12s -> id %s' % (n, kind, resolve(vs, slug, n, kind)))
+    mcs = sorted({m for _s, mc, _d, _l in JARS for m in mc})
+    for n in mcs:
+        print('  %-10s %-12s -> id %s' % (n, 'mc', resolve(vs, slug, n, 'mc')))
 
 
 def show_release(version, ps):
@@ -225,17 +254,17 @@ def main():
                  'its numeric id at the top of this script.')
 
     # Resolving ids needs the token, so a plan without one still prints the shape.
-    all_versions = None
+    resolved = None
     if os.path.isfile(TOKEN_FILE) or os.environ.get('CURSEFORGE_TOKEN'):
-        all_versions = game_versions(session())
-    ps = payloads(a.version, all_versions, loaders, a.release_type)
+        resolved = game_versions(session())
+    ps = payloads(a.version, resolved, loaders, a.release_type)
 
     if a.action == 'plan' or not a.publish:
         if a.action == 'release':
             print('--publish not given, so nothing was sent. This is what it would do:\n')
         show_release(a.version, ps)
         return 0
-    if all_versions is None:
+    if resolved is None:
         sys.exit('refusing to upload without resolved game version ids.')
     do_release(session(), ps)
     return 0
