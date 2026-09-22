@@ -34,7 +34,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  * never applies without it.
  */
 @Pseudo
-@Mixin(targets = "net.irisshaders.iris.uniforms.SystemTimeUniforms$TimerQueue", remap = false)
+@Mixin(targets = "net.irisshaders.iris.uniforms.SystemTimeUniforms$Timer", remap = false)
 public class IrisTimerMixin {
     @ModifyVariable(method = "beginFrame", at = @At("HEAD"), argsOnly = true, ordinal = 0)
     private long snapmatica$driveAnimationClock(long timeMillis) {
