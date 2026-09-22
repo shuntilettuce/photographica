@@ -170,20 +170,31 @@ public abstract class CameraMixin {
         // pixel, and a real rig makes exactly the same trade.
         if (focus <= 1e-4f) return;
         final float TO_DEG = (float) (180.0 / Math.PI);
-        // The yaw sign is MEASURED, not reasoned. Both were derived the same way — step off the
-        // axis, the subject drifts, turn back onto it — and the vertical came out right while
-        // the horizontal came out exactly backwards, because Minecraft's yaw runs the opposite
-        // way round from the camera's own +X. Reading the far field of a real burst settled it:
-        // with the focal plane registered, the distance should have moved -24.7 px and moved
-        // +28 instead, the same size and the wrong way. The vertical predicted -22.3 px and
-        // moved -16 — right way, so pitch stands as derived.
+        // BOTH signs are PLUS here, and that is a 1.20.1 difference, not a preference. The
+        // Fabric tree carries `getYaw() - dYaw` unconditionally, which is right from 1.21 up
+        // and wrong below it, because Camera's own basis was redefined in 1.21:
+        //
+        //   1.20.1  move(f,v,h) = f*forwards + v*up + h*left
+        //           setRotation  rotationYXZ(-yaw, +pitch, 0)
+        //   1.21+   move(f,v,h) = (h, v, -f) rotated by
+        //           setRotation  rotationYXZ(PI - yaw, -pitch, -roll)
+        //
+        // At yaw=pitch=0 the same horizontal argument sends the camera to world +X on 1.20.1
+        // and to world -X on 1.21: the PI in 1.21's yaw is a half turn about Y, which flips
+        // camera-space +X (and +Z, which the -f then flips back, so forward is unchanged).
+        // The pupil STEP therefore reverses across that boundary while the toe-in that has to
+        // cancel it does not, so on 1.20.1 the correction ran the wrong way and doubled the
+        // drift instead of removing it. Measured on a 64-sample burst: sub-frames were
+        // displaced up to 139 px horizontally and exactly 0 px vertically -- pitch was already
+        // right -- and the photograph came out smeared along one axis. With this sign the same
+        // burst registers to within 2 px, the residual expected of a first-order toe-in.
         //
         // Left as two separate signs rather than tidied into one because they genuinely are two
         // conventions, and the next person to touch this should see that one of them was only
         // ever settled by measurement.
         float dYaw   = (float) Math.atan(ox / focus) * TO_DEG;
         float dPitch = (float) Math.atan(oy / focus) * TO_DEG;
-        setRotation(getYRot() - dYaw, getXRot() + dPitch);
+        setRotation(getYRot() + dYaw, getXRot() + dPitch);
     }
 
     @Inject(method = "setup", at = @At("HEAD"), cancellable = true)
