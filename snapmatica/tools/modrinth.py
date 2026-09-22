@@ -22,6 +22,7 @@ The token is read from MODRINTH_TOKEN and is never printed, logged, or written
 anywhere. Set it in the environment; do not put it in a file in this repository.
 
     python tools/modrinth.py plan          1.3.1     # what a release would send
+    python tools/modrinth.py plan          1.3.2 --loaders forge,neoforge
     python tools/modrinth.py plan-repair             # what the backfill would change
     python tools/modrinth.py release       1.3.1 --publish
     python tools/modrinth.py repair-deps             --publish
@@ -48,15 +49,24 @@ SIBLING263 = os.path.join(os.path.dirname(ROOT), 'snapmatica263')
 
 # jar suffix -> the game versions that jar is for. The suffix is what Stonecutter
 # already writes into the filename, so this is the only place the matrix is stated.
+SIBLING_FORGE = os.path.join(os.path.dirname(os.path.dirname(ROOT)), 'snapmatica-forge')
+SIBLING_NEOFORGE = os.path.join(os.path.dirname(os.path.dirname(ROOT)), 'snapmatica-neoforge')
+
+# The loader ports carry their loader in the jar suffix exactly as Stonecutter
+# carries the game version, so they need no special case anywhere below. The
+# loader does decide the dependency: Fabric API is required for the Fabric jars
+# and must not be declared on the others, where it does not exist.
 JARS = [
-    ('1.20.1',        ['1.20.1'],           os.path.join(ROOT, 'versions/1.20.1/build/libs')),
-    ('1.21-1.21.1',   ['1.21', '1.21.1'],   os.path.join(ROOT, 'versions/1.21.1/build/libs')),
-    ('1.21.2-1.21.3', ['1.21.2', '1.21.3'], os.path.join(ROOT, 'versions/1.21.3/build/libs')),
-    ('1.21.4',        ['1.21.4'],           os.path.join(ROOT, 'versions/1.21.4/build/libs')),
-    ('1.21.10',       ['1.21.10'],          os.path.join(ROOT, 'versions/1.21.10/build/libs')),
-    ('1.21.11',       ['1.21.11'],          os.path.join(ROOT, 'versions/1.21.11/build/libs')),
-    ('26.1.2',        ['26.1.2'],           os.path.join(SIBLING26, 'build/libs')),
-    ('26.3',          ['26.3'],             os.path.join(SIBLING263, 'build/libs')),
+    ('1.20.1',        ['1.20.1'],           os.path.join(ROOT, 'versions/1.20.1/build/libs'),  ['fabric']),
+    ('1.21-1.21.1',   ['1.21', '1.21.1'],   os.path.join(ROOT, 'versions/1.21.1/build/libs'),  ['fabric']),
+    ('1.21.2-1.21.3', ['1.21.2', '1.21.3'], os.path.join(ROOT, 'versions/1.21.3/build/libs'),  ['fabric']),
+    ('1.21.4',        ['1.21.4'],           os.path.join(ROOT, 'versions/1.21.4/build/libs'),  ['fabric']),
+    ('1.21.10',       ['1.21.10'],          os.path.join(ROOT, 'versions/1.21.10/build/libs'), ['fabric']),
+    ('1.21.11',       ['1.21.11'],          os.path.join(ROOT, 'versions/1.21.11/build/libs'), ['fabric']),
+    ('26.1.2',        ['26.1.2'],           os.path.join(SIBLING26, 'build/libs'),             ['fabric']),
+    ('26.3',          ['26.3'],             os.path.join(SIBLING263, 'build/libs'),            ['fabric']),
+    ('forge-1.20.1',    ['1.20.1'], os.path.join(SIBLING_FORGE, 'build/libs'),    ['forge']),
+    ('neoforge-1.21.1', ['1.21.1'], os.path.join(SIBLING_NEOFORGE, 'build/libs'), ['neoforge']),
 ]
 
 
@@ -115,35 +125,50 @@ def sha512(path):
     return h.hexdigest()
 
 
-def collect(version):
-    """Every jar for a release, or an explanation of which one is missing."""
+def collect(version, loaders=None):
+    """Every jar for a release, or an explanation of which one is missing.
+
+    `loaders` narrows it. The loader ports do not share the Fabric jars' release
+    cadence, and a Forge-only release must be neither held up by Fabric jars that
+    were never built under that version number nor quietly shipped with stale ones.
+    """
     out, missing = [], []
-    for suffix, game_versions, d in JARS:
+    for suffix, game_versions, d, ldrs in JARS:
+        if loaders and not set(ldrs) & set(loaders):
+            continue
         name = 'snapmatica-%s+%s.jar' % (version, suffix)
         p = os.path.join(d, name)
         (out if os.path.isfile(p) else missing).append(
-            {'suffix': suffix, 'game_versions': game_versions, 'path': p, 'name': name})
+            {'suffix': suffix, 'game_versions': game_versions, 'path': p,
+             'name': name, 'loaders': ldrs})
+    if not out:
+        sys.exit('no jars match --loaders ' + ','.join(loaders or []))
     if missing:
         sys.exit('not built:\n' + '\n'.join('  ' + m['path'] for m in missing))
     return out
 
 
-def payloads(version):
+def payloads(version, loaders=None, version_type=None):
     logs = changelogs()
     out = []
-    for i, j in enumerate(collect(version)):
+    for i, j in enumerate(collect(version, loaders)):
         number = '%s+%s' % (version, j['suffix'])
         out.append({
             'name': number,
             'version_number': number,
-            # Only the lead entry carries the text, which is the shape the project
-            # already has -- the same changelog repeated seven times reads as noise
-            # on a version list where all seven land the same minute.
-            'changelog': logs.get(number, '') if i == 0 else '',
-            'dependencies': [{'project_id': FABRIC_API, 'dependency_type': 'required'}],
+            # Whichever entries changelogs.json names carry the text. For a release
+            # fanning out over GAME VERSIONS that is the lead one only, which is the
+            # shape the project already has -- the same note seven times reads as
+            # noise on a list where all seven land the same minute. For one fanning
+            # out over LOADERS it is all of them, because a reader filtering the list
+            # to their own loader sees exactly one entry.
+            'changelog': logs.get(number, ''),
+            'dependencies': ([{'project_id': FABRIC_API, 'dependency_type': 'required'}]
+                             if 'fabric' in j['loaders'] else []),
             'game_versions': j['game_versions'],
-            'version_type': 'beta' if ('beta' in version or 'alpha' in version) else 'release',
-            'loaders': ['fabric'],
+            'version_type': version_type or (
+                'beta' if ('beta' in version or 'alpha' in version) else 'release'),
+            'loaders': j['loaders'],
             'featured': False,
             'project_id': PROJECT_ID,
             'file_parts': ['file'],
@@ -153,15 +178,16 @@ def payloads(version):
     return out
 
 
-def show_release(version):
-    ps = payloads(version)
+def show_release(version, loaders=None, version_type=None):
+    ps = payloads(version, loaders, version_type)
     print('RELEASE %s -- %d version entries would be CREATED on Modrinth\n' % (version, len(ps)))
     for p in ps:
         print('  %-24s %-9s %-22s %s' % (p['version_number'], p['version_type'],
                                          ','.join(p['game_versions']), ','.join(p['loaders'])))
         print('    file      %s' % os.path.basename(p['_path']))
         print('    sha512    %s' % sha512(p['_path'])[:32] + '...')
-        print('    depends   Fabric API (required)')
+        print('    depends   %s' % ('Fabric API (required)'
+                                     if p['dependencies'] else 'none'))
         if p['changelog']:
             print('    changelog:')
             for line in p['changelog'].split('\n'):
@@ -169,10 +195,10 @@ def show_release(version):
         print()
 
 
-def do_release(version):
+def do_release(version, loaders=None, version_type=None):
     s = session()
     have = {v['version_number'] for v in existing(s)}
-    ps = payloads(version)
+    ps = payloads(version, loaders, version_type)
     clash = [p['version_number'] for p in ps if p['version_number'] in have]
     if clash:
         sys.exit('already published, refusing to duplicate:\n  ' + '\n  '.join(clash))
@@ -193,7 +219,7 @@ def swap_plan(s, version):
     pub = {v['version_number']: v for v in existing(s)
            if v['version_number'].startswith(version + '+')}
     out = []
-    for suffix, _, d in JARS:
+    for suffix, _, d, _ldrs in JARS:
         num = '%s+%s' % (version, suffix)
         if num not in pub:
             sys.exit('%s is not published; use "release", not "swap".' % num)
@@ -347,15 +373,21 @@ def main():
     ap.add_argument('action', choices=['plan', 'plan-repair', 'plan-swap', 'release',
                                        'repair-deps', 'repair-changelogs', 'swap'])
     ap.add_argument('version', nargs='?')
+    ap.add_argument('--loaders', default=None,
+                    help='comma-separated: fabric,forge,neoforge. Default: all of them.')
+    ap.add_argument('--version-type', choices=['release', 'beta', 'alpha'], default=None,
+                    help='override the type derived from the version string. A first '
+                         'build for a new loader is a reasonable beta.')
     ap.add_argument('--publish', action='store_true',
                     help='actually send. Without it nothing leaves this machine.')
     a = ap.parse_args()
+    loaders = [x.strip() for x in a.loaders.split(',')] if a.loaders else None
 
     if a.action in ('plan', 'release', 'plan-swap', 'swap') and not a.version:
         sys.exit('which version?  e.g.  python tools/modrinth.py plan 1.3.1')
 
     if a.action == 'plan':
-        show_release(a.version)
+        show_release(a.version, loaders, a.version_type)
     elif a.action == 'plan-repair':
         show_repair()
     elif a.action == 'plan-swap':
@@ -363,13 +395,13 @@ def main():
     elif not a.publish:
         print('--publish not given, so nothing was sent. This is what it would do:\n')
         if a.action == 'release':
-            show_release(a.version)
+            show_release(a.version, loaders, a.version_type)
         elif a.action == 'swap':
             show_swap(a.version)
         else:
             show_repair()
     elif a.action == 'release':
-        do_release(a.version)
+        do_release(a.version, loaders, a.version_type)
     elif a.action == 'swap':
         do_swap(a.version)
     elif a.action == 'repair-deps':
