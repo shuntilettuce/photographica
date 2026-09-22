@@ -127,11 +127,18 @@ def resolve(all_versions, type_slug, name, kind):
     return hits[0]['id']
 
 
-def collect(version, loaders=None):
-    """The jars for this release, or which one is missing."""
+def collect(version, loaders=None, only=None):
+    """The jars for this release, or which one is missing.
+
+    `only` names jar suffixes outright, for uploading one file rather than a
+    matrix -- a first upload to a new project is worth keeping small, because
+    CurseForge has no API to delete what lands wrong.
+    """
     out, missing = [], []
     for suffix, mc_versions, d, ldrs in JARS:
         if loaders and not set(ldrs) & set(loaders):
+            continue
+        if only and suffix not in only:
             continue
         name = 'snapmatica-%s+%s.jar' % (version, suffix)
         p = os.path.join(d, name)
@@ -142,15 +149,21 @@ def collect(version, loaders=None):
     if missing:
         sys.exit('not built:\n' + '\n'.join('  ' + m['path'] for m in missing))
     if not out:
-        sys.exit('no jars match --loaders ' + ','.join(loaders or []))
+        sys.exit('no jars match --loaders %s --only %s'
+                 % (','.join(loaders or ['*']), ','.join(only or ['*'])))
     return out
 
 
-def payloads(version, resolved, loaders=None, release_type=None):
+def payloads(version, resolved, loaders=None, release_type=None, only=None):
     """`resolved` is (versions, typeSlugById) from game_versions, or None."""
     logs = changelogs()
+    # Modrinth puts the release note on the lead entry only, because seven
+    # identical notes on a version list where all seven land the same minute read
+    # as noise. CurseForge is landed on a file at a time, so a file with no note
+    # tells its reader nothing; the lead entry's text stands in.
+    lead = next((logs[k] for k in sorted(logs) if k.startswith(version + '+') and logs[k]), '')
     out = []
-    for j in collect(version, loaders):
+    for j in collect(version, loaders, only):
         wanted = ([(n, 'mc') for n in j['mc']]
                   + [(LOADER_NAME[l], 'modloader') for l in j['loaders']]
                   + [(ENVIRONMENT, 'environment')])
@@ -159,17 +172,20 @@ def payloads(version, resolved, loaders=None, release_type=None):
                for n, k in wanted] if resolved else []
         meta = {
             'displayName': j['number'],
-            'changelog': logs.get(j['number'], ''),
+            'changelog': logs.get(j['number']) or lead,
             'changelogType': 'markdown',
             'releaseType': release_type or (
                 'beta' if ('beta' in version or 'alpha' in version) else 'release'),
             'gameVersions': ids,
-            # Fabric API exists for the Fabric jars only; declaring it on a Forge
-            # file would be a dependency nobody can satisfy.
-            'relations': ({'projects': [{'slug': FABRIC_API_SLUG,
-                                         'type': 'requiredDependency'}]}
-                          if 'fabric' in j['loaders'] else {'projects': []}),
         }
+        # Fabric API exists for the Fabric jars only; declaring it on a Forge file
+        # would be a dependency nobody can satisfy. `relations` is OMITTED rather
+        # than sent empty -- CurseForge rejects an empty projects array outright
+        # ("Array item count 0 is less than minimum count of 1"), so "no
+        # dependencies" has to be said by saying nothing.
+        if 'fabric' in j['loaders']:
+            meta['relations'] = {'projects': [{'slug': FABRIC_API_SLUG,
+                                               'type': 'requiredDependency'}]}
         out.append({'meta': meta, 'path': j['path'], 'names': names,
                     'number': j['number'], 'loaders': j['loaders']})
     return out
@@ -206,8 +222,9 @@ def show_release(version, ps):
         print('    file      %s' % os.path.basename(p['path']))
         print('    sha512    %s...' % sha512(p['path'])[:32])
         print('    ids       %s' % (m['gameVersions'] or '(not resolved -- no token)'))
-        print('    depends   %s' % (', '.join(r['slug'] for r in m['relations']['projects'])
-                                    or 'none'))
+        print('    depends   %s'
+              % (', '.join(r['slug'] for r in m.get('relations', {}).get('projects', []))
+                 or 'none'))
         if m['changelog']:
             print('    changelog:')
             for line in m['changelog'].split('\n'):
@@ -236,11 +253,15 @@ def main():
     ap.add_argument('version', nargs='?')
     ap.add_argument('--loaders', default=None,
                     help='comma-separated: fabric,forge,neoforge. Default: all of them.')
+    ap.add_argument('--only', default=None,
+                    help='comma-separated jar suffixes, e.g. 1.21-1.21.1. Narrower '
+                         'than --loaders, for uploading one file.')
     ap.add_argument('--release-type', choices=['release', 'beta', 'alpha'], default=None)
     ap.add_argument('--publish', action='store_true',
                     help='actually send. Without it nothing leaves this machine.')
     a = ap.parse_args()
     loaders = [x.strip() for x in a.loaders.split(',')] if a.loaders else None
+    only = [x.strip() for x in a.only.split(',')] if a.only else None
 
     if a.action == 'versions':
         show_versions(session())
@@ -257,7 +278,7 @@ def main():
     resolved = None
     if os.path.isfile(TOKEN_FILE) or os.environ.get('CURSEFORGE_TOKEN'):
         resolved = game_versions(session())
-    ps = payloads(a.version, resolved, loaders, a.release_type)
+    ps = payloads(a.version, resolved, loaders, a.release_type, only)
 
     if a.action == 'plan' or not a.publish:
         if a.action == 'release':
