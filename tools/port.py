@@ -7,7 +7,7 @@ Ports snapmatica's Fabric/yarn sources to NeoForge/Mojang for one target version
   3. drops Fabric-only imports and @Environment annotations (the loader glue is
      rewritten by hand afterwards)
 
-Run:  python tools/port.py <srcDir> <outDir>
+Run:  python tools/port.py <srcDir> <outDir> [--mc=1.20.1]
 """
 import io
 import json
@@ -15,7 +15,7 @@ import os
 import re
 import sys
 
-TARGET = (1, 21, 1)
+TARGET = (1, 21, 1)   # overridden by --mc on the command line
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "out")
 
@@ -168,7 +168,41 @@ _WORD = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*\b")
 _FQ_SLASH = {k.replace(".", "/"): v.replace(".", "/") for k, v in CLASSES_FQ.items()}
 
 
+# Yarn borrows a lot of names from the JDK. The dictionaries below are keyed on
+# simple names only, so without these denylists a yarn entry happily rewrites the
+# mod's calls into java.* -- Properties became BlockStateProperties, trim() became
+# clipText(), Thread.sleep() became Thread.startSleeping(). Every name here was
+# observed corrupting the 1.21.1 port.
+JDK_CLASSES = {"Properties", "Clipboard", "Entry", "Style", "Font", "Component",
+               "Button", "Timer", "List", "Queue", "Path", "Level", "Type"}
+JDK_MEMBERS = {"toLowerCase", "toUpperCase", "trim", "flip", "poll", "pop", "push",
+               "sleep", "hypot", "isNaN", "isInfinite", "parseBoolean", "parseInt",
+               "parseFloat", "readLine", "setProperty", "getProperty", "keySet",
+               "entrySet", "iterator", "order", "floorMod", "floorDiv",
+               "createDirectories", "createDirectory", "lastModified", "length",
+               "get", "set", "put", "add", "remove", "contains", "size", "close",
+               "write", "read", "start", "run", "join", "format", "valueOf",
+               "println", "print", "forName", "getBytes", "getName", "equals",
+               "hashCode", "toString", "clone", "compareTo"}
+
+IMPORT_RE = re.compile(r"^import\s+(?:static\s+)?([\w.$]+)\s*;", re.M)
+
+
+def foreign_simple_names(text):
+    """Simple names this file imports from outside Minecraft -- never rewrite those.
+
+    `import java.util.Properties;` in a file is proof that its `Properties` is the
+    JDK's, whatever yarn happens to call one of its own classes."""
+    out = set()
+    for fq in IMPORT_RE.findall(text):
+        if fq.startswith(("net.minecraft", "com.mojang", "net.fabricmc")):
+            continue
+        out.add(fq.rsplit(".", 1)[-1])
+    return out
+
+
 def rewrite_classes(text):
+    keep = foreign_simple_names(text) | JDK_CLASSES | PROTECTED
     # dotted fully-qualified names
     def fq_sub(m):
         return CLASSES_FQ.get(m.group(0), m.group(0))
@@ -180,6 +214,8 @@ def rewrite_classes(text):
     # then simple names via cheap word scanning + dict lookup
     def word_sub(m):
         w = m.group(0)
+        if w in keep:
+            return w
         return CLASSES.get(w, w)
     return _WORD.sub(word_sub, text)
 
@@ -217,6 +253,8 @@ def rewrite_members(text):
     # owner-qualified: Owner.member, where Owner is a known class simple name
     def owner_sub(m):
         owner, member = m.group(1), m.group(2)
+        if member in PROTECTED or member in JDK_MEMBERS:
+            return m.group(0)
         rep = MEMBERS_OWNER.get("%s.%s" % (owner, member))
         if rep is None or rep == member:
             return m.group(0)
@@ -226,7 +264,7 @@ def rewrite_members(text):
     # global: .member( — only unambiguous names
     def global_sub(m):
         name = m.group(1)
-        if name in PROTECTED:
+        if name in PROTECTED or name in JDK_MEMBERS:
             return m.group(0)
         rep = MEMBERS.get(name)
         if rep is None or rep == name:
@@ -335,10 +373,24 @@ def strip_fabric(text):
 
 
 def main():
-    if len(sys.argv) != 3:
+    global TARGET
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    for a in sys.argv[1:]:
+        if a.startswith("--mc="):
+            TARGET = version_tuple(a.split("=", 1)[1])
+    if len(args) != 2:
         print(__doc__)
         sys.exit(1)
-    src_dir, dst_dir = sys.argv[1], sys.argv[2]
+    src_dir, dst_dir = args
+    # Porting an already-ported tree is what produced Text -> Component ->
+    # TypedDataComponent and TextRenderer -> Font -> GlyphProvider in the first
+    # NeoForge attempt: every rewrite is a single pass, but two passes compose.
+    for _r, _d, _f in os.walk(src_dir):
+        for _n in _f:
+            if _n.endswith(".java") and "import net.minecraft.client.Minecraft;" in                     io.open(os.path.join(_r, _n), encoding="utf-8").read():
+                sys.exit("refusing to run: %s looks already ported (Mojang names "
+                         "present). Port from the Fabric/yarn tree." % src_dir)
+    print("target %s" % ".".join(str(v) for v in TARGET))
     PROTECTED.update(scan_own_names(src_dir))
     count = 0
     for root, _dirs, files in os.walk(src_dir):
