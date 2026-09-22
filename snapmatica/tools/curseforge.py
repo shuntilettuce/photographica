@@ -36,8 +36,8 @@ import requests
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from modrinth import JARS, changelogs, sha512  # noqa: E402
 
-# Filled in once the project exists on the website. There is no API to create it.
-PROJECT_ID = None
+# Created on the website; there is no API for that. Snapmatica is 1707355.
+PROJECT_ID = 1707355
 
 API = 'https://minecraft.curseforge.com/api'
 UA = 'shuntilettuce/snapmatica-publisher (sunnyhorse.minecraft@gmail.com)'
