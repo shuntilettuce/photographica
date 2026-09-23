@@ -14,14 +14,10 @@ This guide is for people who have never used a camera. For every control in deta
 
 ### まずはこれだけ
 
-難しいことは後回しで大丈夫です。最初は次の2つだけ変えてください。
+設定は何も変えなくて大丈夫です。最初から、明るさとピントはカメラが自動で合わせて
+くれるようになっています（露出モード **Av**、フォーカスモード **AF**）。
 
-1. **G** キーで設定を開く。
-2. **露出モード**を **P** に、**フォーカスモード**を **AF** にする。
-
-これで、明るさとピントはカメラが自動で合わせてくれます。
-
-あとは3ステップです。
+撮るのは3ステップだけです。
 
 1. **しゃがむ** ― カメラを構えます。画面に枠が出ます。枠の中が写真になります。
 2. **マウスホイール** ― ズームします。遠くのものを大きく写せます。
@@ -81,8 +77,8 @@ F16 は暗くて全体がくっきりします。
 
 #### 露出モード
 3つのうち、どれをカメラにまかせるかを選びます。
-- **P** ― 絞りとシャッターをおまかせ（ISO だけ自分で。400 のままで大丈夫）。まずはこれ。
-- **Av** ― 絞り（F値）だけ自分で決める。ボケの量を決めたいとき。
+- **P** ― 絞りとシャッターをおまかせ（ISO だけ自分で。400 のままで大丈夫）。
+- **Av** ― 絞り（F値）だけ自分で決める。ボケの量を決めたいとき。**最初はこれ**になっています。
 - **Tv** ― シャッター速度だけ自分で決める。
 - **M** ― ぜんぶ自分で決める。
 
@@ -123,7 +119,7 @@ F16 より大きくすると、かえって全体が少し眠くなります（�
 模型を撮ったような写真になります。高いところから見下ろして撮ると、それらしくなります。
 
 #### 雲や水の流れを写したい
-1. 設定の「**絞り積分**」を ON にする。
+1. 設定の「**絞り積分**」が ON になっていることを確かめる（最初から ON です）。
 2. 露出モードを **Tv** にして、シャッターを**遅く**する（1秒など）。
 3. 明るすぎるときは、**ND フィルタ**を付ける（ND8 など）。
 
@@ -136,7 +132,7 @@ F16 より大きくすると、かえって全体が少し眠くなります（�
 4. **Enter** で撮影。
 
 #### ピントがどこに合っているか確かめたい
-設定の「**フォーカスピーキング**」を ON にすると、ピントが合っている輪郭に色が付きます。
+「**フォーカスピーキング**」（最初から ON）で、ピントが合っている輪郭に色が付きます。
 この色は写真には写りません。
 
 ---
@@ -147,7 +143,7 @@ F16 より大きくすると、かえって全体が少し眠くなります（�
 |---|---|---|
 | 主役がぼやけた | ピントが合っていない | フォーカスモードを AF にする。十字を主役に重ねる |
 | 全体がぼやけた | ピントがどこにも合っていない、または F値が大きすぎる（F16 以上） | AF で合わせ直す。F値は F4〜F8 あたりに |
-| 真っ暗・真っ白 | M モードで明るさが合っていない | 露出モードを P にする |
+| 真っ暗・真っ白 | M モードで明るさが合っていない | 露出モードを Av か P に戻す |
 | ブレた | シャッターが遅いのにカメラが動いた | シャッターを速くする（1/125 など）か、撮る瞬間に動かない |
 | ざらざらする | ISO が高すぎる | ISO を下げる（400 くらい） |
 | 色が変 | ホワイトバランスがずれている | AWB に戻す |
@@ -165,14 +161,10 @@ F16 より大きくすると、かえって全体が少し眠くなります（�
 
 ### Just this, to start
 
-Leave the hard parts for later. At first, change only two things.
+You do not need to change any settings. Out of the box the camera takes care of brightness
+and focus for you (exposure mode **Av**, focus mode **AF**).
 
-1. Press **G** to open the settings.
-2. Set **Exposure Mode** to **P** and **Focus Mode** to **AF**.
-
-Now the camera takes care of brightness and focus for you.
-
-Then it is three steps.
+Taking a picture is three steps.
 
 1. **Sneak**: raise the camera. A frame appears. What is inside the frame is the photo.
 2. **Mouse wheel**: zoom, to make faraway things bigger.
@@ -233,8 +225,8 @@ sharp from front to back.
 
 #### Exposure mode
 Which of the three the camera handles for you.
-- **P**: aperture and shutter (ISO stays yours; 400 is fine). Start here.
-- **Av**: you choose the aperture only. For deciding how much blurs.
+- **P**: aperture and shutter (ISO stays yours; 400 is fine).
+- **Av**: you choose the aperture only. For deciding how much blurs. **This is where it starts.**
 - **Tv**: you choose the shutter speed only.
 - **M**: you choose everything.
 
@@ -275,7 +267,7 @@ Make the **Scale** setting small (1 block = 1 – 5 cm, say). The blur becomes v
 the shot looks like a photo of a model. Shooting from above, looking down, helps.
 
 #### Show clouds or water flowing
-1. Turn **Aperture Integration** on in the settings.
+1. Check that **Aperture Integration** is on in the settings (it is from the start).
 2. Set the exposure mode to **Tv** and make the shutter **slow** (1 second, say).
 3. If it comes out too bright, add an **ND filter** (ND8, say).
 
@@ -288,7 +280,7 @@ Keep the camera still while it shoots. Only the clouds, water and creatures stre
 4. Press **Enter**.
 
 #### Check where the focus is
-Turn on **Focus Peaking** in the settings. The edges that are in focus get a colour. The
+**Focus Peaking** (on from the start) colours the edges that are in focus. The
 colour does not show in the photo.
 
 ---
@@ -299,7 +291,7 @@ colour does not show in the photo.
 |---|---|---|
 | The subject is blurry | It is not in focus | Set Focus Mode to AF and put the cross on the subject |
 | Everything is blurry | Nothing is in focus, or the f-number is too large (f/16 and up) | Refocus with AF, and try f/4 – f/8 |
-| All black or all white | Brightness is off in M | Set the exposure mode to P |
+| All black or all white | Brightness is off in M | Set the exposure mode back to Av or P |
 | Smeared | The camera moved during a slow shutter | Use a faster shutter (1/125, say) or hold still |
 | Grainy | ISO is too high | Lower it (around 400) |
 | Odd colours | White balance is off | Set it back to AWB |

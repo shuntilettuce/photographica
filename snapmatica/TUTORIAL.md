@@ -72,13 +72,13 @@ Snapmatica は、Minecraft の中で「本物のカメラで撮る」ための�
 
 1. **しゃがむ**とファインダーが開きます。枠の中が写真に写る範囲です（3:2）。
 2. **ホイール**でズーム。望遠にするほど背景がボケやすくなります。
-3. **G** でカメラ設定を開き、フォーカスモードを **AF** にします（初期値は MF）。
-   中央の十字に重なったものに自動でピントが合います。
+3. 最初から **AF** になっているので、中央の十字に重なったものに自動でピントが合います。
 4. **Enter** で撮影。写真は保存され、同時にクリップボードにもコピーされます（DNG は
    除く）。そのまま Discord などに貼り付けられます。
 
-初期状態は露出モード M（マニュアル）、F値・シャッター・ISO すべて手動です。まずは
-露出モードを **P**（全自動）か **Av**（絞り優先）にすると楽です。
+初期状態は露出モード **Av**（絞り優先）なので、明るさはカメラが合わせます。ほかにも、
+フォーカスピーキング・ダイナミックレンジ再現・絞り積分が ON、保存形式は JPG になっていて、
+何も設定しなくてもそれらしい写真が撮れます。
 
 ### 4. ファインダーの見方
 
@@ -125,8 +125,8 @@ Snapmatica は、Minecraft の中で「本物のカメラで撮る」ための�
   表示で、写真には写りません。
 
 **出力**
-- **写真フォーマット** ― PNG ／ JPG ／ DNG（RAW）。どの形式にも撮影設定（EXIF）が記録
-  されます。DNG は Lightroom などの現像ソフトで開けます。
+- **写真フォーマット** ― PNG ／ JPG（初期値）／ DNG（RAW）。どの形式にも撮影設定（EXIF）が
+  記録されます。DNG は Lightroom などの現像ソフトで開けます。
 
 右列の残り（フリーカム、絞り積分、常時被写界深度）は 9〜11章で説明します。
 
@@ -173,7 +173,7 @@ Minecraft の1ブロックが何 cm かは決まっていません。スケー�
 
 ### 9. 絞り積分 ― いちばん綺麗な写真
 
-右列の「絞り積分」を ON にすると、写真の撮り方が変わります。
+右列の「絞り積分」は、初期状態で ON です。これが写真の撮り方を変えます。
 
 ふつうの撮影は、1枚の画像をあとからぼかしてボケを作ります。絞り積分は、本物のレンズと
 同じことをします。レンズの口径のあちこちから世界を何十回も描き直し、それを足し合わせます。
@@ -186,9 +186,11 @@ Minecraft の1ブロックが何 cm かは決まっていません。スケー�
 
 **使い方と注意**
 - 写真撮影のときだけ働きます。ファインダーの表示はふつうのままです。
-- シャッターを押すと、数秒かけて撮影します（64サンプルでおよそ2〜3秒）。その間は
-  ファインダーが暗くなります。
-- **瞳サンプル数**（8〜256、初期値 64）― 増やすほど滑らかになり、時間もかかります。
+- シャッターを押すと、少し時間をかけて撮影します（初期値の16サンプルで0.3秒ほど、
+  64サンプルで1秒ほど）。その間はファインダーが暗くなります。
+- **瞳サンプル数**（8〜128、初期値 16）― 増やすほど滑らかになり、時間もかかります。
+  32 あたりで違いはほぼ見えなくなります。
+- OFF にすると、1枚の画像をぼかす普通の撮影に戻ります（一瞬で撮れます）。
 - 遅いシャッターでは、まず**シャッター速度と同じ時間だけ露光を記録**します（1秒なら1秒）。
   その間にカメラを動かすと、そのとおりにブレます。流し撮りもできます。
 
@@ -333,13 +335,14 @@ While you look through the viewfinder, the mouse wheel works the lens.
 
 1. **Sneak** to open the viewfinder. What is inside the frame is what the photo gets (3:2).
 2. **Scroll** to zoom. The longer the lens, the easier the background goes soft.
-3. Press **G** and set Focus Mode to **AF** (it starts on MF). Whatever sits under the
-   centre cross is brought into focus.
+3. The camera starts in **AF**, so whatever sits under the centre cross is brought into
+   focus.
 4. Press **Enter**. The photo is saved and copied to the clipboard (except DNG), ready to
    paste into Discord or anywhere else.
 
-The camera starts in M (manual) with aperture, shutter and ISO all manual. Switching the
-exposure mode to **P** (fully automatic) or **Av** (aperture priority) is the easy start.
+The camera starts in **Av** (aperture priority), so it sets the brightness for you. Focus
+peaking, dynamic range, aperture integration and JPG output are on from the start too, so a
+good-looking photo needs no setup at all.
 
 ### 4. Reading the viewfinder
 
@@ -389,8 +392,8 @@ tools). Change values with the arrows. The buttons at the bottom lead to the **A
   never in the photo.
 
 **Output**
-- **Photo Format**: PNG / JPG / DNG (raw). Every format records the shot settings (EXIF).
-  DNG opens in raw developers such as Lightroom.
+- **Photo Format**: PNG / JPG (default) / DNG (raw). Every format records the shot settings
+  (EXIF). DNG opens in raw developers such as Lightroom.
 
 The rest of the right column (freecam, aperture integration, ambient depth of field) is
 covered in 9 – 11.
@@ -439,7 +442,8 @@ The rangefinder's figure in brackets uses this scale too.
 
 ### 9. Aperture integration: the best photos
 
-Turning on Aperture Integration in the right column changes how a photo is made.
+Aperture Integration, in the right column, is on from the start. It changes how a photo is
+made.
 
 A normal shot takes one picture and blurs it afterwards. Aperture integration does what a
 real lens does: it draws the world again from many points across the lens opening and
@@ -453,9 +457,11 @@ adds them up. As a result:
 
 **How to use it**
 - It only affects photos. The viewfinder looks the same as usual.
-- After you press the shutter, the camera takes a few seconds (about 2 – 3 s at 64
-  samples), and the viewfinder goes dark meanwhile.
-- **Pupil samples** (8 – 256, default 64): more is smoother and slower.
+- After you press the shutter, the camera takes a moment (about 0.3 s at the default 16
+  samples, about 1 s at 64), and the viewfinder goes dark meanwhile.
+- **Pupil samples** (8 – 128, default 16): more is smoother and slower. Past about 32 the
+  difference is hard to see.
+- Turned off, the camera goes back to blurring a single picture, which is instant.
 - On a slow shutter, the camera first **records the exposure for as long as the shutter
   speed** (one second for 1 s). Moving the camera during that time blurs the shot the same
   way, so panning with a subject works.

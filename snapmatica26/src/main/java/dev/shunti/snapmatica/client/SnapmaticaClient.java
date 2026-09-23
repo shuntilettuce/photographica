@@ -113,22 +113,24 @@ public class SnapmaticaClient implements ClientModInitializer {
     /**
      * Take the photograph by integrating the aperture rather than by blurring one frame.
      *
-     * <p>Off by default because it is not free: it costs a rendered frame per pupil sample, so
-     * the shutter takes a second or two of real time instead of an instant, and anything that
-     * moves during it smears. On, and the defocus stops being a reconstruction — see
+     * <p>On by default since the burst got fast: summed on the GPU with no settle frame, the
+     * default 16 samples cost about a third of a second, and the photographs are plainly
+     * better from the first shot. It still costs a rendered frame per pupil sample, and
+     * anything that moves during it smears. On, the defocus stops being a reconstruction — see
      * {@link ApertureIntegration}. The viewfinder is unaffected either way; the gather owns the
      * live view because a live view cannot spend two hundred frames on one picture.
      */
-    public static boolean apertureIntegration = false;
+    public static boolean apertureIntegration = true;   // on out of the box: 16 samples is ~0.3 s
 
 
     /**
      * Pupil samples per photograph. The bokeh is the average of this many views of the scene,
      * so too few reads as a ring of ghosts rather than as a disc — the same way a real
-     * accumulation would. 64 is clean for ordinary apertures; a very wide one spreads the same
-     * samples over a bigger disc and wants more.
+     * accumulation would. 16 by default: side by side the pictures stop improving at around
+     * 32, because the gather fills the gap between neighbouring samples, and 16 keeps the
+     * shutter near a third of a second.
      */
-    public static int apertureSamples = 64;
+    public static int apertureSamples = 16;
 
     /**
      * Write every pupil sample of a burst to disk, alongside what each one metered at.
@@ -166,8 +168,8 @@ public class SnapmaticaClient implements ClientModInitializer {
     public static final float FOCUS_INFINITY = 100000.0f;
     public static int focalLengthMm = 50;
     public static int lensType = 1;               // LensKind.PRIME_50MM
-    public static int exposureMode = 0;           // M (manual)
-    public static int focusMode = 0;              // MF (manual focus)
+    public static int exposureMode = 1;           // Av: a new player sets the blur, the camera the light
+    public static int focusMode = 1;              // AF
     public static boolean motionBlur = false;
 
     /**
@@ -175,7 +177,7 @@ public class SnapmaticaClient implements ClientModInitializer {
      * a real mirrorless body draws for manual focus. Never baked into a photo or a recorded
      * frame — see {@code EvfBlurRenderer.applyBlur}'s {@code showPeaking} computation.
      */
-    public static boolean focusPeaking = false;
+    public static boolean focusPeaking = true;
 
     /**
      * A narrower-dynamic-range "look" — lifted/crushed shadows and a soft-then-hard highlight
@@ -183,10 +185,11 @@ public class SnapmaticaClient implements ClientModInitializer {
      * is not derived from real optics: Minecraft's own framebuffer is already tonemapped,
      * clamped LDR colour, so there is no true scene radiance left to re-expose against a
      * sensor's actual response curve — this recreates the LOOK of limited headroom, not the
-     * physics of it, which is why it defaults off and stays a separate toggle rather than
-     * something the lens model derives on its own.
+     * physics of it, which is why it stays a separate toggle rather than something the lens
+     * model derives on its own. On by default all the same: it is most of what makes a first
+     * photograph look like a photograph rather than a screenshot.
      */
-    public static boolean dynamicRangeSim = false;
+    public static boolean dynamicRangeSim = true;
 
     /**
      * How many stops of scene brightness the simulated sensor captures before {@link
@@ -201,8 +204,8 @@ public class SnapmaticaClient implements ClientModInitializer {
     public static float dynamicRangeStops = 8.0f;
 
     /**
-     * Output container for a saved photo: 0 = PNG (default, unchanged from before this
-     * setting existed), 1 = JPG, 2 = DNG (Linear DNG — see {@link PhotoCapture} and {@link
+     * Output container for a saved photo: 0 = PNG, 1 = JPG (default: a fraction of the size,
+     * and what people actually share), 2 = DNG (Linear DNG — see {@link PhotoCapture} and {@link
      * DngWriter}).
      *
      * <p>The DNG branch skips several of THIS MOD'S OWN destructive post-processing steps
@@ -214,7 +217,7 @@ public class SnapmaticaClient implements ClientModInitializer {
      * MORE irreversible loss on top of that, in a container real raw software (Lightroom,
      * darktable, RawTherapee) opens as a genuine raw file.
      */
-    public static int photoFormat = 0;
+    public static int photoFormat = 1;   // JPG: what people share; PNG and DNG stay one click away
     public static final int PHOTO_FORMAT_PNG = 0;
     public static final int PHOTO_FORMAT_JPG = 1;
     public static final int PHOTO_FORMAT_DNG = 2;
