@@ -11,8 +11,8 @@ import net.minecraft.screen.slot.Slot;
 import net.minecraft.util.Hand;
 
 /**
- * The camera body's own slots — lens, film/card, battery and flash in one place, replacing the
- * pile of separate keybindings that used to load and unload each of them.
+ * The camera body's own slots — lens and film/card in one place, replacing the pile of separate
+ * keybindings that used to load and unload each of them.
  *
  * <p>The camera is always the player's main-hand stack rather than something passed in at open
  * time. That keeps this a plain {@link net.minecraft.screen.ScreenHandlerType} (no extended
@@ -39,10 +39,8 @@ public class CameraGearScreenHandler extends ScreenHandler {
         loadFromCamera();
 
         // Gear slots, left to right across the top of the GUI.
-        addGearSlot(CameraGear.SLOT_LENS, 44, 20);
-        addGearSlot(CameraGear.SLOT_STORAGE, 71, 20);
-        addGearSlot(CameraGear.SLOT_BATTERY, 98, 20);
-        addGearSlot(CameraGear.SLOT_FLASH, 125, 20);
+        addGearSlot(CameraGear.SLOT_LENS, 71, 20);
+        addGearSlot(CameraGear.SLOT_STORAGE, 98, 20);
 
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {

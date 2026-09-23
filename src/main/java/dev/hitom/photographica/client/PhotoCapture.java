@@ -1,7 +1,6 @@
 package dev.hitom.photographica.client;
 
 import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.component.CameraPower;
 import dev.hitom.photographica.component.CameraSettings;
 import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.FilmRollData;
@@ -306,20 +305,6 @@ public final class PhotoCapture {
 						SoundEvents.BLOCK_LEVER_CLICK, 0.5f, 0.9f));
 				return;
 			}
-		}
-
-		// Flash power for this frame, measured against whatever the camera is focused on — the
-		// subject distance autofocus already resolved is exactly the distance a real flash's
-		// output has to cover. Latched now so the developed photo matches the moment of firing.
-		pendingFlashPower = CameraPower.flashIllumination(cameraStack, lastSceneDepthBlocks);
-
-		// Power. Checked here, alongside the film/card prerequisites and before the self-timer
-		// arms, so a dead battery fails immediately instead of counting down and then refusing.
-		if (!CameraPower.hasPowerForShot(cameraStack)) {
-			mc.player.sendMessage(Text.literal(CameraPower.powerFailureMessage(cameraStack)), true);
-			mc.getSoundManager().play(uiSound(
-					SoundEvents.BLOCK_NOTE_BLOCK_BASEDRUM.value(), 0.6f, 0.6f));
-			return;
 		}
 
 		long now = System.currentTimeMillis();
@@ -835,23 +820,6 @@ public final class PhotoCapture {
 			if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影"), true);
 		}
 	}
-
-	/**
-	 * How much light the flash contributes at full power, as a multiplier on the exposure.
-	 * 8x is a little over three stops — enough to take a scene that would have needed a
-	 * tripod-and-30-seconds and make it a handheld shot, which is the entire point of owning
-	 * one, without turning daylight shots into white rectangles (they are already at or above
-	 * correct exposure, so the highlight rolloff absorbs it).
-	 */
-	private static final float FLASH_EXPOSURE_GAIN = 8.0f;
-
-	/**
-	 * Flash power reaching the subject for the shot currently being processed, 0.0 - 1.0.
-	 * Captured at trigger time rather than read from the camera during processing because the
-	 * photo is developed asynchronously on 1.21.11 — by then the player may have swapped or
-	 * drained the flash, and the photo has to reflect the moment the shutter fired.
-	 */
-	private static volatile float pendingFlashPower = 0f;
 
 	/**
 	 * Clears every in-flight capture so none of it leaks into the next world joined (see
@@ -1512,15 +1480,6 @@ public final class PhotoCapture {
 
 		// Exposure multiplier relative to the reference (F5.6 · 1/60 · ISO 400).
 		float mult = (float) (t * 60.0 * ((5.6 / n) * (5.6 / n)) * (s / 400.0));
-
-		// Flash. Folded into the exposure multiplier rather than added as a separate brightening
-		// pass so it goes through the same highlight rolloff as available light — a flashed
-		// subject clips the way an overexposed one does, instead of turning flat white. Scaled
-		// by how much light actually reached the subject at this distance (see FlashItem), so a
-		// small unit fired across a big room barely lifts the frame.
-		if (pendingFlashPower > 0f) {
-			mult *= 1.0f + pendingFlashPower * FLASH_EXPOSURE_GAIN;
-		}
 
 		// Reciprocity failure: film loses sensitivity at long exposures (>= 1s).
 		if (FilmKind.isFilm(settings.filmType()) && t >= 1.0) {

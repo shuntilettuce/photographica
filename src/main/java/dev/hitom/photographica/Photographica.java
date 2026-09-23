@@ -146,11 +146,6 @@ public class Photographica implements ModInitializer {
 			context.server().execute(() -> {
 				ItemStack camera = player.getStackInHand(Hand.MAIN_HAND);
 				if (!(camera.getItem() instanceof CameraItem) && !(camera.getItem() instanceof MirrorlessCameraItem)) return;
-				// Charge is spent HERE, not on the client that asked for the photo. The client
-				// runs the same check first (see PhotoCapture#take) so the shutter refuses
-				// visibly rather than silently producing nothing — but this is the copy that
-				// actually decides, and it's also what stops a flat battery from being ignored.
-				if (!dev.hitom.photographica.component.CameraPower.consumeForShot(camera)) return;
 				//? if >=1.21.11 {
 				/*ServerWorld world = (ServerWorld) player.getEntityWorld();*/
 				//?} else {

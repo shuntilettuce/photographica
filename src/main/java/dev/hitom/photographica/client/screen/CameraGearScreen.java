@@ -12,8 +12,8 @@ import net.minecraft.text.Text;
 /**
  * The camera-body slots. Drawn with the same flat panel treatment the other machine screens in
  * this mod use rather than a bespoke background texture, so it needs no new art to be legible.
- * Each empty slot is labelled, because "which of these four holes takes the battery" is not
- * something an unlabelled grid answers.
+ * Each empty slot is labelled, since the item sprite alone doesn't say what a slot is FOR once
+ * it's occupied either.
  */
 @Environment(EnvType.CLIENT)
 public class CameraGearScreen extends HandledScreen<CameraGearScreenHandler> {
@@ -25,8 +25,8 @@ public class CameraGearScreen extends HandledScreen<CameraGearScreenHandler> {
     private static final int TEXT = 0xFFE8DCC4;
     private static final int TEXT_DIM = 0xFF9A8D72;
 
-    private static final String[] SLOT_LABELS = {"レンズ", "記録", "電池", "閃光"};
-    private static final int[] SLOT_X = {44, 71, 98, 125};
+    private static final String[] SLOT_LABELS = {"レンズ", "記録"};
+    private static final int[] SLOT_X = {71, 98};
     private static final int SLOT_Y = 20;
 
     public CameraGearScreen(CameraGearScreenHandler handler, PlayerInventory inventory, Text title) {

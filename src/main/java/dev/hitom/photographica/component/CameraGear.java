@@ -14,8 +14,7 @@ import net.minecraft.network.codec.PacketCodec;
 /**
  * Everything physically fitted to a camera body — the parts that occupy a slot rather than a
  * dial position. Holds real {@link ItemStack}s, not flattened stats, because these are objects
- * you own: a half-drained battery has to come back out half-drained, and an SD card has to come
- * out still holding its photos.
+ * you own: an SD card has to come out still holding its photos, and a film roll still exposed.
  *
  * <h2>Why the old components still exist</h2>
  * The optics, exposure and gallery code all read the lens from {@link CameraSettings#lensType()},
@@ -24,23 +23,18 @@ import net.minecraft.network.codec.PacketCodec;
  * these slots: {@link #syncDerived} recomputes them after any change here, so this record is the
  * single source of truth while everything downstream keeps working unmodified.
  */
-public record CameraGear(ItemStack lens, ItemStack storage, ItemStack battery, ItemStack flash) {
+public record CameraGear(ItemStack lens, ItemStack storage) {
 
-    public static final CameraGear EMPTY =
-            new CameraGear(ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY);
+    public static final CameraGear EMPTY = new CameraGear(ItemStack.EMPTY, ItemStack.EMPTY);
 
     /** Slot order, shared by the screen handler and this record's accessors. */
     public static final int SLOT_LENS = 0;
     public static final int SLOT_STORAGE = 1;
-    public static final int SLOT_BATTERY = 2;
-    public static final int SLOT_FLASH = 3;
-    public static final int SLOT_COUNT = 4;
+    public static final int SLOT_COUNT = 2;
 
     public static final Codec<CameraGear> CODEC = RecordCodecBuilder.create(i -> i.group(
             ItemStack.OPTIONAL_CODEC.optionalFieldOf("lens", ItemStack.EMPTY).forGetter(CameraGear::lens),
-            ItemStack.OPTIONAL_CODEC.optionalFieldOf("storage", ItemStack.EMPTY).forGetter(CameraGear::storage),
-            ItemStack.OPTIONAL_CODEC.optionalFieldOf("battery", ItemStack.EMPTY).forGetter(CameraGear::battery),
-            ItemStack.OPTIONAL_CODEC.optionalFieldOf("flash", ItemStack.EMPTY).forGetter(CameraGear::flash)
+            ItemStack.OPTIONAL_CODEC.optionalFieldOf("storage", ItemStack.EMPTY).forGetter(CameraGear::storage)
     ).apply(i, CameraGear::new));
 
     public static final PacketCodec<RegistryByteBuf, CameraGear> PACKET_CODEC = new PacketCodec<>() {
@@ -48,36 +42,26 @@ public record CameraGear(ItemStack lens, ItemStack storage, ItemStack battery, I
         public CameraGear decode(RegistryByteBuf buf) {
             ItemStack lens = ItemStack.OPTIONAL_PACKET_CODEC.decode(buf);
             ItemStack storage = ItemStack.OPTIONAL_PACKET_CODEC.decode(buf);
-            ItemStack battery = ItemStack.OPTIONAL_PACKET_CODEC.decode(buf);
-            ItemStack flash = ItemStack.OPTIONAL_PACKET_CODEC.decode(buf);
-            return new CameraGear(lens, storage, battery, flash);
+            return new CameraGear(lens, storage);
         }
 
         @Override
         public void encode(RegistryByteBuf buf, CameraGear v) {
             ItemStack.OPTIONAL_PACKET_CODEC.encode(buf, v.lens);
             ItemStack.OPTIONAL_PACKET_CODEC.encode(buf, v.storage);
-            ItemStack.OPTIONAL_PACKET_CODEC.encode(buf, v.battery);
-            ItemStack.OPTIONAL_PACKET_CODEC.encode(buf, v.flash);
         }
     };
 
-    public boolean hasBattery() { return !battery.isEmpty(); }
-    public boolean hasFlash()   { return !flash.isEmpty(); }
     public boolean hasLens()    { return !lens.isEmpty(); }
     public boolean hasStorage() { return !storage.isEmpty(); }
 
-    public CameraGear withBattery(ItemStack stack) { return new CameraGear(lens, storage, stack, flash); }
-    public CameraGear withFlash(ItemStack stack)   { return new CameraGear(lens, storage, battery, stack); }
-    public CameraGear withLens(ItemStack stack)    { return new CameraGear(stack, storage, battery, flash); }
-    public CameraGear withStorage(ItemStack stack) { return new CameraGear(lens, stack, battery, flash); }
+    public CameraGear withLens(ItemStack stack)    { return new CameraGear(stack, storage); }
+    public CameraGear withStorage(ItemStack stack) { return new CameraGear(lens, stack); }
 
     public ItemStack get(int slot) {
         return switch (slot) {
             case SLOT_LENS -> lens;
             case SLOT_STORAGE -> storage;
-            case SLOT_BATTERY -> battery;
-            case SLOT_FLASH -> flash;
             default -> ItemStack.EMPTY;
         };
     }
@@ -86,8 +70,6 @@ public record CameraGear(ItemStack lens, ItemStack storage, ItemStack battery, I
         return switch (slot) {
             case SLOT_LENS -> withLens(stack);
             case SLOT_STORAGE -> withStorage(stack);
-            case SLOT_BATTERY -> withBattery(stack);
-            case SLOT_FLASH -> withFlash(stack);
             default -> this;
         };
     }
@@ -97,8 +79,6 @@ public record CameraGear(ItemStack lens, ItemStack storage, ItemStack battery, I
         return switch (slot) {
             case SLOT_LENS -> stack.getItem() instanceof LensItem;
             case SLOT_STORAGE -> stack.getItem() instanceof SdCardItem || stack.getItem() instanceof FilmRollItem;
-            case SLOT_BATTERY -> stack.getItem() instanceof dev.hitom.photographica.item.BatteryItem;
-            case SLOT_FLASH -> stack.getItem() instanceof dev.hitom.photographica.item.FlashItem;
             default -> false;
         };
     }

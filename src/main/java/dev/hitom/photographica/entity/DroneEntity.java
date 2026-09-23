@@ -139,32 +139,12 @@ public class DroneEntity extends Entity {
         return flying;
     }
 
-    /**
-     * Spends one tick of flight charge. Returns false when the cell is missing or flat, which
-     * {@link #tick()} turns into an uncontrolled descent — a drone whose battery dies does not
-     * hover politely waiting for a replacement.
-     */
-    private boolean drainFlightPower() {
+    /** Grounds the drone gently once a pilot's position updates stop arriving — no one is flying
+     *  it any more, which is not the same as losing signal mid-flight (see {@link #falling}). */
+    private void checkFlightSignal() {
         if (++ticksSinceSync > FLYING_TIMEOUT_TICKS) {
             flying = false;
-            return true; // nobody flying it; not a power failure, just idle
         }
-        // Off until batteries can be recharged — see CameraPower#POWER_ENFORCED. Grounding
-        // drones on a flat cell with no way to refill it would just make them disposable.
-        if (!dev.hitom.photographica.component.CameraPower.POWER_ENFORCED) return true;
-        ItemStack camera = getEquippedCamera();
-        if (!dev.hitom.photographica.component.CameraPower.hasBattery(camera)) return false;
-        dev.hitom.photographica.component.CameraGear gear =
-                dev.hitom.photographica.component.CameraPower.gearOf(camera);
-        ItemStack battery = gear.battery().copy();
-        if (!dev.hitom.photographica.item.BatteryItem.drain(battery,
-                dev.hitom.photographica.item.BatteryItem.DRONE_COST_PER_TICK)) {
-            return false;
-        }
-        ItemStack updated = camera.copy();
-        updated.set(dev.hitom.photographica.component.ModDataComponents.CAMERA_GEAR, gear.withBattery(battery));
-        setEquippedCamera(updated);
-        return true;
     }
 
     /** A position-sync packet arriving (see {@code UpdateDronePositionPayload}) means a pilot
@@ -183,14 +163,7 @@ public class DroneEntity extends Entity {
     public void tick() {
         super.tick();
         if (!isClientSide() && flying && !falling) {
-            // Flight is the expensive load, and it's charged per tick rather than per takeoff
-            // so hovering costs the same as moving — a hovering quadcopter is still holding
-            // itself up. Runs before the falling branch below because running out mid-air has
-            // to hand off to exactly the same uncontrolled descent a lost signal produces.
-            if (!drainFlightPower()) {
-                flying = false;
-                startFalling(net.minecraft.util.math.Vec3d.ZERO);
-            }
+            checkFlightSignal();
         }
         if (!falling || isClientSide()) return;
 

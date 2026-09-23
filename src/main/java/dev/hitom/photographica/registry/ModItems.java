@@ -3,10 +3,8 @@ package dev.hitom.photographica.registry;
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.component.FilmKind;
 import dev.hitom.photographica.component.LensKind;
-import dev.hitom.photographica.item.BatteryItem;
 import dev.hitom.photographica.item.CameraItem;
 import dev.hitom.photographica.item.DeveloperTankItem;
-import dev.hitom.photographica.item.FlashItem;
 import dev.hitom.photographica.item.DevelopedFilmItem;
 import dev.hitom.photographica.item.DroneItem;
 import dev.hitom.photographica.item.DroneRemoteItem;
@@ -51,17 +49,6 @@ public final class ModItems {
 	public static final Item LENS_ZOOM_70_200    = reg("lens_zoom_70_200mm",   s -> new LensItem(s, LensKind.ZOOM_70_200));
 	public static final Item LENS_MACRO_100      = reg("lens_macro_100mm",     s -> new LensItem(s, LensKind.MACRO_100));
 
-	// Batteries — tiered the way vanilla tiers tools: identical to use, differing only in how
-	// long they last. Capacities are in charge units; one photo costs 1, one tick of drone
-	// flight costs 1 (see BatteryItem), so 1200 is a minute of flight or 1200 shots.
-	public static final Item BATTERY_STANDARD    = reg("battery_standard",     s -> new BatteryItem(s, 1200));
-	public static final Item BATTERY_EXTENDED    = reg("battery_extended",     s -> new BatteryItem(s, 4800));
-	public static final Item BATTERY_PRO         = reg("battery_pro",          s -> new BatteryItem(s, 14400));
-
-	// Flashes — rated by reach rather than raw brightness, so the upgrade path is "how far can
-	// I light" instead of "how bright is the picture". Bigger units cost more per firing.
-	public static final Item FLASH_COMPACT       = reg("flash_compact",        s -> new FlashItem(s, 8, 10));
-	public static final Item FLASH_SPEEDLIGHT    = reg("flash_speedlight",     s -> new FlashItem(s, 20, 25));
 	public static final Item PHOTO               = reg("photo",                s -> new PhotoItem(s));
 	// Film rolls — one item per emulsion type
 	public static final Item FILM_ROLL_COLOR     = reg("film_roll_color",      s -> new FilmRollItem(s, FilmKind.COLOR_400));
@@ -142,11 +129,6 @@ public final class ModItems {
 			entries.add(LENS_PRIME_14);
 			entries.add(LENS_ZOOM_70_200);
 			entries.add(LENS_MACRO_100);
-			entries.add(BATTERY_STANDARD);
-			entries.add(BATTERY_EXTENDED);
-			entries.add(BATTERY_PRO);
-			entries.add(FLASH_COMPACT);
-			entries.add(FLASH_SPEEDLIGHT);
 			entries.add(ALBUM);
 			entries.add(FilmRollItem.stackOf(FILM_ROLL_COLOR,     FilmKind.COLOR_400));
 			entries.add(FilmRollItem.stackOf(FILM_ROLL_COLOR_100, FilmKind.COLOR_100));

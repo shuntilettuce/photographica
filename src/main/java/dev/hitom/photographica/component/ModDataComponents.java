@@ -65,24 +65,14 @@ public final class ModDataComponents {
 					.build()
 	);
 
-	/** Battery and flash installed in a camera body — see {@link CameraGear}. */
+	/** Lens and storage (SD card or film roll) installed in a camera body — see
+	 *  {@link CameraGear}. */
 	public static final ComponentType<CameraGear> CAMERA_GEAR = Registry.register(
 			Registries.DATA_COMPONENT_TYPE,
 			Identifier.of(Photographica.MOD_ID, "camera_gear"),
 			ComponentType.<CameraGear>builder()
 					.codec(CameraGear.CODEC)
 					.packetCodec(CameraGear.PACKET_CODEC)
-					.build()
-	);
-
-	/** Remaining charge of a {@code BatteryItem} stack. Absent means "never used yet", which
-	 *  {@code BatteryItem#getCharge} reads as a full cell rather than an empty one. */
-	public static final ComponentType<Integer> BATTERY_CHARGE = Registry.register(
-			Registries.DATA_COMPONENT_TYPE,
-			Identifier.of(Photographica.MOD_ID, "battery_charge"),
-			ComponentType.<Integer>builder()
-					.codec(com.mojang.serialization.Codec.INT)
-					.packetCodec(net.minecraft.network.codec.PacketCodecs.INTEGER)
 					.build()
 	);
 
