@@ -8,13 +8,13 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * AvatarRenderer overrides submitNameTag, bypassing the EntityRenderer mixin.
+ * AvatarRenderer overrides submitNameDisplay, bypassing the EntityRenderer mixin.
  */
 @Mixin(AvatarRenderer.class)
 public abstract class AvatarRendererMixin {
 
     @Inject(
-            method = "submitNameTag",
+            method = "submitNameDisplay",
             at = @At("HEAD"),
             cancellable = true,
             require = 0
