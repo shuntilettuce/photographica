@@ -3,3 +3,6 @@ __pycache__/
 
 # Mapping downloads for tools/verify_mixins.py and tools/fetch_mappings.py
 tools/cache/
+
+# Staging for tools/repair_cloudmixin.py
+tools/.repair-*/
