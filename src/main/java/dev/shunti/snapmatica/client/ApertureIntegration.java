@@ -81,7 +81,14 @@ public final class ApertureIntegration {
     private ApertureIntegration() {}
 
     /** Ceiling, so a burst costs a bounded number of frames however it is configured. */
-    public static final int MAX_SAMPLES = 256;
+    /**
+     * Ceiling, so a burst costs a bounded number of frames however it is configured.
+     *
+     * <p>128, not 256: side by side the pictures stop improving somewhere around 32 samples,
+     * because the gather already fills the gap between neighbouring pupil points, and every
+     * sample past that is only a frame of waiting.
+     */
+    public static final int MAX_SAMPLES = 128;
     /**
      * Rendered frames to let the scene settle at each pupil position before reading it back.
      *
@@ -105,7 +112,16 @@ public final class ApertureIntegration {
     /** Ceiling on rendered frames for one photograph — about five seconds at 60 fps. */
     private static final int MAX_BURST_FRAMES = 320;
 
-    private static final int SETTLE_FRAMES_PLAIN    = 1;
+    /**
+     * Frames to hold each pupil position before reading it. Zero now.
+     *
+     * <p>It was one, as insurance for a shader pack's temporal history, and it doubled every
+     * burst: measured, 64 samples consumed 133 frames of which 64 were this wait. The history
+     * does not need it any more. The spiral steps the viewpoint a few millimetres at a time,
+     * which a pack reprojects exactly as it reprojects the player walking, and the one frame
+     * that is discontinuous -- the first -- keeps its warm-up.
+     */
+    private static final int SETTLE_FRAMES_PLAIN    = 0;
     /**
      * Frames to hold the FIRST pupil position before any sample is taken.
      *
@@ -313,6 +329,47 @@ public final class ApertureIntegration {
     private static volatile File   debugDir = null;
     private static volatile StringBuilder debugLog = null;
 
+    /**
+     * Where the burst's seconds go, so the answer to "why does the shutter take a second"
+     * is measured rather than guessed.
+     *
+     * <p>Three places can own the time and they call for three different fixes: the FRAMES
+     * (the renderer drawing the scene again from each pupil point, plus the settle frame
+     * each sample waits out), the READBACK (the finished frame coming back from the GPU as
+     * a NativeImage), and the SUM (decoding each frame to linear light and adding it, which
+     * is a per-pixel loop in Java on the render thread). Only the first is inherent to
+     * integrating the aperture; the other two are bookkeeping that could move to the GPU.
+     */
+    /** This burst sums on the GPU ({@link BurstAccumulator}); false = the CPU readback path. */
+    private static volatile boolean gpuSum = false;
+    /** The gain the sample now being folded in was matched at. */
+    private static volatile double lastGain = 1.0;
+
+    /**
+     * The same metering the CPU path does in {@link #accumulate}, for a sample whose mean the
+     * GPU measured: match it to the first sample's exposure, or reject it as a frame that
+     * went wrong.
+     */
+    private static final BurstAccumulator.Sink GPU_SINK = new BurstAccumulator.Sink() {
+        @Override public boolean accept(double mean) {
+            received++;
+            if (!active) return false;
+            if (refMean <= 0.0) refMean = mean;
+            double g = (mean > 1e-6) ? refMean / mean : 1.0;
+            if (g < 0.4 || g > 2.5) { rejected++; return false; }
+            lastGain = g;
+            kept++;
+            return true;
+        }
+        @Override public double gain() { return lastGain; }
+    };
+
+    private static volatile int  frameCount = 0;      // rendered frames this burst has consumed
+    private static volatile int  settleCount = 0;     // of those, spent waiting for a pupil position
+    private static volatile int  warmupCount = 0;     // of those, spent before the first sample
+    private static volatile long readbackNanos = 0L;  // inside takeScreenshot
+    private static volatile long sumNanos = 0L;       // inside accumulate's per-pixel work
+
     private static volatile double  refMean = 0.0;   // exposure the first sub-frame metered at
     private static volatile int     kept = 0, rejected = 0;
     private static volatile int     accW = 0, accH = 0;
@@ -484,6 +541,19 @@ public final class ApertureIntegration {
         sumR = null; sumG = null; sumB = null;
         accW = 0; accH = 0;
         refMean = 0.0; kept = 0; rejected = 0;
+        frameCount = 0; settleCount = 0; warmupCount = 0;
+        readbackNanos = 0L; sumNanos = 0L;
+        // The GPU sum, unless the per-sample dump is on: that needs each frame on the CPU as
+        // an image anyway, so it keeps the path that already has one.
+        lastGain = 1.0;
+        gpuSum = false;
+        if (!SnapmaticaClient.apertureDebugSamples && mcNow != null) {
+            int fw = mcNow.getMainRenderTarget().width, fh = mcNow.getMainRenderTarget().height;
+            if (BurstAccumulator.ensureReady(fw, fh)) {
+                BurstAccumulator.begin(fw, fh);
+                gpuSum = true;
+            }
+        }
         debugDir = null; debugLog = null;
         if (SnapmaticaClient.apertureDebugSamples) {
             File d = new File(MediaLibrary.photoDir(),
@@ -542,17 +612,29 @@ public final class ApertureIntegration {
         // per frame unthrottled would leave a queue of full-resolution NativeImages alive at
         // once — sixty-four of them at 1080p is half a gigabyte, for no gain: the burst is
         // paced by rendered frames either way.
+        // Every frame from here on is one the burst spent: the ones it photographs and the
+        // ones it waits through. Counted where they are consumed rather than derived from
+        // wall-clock time, which would also be counting whatever else the machine was doing.
+        frameCount++;
         // Let the renderer's accumulated buffers converge once, before the first sample.
-        if (warmup > 0) { warmup--; return; }
-        boolean inFlight = (issued - received) >= 1;
+        if (warmup > 0) { warmup--; warmupCount++; return; }
+        // The CPU path keeps one readback in flight at a time; the GPU path stages its own
+        // two samples and never waits on a readback, so it takes one every frame.
+        boolean inFlight = !gpuSum && (issued - received) >= 1;
         // Let the pack's temporal history rebuild at this pupil position first.
-        if (issued < total && !inFlight && settle > 0) { settle--; return; }
+        if (issued < total && !inFlight && settle > 0) { settle--; settleCount++; return; }
         if (issued < total && !inFlight && now >= nextMs) {
-            try {
-                accumulate(Screenshot.takeScreenshot(mc.getMainRenderTarget()));
-            } catch (Exception e) {
-                System.err.println("[Snapmatica] Aperture sample failed: " + e.getMessage());
-                received++;
+            if (gpuSum) {
+                long t0 = System.nanoTime();
+                BurstAccumulator.submit(mc, GPU_SINK);
+                sumNanos += System.nanoTime() - t0;
+            } else {
+                try {
+                    accumulate(Screenshot.takeScreenshot(mc.getMainRenderTarget()));
+                } catch (Exception e) {
+                    System.err.println("[Snapmatica] Aperture sample failed: " + e.getMessage());
+                    received++;
+                }
             }
             debugOffX = offX; debugOffY = offY;
             issued++;
@@ -565,6 +647,13 @@ public final class ApertureIntegration {
             setPupil(issued, total);
         }
 
+        // The last samples are still staged, waiting for their means. Every frame has been
+        // taken, so there is nothing left to overlap with: fold them in now.
+        if (gpuSum && issued >= total && BurstAccumulator.hasPending()) {
+            long t0 = System.nanoTime();
+            BurstAccumulator.flush(GPU_SINK);
+            sumNanos += System.nanoTime() - t0;
+        }
         boolean done      = received >= total;
         boolean timedOut  = now - startMs > TIMEOUT_MS;
         if (done || timedOut) {
@@ -686,6 +775,7 @@ public final class ApertureIntegration {
     /** Folds one rendered sub-frame into the running linear-light sum, and closes it. */
     private static void accumulate(NativeImage frame) {
         if (frame == null) { received++; return; }
+        final long tSum = System.nanoTime();
         try {
             if (!active) return;
             int w = frame.getWidth(), h = frame.getHeight();
@@ -756,6 +846,7 @@ public final class ApertureIntegration {
             }
             kept++;
         } finally {
+            sumNanos += System.nanoTime() - tSum;
             received++;
             frame.close();
         }
@@ -770,9 +861,19 @@ public final class ApertureIntegration {
      * on each of two hundred partial ones and averaging the results is a different function.
      */
     private static void finish(Minecraft mc) {
+        // The GPU sum comes off the card here, once, before anything below reads the planes.
+        if (gpuSum && kept > 0) {
+            long t0 = System.nanoTime();
+            float[][] s = BurstAccumulator.readSum();
+            readbackNanos += System.nanoTime() - t0;
+            sumR = s[0]; sumG = s[1]; sumB = s[2];
+            accW = BurstAccumulator.width(); accH = BurstAccumulator.height();
+        }
         int w = accW, h = accH, n = Math.max(kept, 0);
         int tot = total;
         int rej = rejected;
+        int frames = frameCount, settles = settleCount, warmups = warmupCount;
+        long readNanos = readbackNanos, sumMillis = sumNanos;
         File dbgDir = debugDir;
         StringBuilder dbgLog = debugLog;
         long started = startMs;
@@ -793,9 +894,21 @@ public final class ApertureIntegration {
                 System.err.println("[Snapmatica] burst index failed: " + e.getMessage());
             }
         }
+        long totalMs = System.currentTimeMillis() - started;
+        long readMs = readNanos / 1_000_000L;
+        long sumMs  = sumMillis / 1_000_000L;
         System.out.println(String.format(
                 "[Snapmatica] aperture burst done: %d kept + %d rejected of %d in %d ms, %dx%d",
-                n, rej, tot, System.currentTimeMillis() - started, w, h));
+                n, rej, tot, totalMs, w, h));
+        // The breakdown, per burst and per sample, so a change can be judged against it.
+        System.out.println(String.format(
+                "[Snapmatica] burst time (" + (gpuSum ? "GPU" : "CPU") + " sum): %d frames (%d settle, %d warm-up) | readback %d ms"
+                + " (%.1f ms/sample) | sum %d ms (%.1f ms/sample) | the rest, %d ms, is the"
+                + " renderer drawing those frames (%.1f ms/frame)",
+                frames, settles, warmups, readMs, readMs / (double) Math.max(1, n),
+                sumMs, sumMs / (double) Math.max(1, n),
+                Math.max(0L, totalMs - readMs - sumMs),
+                Math.max(0L, totalMs - readMs - sumMs) / (double) Math.max(1, frames)));
 
         // A DNG is meant to reach the developer before any of this; the same reasoning that
         // makes PhotoCapture skip the shader's sensor pass for a raw capture applies here.
