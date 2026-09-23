@@ -25,7 +25,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  * the game changes behaviour, and the clouds resume from wherever the world left them the moment
  * the shutter closes.
  */
-//? if >=1.21.10 {
+//? if >=1.21.11 {
 @Mixin(net.minecraft.client.render.CloudRenderer.class)
 public class CloudTimeMixin {
     @ModifyVariable(method = "renderClouds", at = @At("HEAD"), argsOnly = true, ordinal = 0)
@@ -37,7 +37,18 @@ public class CloudTimeMixin {
 //?} else {
 /*@Mixin(net.minecraft.client.render.WorldRenderer.class)
 public class CloudTimeMixin {
-    // Vanilla's cloud animation is not reachable as a single argument below 1.21.10, so a burst
+    // Vanilla's cloud animation is not reachable as a single argument below 1.21.11, so a burst
     // there still sees the sky drift. Documented rather than approximated.
+    //
+    // The boundary is 1.21.11, not 1.21.10, and getting that wrong CRASHED 1.21.10 on startup.
+    // CloudRenderer exists in 1.21.10, which is what the first reading of this checked, but the
+    // tick count is not one of its arguments there:
+    //
+    //   1.21.10  renderClouds(I, CloudRenderMode, F, Vec3d,    F)V
+    //   1.21.11  renderClouds(I, CloudRenderMode, F, Vec3d, J, F)V
+    //
+    // so @ModifyVariable(argsOnly = true) on a long found no target, and defaultRequire = 1
+    // turned that into a hard failure before the title screen. A class existing is not the same
+    // as the argument existing.
 }
 *///?}
