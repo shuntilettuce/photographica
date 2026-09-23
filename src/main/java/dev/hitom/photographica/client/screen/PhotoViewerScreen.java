@@ -11,7 +11,7 @@ import net.minecraft.util.Identifier;
 
 /**
  * Displays a captured photo, via {@link PhotoTextureCache} — which transparently fetches the
- * PNG from the server if this client doesn't have it locally (e.g. someone else's photo), so
+ * photo from the server if this client doesn't have it locally (e.g. someone else's photo), so
  * this screen just polls {@code getOrLoad} every frame until it resolves rather than loading
  * once in {@code init()}.
  */

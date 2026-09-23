@@ -1,5 +1,6 @@
 package dev.hitom.photographica.client.screen;
 
+import dev.hitom.photographica.client.render.PhotoTextureCache;
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.client.ClipboardUtil;
 import dev.hitom.photographica.component.ModDataComponents;

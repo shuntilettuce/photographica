@@ -1,5 +1,6 @@
 package dev.hitom.photographica.client.screen;
 
+import dev.hitom.photographica.client.render.PhotoTextureCache;
 import dev.hitom.photographica.Photographica;
 import dev.hitom.photographica.client.ClipboardUtil;
 import dev.hitom.photographica.component.PhotoData;
@@ -80,7 +81,7 @@ public class PhotoViewerScreen extends Screen {
         File dir = new File(mc.gameDirectory, "photographica/photos");
         File file = PhotoData.findPhotoFile(dir, id);
         if (file == null) {
-            Photographica.LOGGER.warn("Photo PNG not found for {}", id);
+            Photographica.LOGGER.warn("Photo file not found for {}", id);
             missing = true;
             return;
         }

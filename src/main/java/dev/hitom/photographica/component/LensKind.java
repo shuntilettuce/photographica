@@ -41,22 +41,6 @@ public final class LensKind {
 	private static final float SOFTEN_EXAGGERATION = 1.4f;
 
 	/**
-	 * How much detail the drone's digital zoom throws away at a given focal length, expressed
-	 * as the size (in destination pixels) of one genuine source pixel.
-	 *
-	 * <p>Both sensors resolve full detail ONLY at their own native focal length; reaching any
-	 * longer focal length means cropping into the sensor and upscaling, so N source pixels have
-	 * to cover N×ratio destination pixels. That upscale is what actually degrades the image —
-	 * it goes SOFT (a real low-resolution upscale), it does not turn into blocks, which is why
-	 * this is reconstructed bilinearly on both the live ({@code digital_zoom.fsh}) and saved
-	 * ({@code PhotoCapture#applyDigitalSoftening}) paths.
-	 *
-	 * <p>Ratios peak at ~2.9× just before each switch (70/24 and 200/70), giving ~4 destination
-	 * pixels per source pixel at the roughest — visibly soft, still clearly an image.
-	 *
-	 * @return destination pixels per source pixel; {@code <= 1} means no degradation at all.
-	 */
-	/**
 	 * Focal length to run DEPTH-OF-FIELD math at, which is not always the focal length the shot
 	 * is actually framed at.
 	 *
@@ -74,6 +58,22 @@ public final class LensKind {
 		return lensType == DRONE_ZOOM ? DRONE_FOCAL_MIN : focalMm;
 	}
 
+	/**
+	 * How much detail the drone's digital zoom throws away at a given focal length, expressed
+	 * as the size (in destination pixels) of one genuine source pixel.
+	 *
+	 * <p>Both sensors resolve full detail ONLY at their own native focal length; reaching any
+	 * longer focal length means cropping into the sensor and upscaling, so N source pixels have
+	 * to cover N×ratio destination pixels. That upscale is what actually degrades the image —
+	 * it goes SOFT (a real low-resolution upscale), it does not turn into blocks, which is why
+	 * this is reconstructed bilinearly on both the live ({@code digital_zoom.fsh}) and saved
+	 * ({@code PhotoCapture#applyDigitalSoftening}) paths.
+	 *
+	 * <p>Ratios peak at ~2.9× just before each switch (70/24 and 200/70), giving ~4 destination
+	 * pixels per source pixel at the roughest — visibly soft, still clearly an image.
+	 *
+	 * @return destination pixels per source pixel; {@code <= 1} means no degradation at all.
+	 */
 	public static float digitalZoomSoftenPx(int focalMm) {
 		int nativeFocal = focalMm < DRONE_FOCAL_OPTICAL_MAX ? DRONE_FOCAL_MIN : DRONE_FOCAL_OPTICAL_MAX;
 		float ratio = focalMm / (float) nativeFocal;
@@ -147,6 +147,20 @@ public final class LensKind {
 			case MACRO_100   -> "100mm マクロ";
 			case DRONE_ZOOM  -> "24/70mm ドローン内蔵";
 			default -> "レンズなし";
+		};
+	}
+
+	/** ASCII lens name for Exif fields, which cannot carry the Japanese display names. */
+	public static String exifName(int lensType) {
+		return switch (lensType) {
+			case PRIME_50MM  -> "50mm Prime";
+			case ZOOM_24_70  -> "24-70mm Zoom";
+			case PRIME_35MM  -> "35mm Prime";
+			case PRIME_85MM  -> "85mm Prime";
+			case PRIME_14MM  -> "14mm Ultra-Wide Prime";
+			case ZOOM_70_200 -> "70-200mm Telephoto Zoom";
+			case MACRO_100   -> "100mm Macro";
+			default -> "";
 		};
 	}
 }

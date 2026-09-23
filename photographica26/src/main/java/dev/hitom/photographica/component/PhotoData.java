@@ -75,20 +75,32 @@ public record PhotoData(
 		return fileBaseName(captureTime, id);
 	}
 
+	/** Extensions a photo may be saved with, in lookup preference order. Photos are written as
+	 *  JPEG now (see {@code PhotoWriter}, which also embeds this same metadata as Exif), but
+	 *  {@code .png} files written by pre-JPEG versions of this mod are still on disk and must
+	 *  keep resolving. */
+	private static final String[] PHOTO_EXTENSIONS = { ".jpg", ".jpeg", ".png" };
+
 	/**
-	 * Locates the PNG for a photo on disk. Matches the new "&lt;date-time&gt;_&lt;uuid&gt;.png"
-	 * by its UUID suffix, then falls back to the legacy "&lt;uuid&gt;.png". Returns null if
-	 * neither exists. Lookup is by the immutable UUID, so it never depends on how the
-	 * timestamp was formatted — the image always resolves.
+	 * Locates a photo on disk. Matches the new "&lt;date-time&gt;_&lt;uuid&gt;.&lt;ext&gt;" by
+	 * its UUID suffix, then falls back to the legacy "&lt;uuid&gt;.&lt;ext&gt;". Returns null if
+	 * none exists. Lookup is by the immutable UUID, so it never depends on how the timestamp
+	 * was formatted — the image always resolves.
 	 */
 	public static File findPhotoFile(File dir, UUID id) {
 		if (dir.isDirectory()) {
-			String suffix = "_" + uuidKey(id) + ".png";
-			File[] matches = dir.listFiles((d, name) -> name.endsWith(suffix));
-			if (matches != null && matches.length > 0) return matches[0];
+			String suffix = "_" + uuidKey(id);
+			for (String ext : PHOTO_EXTENSIONS) {
+				String withExt = suffix + ext;
+				File[] matches = dir.listFiles((d, name) -> name.endsWith(withExt));
+				if (matches != null && matches.length > 0) return matches[0];
+			}
 		}
-		File legacy = new File(dir, id + ".png");
-		return legacy.isFile() ? legacy : null;
+		for (String ext : PHOTO_EXTENSIONS) {
+			File legacy = new File(dir, id + ext);
+			if (legacy.isFile()) return legacy;
+		}
+		return null;
 	}
 
 	/** Human-readable capture date/time (local time), or empty for legacy photos. */

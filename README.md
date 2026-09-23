@@ -39,7 +39,7 @@ Both client and server must have the mod installed for multiplayer.
 - Right-click a developed film roll to preview negatives as inverted thumbnails
 
 ### Digital Workflow
-- Photos saved as PNG files in `.minecraft/photographica/photos/`
+- Photos saved as JPEG files in `.minecraft/photographica/photos/`, with the aperture, shutter speed, ISO, lens, photographer and capture time written into Exif
 - SD card browser with thumbnail preview, metadata display, and per-photo deletion
 - Shader-compatible capture (tested with Iris + Photon)
 

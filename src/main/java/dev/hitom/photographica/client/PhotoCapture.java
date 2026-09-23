@@ -27,10 +27,15 @@ import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.item.ItemStack;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+import net.minecraft.util.math.BlockPos;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.FloatBuffer;
+import java.text.SimpleDateFormat;
+import java.time.OffsetDateTime;
+import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -456,12 +461,16 @@ public final class PhotoCapture {
 		final float[] fLinearDepth = linearDepth;
 		final int fFbW = fbW;
 		final int fFbH = fbH;
+		// Shooting info for the Exif block, captured now rather than read back out of `settings`
+		// later — by the time an async (1.21.11) GPU copy lands the player may have moved, but
+		// the Exif data should describe the moment the shutter actually fired.
+		final PhotoWriter.Shot fShot = buildShot(mc, settings);
 		//? if >=1.21.11 {
 		/*ScreenshotRecorder.takeScreenshot(fb, raw ->
-				processAndSavePhoto(raw, mc, id, settings, fLinearDepth, fFbW, fFbH));
+				processAndSavePhoto(raw, mc, id, settings, fLinearDepth, fFbW, fFbH, fShot));
 		*///?} else {
 		NativeImage raw = ScreenshotRecorder.takeScreenshot(fb);
-		processAndSavePhoto(raw, mc, id, settings, fLinearDepth, fFbW, fFbH);
+		processAndSavePhoto(raw, mc, id, settings, fLinearDepth, fFbW, fFbH, fShot);
 		//?}
 
 		if (captureStandId >= 0 && wasDrone) {
@@ -509,7 +518,7 @@ public final class PhotoCapture {
 	 * where {@code raw} may be null if the GPU read-back produced no image.
 	 */
 	private static void processAndSavePhoto(NativeImage raw, MinecraftClient mc, UUID id,
-			CameraSettings settings, float[] linearDepth, int fbW, int fbH) {
+			CameraSettings settings, float[] linearDepth, int fbW, int fbH, PhotoWriter.Shot shot) {
 		if (raw == null) {
 			Photographica.LOGGER.error("Photo capture failed: framebuffer read-back returned null");
 			return;
@@ -532,13 +541,8 @@ public final class PhotoCapture {
 			}
 			downsampled = boxDownsample(zoomed != null ? zoomed : cropped, 1280);
 			processed = applyPhotographicEffects(downsampled, settings, linearDepth, fbW, fbH, true);
-			File dir = new File(mc.runDirectory, "photographica/photos");
-			if (!dir.exists() && !dir.mkdirs()) {
-				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
-				return;
-			}
-			File outFile = new File(dir, id + ".jpg");
-			writeJpeg(processed, outFile);
+			File outFile = savePhoto(mc, processed, id, shot);
+			if (outFile == null) return;
 			Photographica.LOGGER.info("Photo saved: {} ({}x{})",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
 			ClipboardUtil.copyImageAsync(outFile);
@@ -704,13 +708,8 @@ public final class PhotoCapture {
 		try {
 			// Skip synthetic motion blur — real blur is already baked into the accumulation.
 			processed = applyPhotographicEffects(averaged, settings, depth, depthFbW, depthFbH, false);
-			File dir = new File(mc.runDirectory, "photographica/photos");
-			if (!dir.exists() && !dir.mkdirs()) {
-				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
-				return;
-			}
-			File outFile = new File(dir, id + ".jpg");
-			writeJpeg(processed, outFile);
+			File outFile = savePhoto(mc, processed, id, buildShot(mc, settings));
+			if (outFile == null) return;
 			Photographica.LOGGER.info("Long-exposure photo saved: {} ({}x{}, {} frames accumulated)",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight(), n);
 			ClipboardUtil.copyImageAsync(outFile);
@@ -770,43 +769,6 @@ public final class PhotoCapture {
 	 * drained the flash, and the photo has to reflect the moment the shutter fired.
 	 */
 	private static volatile float pendingFlashPower = 0f;
-
-	/** JPEG quality for saved photos. High enough that the mod's own grain and bokeh survive
-	 *  without visible blocking, low enough to be roughly 5-10x smaller than the PNG this
-	 *  replaced — which matters most for multiplayer, where every photo is chunked over the
-	 *  network to anyone who views it. */
-	private static final int JPEG_QUALITY = 88;
-
-	/**
-	 * Writes {@code img} as a JPEG. {@link NativeImage#writeTo} only speaks PNG, but LWJGL's
-	 * STB bindings (already on the classpath — NativeImage itself decodes through them) include
-	 * a JPEG encoder, so this goes straight to stb rather than through AWT/ImageIO, which would
-	 * drag a second imaging stack onto the render thread.
-	 *
-	 * <p>Pixels are read through {@link #niGet}, which normalises every version to ABGR, so the
-	 * RGB order written here is correct on all of them.
-	 */
-	private static void writeJpeg(NativeImage img, File out) throws IOException {
-		int w = img.getWidth();
-		int h = img.getHeight();
-		java.nio.ByteBuffer buf = org.lwjgl.system.MemoryUtil.memAlloc(w * h * 3);
-		try {
-			for (int y = 0; y < h; y++) {
-				for (int x = 0; x < w; x++) {
-					int c = niGet(img, x, y);
-					buf.put((byte) (c & 0xFF));          // R (low byte — see niGet)
-					buf.put((byte) ((c >> 8) & 0xFF));   // G
-					buf.put((byte) ((c >> 16) & 0xFF));  // B
-				}
-			}
-			buf.flip();
-			if (!org.lwjgl.stb.STBImageWrite.stbi_write_jpg(out.getAbsolutePath(), w, h, 3, buf, JPEG_QUALITY)) {
-				throw new IOException("stbi_write_jpg failed for " + out);
-			}
-		} finally {
-			org.lwjgl.system.MemoryUtil.memFree(buf);
-		}
-	}
 
 	/**
 	 * Clears every in-flight capture so none of it leaks into the next world joined (see
@@ -1748,6 +1710,114 @@ public final class PhotoCapture {
 			}
 		}
 		return result;
+	}
+
+	// ── Saving ─────────────────────────────────────────────────────────────────
+
+	/**
+	 * Packs the image into RGB ints for {@link PhotoWriter}. Alpha is dropped here:
+	 * a photo is always opaque, and the framebuffer readback is not guaranteed to
+	 * hand back a full alpha channel on every version or with every shader pack.
+	 */
+	private static int[] toRgb(NativeImage img) {
+		int w = img.getWidth();
+		int h = img.getHeight();
+		int[] rgb = new int[w * h];
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				// niGet, not getPixelAbgr: this tree's per-version pixel-format helper is named
+				// differently from photographica26's/snapmatica's (same job — normalise every
+				// version's NativeImage accessor to ABGR — different name).
+				int abgr = niGet(img, x, y);
+				int r = abgr & 0xFF;
+				int g = (abgr >>> 8) & 0xFF;
+				int b = (abgr >>> 16) & 0xFF;
+				rgb[y * w + x] = (r << 16) | (g << 8) | b;
+			}
+		}
+		return rgb;
+	}
+
+	/** Collects the shooting information written into the photo's Exif block. */
+	private static PhotoWriter.Shot buildShot(MinecraftClient mc, CameraSettings settings) {
+		// player.getName() (an Entity method), not getGameProfile().getName() — the latter is
+		// stable pre-1.21.11 but GameProfile lost getName() there (record-style accessor rename,
+		// same pattern as NativeImage's getColor -> getColorArgb this same merge ran into), and
+		// this path is already how every other Artist/photographer field in this mod reads it.
+		String artist = mc.player != null ? mc.player.getName().getString() : "";
+		String where = "";
+		if (mc.world != null && mc.player != null) {
+			BlockPos pos = mc.player.getBlockPos();
+			where = mc.world.getRegistryKey().getValue()
+					+ " (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
+		}
+		String lens = LensKind.exifName(settings.lensType());
+		String comment = "Lens: " + (lens.isEmpty() ? "none" : lens)
+				+ " / Film: " + FilmKind.exifName(settings.filmType())
+				+ " / Mode: " + exposureModeName(settings.exposureMode())
+				+ " / Focus: " + focusModeName(settings.focusMode());
+		return new PhotoWriter.Shot(
+				settings.isFilm() ? "Film SLR" : "Mirrorless Digital",
+				lens,
+				PhotoWriter.softwareTag(Photographica.MOD_ID),
+				artist,
+				where,
+				comment,
+				settings.shutterSeconds(),
+				settings.aperture(),
+				settings.iso(),
+				settings.focalLengthMm(),
+				exifExposureProgram(settings.exposureMode()),
+				OffsetDateTime.now());
+	}
+
+	private static int exifExposureProgram(int exposureMode) {
+		return switch (exposureMode) {
+			case CameraSettings.EXP_AV -> PhotoWriter.PROGRAM_APERTURE_PRIORITY;
+			case CameraSettings.EXP_TV -> PhotoWriter.PROGRAM_SHUTTER_PRIORITY;
+			case CameraSettings.EXP_P  -> PhotoWriter.PROGRAM_NORMAL;
+			default -> PhotoWriter.PROGRAM_MANUAL;
+		};
+	}
+
+	private static String exposureModeName(int exposureMode) {
+		return switch (exposureMode) {
+			case CameraSettings.EXP_AV -> "Av";
+			case CameraSettings.EXP_TV -> "Tv";
+			case CameraSettings.EXP_P  -> "P";
+			default -> "M";
+		};
+	}
+
+	private static String focusModeName(int focusMode) {
+		return switch (focusMode) {
+			case CameraSettings.FOCUS_AF  -> "AF";
+			case CameraSettings.FOCUS_MOB -> "MOB";
+			default -> "MF";
+		};
+	}
+
+	/**
+	 * Writes the finished photo to disk. Returns the file written, or null when the
+	 * photo directory could not be created.
+	 *
+	 * <p>Named {@code <id>.jpg} — plain UUID, no timestamp prefix. Unlike snapmatica (where this
+	 * scheme originated, to stop two shots in the same second overwriting each other),
+	 * photographica's UUIDs are already collision-proof, and every OTHER lookup of a saved photo
+	 * — {@link PhotoTextureCache}, the SD gallery, delete-by-id, the server's own copy under the
+	 * world save, chunked upload/download — already expects exactly this filename. Prefixing a
+	 * timestamp here would silently break every one of them.
+	 */
+	private static @Nullable File savePhoto(MinecraftClient mc, NativeImage image,
+	                                        UUID id, PhotoWriter.Shot shot) throws IOException {
+		File dir = new File(mc.runDirectory, "photographica/photos");
+		if (!dir.exists() && !dir.mkdirs()) {
+			Photographica.LOGGER.error("Could not create photo dir: {}", dir);
+			return null;
+		}
+		File outFile = new File(dir, id + PhotoWriter.EXTENSION);
+		PhotoWriter.write(toRgb(image), image.getWidth(), image.getHeight(), outFile, shot);
+		return outFile;
 	}
 
 	/** Box-filter downsample to a max width (preserving aspect). Returns src if already small enough. */

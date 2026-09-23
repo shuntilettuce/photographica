@@ -28,11 +28,14 @@ import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.core.BlockPos;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.FloatBuffer;
 import java.text.SimpleDateFormat;
+import java.time.OffsetDateTime;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
@@ -426,6 +429,9 @@ public final class PhotoCapture {
 		final float[] fLinearDepth = linearDepth;
 		final int fFbW = fbW;
 		final int fFbH = fbH;
+		// Captured now, not in the callback: by the time the GPU copy lands the player
+		// may have moved away from where the shot was composed.
+		final PhotoWriter.Shot fShot = buildShot(mc, settings);
 		Screenshot.takeScreenshot(fb, raw -> {
 			if (raw == null) return;
 			NativeImage cropped = null;
@@ -435,16 +441,8 @@ public final class PhotoCapture {
 				cropped = cropTo3to2(raw);
 				downsampled = boxDownsample(cropped, 1280);
 				processed = applyPhotographicEffects(downsampled, fSettings, fLinearDepth, fFbW, fFbH, true);
-				File dir = new File(mc.gameDirectory, "photographica/photos");
-				if (!dir.exists() && !dir.mkdirs()) {
-					Photographica.LOGGER.error("Could not create photo dir: {}", dir);
-					return;
-				}
-				// File name is the real-world capture date/time so the photos folder is
-				// human-browsable. The viewer reconstructs the same UTC-based name from
-				// PhotoData.captureTime (with a UUID fallback), so the image always resolves.
-				File outFile = new File(dir, PhotoData.fileBaseName(fCaptureTime, fId) + ".png");
-				processed.writeToFile(outFile.toPath());
+				File outFile = savePhoto(mc, processed, fId, fCaptureTime, fShot);
+				if (outFile == null) return;
 				ClipboardUtil.copyImageAsync(outFile);
 				Photographica.LOGGER.info("Photo saved: {} ({}x{})",
 						outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight());
@@ -579,13 +577,8 @@ public final class PhotoCapture {
 		try {
 			// Skip synthetic motion blur — real blur is already baked into the accumulation.
 			processed = applyPhotographicEffects(averaged, settings, depth, depthFbW, depthFbH, false);
-			File dir = new File(mc.gameDirectory, "photographica/photos");
-			if (!dir.exists() && !dir.mkdirs()) {
-				Photographica.LOGGER.error("Could not create photo dir: {}", dir);
-				return;
-			}
-			File outFile = new File(dir, PhotoData.fileBaseName(captureTime, id) + ".png");
-			processed.writeToFile(outFile.toPath());
+			File outFile = savePhoto(mc, processed, id, captureTime, buildShot(mc, settings));
+			if (outFile == null) return;
 			ClipboardUtil.copyImageAsync(outFile);
 			Photographica.LOGGER.info("Long-exposure photo saved: {} ({}x{}, {} frames accumulated)",
 					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight(), n);
@@ -1424,6 +1417,112 @@ public final class PhotoCapture {
 			}
 		}
 		return dst;
+	}
+
+	// ── Saving ────────────────────────────────────────────────────────────────
+
+	/**
+	 * Packs the image into RGB ints for {@link PhotoWriter}. Alpha is dropped here:
+	 * a photo is always opaque, and the framebuffer readback is not guaranteed to
+	 * hand back a full alpha channel on every version or with every shader pack.
+	 */
+	private static int[] toRgb(NativeImage img) {
+		int w = img.getWidth();
+		int h = img.getHeight();
+		int[] rgb = new int[w * h];
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				int abgr = getPixelAbgr(img, x, y);
+				int r = abgr & 0xFF;
+				int g = (abgr >>> 8) & 0xFF;
+				int b = (abgr >>> 16) & 0xFF;
+				rgb[y * w + x] = (r << 16) | (g << 8) | b;
+			}
+		}
+		return rgb;
+	}
+
+	/** Collects the shooting information written into the photo's Exif block. */
+	private static PhotoWriter.Shot buildShot(Minecraft mc, CameraSettings settings) {
+		// player.getName() (an Entity method), not getGameProfile().getName() — matches how
+		// every other Artist/photographer field in this mod already reads the player's name
+		// (see Photographica.java's payload receivers), and GameProfile.getName() may not exist
+		// on every Mojang mapping this tree gets built against.
+		String artist = mc.player != null ? mc.player.getName().getString() : "";
+		String where = "";
+		if (mc.level != null && mc.player != null) {
+			BlockPos pos = mc.player.blockPosition();
+			where = mc.level.dimension().identifier()
+					+ " (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
+		}
+		String lens = LensKind.exifName(settings.lensType());
+		String comment = "Lens: " + (lens.isEmpty() ? "none" : lens)
+				+ " / Film: " + FilmKind.exifName(settings.filmType())
+				+ " / Mode: " + exposureModeName(settings.exposureMode())
+				+ " / Focus: " + focusModeName(settings.focusMode());
+		return new PhotoWriter.Shot(
+				settings.isFilm() ? "Film SLR" : "Mirrorless Digital",
+				lens,
+				PhotoWriter.softwareTag(Photographica.MOD_ID),
+				artist,
+				where,
+				comment,
+				settings.shutterSeconds(),
+				settings.aperture(),
+				settings.iso(),
+				settings.focalLengthMm(),
+				exifExposureProgram(settings.exposureMode()),
+				OffsetDateTime.now());
+	}
+
+	private static int exifExposureProgram(int exposureMode) {
+		return switch (exposureMode) {
+			case CameraSettings.EXP_AV -> PhotoWriter.PROGRAM_APERTURE_PRIORITY;
+			case CameraSettings.EXP_TV -> PhotoWriter.PROGRAM_SHUTTER_PRIORITY;
+			case CameraSettings.EXP_P  -> PhotoWriter.PROGRAM_NORMAL;
+			default -> PhotoWriter.PROGRAM_MANUAL;
+		};
+	}
+
+	private static String exposureModeName(int exposureMode) {
+		return switch (exposureMode) {
+			case CameraSettings.EXP_AV -> "Av";
+			case CameraSettings.EXP_TV -> "Tv";
+			case CameraSettings.EXP_P  -> "P";
+			default -> "M";
+		};
+	}
+
+	private static String focusModeName(int focusMode) {
+		return switch (focusMode) {
+			case CameraSettings.FOCUS_AF  -> "AF";
+			case CameraSettings.FOCUS_MOB -> "MOB";
+			default -> "MF";
+		};
+	}
+
+	/**
+	 * Writes the finished photo to disk. Returns the file written, or null when the
+	 * photo directory could not be created.
+	 *
+	 * <p>Named via {@link PhotoData#fileBaseName} — the same real-world-date-time-plus-UUID
+	 * scheme every other lookup/display in this tree already expects ({@link PhotoData}'s own
+	 * doc, {@code findPhotoFile}, {@code captureDateTimeDisplay}) — rather than a second,
+	 * independent timestamp format. {@code captureTime} is the same value already sent to the
+	 * server alongside this shot (see the {@code CreatePhotoPayload}/{@code TakeFilmPhotoPayload}
+	 * calls at each call site), so the on-disk name and {@link PhotoData#captureTime()} always
+	 * agree, even though the file itself is written slightly later (JPEG encode + Exif build).
+	 */
+	private static @Nullable File savePhoto(Minecraft mc, NativeImage image,
+	                                        UUID id, long captureTime, PhotoWriter.Shot shot) throws IOException {
+		File dir = new File(mc.gameDirectory, "photographica/photos");
+		if (!dir.exists() && !dir.mkdirs()) {
+			Photographica.LOGGER.error("Could not create photo dir: {}", dir);
+			return null;
+		}
+		File outFile = new File(dir, PhotoData.fileBaseName(captureTime, id) + PhotoWriter.EXTENSION);
+		PhotoWriter.write(toRgb(image), image.getWidth(), image.getHeight(), outFile, shot);
+		return outFile;
 	}
 
 	// NativeImage.getPixel() returns ARGB; convert to ABGR for internal use.

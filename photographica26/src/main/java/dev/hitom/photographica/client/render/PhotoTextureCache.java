@@ -22,7 +22,7 @@ import java.util.UUID;
 
 /**
  * Client-side cache mapping photo UUIDs to registered GPU texture identifiers.
- * Photos are loaded from <gameDir>/photographica/photos/<uuid>.png on first use
+ * Photos are loaded from <gameDir>/photographica/photos/<datetime>_<uuid>.jpg on first use
  * and registered with Minecraft's TextureManager for fast re-use.
  */
 @Environment(EnvType.CLIENT)

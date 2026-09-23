@@ -23,7 +23,7 @@ import java.util.UUID;
 
 /**
  * Client-side cache mapping photo UUIDs to registered GPU texture identifiers.
- * Photos are loaded from <gameDir>/photographica/photos/<uuid>.png on first use
+ * Photos are loaded from <gameDir>/photographica/photos/<datetime>_<uuid>.jpg on first use
  * and registered with Minecraft's TextureManager for fast re-use.
  *
  * <p>A UUID whose PNG isn't on disk yet — always true for a photo someone ELSE took, until
@@ -59,9 +59,16 @@ public final class PhotoTextureCache {
         return fetching.contains(photoId);
     }
 
+    private static File photosDir() {
+        return new File(MinecraftClient.getInstance().runDirectory, "photographica/photos");
+    }
+
+    /** Where a freshly downloaded photo gets written — always the current {@code .jpg}
+     *  filename. Looking one up that might already be on disk goes through
+     *  {@link #findPhotoFile}, which also accepts the older {@code .png} files pre-JPEG
+     *  versions of this mod wrote. */
     private static File localFile(UUID photoId) {
-        return new File(MinecraftClient.getInstance().runDirectory,
-                "photographica/photos/" + photoId + ".jpg");
+        return new File(photosDir(), photoId + ".jpg");
     }
 
     public static @Nullable Identifier getOrLoad(UUID photoId) {
@@ -69,8 +76,8 @@ public final class PhotoTextureCache {
         Identifier cached = loaded.get(photoId);
         if (cached != null) return cached;
 
-        File file = localFile(photoId);
-        if (!file.exists()) {
+        File file = findPhotoFile(photosDir(), photoId);
+        if (file == null) {
             if (fetching.add(photoId)) {
                 ClientPlayNetworking.send(new RequestPhotoPayload(photoId));
             }
@@ -116,6 +123,35 @@ public final class PhotoTextureCache {
     public static void onNotFound(UUID photoId) {
         fetching.remove(photoId);
         failed.add(photoId);
+    }
+
+    /** Extensions a photo may carry. Photographica always writes {@code <uuid>.jpg} now (see
+     *  {@code PhotoCapture#savePhoto}), but {@code .png} files written by pre-JPEG versions of
+     *  this mod are still sitting on players' disks and must keep loading. */
+    private static final String[] PHOTO_EXTENSIONS = { ".jpg", ".jpeg", ".png" };
+
+    /**
+     * Resolves a photo's UUID to whatever file for it actually exists on disk, or null.
+     *
+     * <p>Checks the exact {@code <uuid>.<ext>} path first — the only form photographica itself
+     * has ever written, so this is a plain file-exists check, not a directory scan, for every
+     * lookup that matters. The {@code <datetime>_<uuid>.<ext>} form below it is a naming scheme
+     * from snapmatica (ported here for shared-code reasons); photographica has never written
+     * it, so that branch is a fallback that in practice never fires, not the common case.
+     */
+    public static @Nullable File findPhotoFile(File dir, UUID photoId) {
+        if (!dir.isDirectory()) return null;
+        for (String ext : PHOTO_EXTENSIONS) {
+            File exact = new File(dir, photoId + ext);
+            if (exact.exists()) return exact;
+        }
+        String bare = photoId.toString().replace("-", "");
+        for (String ext : PHOTO_EXTENSIONS) {
+            String suffix = "_" + bare + ext;
+            File[] matches = dir.listFiles((d, name) -> name.endsWith(suffix));
+            if (matches != null && matches.length > 0) return matches[0];
+        }
+        return null;
     }
 
     /** Call when leaving a world so stale textures from a previous session are discarded. */
