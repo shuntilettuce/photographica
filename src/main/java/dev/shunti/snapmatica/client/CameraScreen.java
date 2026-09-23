@@ -483,7 +483,7 @@ public class CameraScreen extends Screen {
      * 1/sqrt(N) — halving the gap between ghosts costs four times the frames, and offering
      * intermediate stops would suggest a finer control than the eye actually gets.
      */
-    private static final int[] APERTURE_SAMPLES = { 8, 16, 32, 64, 128, 256 };
+    private static final int[] APERTURE_SAMPLES = { 8, 16, 32, 64, 128 };
 
     private static String fmtScale(float mm) {
         if (mm >= 1000f) return String.format("1blk = %.1fm", mm / 1000f);
