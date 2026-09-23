@@ -64,7 +64,9 @@ public class CameraScreen extends Screen {
 	protected void init() {
 		int cx = width / 2;
 		int overhead = (armorStandEntityId >= 0) ? 82 : 58;
-		int totalRows = 11 + 1 + (PhotoCapture.dynamicRangeSim ? 1 : 0); // +1 DR toggle, +1 more for its stops row
+		boolean hasLensForRows = LensKind.hasLens(settings.lensType());
+		int totalRows = 11 + 1 + (PhotoCapture.dynamicRangeSim ? 1 : 0) // +1 DR toggle, +1 more for its stops row
+				+ (hasLensForRows ? 1 + (PhotoCapture.apertureIntegration ? 1 : 0) : 0); // aperture integration toggle + its sample-count row
 		rowH = Math.min(22, Math.max(20, (height - overhead - 8) / totalRows));
 		panelH = totalRows * rowH + overhead;
 		panelPy = Math.max(4, (height - panelH) / 2);
@@ -193,6 +195,26 @@ public class CameraScreen extends Screen {
 					step -> PhotoCapture.dynamicRangeStops =
 							Math.max(3.0f, Math.min(16.0f, PhotoCapture.dynamicRangeStops + step)),
 					true);
+		}
+
+		// Aperture integration — true optical depth of field by summing several renders of the
+		// shot from different points on the lens's entrance pupil, instead of the always-on
+		// reconstruction blur (applyDepthOfField). Off by default: a burst costs dozens of
+		// rendered frames per shutter press, real wall-clock time the reconstruction doesn't.
+		// Needs a lens for the same reason the focal-length row does — there is no pupil without
+		// one.
+		if (hasLensForRows) {
+			addClientRow(cx, topRow + row++ * rowH, "絞り積分",
+					() -> PhotoCapture.apertureIntegration ? "§aON" : "§cOFF",
+					step -> PhotoCapture.apertureIntegration = !PhotoCapture.apertureIntegration,
+					true);
+			if (PhotoCapture.apertureIntegration) {
+				addClientRow(cx, topRow + row++ * rowH, "サンプル数",
+						() -> PhotoCapture.apertureSamples + "枚",
+						step -> PhotoCapture.apertureSamples =
+								Math.max(8, Math.min(64, PhotoCapture.apertureSamples + step * 4)),
+						true);
+			}
 		}
 
 		int btnY = topRow + totalRows * rowH + 14;

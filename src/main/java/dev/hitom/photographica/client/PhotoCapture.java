@@ -195,8 +195,57 @@ public final class PhotoCapture {
 	private static volatile int accumDepthFbH = 0;
 	private static final int ACCUM_MAX_SAMPLES = 120;
 
+	// Aperture integration: true optical depth of field by rendering the shot several times
+	// from different points on the lens's entrance pupil and summing in linear light, instead
+	// of reconstructing blur from one pinhole image (see applyDepthOfField). Ported from
+	// snapmatica's ApertureIntegration — ApertureIntegration.java there has the full derivation
+	// and the history of why the camera moves rather than the projection matrix shearing (a
+	// shear disagrees with GPU shader packs; a camera move is the same thing walking does, and
+	// every renderer already handles that correctly). This port keeps the core of it — the
+	// pupil spiral, the camera-move-and-toe-in registration, the linear-light sum — and leaves
+	// out snapmatica's later refinements (exposure-time integration via EntityExposure, the GPU
+	// accumulator, Iris/temporal-shader detection): those are real improvements, not omissions
+	// this feature needs to be usable, and can follow once the core path is proven in the wild.
+	/** Master toggle. Off by default: a burst costs dozens of rendered frames per shutter
+	 *  press, real time a plain reconstruction blur doesn't. */
+	public static boolean apertureIntegration = false;
+	/** Pupil samples per burst. More resolves occlusion better and reduces banding in the
+	 *  bokeh disc; fewer is a faster shutter. */
+	public static int apertureSamples = 24;
+	private static final int APERTURE_MIN_SAMPLES = 8;
+	private static final int APERTURE_MAX_SAMPLES = 64;
+	/** How far the viewpoint may leave the camera's own position, in blocks — see snapmatica's
+	 *  ApertureIntegration#MAX_EXCURSION_BLOCKS for why this has to be capped at all: past a
+	 *  lens's own reasonable size relative to the scene, the subject leaves the frame on the
+	 *  outer samples entirely and no amount of focusing recovers it. */
+	private static final float APERTURE_MAX_EXCURSION_BLOCKS = 0.5f;
+	/** Give up rather than hang if a readback callback never arrives. */
+	private static final long APERTURE_TIMEOUT_MS = 30_000L;
+
+	private static volatile UUID apertureId = null;
+	private static volatile CameraSettings apertureSettings = null;
+	private static volatile int apertureTotal = 0;
+	private static volatile int apertureIssued = 0;
+	private static volatile int apertureReceived = 0;
+	private static volatile int apertureKept = 0;
+	private static volatile long apertureStartMs = 0L;
+	private static volatile float[] apertureSumR = null, apertureSumG = null, apertureSumB = null;
+	private static volatile int apertureW = 0, apertureH = 0;
+	private static volatile double apertureRefMean = 0.0;
+	private static volatile float apertureRadiusBlocks = 0f;
+	private static volatile float apertureFocusBlocks = 1.0f;
+	/** Pupil offset in blocks for the sub-frame currently being rendered — read every frame by
+	 *  {@code CameraMixin} to move the camera and toe it back onto the focal plane. */
+	private static volatile float apertureOffX = 0f, apertureOffY = 0f;
+
+	/** Whether {@code CameraMixin} should be moving the camera across the pupil right now. */
+	public static boolean isApertureIntegrating() { return apertureId != null; }
+	public static float aperturePupilOffsetX() { return apertureOffX; }
+	public static float aperturePupilOffsetY() { return apertureOffY; }
+	public static float apertureFocusBlocks() { return apertureFocusBlocks; }
+
 	/** Returns true when a capture is queued or a long exposure is accumulating. */
-	public static boolean isCapturePending() { return pendingId != null || accumId != null; }
+	public static boolean isCapturePending() { return pendingId != null || accumId != null || apertureId != null; }
 
 	/** Returns true during multi-frame long-exposure accumulation (excludes single-frame captures). */
 	public static boolean isAccumulating() { return accumId != null; }
@@ -275,7 +324,7 @@ public final class PhotoCapture {
 
 		long now = System.currentTimeMillis();
 		if (now - lastCaptureMs < COOLDOWN_MS) return;
-		if (pendingId != null || accumId != null) return;
+		if (pendingId != null || accumId != null || apertureId != null) return;
 
 		// Self-timer: arm a delayed capture instead of capturing immediately.
 		// timerIsFiring is true when called from tickTimer() — bypass re-arm to avoid infinite loop.
@@ -434,7 +483,13 @@ public final class PhotoCapture {
 			return;
 		}
 
-		// Long-exposure accumulation takes priority.
+		// Aperture-integration burst and long-exposure accumulation both take priority over
+		// starting a new single-frame capture — and over each other, since they're mutually
+		// exclusive (armApertureIntegration only arms for a plain handheld digital shot).
+		if (apertureId != null) {
+			tickApertureIntegration();
+			return;
+		}
 		if (accumId != null) {
 			tickAccumulation();
 			return;
@@ -454,6 +509,19 @@ public final class PhotoCapture {
 		pendingSettings = null;
 		pendingIsFilm = false;
 		pendingArmorStandEntityId = -1;
+
+		// True optical depth of field, for a plain handheld digital shot only (v1 scope — see
+		// the field-block comment above isCapturePending()). Armed here and handed off to
+		// tickApertureIntegration() on the frames that follow; this frame's own render (already
+		// composited from the un-offset camera by the time we get here) is discarded rather than
+		// used as one of the burst's samples, so every sample the burst DOES keep is registered
+		// against the same latched viewpoint.
+		if (captureStandId < 0 && !wasDrone && !isFilm && apertureIntegration
+				&& LensKind.hasLens(settings.lensType()) && settings.aperture() <= 5.6f) {
+			pendingLinearDepth = null;
+			armApertureIntegration(id, settings);
+			return;
+		}
 
 		// Use depth pre-read during WorldRenderEvents.LAST if available.
 		// Reading depth here from mc.getFramebuffer() would give wrong results with Iris
@@ -796,6 +864,7 @@ public final class PhotoCapture {
 	 */
 	public static void resetOnDisconnect() {
 		resetAccumState();
+		resetApertureState();
 		pendingId = null;
 		pendingSettings = null;
 		pendingIsFilm = false;
@@ -830,6 +899,239 @@ public final class PhotoCapture {
 		accumW = 0; accumH = 0;
 		accumDepth = null;
 		accumDepthFbW = 0; accumDepthFbH = 0;
+	}
+
+	// ── Aperture integration ────────────────────────────────────────────────────
+	// See the field-block comment above isCapturePending() for what this is and what it
+	// deliberately leaves out of snapmatica's own, more mature version of the same mechanism.
+
+	/** sRGB→linear for the 256 values a screenshot readback can hold. */
+	private static final float[] SRGB_TO_LINEAR = buildSrgbToLinearTable();
+
+	private static float[] buildSrgbToLinearTable() {
+		float[] t = new float[256];
+		for (int i = 0; i < 256; i++) {
+			double c = i / 255.0;
+			t[i] = (float) (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+		}
+		return t;
+	}
+
+	private static float linearToSrgb(float c) {
+		c = Math.max(0f, c);
+		return c <= 0.0031308f ? c * 12.92f : (float) (1.055 * Math.pow(c, 1.0 / 2.4) - 0.055);
+	}
+
+	/**
+	 * Begins a burst: latches the optics, primes the first pupil sample, and returns.
+	 * {@code CameraMixin} picks up {@link #apertureOffX}/{@link #apertureOffY} from the very
+	 * next {@code Camera.update()} — this frame's own render already happened from the plain,
+	 * un-offset camera before {@code captureIfPending()} runs, so it is discarded rather than
+	 * used as a sample; see the call site's comment.
+	 */
+	private static void armApertureIntegration(UUID id, CameraSettings settings) {
+		int n = Math.max(APERTURE_MIN_SAMPLES, Math.min(APERTURE_MAX_SAMPLES, apertureSamples));
+		apertureId = id;
+		apertureSettings = settings;
+		apertureTotal = n;
+		apertureIssued = 0;
+		apertureReceived = 0;
+		apertureKept = 0;
+		apertureRefMean = 0.0;
+		apertureStartMs = System.currentTimeMillis();
+		apertureSumR = null; apertureSumG = null; apertureSumB = null;
+		apertureW = 0; apertureH = 0;
+
+		apertureFocusBlocks = Math.max(0.05f, settings.focusDistance());
+		// Entrance pupil diameter from the thin-lens relation D = f/N, in the same 200mm/block
+		// world scale applyDepthOfField already uses for subject distance (see its class doc) —
+		// there's no dedicated constant for it in this codebase, it has just always been spelled
+		// out inline as *200f / 200f wherever it's needed, so this does the same.
+		float fmm = LensKind.bokehFocalLengthMm(settings.lensType(), settings.focalLengthMm());
+		float pupilDiameterBlocks = (fmm / Math.max(0.1f, settings.aperture())) / 200.0f;
+		apertureRadiusBlocks = Math.min(pupilDiameterBlocks * 0.5f, APERTURE_MAX_EXCURSION_BLOCKS);
+
+		setAperturePupil(0, n);
+		Photographica.LOGGER.info(
+				"Aperture integration: {} samples, {}mm f/{}, focus {} blk, pupil {} blk",
+				n, fmm, settings.aperture(), apertureFocusBlocks, 2f * apertureRadiusBlocks);
+	}
+
+	/**
+	 * Where on the entrance pupil sub-frame {@code i} of {@code n} looks from, in blocks — a
+	 * continuous spiral rather than a scattered disc, so consecutive samples land near each
+	 * other: ported unchanged from snapmatica's {@code ApertureIntegration#setPupil}, whose
+	 * class doc has the measurements behind it (a scattered order steps most of the pupil's
+	 * diameter between neighbours; this spiral steps about a fifth of that).
+	 */
+	private static void setAperturePupil(int i, int n) {
+		if (i >= n) { apertureOffX = 0f; apertureOffY = 0f; return; }
+		int turns = Math.max(2, (int) Math.round(Math.sqrt(n) / 2.0));
+		double f = (i + 0.5) / n;
+		double r = Math.sqrt(f);
+		double t = 2.0 * Math.PI * turns * f;
+		apertureOffX = (float) (r * Math.cos(t)) * apertureRadiusBlocks;
+		apertureOffY = (float) (r * Math.sin(t)) * apertureRadiusBlocks;
+	}
+
+	/** Runs once per rendered frame while {@link #apertureId} != null; owns the capture until
+	 *  the burst ends. */
+	private static void tickApertureIntegration() {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc == null || mc.player == null) { resetApertureState(); return; }
+		Framebuffer fb = mc.getFramebuffer();
+
+		// At most one readback in flight: the 1.21.11 async callback can land a frame or more
+		// later, and issuing a second screenshot before the first returns would mean the camera
+		// has already moved to a different pupil sample by the time this one's result arrives.
+		boolean inFlight = apertureIssued > apertureReceived;
+		if (apertureIssued < apertureTotal && !inFlight) {
+			//? if >=1.21.11 {
+			/*ScreenshotRecorder.takeScreenshot(fb, PhotoCapture::apertureAccumulateFrame);
+			*///?} else {
+			apertureAccumulateFrame(ScreenshotRecorder.takeScreenshot(fb));
+			//?}
+			apertureIssued++;
+			// Move on to the NEXT sample's position now, so next frame's Camera.update() —
+			// which runs before this method does — already renders from it.
+			setAperturePupil(apertureIssued, apertureTotal);
+		}
+
+		boolean done = apertureReceived >= apertureTotal;
+		boolean timedOut = System.currentTimeMillis() - apertureStartMs > APERTURE_TIMEOUT_MS;
+		if (done || timedOut) {
+			if (timedOut && !done) {
+				Photographica.LOGGER.warn(
+						"Aperture integration timed out with {}/{} samples; saving what arrived",
+						apertureReceived, apertureTotal);
+			}
+			finalizeApertureIntegration(mc);
+		}
+	}
+
+	/**
+	 * Folds one rendered sub-frame into the running linear-light sum, and closes it. On
+	 * 1.21.11+ this runs inside the async screenshot callback, where {@code frame} may be null.
+	 */
+	private static void apertureAccumulateFrame(NativeImage frame) {
+		if (frame == null) { apertureReceived++; return; }
+		NativeImage cropped = null, zoomed = null, ds = null;
+		try {
+			cropped = cropTo3to2(frame);
+			// Same aliasing hazard as processAndSavePhoto/accumulateFrame: cropTo3to2 can hand
+			// back `frame` itself, so nothing is closed here — the finally block owns every one.
+			CameraSettings s = apertureSettings;
+			if (s != null && s.lensType() == LensKind.DRONE_ZOOM) {
+				float blockPx = LensKind.digitalZoomSoftenPx(s.focalLengthMm());
+				if (blockPx > 1.0f) zoomed = applyDigitalSoftening(cropped, blockPx);
+			}
+			ds = boxDownsample(zoomed != null ? zoomed : cropped, 1280);
+			int w = ds.getWidth();
+			int h = ds.getHeight();
+			if (apertureSumR == null) {
+				apertureW = w; apertureH = h;
+				apertureSumR = new float[w * h];
+				apertureSumG = new float[w * h];
+				apertureSumB = new float[w * h];
+			}
+			// A window resize mid-burst changes the buffer's shape; drop the odd frame rather
+			// than corrupt the sum.
+			if (w != apertureW || h != apertureH) return;
+
+			// Every sub-frame is the same exposure — the only thing meant to differ between them
+			// is which point on the pupil it looks from. Matching each one's mean back to the
+			// first catches a frame that rendered wrong (loading chunks, a GUI flash) without
+			// needing to know what "wrong" looks like in advance.
+			double mean = 0.0;
+			float[] lr = new float[w * h], lg = new float[w * h], lb = new float[w * h];
+			for (int y = 0; y < h; y++) {
+				for (int x = 0; x < w; x++) {
+					int c = niGet(ds, x, y);
+					int idx = y * w + x;
+					float rl = SRGB_TO_LINEAR[c & 0xFF];
+					float gl = SRGB_TO_LINEAR[(c >>> 8) & 0xFF];
+					float bl = SRGB_TO_LINEAR[(c >>> 16) & 0xFF];
+					lr[idx] = rl; lg[idx] = gl; lb[idx] = bl;
+					mean += 0.2126 * rl + 0.7152 * gl + 0.0722 * bl;
+				}
+			}
+			mean /= (double) w * h;
+			if (apertureRefMean <= 0.0) apertureRefMean = mean;
+			double gain = mean > 1e-6 ? apertureRefMean / mean : 1.0;
+			if (gain < 0.4 || gain > 2.5) return; // a frame that went wrong, not the scene changing
+			float gf = (float) gain;
+			for (int i = 0; i < w * h; i++) {
+				apertureSumR[i] += lr[i] * gf;
+				apertureSumG[i] += lg[i] * gf;
+				apertureSumB[i] += lb[i] * gf;
+			}
+			apertureKept++;
+		} finally {
+			if (ds != null && ds != zoomed && ds != cropped && ds != frame) ds.close();
+			if (zoomed != null && zoomed != cropped && zoomed != frame) zoomed.close();
+			if (cropped != null && cropped != frame) cropped.close();
+			frame.close();
+			apertureReceived++;
+		}
+	}
+
+	/** Averages the pupil, converts back to sRGB, and runs the result through the same
+	 *  exposure/film/vignette/grain pass every other capture goes through — {@code linearDepth}
+	 *  is null, so it skips straight past the reconstruction-based DoF pass: the defocus is
+	 *  already IN this image, baked in by the burst itself. */
+	private static void finalizeApertureIntegration(MinecraftClient mc) {
+		UUID id = apertureId;
+		CameraSettings settings = apertureSettings;
+		int w = apertureW, h = apertureH, n = apertureKept;
+		float[] r = apertureSumR, g = apertureSumG, b = apertureSumB;
+		resetApertureState();
+
+		if (n == 0 || r == null || w == 0 || h == 0) {
+			Photographica.LOGGER.warn("Aperture integration: no samples, discarding");
+			return;
+		}
+
+		float inv = 1.0f / n;
+		NativeImage out = new NativeImage(w, h, false);
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				int idx = y * w + x;
+				int red   = clampCh(Math.round(linearToSrgb(r[idx] * inv) * 255.0f));
+				int green = clampCh(Math.round(linearToSrgb(g[idx] * inv) * 255.0f));
+				int blue  = clampCh(Math.round(linearToSrgb(b[idx] * inv) * 255.0f));
+				niSet(out, x, y, (0xFF << 24) | (blue << 16) | (green << 8) | red);
+			}
+		}
+
+		NativeImage processed = null;
+		try {
+			processed = applyPhotographicEffects(out, settings, null, 0, 0, false);
+			File outFile = savePhoto(mc, processed, id, buildShot(mc, settings));
+			if (outFile == null) return;
+			Photographica.LOGGER.info("Aperture integration photo saved: {} ({}x{}, {} samples)",
+					outFile.getAbsolutePath(), processed.getWidth(), processed.getHeight(), n);
+			ClipboardUtil.copyImageAsync(outFile);
+			uploadPhotoToServer(id, outFile);
+		} catch (IOException e) {
+			Photographica.LOGGER.error("Aperture integration photo capture failed", e);
+		} finally {
+			if (processed != null) processed.close();
+			out.close();
+		}
+
+		ClientPlayNetworking.send(new CreatePhotoPayload(id, settings));
+		if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (絞り積分)"), true);
+	}
+
+	private static void resetApertureState() {
+		apertureId = null;
+		apertureSettings = null;
+		apertureTotal = 0; apertureIssued = 0; apertureReceived = 0; apertureKept = 0;
+		apertureSumR = null; apertureSumG = null; apertureSumB = null;
+		apertureW = 0; apertureH = 0;
+		apertureRefMean = 0.0;
+		apertureOffX = 0f; apertureOffY = 0f;
+		apertureStartMs = 0L;
 	}
 
 	/** Called by the HUD callback when the mirror-down click is due. */
@@ -979,7 +1281,7 @@ public final class PhotoCapture {
 
 		long now = System.currentTimeMillis();
 		if (now - lastCaptureMs < COOLDOWN_MS) return;
-		if (pendingId != null || accumId != null) return;
+		if (pendingId != null || accumId != null || apertureId != null) return;
 
 		// Self-timer
 		int timerSec = settings.timerSeconds();

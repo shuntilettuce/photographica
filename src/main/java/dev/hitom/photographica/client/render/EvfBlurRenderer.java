@@ -133,6 +133,11 @@ public final class EvfBlurRenderer {
     public static void applyScheduledBlur(boolean forCapture) {
         if (!blurScheduled) return;
         blurScheduled = false;
+        // A burst's own sub-frames must render pinhole-sharp — the defocus this feature is
+        // taking comes from summing them from different points on the pupil, not from this
+        // reconstruction. Baking GPU bokeh into each one first would blur an image that then
+        // gets blurred a second, physically different way by the sum itself.
+        if (dev.hitom.photographica.client.PhotoCapture.isApertureIntegrating()) return;
         if (forCapture) {
             MinecraftClient mc = MinecraftClient.getInstance();
             int sw = mc.getWindow().getScaledWidth();
