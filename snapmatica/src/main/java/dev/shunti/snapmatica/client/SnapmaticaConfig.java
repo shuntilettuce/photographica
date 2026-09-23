@@ -63,6 +63,10 @@ public final class SnapmaticaConfig {
         SnapmaticaClient.droneMode               = getBool(p, "droneMode",              SnapmaticaClient.droneMode);
         SnapmaticaClient.freecamHidePlayer       = getBool(p, "freecamHidePlayer",      SnapmaticaClient.freecamHidePlayer);
         SnapmaticaClient.exposureMode           = getInt (p, "exposureMode",           SnapmaticaClient.exposureMode);
+        SnapmaticaClient.cameraRollDeg          = Math.max(-CameraRoll.MAX_DEG, Math.min(CameraRoll.MAX_DEG,
+                getFloat(p, "cameraRollDeg", SnapmaticaClient.cameraRollDeg)));
+        SnapmaticaClient.exposureCompEv         = Math.max(-SnapmaticaClient.EXPOSURE_COMP_MAX,
+                Math.min(SnapmaticaClient.EXPOSURE_COMP_MAX, getFloat(p, "exposureCompEv", SnapmaticaClient.exposureCompEv)));
         SnapmaticaClient.focusMode              = getInt (p, "focusMode",              SnapmaticaClient.focusMode);
         SnapmaticaClient.shutterSpeedIdx        = getInt (p, "shutterSpeedIdx",        SnapmaticaClient.shutterSpeedIdx);
         SnapmaticaClient.iso                    = getInt (p, "iso",                    SnapmaticaClient.iso);
@@ -111,6 +115,8 @@ public final class SnapmaticaConfig {
         p.setProperty("droneMode",              Boolean.toString(SnapmaticaClient.droneMode));
         p.setProperty("freecamHidePlayer",      Boolean.toString(SnapmaticaClient.freecamHidePlayer));
         p.setProperty("exposureMode",           Integer.toString(SnapmaticaClient.exposureMode));
+        p.setProperty("cameraRollDeg",          Float.toString(SnapmaticaClient.cameraRollDeg));
+        p.setProperty("exposureCompEv",         Float.toString(SnapmaticaClient.exposureCompEv));
         p.setProperty("focusMode",              Integer.toString(SnapmaticaClient.focusMode));
         p.setProperty("shutterSpeedIdx",        Integer.toString(SnapmaticaClient.shutterSpeedIdx));
         p.setProperty("iso",                    Integer.toString(SnapmaticaClient.iso));

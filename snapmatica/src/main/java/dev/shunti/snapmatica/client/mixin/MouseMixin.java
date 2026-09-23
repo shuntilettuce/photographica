@@ -1,5 +1,6 @@
 package dev.shunti.snapmatica.client.mixin;
 
+import dev.shunti.snapmatica.client.CameraRoll;
 import dev.shunti.snapmatica.client.CameraScrollHandler;
 import dev.shunti.snapmatica.client.Freecam;
 import net.minecraft.client.MinecraftClient;
@@ -60,6 +61,19 @@ public abstract class MouseMixin {
     *///?}
 
     private void snapmatica$freecamLookImpl(CallbackInfo ci) {
+        // The roll grip takes the mouse outright: sideways motion turns the camera about its
+        // axis, and nothing aims -- the frame holds still while it is levelled or tilted.
+        if (CameraRoll.isGripping()) {
+            MinecraftClient mc0 = MinecraftClient.getInstance();
+            double s = mc0.options.getMouseSensitivity().getValue() * 0.6 + 0.2;
+            CameraRoll.onDrag(cursorDeltaX * s * s * s * 8.0);
+            //? if <1.21 {
+            /*cursorDeltaX = 0;
+            cursorDeltaY = 0;
+            *///?}
+            ci.cancel();
+            return;
+        }
         // Locked (tripod mode): the vanilla path runs untouched, so the player looks around
         // normally instead of steering a camera that has stopped moving.
         if (!Freecam.isActive() || Freecam.isLocked()) return;
@@ -115,6 +129,11 @@ public abstract class MouseMixin {
     private void snapmatica$blockClicksInFreecam(long window, net.minecraft.client.input.MouseInput button,
                                                  int action, CallbackInfo ci) {
         MinecraftClient mc = MinecraftClient.getInstance();
+        if ((action == GLFW.GLFW_PRESS || action == GLFW.GLFW_RELEASE)
+                && CameraRoll.onButton(mc, button.button(), action == GLFW.GLFW_PRESS)) {
+            ci.cancel();
+            return;
+        }
         if (Freecam.isActive() && !Freecam.isLocked() && mc.currentScreen == null) {
             snapmatica$trackButton(button.button(), action);
             ci.cancel();
@@ -125,6 +144,11 @@ public abstract class MouseMixin {
     private void snapmatica$blockClicksInFreecam(long window, int button, int action, int mods,
                                                  CallbackInfo ci) {
         MinecraftClient mc = MinecraftClient.getInstance();
+        if ((action == GLFW.GLFW_PRESS || action == GLFW.GLFW_RELEASE)
+                && CameraRoll.onButton(mc, button, action == GLFW.GLFW_PRESS)) {
+            ci.cancel();
+            return;
+        }
         if (Freecam.isActive() && !Freecam.isLocked() && mc.currentScreen == null) {
             snapmatica$trackButton(button, action);
             ci.cancel();

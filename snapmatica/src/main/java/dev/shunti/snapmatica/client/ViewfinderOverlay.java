@@ -144,8 +144,12 @@ public final class ViewfinderOverlay {
         int em = SnapmaticaClient.exposureMode;
         int si = clampIdx((em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx, SHUTTERS.length);
         float dispAp = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
-        ctx.drawTextWithShadow(tr, String.format("F%s  %s  ISO%d  %s",
-                fmt(dispAp),SHUTTERS[si],SnapmaticaClient.iso,fp),
+        // Compensation is shown whenever it is doing something, because a frame deliberately
+        // exposed off the meter is otherwise indistinguishable from one the meter got wrong.
+        boolean compOn = (em != 0) && Math.round(SnapmaticaClient.exposureCompEv * 3f) != 0;
+        String comp = compOn ? "  " + CameraScreen.fmtEv(SnapmaticaClient.exposureCompEv) : "";
+        ctx.drawTextWithShadow(tr, String.format("F%s  %s  ISO%d  %s%s",
+                fmt(dispAp),SHUTTERS[si],SnapmaticaClient.iso,fp,comp),
                 fx+6,fy2-tr.fontHeight-14,0xFFE8DCC4);
         if (SnapmaticaClient.lensType != 0) {
             // Same predicate the DoF shader is driven from, so the readout cannot claim
@@ -158,6 +162,8 @@ public final class ViewfinderOverlay {
 
         // Exposure meter
         renderExposureMeter(ctx, fx, fx2, fy2);
+
+        renderLevel(ctx, tr, fx, fy, fx2, fy2);
 
         // Lens label. snapmatica has one lens and it zooms the whole range, so it is named
         // after that range rather than the fixed focal lengths photographica's kit had.
@@ -228,6 +234,55 @@ public final class ViewfinderOverlay {
             }
         }
 
+    }
+
+    // ── Electronic level ────────────────────────────────────────────────────────
+
+    /**
+     * Where the horizon is, while the camera is turned or being turned.
+     *
+     * <p>A line through the centre at the true horizon's angle, and short fixed marks either
+     * side at the frame's own horizontal: when the line lies on the marks, the camera is level.
+     * Green at level, cream otherwise, with the angle beside it. Hidden when level and not being
+     * gripped, because a level that is always on screen is one more thing in the way of the
+     * picture. Never in the photograph -- the HUD is drawn after the capture.
+     */
+    private static void renderLevel(DrawContext ctx, TextRenderer tr, int fx, int fy, int fx2, int fy2) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        float deg = CameraRoll.effectiveDeg(mc);
+        if (deg == 0f && !CameraRoll.isGripping()) return;
+        int cx = (fx + fx2) / 2, cy = (fy + fy2) / 2;
+        int half = Math.max(24, (fx2 - fx) / 6);
+        boolean level = deg == 0f;
+        int color = level ? 0xFF7CD67C : 0xFFE8DCC4;
+        // Fixed marks: the frame's horizontal.
+        ctx.fill(cx - half - 12, cy, cx - half - 4, cy + 1, 0xA0E8DCC4);
+        ctx.fill(cx + half + 4, cy, cx + half + 12, cy + 1, 0xA0E8DCC4);
+        // The horizon as the turned camera sees it: turned the other way by the same angle. A
+        // clockwise camera shows the horizon counter-clockwise, which with screen y running
+        // down is a negative angle for the matrix stack.
+        double a = Math.toRadians(-deg);
+        drawTurnedLine(ctx, cx, cy, half, a, color);
+        String label = level ? "0\u00b0" : String.format("%+.1f\u00b0", deg);
+        ctx.drawTextWithShadow(tr, label, cx + half + 16, cy - tr.fontHeight / 2, color);
+    }
+
+    private static void drawTurnedLine(DrawContext ctx, int cx, int cy, int half, double angle, int color) {
+        //? if >=1.21.10 {
+        org.joml.Matrix3x2fStack m = ctx.getMatrices();
+        m.pushMatrix();
+        m.translate(cx, cy + 0.5f);
+        m.rotate((float) angle);
+        ctx.fill(-half, 0, half, 1, color);
+        m.popMatrix();
+        //?} else {
+        /*net.minecraft.client.util.math.MatrixStack m = ctx.getMatrices();
+        m.push();
+        m.translate(cx, cy + 0.5f, 0f);
+        m.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_Z.rotation((float) angle));
+        ctx.fill(-half, 0, half, 1, color);
+        m.pop();
+        *///?}
     }
 
     // ── Exposure meter ──────────────────────────────────────────────────────────

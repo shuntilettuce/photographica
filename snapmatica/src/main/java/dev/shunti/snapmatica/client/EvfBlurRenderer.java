@@ -343,6 +343,19 @@ public final class EvfBlurRenderer {
             motionToUniforms(yaw - prevYaw, pitch - prevPitch,
                              x - prevX, y - prevY, z - prevZ, yaw,
                              fbH, focalPx, outRotPx, outVelCam);
+            // Both come out in the level camera's right/up. A turned camera sees the world
+            // turned the other way, so a pan that smears straight across a level frame smears
+            // at the roll's angle across a tilted one: turn both vectors into its axes.
+            float rollDeg = CameraRoll.effectiveDeg(mc);
+            if (rollDeg != 0f) {
+                double r = Math.toRadians(rollDeg), c = Math.cos(r), sn = Math.sin(r);
+                float rx = outRotPx[0], ry = outRotPx[1];
+                outRotPx[0] = (float) (rx * c - ry * sn);
+                outRotPx[1] = (float) (rx * sn + ry * c);
+                float vx = outVelCam[0], vy = outVelCam[1];
+                outVelCam[0] = (float) (vx * c - vy * sn);
+                outVelCam[1] = (float) (vx * sn + vy * c);
+            }
         }
 
         if (!haveMotionRef) {

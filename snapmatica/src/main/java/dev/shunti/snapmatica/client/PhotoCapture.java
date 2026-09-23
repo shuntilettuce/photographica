@@ -717,6 +717,16 @@ public final class PhotoCapture {
         net.minecraft.util.math.Vec3d fwd   = net.minecraft.util.math.Vec3d.fromPolar(basePitch, baseYaw);
         net.minecraft.util.math.Vec3d right = net.minecraft.util.math.Vec3d.fromPolar(0f, baseYaw + 90f);
         net.minecraft.util.math.Vec3d up    = right.crossProduct(fwd);
+        // A turned camera carries the frame round with it, so a point on the frame is that
+        // many degrees round in the level frame. Clockwise roll: the frame's right points a
+        // little down.
+        float rollDeg = CameraRoll.effectiveDeg(mc);
+        if (rollDeg != 0f) {
+            double r = Math.toRadians(rollDeg), c = Math.cos(r), sn = Math.sin(r);
+            double rx =  tx * c + ty * sn;
+            double ry = -tx * sn + ty * c;
+            tx = rx; ty = ry;
+        }
         net.minecraft.util.math.Vec3d d = fwd.add(right.multiply(tx))
                              .add(up.multiply(ty)).normalize();
 
