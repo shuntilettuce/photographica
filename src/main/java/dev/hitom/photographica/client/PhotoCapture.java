@@ -83,6 +83,21 @@ public final class PhotoCapture {
 	/** True when a tripod is in the player's off-hand. Evaluated each time take() is called. */
 	public static boolean motionBlurEnabled = false; // kept for CameraScreen read-only display
 
+	/**
+	 * When true, {@link #applyExposure} runs the fuller shadow-crush + adjustable-width
+	 * highlight-shoulder curve (see {@link #applyDynamicRange}) instead of its old fixed
+	 * highlight-only rolloff. Ported from snapmatica's applyDynamicRange (evf_blur.fsh).
+	 * On by default, matching snapmatica's own default.
+	 */
+	public static boolean dynamicRangeSim = true;
+
+	/**
+	 * How many stops of scene brightness the simulated sensor captures before shadow crush
+	 * and highlight rolloff set in; narrower reads as a cheaper sensor. Same default (8) and
+	 * same formula as snapmatica's own dial.
+	 */
+	public static float dynamicRangeStops = 8.0f;
+
 	/** Returns true if an armor stand with a camera is within 6 blocks of the player. */
 	public static boolean hasTripod() {
 		MinecraftClient mc = MinecraftClient.getInstance();
@@ -1382,14 +1397,51 @@ public final class PhotoCapture {
 		return clampCh(avg + (int)((ch - avg) * factor));
 	}
 
-	/** Exposure scaling with film-like highlight rolloff above ~78% brightness. */
+	/**
+	 * Exposure scaling, then either {@link #applyDynamicRange} (shadow crush + adjustable
+	 * highlight shoulder, on by default) or the older fixed highlight-only rolloff above
+	 * ~78% brightness.
+	 */
 	private static int applyExposure(int v, float mult) {
 		float f = v * mult;
+		if (dynamicRangeSim) {
+			return applyDynamicRange(f);
+		}
 		if (f > 200.0f) {
 			float excess = f - 200.0f;
 			f = 200.0f + 55.0f * (1.0f - (float) Math.exp(-excess / 55.0f));
 		}
 		return clampCh((int) f);
+	}
+
+	/**
+	 * Shadow crush + highlight shoulder, ported from snapmatica's applyDynamicRange
+	 * (evf_blur.fsh) — a physically-motivated stand-in for a narrower-dynamic-range sensor:
+	 * shadows compress toward black instead of fading out linearly, and highlights ease into
+	 * a shoulder instead of clipping abruptly. {@code dynamicRangeStops} sets how wide that
+	 * range is; snapmatica's own highlight-only rolloff constants (KNEE=200/255, SOFT=55/255)
+	 * came from this mod's old {@link #applyExposure} in the first place, so this is a case of
+	 * a photographica idea coming back home with a shadow half added.
+	 *
+	 * <p>Runs on the 0-255 gamma-encoded value {@code v} this whole develop pass already
+	 * works in (converting to [0,1] only for the duration of this call), rather than
+	 * snapmatica's linear light: nothing else in this pipeline decodes to linear, and doing
+	 * so for just this one step would buy accuracy nothing else here shares.
+	 */
+	private static int applyDynamicRange(float v) {
+		float stops = Math.max(dynamicRangeStops, 1.0f);
+		float blackLift = clampf(0.10f * (8.0f / stops), 0.01f, 0.35f);
+		float shoulder  = clampf(1.0f - 0.2f * (8.0f / stops), 0.4f, 0.97f);
+
+		float c = v / 255.0f;
+		float x = Math.max(c - blackLift, 0.0f) / (1.0f - blackLift);
+		float over = Math.max(x - shoulder, 0.0f);
+		float result = Math.min(x, shoulder) + over / (1.0f + over * 3.0f);
+		return clampCh(Math.round(result * 255.0f));
+	}
+
+	private static float clampf(float v, float lo, float hi) {
+		return Math.max(lo, Math.min(hi, v));
 	}
 
 	/** ISO → luminance noise sigma (in pixel-level units 0–255). */

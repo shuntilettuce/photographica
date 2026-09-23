@@ -64,8 +64,9 @@ public class CameraScreen extends Screen {
 	protected void init() {
 		int cx = width / 2;
 		int overhead = (armorStandEntityId >= 0) ? 82 : 58;
-		rowH = Math.min(22, Math.max(20, (height - overhead - 8) / 11));
-		panelH = 11 * rowH + overhead;
+		int totalRows = 11 + 1 + (PhotoCapture.dynamicRangeSim ? 1 : 0); // +1 DR toggle, +1 more for its stops row
+		rowH = Math.min(22, Math.max(20, (height - overhead - 8) / totalRows));
+		panelH = totalRows * rowH + overhead;
 		panelPy = Math.max(4, (height - panelH) / 2);
 		topRow = panelPy + 16;
 		int row = 0;
@@ -179,7 +180,22 @@ public class CameraScreen extends Screen {
 					dirty = true;
 				}, true);
 
-		int btnY = topRow + 11 * rowH + 14;
+		// Dynamic range simulation — shadow crush + highlight shoulder baked into the develop
+		// pass. Client-only (like motion blur's tripod detection), not part of CameraSettings:
+		// it isn't a physical property of the camera, so it isn't synced to the server.
+		addClientRow(cx, topRow + row++ * rowH, "ダイナミックレンジ",
+				() -> PhotoCapture.dynamicRangeSim ? "§aON" : "§cOFF",
+				step -> PhotoCapture.dynamicRangeSim = !PhotoCapture.dynamicRangeSim,
+				true);
+		if (PhotoCapture.dynamicRangeSim) {
+			addClientRow(cx, topRow + row++ * rowH, "レンジ幅",
+					() -> Math.round(PhotoCapture.dynamicRangeStops) + "段",
+					step -> PhotoCapture.dynamicRangeStops =
+							Math.max(3.0f, Math.min(16.0f, PhotoCapture.dynamicRangeStops + step)),
+					true);
+		}
+
+		int btnY = topRow + totalRows * rowH + 14;
 		if (armorStandEntityId >= 0) {
 			// Armor stand mode: "Shoot" | "Remove camera" | "Close"
 			addDrawableChild(SafelightButton.primary(cx - 105, btnY, 100,
@@ -303,6 +319,26 @@ public class CameraScreen extends Screen {
 			//?}
 		}
 		return new ArrayList<>(kinds);
+	}
+
+	/** Like {@link #addRow}, but for client-only settings that aren't part of {@link #settings}
+	 *  and so shouldn't mark the camera dirty or get pushed to the server. */
+	private void addClientRow(int cx, int y, String label, java.util.function.Supplier<String> value,
+	                    java.util.function.IntConsumer step, boolean editable) {
+		SafelightButton left = SafelightButton.of(cx - 30, y, 20, Text.literal("◀"),
+				b -> { step.accept(-1); clearAndInit(); });
+		left.active = editable;
+		addDrawableChild(left);
+
+		SafelightButton center = SafelightButton.ghost(cx - 8, y, 140,
+				Text.literal(label + ": " + value.get()), b -> {});
+		center.active = false;
+		addDrawableChild(center);
+
+		SafelightButton right = SafelightButton.of(cx + 134, y, 20, Text.literal("▶"),
+				b -> { step.accept(1); clearAndInit(); });
+		right.active = editable;
+		addDrawableChild(right);
 	}
 
 	// ---------- helpers ----------
