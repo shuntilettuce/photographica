@@ -2,8 +2,8 @@ package dev.shunti.snapmatica.client;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.Framebuffer;
+import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.pipeline.RenderTarget;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -121,7 +121,7 @@ final class BurstAccumulator {
      *
      * @param sink told the outcome of every sample that gets folded in
      */
-    static void submit(MinecraftClient mc, Sink sink) {
+    static void submit(Minecraft mc, Sink sink) {
         int mainTex = mainColorTex(mc);
         if (mainTex <= 0) return;
         State st = State.save();
@@ -242,14 +242,10 @@ final class BurstAccumulator {
         if (fence[s] != 0L) { GL32.glDeleteSync(fence[s]); fence[s] = 0L; }
     }
 
-    private static int mainColorTex(MinecraftClient mc) {
-        Framebuffer fb = mc.getFramebuffer();
-        //? if >=1.21.10 {
-        com.mojang.blaze3d.textures.GpuTexture gpuTex = fb.getColorAttachment();
-        return (gpuTex instanceof net.minecraft.client.texture.GlTexture glTex) ? glTex.getGlId() : 0;
-        //?} else {
-        /*return fb.getColorAttachment();
-        *///?}
+    private static int mainColorTex(Minecraft mc) {
+        RenderTarget fb = mc.getMainRenderTarget();
+        com.mojang.blaze3d.textures.GpuTexture gpuTex = fb.getColorTexture();
+        return (gpuTex instanceof com.mojang.blaze3d.opengl.GlTexture glTex) ? glTex.glId() : 0;
     }
 
     private static boolean initProgram() {
