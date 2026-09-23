@@ -1,2 +1,5 @@
 __pycache__/
 .swap-placeholder.jar
+
+# Mapping downloads for tools/verify_mixins.py and tools/fetch_mappings.py
+tools/cache/
