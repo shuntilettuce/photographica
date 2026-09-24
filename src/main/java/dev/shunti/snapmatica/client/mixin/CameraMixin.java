@@ -8,6 +8,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.BlockGetter;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -51,6 +52,43 @@ public abstract class CameraMixin {
 
     @Shadow
     private boolean detached;
+
+    // The orientation and the three direction vectors vanilla derives from it. Roll has to
+    // update all four: rendering reads the quaternion, and particles, sounds and moveBy read
+    // the vectors.
+    @Shadow @Final private org.joml.Quaternionf rotation;
+    @Shadow @Final private org.joml.Vector3f forwards;
+    @Shadow @Final private org.joml.Vector3f up;
+    @Shadow @Final private org.joml.Vector3f left;
+    // 1.20.1 has no such constants: it sets the vectors from literals, and it does not build
+    // the view from this quaternion at all (see GameRendererMixin.snapmatica$rollView).
+    @Shadow @Final private static org.joml.Vector3f FORWARDS;
+    @Shadow @Final private static org.joml.Vector3f UP;
+    @Shadow @Final private static org.joml.Vector3f LEFT;
+
+    /**
+     * Turns the camera about its own view axis -- the one rotation vanilla never makes.
+     *
+     * <p>Applied after the pupil offset, deliberately. The burst's step across the pupil and
+     * its toe-in are worked out in the level frame, and the pupil is a disc, so a set of
+     * points on it turned by the roll is the same set of points: nothing about the aperture
+     * changes. Turning first would only have made the toe-in's yaw and pitch mean something
+     * other than what the step assumed.
+     *
+     * <p>Local Z of the orientation is the view axis on every version this builds for, so a
+     * right-hand turn about it is the roll whatever the yaw and pitch. Clockwise as the
+     * photographer sees it is a negative turn about an axis pointing back at them.
+     */
+    @org.spongepowered.asm.mixin.Unique
+    private void snapmatica$applyRoll() {
+        float deg = dev.shunti.snapmatica.client.CameraRoll.effectiveDeg(
+                net.minecraft.client.Minecraft.getInstance());
+        if (deg == 0f) return;
+        rotation.rotateZ((float) Math.toRadians(-deg));
+        FORWARDS.rotate(rotation, forwards);
+        UP.rotate(rotation, up);
+        LEFT.rotate(rotation, left);
+    }
 
     // moveBy took doubles until 1.21; the pupil offset is a float either way, so the two
     // branches differ only in the shadow's descriptor and both feed snapmatica$moveByPupil.
@@ -195,6 +233,7 @@ public abstract class CameraMixin {
         // The pupil offset has to ride both paths or a burst taken through the freecam would
         // silently have no parallax at all.
         snapmatica$applyPupilOffset();
+        snapmatica$applyRoll();
         ci.cancel();
     }
 
@@ -202,6 +241,7 @@ public abstract class CameraMixin {
     private void snapmatica$pupilOffset(BlockGetter world, Entity focusedEntity, boolean detached,
                                         boolean thirdPersonFront, float tickDelta, CallbackInfo ci) {
         snapmatica$applyPupilOffset();
+        snapmatica$applyRoll();
     }
 
     @Unique

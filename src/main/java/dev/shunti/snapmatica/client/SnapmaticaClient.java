@@ -14,7 +14,6 @@ public class SnapmaticaClient {
     private static KeyMapping shootKey;
     private static KeyMapping settingsKey;
     private static KeyMapping viewfinderSneakKey;  // toggle sneak-to-viewfinder mode
-    private static KeyMapping orientationKey;       // toggle portrait/landscape framing
     private static KeyMapping recordKey;            // start/stop video recording
     private static KeyMapping pinKey;               // drone mode: drop/clear the orbit pin
     private static KeyMapping freecamLockKey;       // freecam: lock camera, hand WASD/mouse back to the player
@@ -342,6 +341,24 @@ public class SnapmaticaClient {
     public static int ndStops = 0;
 
     /**
+     * Exposure compensation, in stops: how much brighter (+) or darker (-) than the meter's
+     * idea of correct an automatic mode should expose.
+     *
+     * <p>Without it the automatic modes had no way to be told the scene is not average. The
+     * meter aims every frame at middle grey, so a backlit subject came out dark and a night
+     * street came out grey, and turning the ISO up changed nothing -- in Av the shutter simply
+     * shortened to cancel it. Every camera with an automatic mode has this dial for exactly
+     * that reason.
+     *
+     * <p>It works the way an ND filter does in reverse: the automatic axis is asked for this
+     * many stops more (or less) light than the meter wants, so the photograph moves by exactly
+     * that and the exposure meter's needle sits on the compensation rather than on zero. In M
+     * there is nothing automatic to steer, so it does nothing there, as on a real body.
+     */
+    public static float exposureCompEv = 0f;
+    public static final float EXPOSURE_COMP_MAX = 3f;
+
+    /**
      * Crop factor of the simulated sensor relative to 35 mm full frame — 1.0 is the 36x24 mm
      * frame every distance in this mod was written against, 1.5 an APS-C body, 2.0 Micro Four
      * Thirds, 2.7 a 1-inch compact, 0.79 a 44x33 medium-format back.
@@ -551,6 +568,19 @@ public class SnapmaticaClient {
     /** Condition true, the viewfinder and saved photo use a 2:3 portrait frame instead of 3:2. */
     public static boolean portraitOrientation = false;
 
+    /**
+     * How far the camera is turned about its lens axis, in degrees, clockwise as the
+     * photographer sees it. See {@link CameraRoll}.
+     */
+    public static float cameraRollDeg = 0f;
+
+    /**
+     * The camera's whole turn about its lens axis, in degrees, clockwise: the source both
+     * {@link #cameraRollDeg} (the tilt) and {@link #portraitOrientation} (a quarter turn or
+     * more) are derived from. Set through {@link CameraRoll#setTurn}.
+     */
+    public static float cameraTurnDeg = 0f;
+
     // Shutter speed table (same as Photographica's CameraSettings)
     public static final double[] SHUTTER_SECONDS = {
             30.0, 15.0, 8.0, 4.0, 2.0, 1.0,
@@ -572,8 +602,6 @@ public class SnapmaticaClient {
                 "key.snapmatica.settings", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.snapmatica"));
         viewfinderSneakKey = register(event, new KeyMapping(
                 "key.snapmatica.viewfinder_sneak", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_COMMA, "category.snapmatica"));
-        orientationKey = register(event, new KeyMapping(
-                "key.snapmatica.orientation", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_V, "category.snapmatica"));
         recordKey = register(event, new KeyMapping(
                 "key.snapmatica.record", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.snapmatica"));
         pinKey = register(event, new KeyMapping(
@@ -604,11 +632,7 @@ public class SnapmaticaClient {
             SnapmaticaConfig.save();
         }
 
-        // Toggle portrait / landscape framing
-        while (orientationKey.consumeClick()) {
-            portraitOrientation = !portraitOrientation;
-            SnapmaticaConfig.save();
-        }
+            // No orientation key: portrait is a quarter turn of the camera -- see CameraRoll.
 
         // Recording key: open settings screen when idle, stop directly when recording
         while (recordKey.consumeClick()) {
@@ -640,6 +664,8 @@ public class SnapmaticaClient {
         if (settingsKey.consumeClick()) {
             minecraft.setScreen(new CameraScreen());
         }
+
+        CameraRoll.releaseIfStale(minecraft);
 
         // Auto-focus (AF / MOB) drives focusDistance while the viewfinder is active
         AutoFocus.tick(minecraft);
@@ -1059,7 +1085,7 @@ public class SnapmaticaClient {
             // filter is fitted precisely to force a slower shutter or a wider aperture in light
             // that would not otherwise allow one; answering it by raising ISO would cancel the
             // only reason to fit it, and hand back a noisier frame for the privilege.
-            axisStopsUsed = ndStops;
+            axisStopsUsed = ndStops + exposureCompEv;
             if (meteredExtraStops > 0.0) {
                 final double AXIS_STOPS_BUDGET = 3.0;
                 final double isoCeiling = 25600.0;

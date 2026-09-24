@@ -101,6 +101,16 @@ public class GameRendererMixin {
      * input back and they started actually walking. Freecam owns the camera outright, so
      * nothing else gets to perturb it either.
      */
+    /**
+     * The roll, on 1.20.1. That version builds the view in {@code renderWorld} from yaw and pitch
+     * -- {@code multiply(POSITIVE_X(pitch))} then {@code multiply(POSITIVE_Y(yaw + 180))} -- and
+     * never reads the camera's quaternion, so turning the quaternion (what CameraMixin does on
+     * 1.21+, where the view IS that quaternion) would move nothing on screen. The turn goes into
+     * the same stack instead, just before the pitch: view = Rz(roll) * Rx(pitch) * Ry(yaw), which
+     * is exactly the 1.21 view with the same roll. The frustum is built from this stack a few
+     * calls later, so culling follows the turned frame for free.
+     */
+
     @Inject(method = "bobView", at = @At("HEAD"), cancellable = true)
     private void snapmatica$noBobInFreecam(com.mojang.blaze3d.vertex.PoseStack matrices,
                                            float tickDelta, CallbackInfo ci) {

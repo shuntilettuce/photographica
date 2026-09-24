@@ -137,8 +137,12 @@ public final class ViewfinderOverlay {
         int em = SnapmaticaClient.exposureMode;
         int si = clampIdx((em == 1 || em == 3) ? SnapmaticaClient.autoShutterIdx : SnapmaticaClient.shutterSpeedIdx, SHUTTERS.length);
         float dispAp = (em == 2 || em == 3) ? SnapmaticaClient.autoAperture : SnapmaticaClient.aperture;
-        ctx.drawString(tr, String.format("F%s  %s  ISO%d  %s",
-                fmt(dispAp),SHUTTERS[si],SnapmaticaClient.iso,fp),
+        // Compensation is shown whenever it is doing something, because a frame deliberately
+        // exposed off the meter is otherwise indistinguishable from one the meter got wrong.
+        boolean compOn = (em != 0) && Math.round(SnapmaticaClient.exposureCompEv * 3f) != 0;
+        String comp = compOn ? "  " + CameraScreen.fmtEv(SnapmaticaClient.exposureCompEv) : "";
+        ctx.drawString(tr, String.format("F%s  %s  ISO%d  %s%s",
+                fmt(dispAp),SHUTTERS[si],SnapmaticaClient.iso,fp,comp),
                 fx+6,fy2-tr.lineHeight-14,0xFFE8DCC4);
         if (SnapmaticaClient.lensType != 0) {
             // Same predicate the DoF shader is driven from, so the readout cannot claim
@@ -151,6 +155,8 @@ public final class ViewfinderOverlay {
 
         // Exposure meter
         renderExposureMeter(ctx, fx, fx2, fy2);
+
+        renderLevel(ctx, tr, fx, fy, fx2, fy2);
 
         // Lens label. snapmatica has one lens and it zooms the whole range, so it is named
         // after that range rather than the fixed focal lengths photographica's kit had.
@@ -221,6 +227,49 @@ public final class ViewfinderOverlay {
             }
         }
 
+    }
+
+    // ── Electronic level ────────────────────────────────────────────────────────
+
+    /**
+     * Where the horizon is, while the camera is turned or being turned.
+     *
+     * <p>A line through the centre at the true horizon's angle, and short fixed marks either
+     * side at the frame's own horizontal: when the line lies on the marks, the camera is level.
+     * Green at level, cream otherwise, with the angle beside it. Hidden when level and not being
+     * gripped, because a level that is always on screen is one more thing in the way of the
+     * picture. Never in the photograph -- the HUD is drawn after the capture.
+     */
+    private static void renderLevel(GuiGraphics ctx, Font tr, int fx, int fy, int fx2, int fy2) {
+        Minecraft mc = Minecraft.getInstance();
+        if (!CameraRoll.inCameraContext(mc)) return;
+        float deg = CameraRoll.effectiveDeg(mc);          // the turn the camera makes
+        float tiltDeg = CameraRoll.tiltDeg();             // off the nearest level
+        if (tiltDeg == 0f && !CameraRoll.isGripping()) return;
+        int cx = (fx + fx2) / 2, cy = (fy + fy2) / 2;
+        int half = Math.max(24, (fx2 - fx) / 6);
+        boolean level = tiltDeg == 0f;
+        int color = level ? 0xFF7CD67C : 0xFFE8DCC4;
+        // Fixed marks: the frame's horizontal.
+        ctx.fill(cx - half - 12, cy, cx - half - 4, cy + 1, 0xA0E8DCC4);
+        ctx.fill(cx + half + 4, cy, cx + half + 12, cy + 1, 0xA0E8DCC4);
+        // The horizon as the turned camera sees it: turned the other way by the same angle. A
+        // clockwise camera shows the horizon counter-clockwise, which with screen y running
+        // down is a negative angle for the matrix stack.
+        double a = Math.toRadians(-deg);
+        drawTurnedLine(ctx, cx, cy, half, a, color);
+        String label = (CameraRoll.isUpsideDown() ? "180\u00b0 " : "")
+                + (level ? "0\u00b0" : String.format("%+.1f\u00b0", tiltDeg));
+        ctx.drawString(tr, label, cx + half + 16, cy - tr.lineHeight / 2, color);
+    }
+
+    private static void drawTurnedLine(GuiGraphics ctx, int cx, int cy, int half, double angle, int color) {
+        com.mojang.blaze3d.vertex.PoseStack m = ctx.pose();
+        m.pushPose();
+        m.translate(cx, cy + 0.5f, 0f);
+        m.mulPose(com.mojang.math.Axis.ZP.rotation((float) angle));
+        ctx.fill(-half, 0, half, 1, color);
+        m.popPose();
     }
 
     // ── Exposure meter ──────────────────────────────────────────────────────────
