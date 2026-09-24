@@ -222,6 +222,29 @@ public class GameRendererMixin {
      * input back and they started actually walking. Freecam owns the camera outright, so
      * nothing else gets to perturb it either.
      */
+    /**
+     * The roll, on 1.20.1. That version builds the view in {@code renderWorld} from yaw and pitch
+     * -- {@code multiply(POSITIVE_X(pitch))} then {@code multiply(POSITIVE_Y(yaw + 180))} -- and
+     * never reads the camera's quaternion, so turning the quaternion (what CameraMixin does on
+     * 1.21+, where the view IS that quaternion) would move nothing on screen. The turn goes into
+     * the same stack instead, just before the pitch: view = Rz(roll) * Rx(pitch) * Ry(yaw), which
+     * is exactly the 1.21 view with the same roll. The frustum is built from this stack a few
+     * calls later, so culling follows the turned frame for free.
+     */
+    //? if <1.21 {
+    /*@Inject(method = "renderWorld",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/Camera;getPitch()F"))
+    private void snapmatica$rollView(float tickDelta, long limitTime,
+                                     net.minecraft.client.util.math.MatrixStack matrices,
+                                     CallbackInfo ci) {
+        float deg = dev.shunti.snapmatica.client.CameraRoll.effectiveDeg(
+                net.minecraft.client.MinecraftClient.getInstance());
+        if (deg != 0f) {
+            matrices.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_Z.rotationDegrees(deg));
+        }
+    }
+    *///?}
+
     @Inject(method = "bobView", at = @At("HEAD"), cancellable = true)
     private void snapmatica$noBobInFreecam(net.minecraft.client.util.math.MatrixStack matrices,
                                            float tickDelta, CallbackInfo ci) {

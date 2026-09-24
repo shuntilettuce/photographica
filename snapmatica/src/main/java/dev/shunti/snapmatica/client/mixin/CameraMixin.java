@@ -64,9 +64,13 @@ public abstract class CameraMixin {
     @Shadow @Final private org.joml.Vector3f horizontalPlane;
     @Shadow @Final private org.joml.Vector3f verticalPlane;
     @Shadow @Final private org.joml.Vector3f diagonalPlane;
+    // 1.20.1 has no such constants: it sets the vectors from literals, and it does not build
+    // the view from this quaternion at all (see GameRendererMixin.snapmatica$rollView).
+    //? if >=1.21 {
     @Shadow @Final private static org.joml.Vector3f HORIZONTAL;
     @Shadow @Final private static org.joml.Vector3f VERTICAL;
     @Shadow @Final private static org.joml.Vector3f DIAGONAL;
+    //?}
 
     /**
      * Turns the camera about its own view axis -- the one rotation vanilla never makes.
@@ -86,10 +90,17 @@ public abstract class CameraMixin {
         float deg = dev.shunti.snapmatica.client.CameraRoll.effectiveDeg(
                 net.minecraft.client.MinecraftClient.getInstance());
         if (deg == 0f) return;
+        //? if >=1.21 {
         rotation.rotateZ((float) Math.toRadians(-deg));
         HORIZONTAL.rotate(rotation, horizontalPlane);
         VERTICAL.rotate(rotation, verticalPlane);
         DIAGONAL.rotate(rotation, diagonalPlane);
+        //?} else {
+        /*// 1.20.1's quaternion is rotationYXZ(-yaw, pitch, 0), the view's inverse up to a half
+        // turn about Y -- which flips the sense of a turn about local Z. Only billboards read
+        // it there (particles facing the camera); the picture itself turns in renderWorld.
+        rotation.rotateZ((float) Math.toRadians(deg));
+        *///?}
     }
 
     // moveBy took doubles until 1.21; the pupil offset is a float either way, so the two
