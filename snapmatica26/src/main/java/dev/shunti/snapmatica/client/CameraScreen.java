@@ -246,6 +246,17 @@ public class CameraScreen extends Screen {
                     SnapmaticaClient.updateAutoValues(); },
                 true));
 
+        // Only meaningful where something is automatic; in M it reads as a dash, as the
+        // compensation display does on a body in manual.
+        boolean anyAuto = apAuto || ssAuto;
+        out.add(new Item("snapmatica.camera.exp_comp",
+                () -> anyAuto ? fmtEv(SnapmaticaClient.exposureCompEv) : "-",
+                step -> { float v = Math.round((SnapmaticaClient.exposureCompEv + step / 3f) * 3f) / 3f;
+                    SnapmaticaClient.exposureCompEv = Math.max(-SnapmaticaClient.EXPOSURE_COMP_MAX,
+                            Math.min(SnapmaticaClient.EXPOSURE_COMP_MAX, v));
+                    SnapmaticaClient.updateAutoValues(); SnapmaticaConfig.save(); },
+                anyAuto));
+
         // Shows the stops as well as the ring marking, because the stops are what the exposure
         // actually does — see SnapmaticaClient.ndStops.
         out.add(new Item("snapmatica.camera.nd_filter",
@@ -302,6 +313,21 @@ public class CameraScreen extends Screen {
                                                        SnapmaticaClient.afPointY * 100f),
                 step -> { SnapmaticaClient.afPointX = 0f; SnapmaticaClient.afPointY = 0f;
                     SnapmaticaConfig.save(); },
+                true));
+
+        // Same shape as the AF point row: it shows where the roll is and names the grip, and
+        // pressing it is the one thing a button can usefully do -- level the camera, in
+        // whichever orientation the turn has put it.
+        out.add(new Item("snapmatica.camera.roll",
+                () -> (SnapmaticaClient.portraitOrientation
+                        ? net.minecraft.network.chat.Component.translatable("snapmatica.camera.roll_portrait").getString() + " "
+                        : CameraRoll.isUpsideDown()
+                        ? net.minecraft.network.chat.Component.translatable("snapmatica.camera.roll_upside_down").getString() + " "
+                        : "")
+                        + (CameraRoll.tiltDeg() == 0f
+                        ? net.minecraft.network.chat.Component.translatable("snapmatica.camera.roll_level").getString()
+                        : String.format("%+.1f\u00b0", CameraRoll.tiltDeg())),
+                step -> { CameraRoll.reset(); SnapmaticaConfig.save(); },
                 true));
 
         out.add(new Item("snapmatica.camera.focus_area",
@@ -497,6 +523,16 @@ public class CameraScreen extends Screen {
      * intermediate stops would suggest a finer control than the eye actually gets.
      */
     private static final int[] APERTURE_SAMPLES = { 8, 16, 32, 64, 128 };
+
+    /** Compensation as a camera shows it: thirds of a stop, signed, zero as a plain 0. */
+    static String fmtEv(float ev) {
+        int thirds = Math.round(ev * 3f);
+        if (thirds == 0) return "0 EV";
+        String sign = thirds > 0 ? "+" : "-";
+        int a = Math.abs(thirds), whole = a / 3, rem = a % 3;
+        String frac = rem == 0 ? "" : (rem == 1 ? " 1/3" : " 2/3");
+        return sign + (whole > 0 || rem == 0 ? whole : "") + (whole > 0 ? frac : frac.trim()) + " EV";
+    }
 
     private static String fmtScale(float mm) {
         if (mm >= 1000f) return String.format("1blk = %.1fm", mm / 1000f);

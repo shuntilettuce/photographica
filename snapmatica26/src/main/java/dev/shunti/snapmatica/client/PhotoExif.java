@@ -39,6 +39,8 @@ final class PhotoExif {
     private final int    focalLengthMm;
     private final int    equivalentFocalMm;
     private final int    exposureProgram;
+    /** Stops of exposure compensation dialled in; 0 in M, where it does nothing. */
+    private final double exposureBias;
     private final boolean autoWhiteBalance;
     private final int    width, height;
     private final String captureTime;
@@ -67,6 +69,7 @@ final class PhotoExif {
         // EXIF's own enumeration: 1 manual, 2 program, 3 aperture priority, 4 shutter priority.
         // This mod's Av means "aperture is what you set, shutter follows", which is EXIF's
         // aperture priority; Tv is the mirror of it.
+        this.exposureBias = (em == 0) ? 0.0 : SnapmaticaClient.exposureCompEv;
         this.exposureProgram = switch (em) {
             case 1 -> 3;
             case 2 -> 4;
@@ -104,6 +107,7 @@ final class PhotoExif {
         e.add(Tiff.shortEntry(34855, (int) Math.round(iso)));           // ISOSpeedRatings
         e.add(Tiff.asciiEntry(36867, captureTime));                     // DateTimeOriginal
         e.add(Tiff.asciiEntry(36868, captureTime));                     // DateTimeDigitized
+        e.add(Tiff.srationalEntry(37380, exposureBias));                // ExposureBiasValue
         // Metering mode 5 is EXIF's "Pattern" — a multi-zone evaluative meter, which is what
         // SnapmaticaClient.updateMetering's centre-weighted five-point sampling is.
         e.add(Tiff.shortEntry(37383, 5));                               // MeteringMode

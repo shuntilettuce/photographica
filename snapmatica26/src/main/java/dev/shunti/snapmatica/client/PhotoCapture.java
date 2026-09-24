@@ -720,6 +720,16 @@ public final class PhotoCapture {
         net.minecraft.world.phys.Vec3 fwd   = net.minecraft.world.phys.Vec3.directionFromRotation(basePitch, baseYaw);
         net.minecraft.world.phys.Vec3 right = net.minecraft.world.phys.Vec3.directionFromRotation(0f, baseYaw + 90f);
         net.minecraft.world.phys.Vec3 up    = right.cross(fwd);
+        // A turned camera carries the frame round with it, so a point on the frame is that
+        // many degrees round in the level frame. Clockwise roll: the frame's right points a
+        // little down.
+        float rollDeg = CameraRoll.effectiveDeg(mc);
+        if (rollDeg != 0f) {
+            double r = Math.toRadians(rollDeg), c = Math.cos(r), sn = Math.sin(r);
+            double rx =  tx * c + ty * sn;
+            double ry = -tx * sn + ty * c;
+            tx = rx; ty = ry;
+        }
         net.minecraft.world.phys.Vec3 d = fwd.add(right.scale(tx))
                              .add(up.scale(ty)).normalize();
 

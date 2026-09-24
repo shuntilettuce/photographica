@@ -40,6 +40,7 @@ public final class CameraScrollHandler {
     // Exposure mode constants
     private static final int EXP_AV = 1;
     private static final int EXP_P  = 3;
+    private static final int EXP_TV = 2;
     // Focus mode constants
     private static final int FOCUS_MF = 0;
 
@@ -97,7 +98,21 @@ public final class CameraScrollHandler {
         return FOCAL_STOPS.get(Math.max(0, Math.min(FOCAL_STOPS.size() - 1, idx + dir)));
     }
 
+    /** A third of a stop per detent, the step every camera's compensation dial clicks in. */
+    private static void adjustExposureComp(int dir) {
+        float stepped = Math.round((SnapmaticaClient.exposureCompEv + dir / 3f) * 3f) / 3f;
+        SnapmaticaClient.exposureCompEv = Math.max(-SnapmaticaClient.EXPOSURE_COMP_MAX,
+                Math.min(SnapmaticaClient.EXPOSURE_COMP_MAX, stepped));
+        SnapmaticaClient.updateAutoValues();
+    }
+
     private static void adjustAperture(int dir) {
+        // In Tv and P the aperture is the camera's to choose, so its dial becomes the
+        // compensation dial -- what the same dial does on a real body in those modes.
+        if (SnapmaticaClient.exposureMode == EXP_TV || SnapmaticaClient.exposureMode == EXP_P) {
+            adjustExposureComp(dir);
+            return;
+        }
         int idx = nearestIdx(APERTURES, SnapmaticaClient.aperture);
         // Scroll up → open aperture → lower f-number
         int newIdx = Math.max(0, Math.min(APERTURES.size() - 1, idx - dir));
@@ -110,7 +125,11 @@ public final class CameraScrollHandler {
 
     private static void adjustShutterSpeed(int dir) {
         if (SnapmaticaClient.exposureMode == EXP_AV
-                || SnapmaticaClient.exposureMode == EXP_P) return; // auto
+                || SnapmaticaClient.exposureMode == EXP_P) {
+            // The shutter is automatic here, so this dial becomes exposure compensation.
+            adjustExposureComp(dir);
+            return;
+        }
         SnapmaticaClient.shutterSpeedIdx = Math.max(0,
                 Math.min(SHUTTER_COUNT - 1, SnapmaticaClient.shutterSpeedIdx + dir));
     }

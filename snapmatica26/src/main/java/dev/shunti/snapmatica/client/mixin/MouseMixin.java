@@ -43,6 +43,15 @@ public abstract class MouseMixin {
      */
     @Inject(method = "turnPlayer", at = @At("HEAD"), cancellable = true)
     private void snapmatica$freecamLook(double partialTick, CallbackInfo ci) {
+        // The roll grip takes the mouse outright: sideways motion turns the camera about its
+        // axis, and nothing aims -- the frame holds still while it is levelled or tilted.
+        if (dev.shunti.snapmatica.client.CameraRoll.isGripping()) {
+            Minecraft mc0 = Minecraft.getInstance();
+            double s = mc0.options.sensitivity().get() * 0.6 + 0.2;
+            dev.shunti.snapmatica.client.CameraRoll.onDrag(accumulatedDX * s * s * s * 8.0);
+            ci.cancel();
+            return;
+        }
         if (!Freecam.isActive() || Freecam.isLocked()) return;
         Minecraft mc = Minecraft.getInstance();
         double sensitivity = mc.options.sensitivity().get() * 0.6 + 0.2;
@@ -81,6 +90,13 @@ public abstract class MouseMixin {
     private void snapmatica$blockClicksInFreecam(long window, MouseButtonInfo buttonInfo,
                                                  int action, CallbackInfo ci) {
         Minecraft mc = Minecraft.getInstance();
+        if ((action == org.lwjgl.glfw.GLFW.GLFW_PRESS || action == org.lwjgl.glfw.GLFW.GLFW_RELEASE)
+                && dev.shunti.snapmatica.client.CameraRoll.onButton(mc,
+                        buttonInfo.button() == org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT, buttonInfo.button() == org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_RIGHT,
+                        action == org.lwjgl.glfw.GLFW.GLFW_PRESS)) {
+            ci.cancel();
+            return;
+        }
         if (Freecam.isActive() && !Freecam.isLocked() && mc.screen == null) {
             snapmatica$trackButton(buttonInfo.button(), action);
             ci.cancel();

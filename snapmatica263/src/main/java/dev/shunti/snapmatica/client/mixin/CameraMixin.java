@@ -55,6 +55,39 @@ public abstract class CameraMixin {
     @Shadow
     private boolean detached;
 
+    // The orientation, the three direction vectors vanilla derives from it, and the flag that
+    // makes the cached view matrix be rebuilt. Roll updates all of them.
+    @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final private org.joml.Quaternionf rotation;
+    @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final private org.joml.Vector3f forwards;
+    @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final private org.joml.Vector3f up;
+    @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final private org.joml.Vector3f left;
+    @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final private static org.joml.Vector3fc FORWARDS;
+    @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final private static org.joml.Vector3fc UP;
+    @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final private static org.joml.Vector3fc LEFT;
+    @org.spongepowered.asm.mixin.Shadow private int matrixPropertiesDirty;
+
+    /**
+     * Turns the camera about its own view axis -- the one rotation vanilla never makes. See
+     * the Fabric tree's CameraMixin for why it comes after the pupil offset.
+     *
+     * <p>26.x caches the view matrix behind a dirty flag and prepares the cull frustum inside
+     * update(), from the level view. So the flag is raised again, and the frustum prepared
+     * again from the turned view, or the corners a tilted frame swings into would be culled.
+     */
+    @Unique
+    private void snapmatica$applyRoll() {
+        float deg = dev.shunti.snapmatica.client.CameraRoll.effectiveDeg(
+                net.minecraft.client.Minecraft.getInstance());
+        if (deg == 0f) return;
+        rotation.rotateZ((float) Math.toRadians(-deg));
+        FORWARDS.rotate(rotation, forwards);
+        UP.rotate(rotation, up);
+        LEFT.rotate(rotation, left);
+        matrixPropertiesDirty |= 3;
+        prepareCullFrustum(getViewRotationMatrix(cachedViewRotMatrix),
+                createProjectionMatrixForCulling(), position());
+    }
+
     @Shadow
     private Matrix4f cachedViewRotMatrix;
 
@@ -138,6 +171,7 @@ public abstract class CameraMixin {
     @Inject(method = "update", at = @At("RETURN"))
     private void snapmatica$pupilAfterUpdate(DeltaTracker deltaTracker, CallbackInfo ci) {
         snapmatica$applyPupilOffset();
+        snapmatica$applyRoll();
     }
 
     @Inject(method = "update", at = @At("HEAD"), cancellable = true)
@@ -164,6 +198,7 @@ public abstract class CameraMixin {
 
         Matrix4f viewRot = this.getViewRotationMatrix(this.cachedViewRotMatrix);
         this.prepareCullFrustum(viewRot, this.createProjectionMatrixForCulling(), interpPos);
+        snapmatica$applyRoll();
 
         ci.cancel();
     }
