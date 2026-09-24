@@ -316,11 +316,15 @@ public class CameraScreen extends Screen {
                 true));
 
         // Same shape as the AF point row: it shows where the roll is and names the grip, and
-        // pressing it is the one thing a button can usefully do -- level the camera.
+        // pressing it is the one thing a button can usefully do -- level the camera, in
+        // whichever orientation the turn has put it.
         out.add(new Item("snapmatica.camera.roll",
-                () -> SnapmaticaClient.cameraRollDeg == 0f
+                () -> (SnapmaticaClient.portraitOrientation
+                        ? net.minecraft.text.Text.translatable("snapmatica.camera.roll_portrait").getString() + " "
+                        : "")
+                        + (SnapmaticaClient.cameraRollDeg == 0f
                         ? net.minecraft.text.Text.translatable("snapmatica.camera.roll_level").getString()
-                        : String.format("%+.1f\u00b0", SnapmaticaClient.cameraRollDeg),
+                        : String.format("%+.1f\u00b0", SnapmaticaClient.cameraRollDeg)),
                 step -> { CameraRoll.reset(); SnapmaticaConfig.save(); },
                 true));
 

@@ -63,8 +63,11 @@ public final class SnapmaticaConfig {
         SnapmaticaClient.droneMode               = getBool(p, "droneMode",              SnapmaticaClient.droneMode);
         SnapmaticaClient.freecamHidePlayer       = getBool(p, "freecamHidePlayer",      SnapmaticaClient.freecamHidePlayer);
         SnapmaticaClient.exposureMode           = getInt (p, "exposureMode",           SnapmaticaClient.exposureMode);
-        SnapmaticaClient.cameraRollDeg          = Math.max(-CameraRoll.MAX_DEG, Math.min(CameraRoll.MAX_DEG,
-                getFloat(p, "cameraRollDeg", SnapmaticaClient.cameraRollDeg)));
+        // The turn is the source of truth. A file from before it existed has only the portrait
+        // flag, which was a quarter turn all along.
+        CameraRoll.setTurn(p.containsKey("cameraTurnDeg")
+                ? getFloat(p, "cameraTurnDeg", 0f)
+                : (SnapmaticaClient.portraitOrientation ? 90f : 0f));
         SnapmaticaClient.exposureCompEv         = Math.max(-SnapmaticaClient.EXPOSURE_COMP_MAX,
                 Math.min(SnapmaticaClient.EXPOSURE_COMP_MAX, getFloat(p, "exposureCompEv", SnapmaticaClient.exposureCompEv)));
         SnapmaticaClient.focusMode              = getInt (p, "focusMode",              SnapmaticaClient.focusMode);
@@ -115,7 +118,7 @@ public final class SnapmaticaConfig {
         p.setProperty("droneMode",              Boolean.toString(SnapmaticaClient.droneMode));
         p.setProperty("freecamHidePlayer",      Boolean.toString(SnapmaticaClient.freecamHidePlayer));
         p.setProperty("exposureMode",           Integer.toString(SnapmaticaClient.exposureMode));
-        p.setProperty("cameraRollDeg",          Float.toString(SnapmaticaClient.cameraRollDeg));
+        p.setProperty("cameraTurnDeg",          Float.toString(SnapmaticaClient.cameraTurnDeg));
         p.setProperty("exposureCompEv",         Float.toString(SnapmaticaClient.exposureCompEv));
         p.setProperty("focusMode",              Integer.toString(SnapmaticaClient.focusMode));
         p.setProperty("shutterSpeedIdx",        Integer.toString(SnapmaticaClient.shutterSpeedIdx));

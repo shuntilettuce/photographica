@@ -32,7 +32,6 @@ public class SnapmaticaClient implements ClientModInitializer {
     private static KeyBinding shootKey;
     private static KeyBinding settingsKey;
     private static KeyBinding viewfinderSneakKey;  // toggle sneak-to-viewfinder mode
-    private static KeyBinding orientationKey;       // toggle portrait/landscape framing
     private static KeyBinding recordKey;            // start/stop video recording
     private static KeyBinding pinKey;               // drone mode: drop/clear the orbit pin
     private static KeyBinding freecamLockKey;       // freecam: lock camera, hand WASD/mouse back to the player
@@ -593,6 +592,13 @@ public class SnapmaticaClient implements ClientModInitializer {
      */
     public static float cameraRollDeg = 0f;
 
+    /**
+     * The camera's whole turn about its lens axis, in degrees, clockwise: the source both
+     * {@link #cameraRollDeg} (the tilt) and {@link #portraitOrientation} (a quarter turn or
+     * more) are derived from. Set through {@link CameraRoll#setTurn}.
+     */
+    public static float cameraTurnDeg = 0f;
+
     // Shutter speed table (same as Photographica's CameraSettings)
     public static final double[] SHUTTER_SECONDS = {
             30.0, 15.0, 8.0, 4.0, 2.0, 1.0,
@@ -613,8 +619,6 @@ public class SnapmaticaClient implements ClientModInitializer {
                 "key.snapmatica.settings", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, SNAPMATICA_CATEGORY));
         viewfinderSneakKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.viewfinder_sneak", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_COMMA, SNAPMATICA_CATEGORY));
-        orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.orientation", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, SNAPMATICA_CATEGORY));
         recordKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.record", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, SNAPMATICA_CATEGORY));
         pinKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
@@ -630,8 +634,6 @@ public class SnapmaticaClient implements ClientModInitializer {
                 "key.snapmatica.settings", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.snapmatica"));
         viewfinderSneakKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.viewfinder_sneak", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_COMMA, "category.snapmatica"));
-        orientationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.snapmatica.orientation", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, "category.snapmatica"));
         recordKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.snapmatica.record", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.snapmatica"));
         pinKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
@@ -656,11 +658,7 @@ public class SnapmaticaClient implements ClientModInitializer {
                 SnapmaticaConfig.save();
             }
 
-            // Toggle portrait / landscape framing
-            while (orientationKey.wasPressed()) {
-                portraitOrientation = !portraitOrientation;
-                SnapmaticaConfig.save();
-            }
+            // No orientation key: portrait is a quarter turn of the camera -- see CameraRoll.
 
             // Recording key: open settings screen when idle, stop directly when recording
             while (recordKey.wasPressed()) {
