@@ -5,8 +5,8 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 
 /**
- * Turning the camera about its own lens axis: a tilted frame, and past 45 degrees a
- * portrait one.
+ * Turning the camera about its own lens axis: a tilted frame, a portrait one past 45 degrees,
+ * and all the way round to upside down.
  *
  * <p>Minecraft's camera has no roll: {@code Camera.setRotation} builds its orientation from yaw
  * and pitch alone, with the third angle hard-wired to zero. A camera held in hands has three
@@ -21,6 +21,11 @@ import net.minecraft.client.MinecraftClient;
  * turned, because the viewfinder is the camera's own back and turns with it; the world inside
  * does.
  *
+ * <p>It turns without end, and half a turn is not quietly undone: at 180 degrees the frame is
+ * landscape again and the world in it is upside down, which is the photograph a camera held
+ * upside down takes. Only the quarter turns are folded into the orientation, because that is
+ * the one change a photograph's frame can make.
+ *
  * <p>Only while the camera is up -- the viewfinder, freecam, or a recording. Rolling the
  * player's ordinary view would be a different mod.
  *
@@ -31,7 +36,7 @@ import net.minecraft.client.MinecraftClient;
  * move. Alt is already the camera's modifier (Alt + wheel is the shutter dial).
  *
  * <p><b>Getting level again.</b> A tilt is only a choice if level is easy to come back to.
- * The angle has a notch at level in both orientations -- 0 and a quarter turn either way --
+ * The angle has a notch at every level -- 0, a quarter turn either way, and half a turn --
  * that holds it exactly level until the drag has pushed a few degrees past. The viewfinder
  * draws an electronic level while the camera is tilted or being gripped -- a finder aid,
  * never in the photograph.
@@ -40,10 +45,6 @@ import net.minecraft.client.MinecraftClient;
 public final class CameraRoll {
     private CameraRoll() {}
 
-    /** Tilt either side of level, in either orientation, before the frame changes over. */
-    public static final float MAX_DEG = 45f;
-    /** Furthest the camera turns: a portrait frame tilted the full 45 degrees. */
-    public static final float MAX_TURN_DEG = 135f;
     /** Half-width of the notch at each level, in degrees of drag. */
     private static final float DETENT_DEG = 4f;
     /** Drag between the centres of two neighbouring notches. */
@@ -53,8 +54,16 @@ public final class CameraRoll {
 
     private static boolean rightHeld = false, leftHeld = false;
     private static boolean gripping = false;
-    /** The drag in raw degrees, notches included. */
+    /** The drag in raw degrees, notches included; wraps with the turn. */
     private static double raw = 0.0;
+    /** What is left of the turn past the nearest level, and whether that level is upside down. */
+    private static float tilt = 0f;
+    private static boolean upsideDown = false;
+
+    /** Degrees off the nearest level, whichever orientation that is. */
+    public static float tiltDeg() { return tilt; }
+    /** Whether the camera is nearer half a turn than level: the world is upside down. */
+    public static boolean isUpsideDown() { return upsideDown; }
 
     /** Whether roll applies at all right now: the camera is up. */
     public static boolean inCameraContext(MinecraftClient mc) {
@@ -75,31 +84,37 @@ public final class CameraRoll {
      * the mod reads: a quarter turn either way is portrait, what is left over is the tilt.
      */
     public static void setTurn(float turnDeg) {
-        float t = Math.max(-MAX_TURN_DEG, Math.min(MAX_TURN_DEG, turnDeg));
-        int quarter = quarterOf(t);
-        boolean portrait = quarter != 0;
+        float t = normalize(turnDeg);
+        int quarter = quarterOf(t);                 // -2..2; +-2 are both half a turn
+        boolean portrait = Math.abs(quarter) == 1;
         if (portrait != SnapmaticaClient.portraitOrientation) {
             SnapmaticaClient.portraitOrientation = portrait;
         }
+        tilt = t - 90f * quarter;
+        upsideDown = Math.abs(quarter) == 2;
         SnapmaticaClient.cameraTurnDeg = t;
-        SnapmaticaClient.cameraRollDeg = t - 90f * quarter;
+        // The turn the render camera actually makes: the tilt, plus half a turn when upside
+        // down. A portrait quarter turn is the frame's, not the world's, so it is not in here.
+        SnapmaticaClient.cameraRollDeg = tilt + (upsideDown ? 180f : 0f);
     }
 
-    /**
-     * Which quarter turn an angle belongs to: -1, 0 or 1. Clamped, because at exactly 135
-     * degrees Math.round lands on 2 -- an upside-down landscape frame this camera does not
-     * have -- rather than on a portrait one tilted the full 45.
-     */
+    /** Into (-180, 180]. */
+    private static float normalize(float t) {
+        float n = t - 360f * (float) Math.floor((t + 180f) / 360f);
+        return (n == -180f) ? 180f : n;
+    }
+
+    /** Which quarter turn a normalized angle is nearest: -2..2, where +-2 are both upside down. */
     private static int quarterOf(float t) {
-        return Math.max(-1, Math.min(1, Math.round(t / 90f)));
+        return Math.round(t / 90f);
     }
 
     /** Raw drag -> turn, with a flat notch of {@link #DETENT_DEG} either side of each level. */
     private static float turnFromRaw(double r) {
-        int k = (int) Math.max(-1, Math.min(1, Math.round(r / NOTCH_SPACING)));
+        long k = Math.round(r / NOTCH_SPACING);
         double d = r - k * NOTCH_SPACING;
         double a = Math.abs(d);
-        return (float) (90.0 * k + (a <= DETENT_DEG ? 0.0 : Math.signum(d) * (a - DETENT_DEG)));
+        return normalize((float) (90.0 * k + (a <= DETENT_DEG ? 0.0 : Math.signum(d) * (a - DETENT_DEG))));
     }
 
     /** Turn -> raw drag, for picking the grip up where the camera already is. */
@@ -137,12 +152,14 @@ public final class CameraRoll {
 
     /** Horizontal mouse motion while gripping, already scaled the way vanilla scales look. */
     public static void onDrag(double dx) {
-        double lim = NOTCH_SPACING + (MAX_TURN_DEG - 90.0) + DETENT_DEG;
-        raw = Math.max(-lim, Math.min(lim, raw + dx * DEG_PER_UNIT));
+        // Round and round: the drag wraps a full turn at a time so it never grows without end.
+        double full = 4.0 * NOTCH_SPACING;
+        raw += dx * DEG_PER_UNIT;
+        raw -= full * Math.floor((raw + full / 2.0) / full);
         setTurn(turnFromRaw(raw));
     }
 
-    /** Level again from the settings screen, keeping whichever orientation it is in. */
+    /** Level again from the settings screen, keeping whichever orientation it is nearest. */
     public static void reset() {
         setTurn(90f * quarterOf(SnapmaticaClient.cameraTurnDeg));
         raw = rawFromTurn(SnapmaticaClient.cameraTurnDeg);

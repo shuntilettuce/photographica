@@ -249,11 +249,13 @@ public final class ViewfinderOverlay {
      */
     private static void renderLevel(DrawContext ctx, TextRenderer tr, int fx, int fy, int fx2, int fy2) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        float deg = CameraRoll.effectiveDeg(mc);
-        if (deg == 0f && !CameraRoll.isGripping()) return;
+        if (!CameraRoll.inCameraContext(mc)) return;
+        float deg = CameraRoll.effectiveDeg(mc);          // the turn the camera makes
+        float tiltDeg = CameraRoll.tiltDeg();             // off the nearest level
+        if (tiltDeg == 0f && !CameraRoll.isGripping()) return;
         int cx = (fx + fx2) / 2, cy = (fy + fy2) / 2;
         int half = Math.max(24, (fx2 - fx) / 6);
-        boolean level = deg == 0f;
+        boolean level = tiltDeg == 0f;
         int color = level ? 0xFF7CD67C : 0xFFE8DCC4;
         // Fixed marks: the frame's horizontal.
         ctx.fill(cx - half - 12, cy, cx - half - 4, cy + 1, 0xA0E8DCC4);
@@ -263,7 +265,8 @@ public final class ViewfinderOverlay {
         // down is a negative angle for the matrix stack.
         double a = Math.toRadians(-deg);
         drawTurnedLine(ctx, cx, cy, half, a, color);
-        String label = level ? "0\u00b0" : String.format("%+.1f\u00b0", deg);
+        String label = (CameraRoll.isUpsideDown() ? "180\u00b0 " : "")
+                + (level ? "0\u00b0" : String.format("%+.1f\u00b0", tiltDeg));
         ctx.drawTextWithShadow(tr, label, cx + half + 16, cy - tr.fontHeight / 2, color);
     }
 

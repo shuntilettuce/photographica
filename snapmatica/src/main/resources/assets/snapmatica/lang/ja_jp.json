@@ -64,6 +64,7 @@
   "snapmatica.camera.roll": "傾き (Alt+右ドラッグ)",
   "snapmatica.camera.roll_level": "水平",
   "snapmatica.camera.roll_portrait": "縦",
+  "snapmatica.camera.roll_upside_down": "逆さ",
   "snapmatica.camera.dynamic_range": "ダイナミックレンジ再現",
   "snapmatica.camera.dynamic_range_stops": "ダイナミックレンジ幅",
   "snapmatica.camera.drone_mode": "ドローンモード",

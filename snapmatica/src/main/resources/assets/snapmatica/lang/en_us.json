@@ -64,6 +64,7 @@
   "snapmatica.camera.roll": "Tilt (Alt + right-drag)",
   "snapmatica.camera.roll_level": "LEVEL",
   "snapmatica.camera.roll_portrait": "PORTRAIT",
+  "snapmatica.camera.roll_upside_down": "UPSIDE DOWN",
   "snapmatica.camera.dynamic_range": "Dynamic Range Sim",
   "snapmatica.camera.dynamic_range_stops": "Dynamic Range Width",
   "snapmatica.camera.drone_mode": "Drone Mode",

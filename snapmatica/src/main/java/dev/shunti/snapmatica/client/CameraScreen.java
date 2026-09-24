@@ -321,10 +321,12 @@ public class CameraScreen extends Screen {
         out.add(new Item("snapmatica.camera.roll",
                 () -> (SnapmaticaClient.portraitOrientation
                         ? net.minecraft.text.Text.translatable("snapmatica.camera.roll_portrait").getString() + " "
+                        : CameraRoll.isUpsideDown()
+                        ? net.minecraft.text.Text.translatable("snapmatica.camera.roll_upside_down").getString() + " "
                         : "")
-                        + (SnapmaticaClient.cameraRollDeg == 0f
+                        + (CameraRoll.tiltDeg() == 0f
                         ? net.minecraft.text.Text.translatable("snapmatica.camera.roll_level").getString()
-                        : String.format("%+.1f\u00b0", SnapmaticaClient.cameraRollDeg)),
+                        : String.format("%+.1f\u00b0", CameraRoll.tiltDeg())),
                 step -> { CameraRoll.reset(); SnapmaticaConfig.save(); },
                 true));
 
