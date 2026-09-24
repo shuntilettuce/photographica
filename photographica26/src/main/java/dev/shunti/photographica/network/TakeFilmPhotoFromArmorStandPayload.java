@@ -1,7 +1,7 @@
-package dev.hitom.photographica.network;
+package dev.shunti.photographica.network;
 
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.component.CameraSettings;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.component.CameraSettings;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;

@@ -9,7 +9,7 @@ val fabricVersion = "0.149.1+26.1.2"
 val modVersion    = "0.3.0"
 
 version = "$modVersion+$mcVersion"
-group   = "dev.hitom.photographica"
+group   = "dev.shunti.photographica"
 
 base {
     archivesName = "photographica"

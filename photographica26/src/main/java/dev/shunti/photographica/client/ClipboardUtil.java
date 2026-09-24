@@ -1,6 +1,6 @@
-package dev.hitom.photographica.client;
+package dev.shunti.photographica.client;
 
-import dev.hitom.photographica.Photographica;
+import dev.shunti.photographica.Photographica;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;

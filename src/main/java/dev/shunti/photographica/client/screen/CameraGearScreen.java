@@ -1,7 +1,7 @@
-package dev.hitom.photographica.client.screen;
+package dev.shunti.photographica.client.screen;
 
-import dev.hitom.photographica.component.CameraGear;
-import dev.hitom.photographica.screen.CameraGearScreenHandler;
+import dev.shunti.photographica.component.CameraGear;
+import dev.shunti.photographica.screen.CameraGearScreenHandler;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.gui.DrawContext;

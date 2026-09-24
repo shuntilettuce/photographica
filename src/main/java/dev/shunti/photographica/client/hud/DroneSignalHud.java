@@ -1,7 +1,7 @@
-package dev.hitom.photographica.client.hud;
+package dev.shunti.photographica.client.hud;
 
-import dev.hitom.photographica.client.DronePilot;
-import dev.hitom.photographica.entity.DroneEntity;
+import dev.shunti.photographica.client.DronePilot;
+import dev.shunti.photographica.entity.DroneEntity;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
@@ -111,7 +111,7 @@ public final class DroneSignalHud {
         // Channel / altitude — top-left, same corner ViewfinderHud puts its lens label in.
         int frequency = -1;
         double altitude = Double.NaN;
-        dev.hitom.photographica.component.CameraSettings camSettings = null;
+        dev.shunti.photographica.component.CameraSettings camSettings = null;
         boolean hasCamera = false;
         if (mc.world != null && mc.world.getEntityById(DronePilot.droneEntityId()) instanceof DroneEntity drone) {
             frequency = drone.getFrequency();
@@ -123,9 +123,9 @@ public final class DroneSignalHud {
             net.minecraft.item.ItemStack mounted = drone.getEquippedCamera();
             hasCamera = !mounted.isEmpty();
             if (hasCamera) {
-                camSettings = mounted.getItem() instanceof dev.hitom.photographica.item.FilmCameraItem
-                        ? dev.hitom.photographica.item.FilmCameraItem.getSettings(mounted)
-                        : dev.hitom.photographica.item.CameraItem.getSettings(mounted);
+                camSettings = mounted.getItem() instanceof dev.shunti.photographica.item.FilmCameraItem
+                        ? dev.shunti.photographica.item.FilmCameraItem.getSettings(mounted)
+                        : dev.shunti.photographica.item.CameraItem.getSettings(mounted);
             }
         }
         String chLabel = frequency >= 0 ? ("📡 CH " + frequency) : "📡 CH --";
@@ -137,14 +137,14 @@ public final class DroneSignalHud {
         // the 24mm wide end (the way a compact/phone camera states its zoom ratio), and the
         // live AF distance. Mirrors ViewfinderHud's exposure-readout placement/style.
         if (hasCamera && camSettings != null) {
-            int opticalMax = dev.hitom.photographica.component.LensKind.DRONE_FOCAL_OPTICAL_MAX;
+            int opticalMax = dev.shunti.photographica.component.LensKind.DRONE_FOCAL_OPTICAL_MAX;
             float mag = camSettings.focalLengthMm()
-                    / (float) dev.hitom.photographica.component.LensKind.DRONE_FOCAL_MIN;
+                    / (float) dev.shunti.photographica.component.LensKind.DRONE_FOCAL_MIN;
             boolean tele = camSettings.focalLengthMm() >= opticalMax;
             String camLine = String.format("F2.8 · %dmm (%.1fx · %s)",
                     camSettings.focalLengthMm(), mag, tele ? "TELE" : "WIDE");
             ctx.drawTextWithShadow(tr, Text.literal(camLine), fx + 6, fy2 - tr.fontHeight * 2 - 14, COLOR_TEXT);
-            boolean atInf = camSettings.focusDistance() >= dev.hitom.photographica.component.CameraSettings.FOCUS_INFINITY;
+            boolean atInf = camSettings.focusDistance() >= dev.shunti.photographica.component.CameraSettings.FOCUS_INFINITY;
             String afLine = "AF " + (atInf ? "∞" : String.format("%.1fm", camSettings.focusDistance()));
             ctx.drawTextWithShadow(tr, Text.literal(afLine), fx + 6, fy2 - tr.fontHeight - 12, COLOR_TEXT_DIM);
 
@@ -155,20 +155,20 @@ public final class DroneSignalHud {
             // counts as EVF-active every frame, same as sneaking with a mirrorless in hand).
             // Bokeh always runs at the wide end's focal length regardless of zoom — see
             // LensKind#bokehFocalLengthMm for why honest f² scaling is unusable here.
-            int bokehFocal = dev.hitom.photographica.component.LensKind.bokehFocalLengthMm(
+            int bokehFocal = dev.shunti.photographica.component.LensKind.bokehFocalLengthMm(
                     camSettings.lensType(), camSettings.focalLengthMm());
             //? if >=1.21.11 {
             /*// On >=1.21.11 this scheduleBlur() call is also what bakes bokeh into the SAVED
             // PHOTO (applyScheduledBlur() runs in GameRendererMixin right before the capture
             // screenshot) — unlike the live preview, that must never be skipped.
-            dev.hitom.photographica.client.render.EvfBlurRenderer.scheduleBlur(
+            dev.shunti.photographica.client.render.EvfBlurRenderer.scheduleBlur(
                     fx, fy, fx2, fy2, camSettings.focusDistance(), camSettings.aperture(), bokehFocal);
             *///?} else {
             // <1.21.11 bakes bokeh into the saved photo separately (CPU-side, see
             // PhotoCapture#applyDepthOfField) — this call is live-preview only.
-            dev.hitom.photographica.client.render.EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2,
+            dev.shunti.photographica.client.render.EvfBlurRenderer.renderBlur(fx, fy, fx2, fy2,
                     camSettings.focusDistance(), camSettings.aperture(), bokehFocal,
-                    dev.hitom.photographica.client.render.EvfBlurRenderer.DOF_SCALE_STILL);
+                    dev.shunti.photographica.client.render.EvfBlurRenderer.DOF_SCALE_STILL);
             //?}
 
             // Live reproduction of the digital-zoom detail loss (see
@@ -177,12 +177,12 @@ public final class DroneSignalHud {
             // progressively softer approaching 70mm, snaps back to fully sharp the instant the
             // airframe switches to the TELE sensor at exactly 70mm, then softens again
             // approaching 200mm.
-            float blockPx = dev.hitom.photographica.component.LensKind.digitalZoomSoftenPx(camSettings.focalLengthMm());
+            float blockPx = dev.shunti.photographica.component.LensKind.digitalZoomSoftenPx(camSettings.focalLengthMm());
             if (blockPx > 1.0f) {
                 //? if >=1.21.11 {
-                /*dev.hitom.photographica.client.render.EvfBlurRenderer.scheduleDigitalZoom(fx, fy, fx2, fy2, blockPx);
+                /*dev.shunti.photographica.client.render.EvfBlurRenderer.scheduleDigitalZoom(fx, fy, fx2, fy2, blockPx);
                 *///?} else {
-                dev.hitom.photographica.client.render.EvfBlurRenderer.applyDigitalZoom(fx, fy, fx2, fy2, blockPx);
+                dev.shunti.photographica.client.render.EvfBlurRenderer.applyDigitalZoom(fx, fy, fx2, fy2, blockPx);
                 //?}
             }
         } else {

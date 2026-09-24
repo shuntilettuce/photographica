@@ -1,7 +1,7 @@
-package dev.hitom.photographica.block;
+package dev.shunti.photographica.block;
 
 import com.mojang.serialization.MapCodec;
-import dev.hitom.photographica.block.entity.PrinterBlockEntity;
+import dev.shunti.photographica.block.entity.PrinterBlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;

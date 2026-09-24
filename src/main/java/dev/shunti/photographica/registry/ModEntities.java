@@ -1,7 +1,7 @@
-package dev.hitom.photographica.registry;
+package dev.shunti.photographica.registry;
 
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.entity.DroneEntity;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.entity.DroneEntity;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
 import net.minecraft.entity.EntityDimensions;
 import net.minecraft.entity.EntityType;

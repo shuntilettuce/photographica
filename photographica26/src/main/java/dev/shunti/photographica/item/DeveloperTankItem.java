@@ -1,6 +1,6 @@
-package dev.hitom.photographica.item;
+package dev.shunti.photographica.item;
 
-import dev.hitom.photographica.network.DevelopFilmPayload;
+import dev.shunti.photographica.network.DevelopFilmPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;

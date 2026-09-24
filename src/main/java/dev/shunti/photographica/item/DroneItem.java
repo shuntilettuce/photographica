@@ -1,6 +1,6 @@
-package dev.hitom.photographica.item;
+package dev.shunti.photographica.item;
 
-import dev.hitom.photographica.entity.DroneEntity;
+import dev.shunti.photographica.entity.DroneEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -76,7 +76,7 @@ public class DroneItem extends Item {
         // already paired to it keeps working, instead of a fresh entity silently rolling a new
         // number. A brand-new drone crafted from scratch has no such component and gets the
         // usual lazy random assignment (see DroneEntity#ensureFrequency).
-        Integer savedFreq = stack.get(dev.hitom.photographica.component.ModDataComponents.DRONE_FREQUENCY);
+        Integer savedFreq = stack.get(dev.shunti.photographica.component.ModDataComponents.DRONE_FREQUENCY);
         if (savedFreq != null) {
             drone.setFrequency(savedFreq);
         }

@@ -1,4 +1,4 @@
-package dev.hitom.photographica.item;
+package dev.shunti.photographica.item;
 
 import net.minecraft.world.item.Item;
 

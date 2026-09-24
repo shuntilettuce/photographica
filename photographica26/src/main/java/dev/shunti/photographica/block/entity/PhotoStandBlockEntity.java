@@ -1,8 +1,8 @@
-package dev.hitom.photographica.block.entity;
+package dev.shunti.photographica.block.entity;
 
 import com.mojang.serialization.DataResult;
-import dev.hitom.photographica.component.PhotoData;
-import dev.hitom.photographica.registry.ModBlockEntities;
+import dev.shunti.photographica.component.PhotoData;
+import dev.shunti.photographica.registry.ModBlockEntities;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.entity.BlockEntity;

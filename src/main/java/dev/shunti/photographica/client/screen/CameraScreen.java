@@ -1,15 +1,15 @@
-package dev.hitom.photographica.client.screen;
+package dev.shunti.photographica.client.screen;
 
-import dev.hitom.photographica.client.PhotoCapture;
-import dev.hitom.photographica.component.CameraSettings;
-import dev.hitom.photographica.component.LensKind;
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.SdCardData;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.LensItem;
-import dev.hitom.photographica.network.UnequipCameraFromArmorStandPayload;
-import dev.hitom.photographica.network.UpdateArmorStandCameraPayload;
-import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
+import dev.shunti.photographica.client.PhotoCapture;
+import dev.shunti.photographica.component.CameraSettings;
+import dev.shunti.photographica.component.LensKind;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.SdCardData;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.LensItem;
+import dev.shunti.photographica.network.UnequipCameraFromArmorStandPayload;
+import dev.shunti.photographica.network.UpdateArmorStandCameraPayload;
+import dev.shunti.photographica.network.UpdateCameraSettingsPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;

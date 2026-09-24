@@ -1,6 +1,6 @@
 # See https://stonecutter.kikugie.dev/wiki/config/properties
 mod_version = "0.9.0"
-maven_group = "dev.hitom.photographica"
+maven_group = "dev.shunti.photographica"
 archives_base_name = "photographica"
 
 ["1.21.1"]

@@ -1,8 +1,8 @@
-package dev.hitom.photographica.item;
+package dev.shunti.photographica.item;
 
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.PhotoData;
-import dev.hitom.photographica.component.SdCardData;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.PhotoData;
+import dev.shunti.photographica.component.SdCardData;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -62,7 +62,7 @@ public class SdCardItem extends Item {
     private static void openGallery(ItemStack stack) {
         net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
         SdCardData data = getSdCard(stack);
-        mc.setScreen(new dev.hitom.photographica.client.screen.SdCardGalleryScreen(stack, data, mc.currentScreen));
+        mc.setScreen(new dev.shunti.photographica.client.screen.SdCardGalleryScreen(stack, data, mc.currentScreen));
     }
 
     //? if >=1.21.11 {

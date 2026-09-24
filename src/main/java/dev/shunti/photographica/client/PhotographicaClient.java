@@ -1,30 +1,30 @@
-package dev.hitom.photographica.client;
+package dev.shunti.photographica.client;
 
-import dev.hitom.photographica.client.hud.VideoRecorderHud;
-import dev.hitom.photographica.client.hud.ViewfinderHud;
-import dev.hitom.photographica.client.render.PhotoFrameBlockEntityRenderer;
-import dev.hitom.photographica.client.render.PhotoStandBlockEntityRenderer;
-import dev.hitom.photographica.client.render.PhotoTextureCache;
-import dev.hitom.photographica.client.screen.CameraScreen;
-import dev.hitom.photographica.client.screen.DarkroomScreen;
-import dev.hitom.photographica.client.screen.EnlargerScreen;
-import dev.hitom.photographica.client.screen.FilmCameraScreen;
-import dev.hitom.photographica.client.screen.FilmStripScreen;
-import dev.hitom.photographica.client.screen.PhotoViewerScreen;
-import dev.hitom.photographica.client.screen.PrinterScreen;
-import dev.hitom.photographica.client.screen.VideoCameraScreen;
-import dev.hitom.photographica.registry.ModBlockEntities;
-import dev.hitom.photographica.registry.ModItems;
-import dev.hitom.photographica.registry.ModScreenHandlers;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.DevelopedFilmItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.item.MirrorlessCameraItem;
-import dev.hitom.photographica.item.PhotoItem;
-import dev.hitom.photographica.item.VideoCameraItem;
-import dev.hitom.photographica.network.LoadSdCardPayload;
-import dev.hitom.photographica.network.UnloadSdCardPayload;
-import dev.hitom.photographica.network.WindFilmPayload;
+import dev.shunti.photographica.client.hud.VideoRecorderHud;
+import dev.shunti.photographica.client.hud.ViewfinderHud;
+import dev.shunti.photographica.client.render.PhotoFrameBlockEntityRenderer;
+import dev.shunti.photographica.client.render.PhotoStandBlockEntityRenderer;
+import dev.shunti.photographica.client.render.PhotoTextureCache;
+import dev.shunti.photographica.client.screen.CameraScreen;
+import dev.shunti.photographica.client.screen.DarkroomScreen;
+import dev.shunti.photographica.client.screen.EnlargerScreen;
+import dev.shunti.photographica.client.screen.FilmCameraScreen;
+import dev.shunti.photographica.client.screen.FilmStripScreen;
+import dev.shunti.photographica.client.screen.PhotoViewerScreen;
+import dev.shunti.photographica.client.screen.PrinterScreen;
+import dev.shunti.photographica.client.screen.VideoCameraScreen;
+import dev.shunti.photographica.registry.ModBlockEntities;
+import dev.shunti.photographica.registry.ModItems;
+import dev.shunti.photographica.registry.ModScreenHandlers;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.DevelopedFilmItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.item.MirrorlessCameraItem;
+import dev.shunti.photographica.item.PhotoItem;
+import dev.shunti.photographica.item.VideoCameraItem;
+import dev.shunti.photographica.network.LoadSdCardPayload;
+import dev.shunti.photographica.network.UnloadSdCardPayload;
+import dev.shunti.photographica.network.WindFilmPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.ArmorRenderer;
 //? if >=1.21.11 {
@@ -71,8 +71,8 @@ public class PhotographicaClient implements ClientModInitializer {
 
 	/** Reassembles chunked photo downloads fetched on a local cache miss — see
 	 *  PhotoTextureCache.getOrLoad() and the DownloadPhotoChunkPayload receiver below. */
-	private static final dev.hitom.photographica.network.PhotoChunkAssembler photoDownloadAssembler =
-			new dev.hitom.photographica.network.PhotoChunkAssembler();
+	private static final dev.shunti.photographica.network.PhotoChunkAssembler photoDownloadAssembler =
+			new dev.shunti.photographica.network.PhotoChunkAssembler();
 
 	@Override
 	public void onInitializeClient() {
@@ -103,10 +103,10 @@ public class PhotographicaClient implements ClientModInitializer {
 		// "radio range" rather than requiring the pilot to physically touch the airframe. Range
 		// is the same DronePilot.computeSignal() the pilot's own per-tick monitoring uses — one
 		// definition of "can I reach it" shared between connecting and staying connected.
-		dev.hitom.photographica.item.DroneRemoteItem.clientTryPilot = stack -> {
+		dev.shunti.photographica.item.DroneRemoteItem.clientTryPilot = stack -> {
 			MinecraftClient client = MinecraftClient.getInstance();
 			if (client.player == null || client.world == null) return;
-			Integer freq = stack.get(dev.hitom.photographica.component.ModDataComponents.DRONE_FREQUENCY);
+			Integer freq = stack.get(dev.shunti.photographica.component.ModDataComponents.DRONE_FREQUENCY);
 			if (freq == null) {
 				client.player.sendMessage(net.minecraft.text.Text.literal(
 						"📡 このリモコンは未ペアリングです。ドローンにタッチしてください"), true);
@@ -114,10 +114,10 @@ public class PhotographicaClient implements ClientModInitializer {
 			}
 			net.minecraft.util.math.Vec3d eye = client.player.getEyePos();
 			net.minecraft.util.math.Box searchBox = client.player.getBoundingBox().expand(DronePilot.getFullRange());
-			dev.hitom.photographica.entity.DroneEntity target = null;
+			dev.shunti.photographica.entity.DroneEntity target = null;
 			int bestSignal = 0;
-			for (dev.hitom.photographica.entity.DroneEntity d : client.world.getEntitiesByClass(
-					dev.hitom.photographica.entity.DroneEntity.class, searchBox, e -> e.getFrequency() == freq)) {
+			for (dev.shunti.photographica.entity.DroneEntity d : client.world.getEntitiesByClass(
+					dev.shunti.photographica.entity.DroneEntity.class, searchBox, e -> e.getFrequency() == freq)) {
 				//? if >=1.21.11 {
 				/*net.minecraft.util.math.Vec3d dPos = d.getEntityPos();
 				*///?} else {
@@ -140,7 +140,7 @@ public class PhotographicaClient implements ClientModInitializer {
 		// Fetch-on-miss for photos taken by someone else (or on a different machine) — see
 		// PhotoTextureCache.getOrLoad(), which sends RequestPhotoPayload on a local cache miss.
 		net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
-				dev.hitom.photographica.network.DownloadPhotoChunkPayload.ID, (payload, context) -> {
+				dev.shunti.photographica.network.DownloadPhotoChunkPayload.ID, (payload, context) -> {
 					byte[] full = photoDownloadAssembler.receive(
 							payload.id(), payload.chunkIndex(), payload.totalChunks(), payload.data());
 					if (full == null) return;
@@ -149,24 +149,24 @@ public class PhotographicaClient implements ClientModInitializer {
 							File dir = new File(MinecraftClient.getInstance().runDirectory, "photographica/photos");
 							if (!dir.exists()) dir.mkdirs();
 							java.nio.file.Files.write(new File(dir, payload.id() + ".jpg").toPath(), full);
-							dev.hitom.photographica.client.render.PhotoTextureCache.onFetched(payload.id());
+							dev.shunti.photographica.client.render.PhotoTextureCache.onFetched(payload.id());
 						} catch (java.io.IOException e) {
-							dev.hitom.photographica.Photographica.LOGGER.error("Failed to save fetched photo {}", payload.id(), e);
-							dev.hitom.photographica.client.render.PhotoTextureCache.onNotFound(payload.id());
+							dev.shunti.photographica.Photographica.LOGGER.error("Failed to save fetched photo {}", payload.id(), e);
+							dev.shunti.photographica.client.render.PhotoTextureCache.onNotFound(payload.id());
 						}
 					});
 				});
 		net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
-				dev.hitom.photographica.network.PhotoNotFoundPayload.ID, (payload, context) ->
+				dev.shunti.photographica.network.PhotoNotFoundPayload.ID, (payload, context) ->
 						context.client().execute(() ->
-								dev.hitom.photographica.client.render.PhotoTextureCache.onNotFound(payload.id())));
+								dev.shunti.photographica.client.render.PhotoTextureCache.onNotFound(payload.id())));
 
 		HandledScreens.register(ModScreenHandlers.DARKROOM, DarkroomScreen::new);
 		HandledScreens.register(ModScreenHandlers.PRINTER, PrinterScreen::new);
-		HandledScreens.register(ModScreenHandlers.CAMERA_GEAR, dev.hitom.photographica.client.screen.CameraGearScreen::new);
-		HandledScreens.register(ModScreenHandlers.ALBUM, dev.hitom.photographica.client.screen.AlbumScreen::new);
+		HandledScreens.register(ModScreenHandlers.CAMERA_GEAR, dev.shunti.photographica.client.screen.CameraGearScreen::new);
+		HandledScreens.register(ModScreenHandlers.ALBUM, dev.shunti.photographica.client.screen.AlbumScreen::new);
 		HandledScreens.register(ModScreenHandlers.ENLARGER, EnlargerScreen::new);
-		HandledScreens.register(ModScreenHandlers.FAX_MACHINE, dev.hitom.photographica.client.screen.FaxMachineScreen::new);
+		HandledScreens.register(ModScreenHandlers.FAX_MACHINE, dev.shunti.photographica.client.screen.FaxMachineScreen::new);
 
 		// Settings key (unbound by default).
 		//? if >=1.21.11 {
@@ -344,10 +344,10 @@ public class PhotographicaClient implements ClientModInitializer {
 			}
 			if (settingsKey.wasPressed()) {
 				int recStandId = VideoRecorder.getRecordingArmorStandEntityId();
-				dev.hitom.photographica.entity.DroneEntity pilotedDrone = null;
+				dev.shunti.photographica.entity.DroneEntity pilotedDrone = null;
 				if (DronePilot.isActive() && client.world != null
 						&& client.world.getEntityById(DronePilot.droneEntityId())
-								instanceof dev.hitom.photographica.entity.DroneEntity d) {
+								instanceof dev.shunti.photographica.entity.DroneEntity d) {
 					pilotedDrone = d;
 				}
 				if (recStandId >= 0) {
@@ -387,14 +387,14 @@ public class PhotographicaClient implements ClientModInitializer {
 				ClientPlayNetworking.send(new UnloadSdCardPayload());
 			}
 			while (orientationKey.wasPressed()) {
-				dev.hitom.photographica.client.hud.ViewfinderHud.portraitOrientation =
-						!dev.hitom.photographica.client.hud.ViewfinderHud.portraitOrientation;
+				dev.shunti.photographica.client.hud.ViewfinderHud.portraitOrientation =
+						!dev.shunti.photographica.client.hud.ViewfinderHud.portraitOrientation;
 			}
 		});
 
 		HudRenderCallback.EVENT.register(ViewfinderHud::render);
 		HudRenderCallback.EVENT.register(VideoRecorderHud::render);
-		HudRenderCallback.EVENT.register(dev.hitom.photographica.client.hud.DroneSignalHud::render);
+		HudRenderCallback.EVENT.register(dev.shunti.photographica.client.hud.DroneSignalHud::render);
 
 		// Leaving a world has to clear the client-side state machines, because all of it is
 		// static and none of it is otherwise tied to a world's lifetime. Piloting state is the
@@ -409,7 +409,7 @@ public class PhotographicaClient implements ClientModInitializer {
 			// full-size RGBA texture), and — more visibly — a photo left in the `fetching` set
 			// because its request was cut short by this very disconnect would stay stuck
 			// "loading" forever, even after rejoining.
-			dev.hitom.photographica.client.render.PhotoTextureCache.clear();
+			dev.shunti.photographica.client.render.PhotoTextureCache.clear();
 			// Not a reset but a real stop: it finishes encoding whatever was already filmed
 			// (so the footage isn't lost), and restores the smooth-camera option it borrowed —
 			// a global setting that would otherwise stay flipped for the rest of the session.
@@ -470,11 +470,11 @@ public class PhotographicaClient implements ClientModInitializer {
 		//?}
 
 		net.fabricmc.fabric.api.client.rendering.v1.EntityModelLayerRegistry.registerModelLayer(
-				dev.hitom.photographica.client.render.DroneEntityModel.LAYER,
-				dev.hitom.photographica.client.render.DroneEntityModel::getTexturedModelData);
+				dev.shunti.photographica.client.render.DroneEntityModel.LAYER,
+				dev.shunti.photographica.client.render.DroneEntityModel::getTexturedModelData);
 		net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry.register(
-				dev.hitom.photographica.registry.ModEntities.DRONE,
-				dev.hitom.photographica.client.render.DroneEntityRenderer::new);
+				dev.shunti.photographica.registry.ModEntities.DRONE,
+				dev.shunti.photographica.client.render.DroneEntityRenderer::new);
 
 		// Render all four camera item models on the player's chest when worn.
 		// Uses the humanoid body bone for correct rotation with body/head animations.

@@ -1,11 +1,11 @@
-package dev.hitom.photographica.item;
+package dev.shunti.photographica.item;
 
-import dev.hitom.photographica.component.CameraSettings;
-import dev.hitom.photographica.component.LensKind;
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.SdCardData;
+import dev.shunti.photographica.component.CameraSettings;
+import dev.shunti.photographica.component.LensKind;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.SdCardData;
 import net.minecraft.entity.player.PlayerEntity;
-import dev.hitom.photographica.screen.CameraGearScreens;
+import dev.shunti.photographica.screen.CameraGearScreens;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.tooltip.TooltipType;

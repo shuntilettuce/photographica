@@ -1,6 +1,6 @@
-package dev.hitom.photographica.screen;
+package dev.shunti.photographica.screen;
 
-import dev.hitom.photographica.component.CameraGear;
+import dev.shunti.photographica.component.CameraGear;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.screen.NamedScreenHandlerFactory;

@@ -1,9 +1,9 @@
-package dev.hitom.photographica.registry;
+package dev.shunti.photographica.registry;
 
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.screen.DarkroomScreenHandler;
-import dev.hitom.photographica.screen.EnlargerScreenHandler;
-import dev.hitom.photographica.screen.PrinterScreenHandler;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.screen.DarkroomScreenHandler;
+import dev.shunti.photographica.screen.EnlargerScreenHandler;
+import dev.shunti.photographica.screen.PrinterScreenHandler;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Registry;

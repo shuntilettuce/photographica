@@ -1,8 +1,8 @@
-package dev.hitom.photographica.item;
+package dev.shunti.photographica.item;
 
-import dev.hitom.photographica.component.FilmKind;
-import dev.hitom.photographica.component.FilmRollData;
-import dev.hitom.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.FilmKind;
+import dev.shunti.photographica.component.FilmRollData;
+import dev.shunti.photographica.component.ModDataComponents;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;

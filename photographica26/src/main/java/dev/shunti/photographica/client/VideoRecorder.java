@@ -1,9 +1,9 @@
-package dev.hitom.photographica.client;
+package dev.shunti.photographica.client;
 
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.client.render.EvfBlurRenderer;
-import dev.hitom.photographica.component.VideoSettings;
-import dev.hitom.photographica.item.VideoCameraItem;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.client.render.EvfBlurRenderer;
+import dev.shunti.photographica.component.VideoSettings;
+import dev.shunti.photographica.item.VideoCameraItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import com.mojang.blaze3d.pipeline.RenderTarget;

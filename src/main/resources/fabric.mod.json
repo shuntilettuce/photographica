@@ -4,7 +4,7 @@
 	"version": "${version}",
 	"name": "Photographica",
 	"description": "A photography mod with realistic camera simulation. Supports film cameras, digital cameras with SD cards, interchangeable lenses, aperture/shutter/ISO controls, depth-of-field, grain, and darkroom development. | リアルカメラ感覚で遊べる撮影Mod。フィルム/デジタル/交換レンズ対応。",
-	"authors": ["hitom"],
+	"authors": ["shunti"],
 	"license": "MIT",
 	"contact": {
 		"issues": "https://github.com/shuntilettuce/photographica/issues",
@@ -13,10 +13,10 @@
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"dev.hitom.photographica.Photographica"
+			"dev.shunti.photographica.Photographica"
 		],
 		"client": [
-			"dev.hitom.photographica.client.PhotographicaClient"
+			"dev.shunti.photographica.client.PhotographicaClient"
 		]
 	},
 	"mixins": [

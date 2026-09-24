@@ -1,6 +1,6 @@
-package dev.hitom.photographica.client.hud;
+package dev.shunti.photographica.client.hud;
 
-import dev.hitom.photographica.client.VideoRecorder;
+import dev.shunti.photographica.client.VideoRecorder;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;

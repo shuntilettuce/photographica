@@ -1,7 +1,7 @@
-package dev.hitom.photographica.client.screen;
+package dev.shunti.photographica.client.screen;
 
-import dev.hitom.photographica.network.SendFaxPayload;
-import dev.hitom.photographica.screen.FaxMachineScreenHandler;
+import dev.shunti.photographica.network.SendFaxPayload;
+import dev.shunti.photographica.screen.FaxMachineScreenHandler;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;

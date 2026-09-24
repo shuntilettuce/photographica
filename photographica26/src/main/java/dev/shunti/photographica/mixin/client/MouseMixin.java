@@ -1,6 +1,6 @@
-package dev.hitom.photographica.mixin.client;
+package dev.shunti.photographica.mixin.client;
 
-import dev.hitom.photographica.client.CameraScrollHandler;
+import dev.shunti.photographica.client.CameraScrollHandler;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MouseHandler;
 import org.spongepowered.asm.mixin.Mixin;

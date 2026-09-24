@@ -1,6 +1,6 @@
-package dev.hitom.photographica.mixin.client;
+package dev.shunti.photographica.mixin.client;
 
-import dev.hitom.photographica.client.PhotoCapture;
+import dev.shunti.photographica.client.PhotoCapture;
 import net.minecraft.client.render.entity.EntityRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

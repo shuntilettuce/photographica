@@ -1,6 +1,6 @@
-package dev.hitom.photographica.client.render;
+package dev.shunti.photographica.client.render;
 
-import dev.hitom.photographica.entity.DroneEntity;
+import dev.shunti.photographica.entity.DroneEntity;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.model.ModelData;

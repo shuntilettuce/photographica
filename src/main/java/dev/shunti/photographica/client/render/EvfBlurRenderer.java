@@ -1,6 +1,6 @@
-package dev.hitom.photographica.client.render;
+package dev.shunti.photographica.client.render;
 
-import dev.hitom.photographica.Photographica;
+import dev.shunti.photographica.Photographica;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
@@ -137,7 +137,7 @@ public final class EvfBlurRenderer {
         // taking comes from summing them from different points on the pupil, not from this
         // reconstruction. Baking GPU bokeh into each one first would blur an image that then
         // gets blurred a second, physically different way by the sum itself.
-        if (dev.hitom.photographica.client.PhotoCapture.isApertureIntegrating()) return;
+        if (dev.shunti.photographica.client.PhotoCapture.isApertureIntegrating()) return;
         if (forCapture) {
             MinecraftClient mc = MinecraftClient.getInstance();
             int sw = mc.getWindow().getScaledWidth();
@@ -606,7 +606,7 @@ public final class EvfBlurRenderer {
     /**
      * Live-viewfinder digital zoom: reconstructs the frame from a sample grid {@code blockPx}
      * destination-pixels apart, throwing away the detail a real sensor wouldn't have resolved
-     * at this focal length (see {@link dev.hitom.photographica.component.LensKind#digitalZoomSoftenPx}).
+     * at this focal length (see {@link dev.shunti.photographica.component.LensKind#digitalZoomSoftenPx}).
      * The framing itself is untouched — the render already used the true focal length's FOV —
      * so this only ever costs sharpness, never magnification. Structurally identical to
      * {@link #applyPeaking}: single full-res pass, ping-ponged through aux because reading and

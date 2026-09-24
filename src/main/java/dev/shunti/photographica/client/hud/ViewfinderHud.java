@@ -1,15 +1,15 @@
-package dev.hitom.photographica.client.hud;
+package dev.shunti.photographica.client.hud;
 
-import dev.hitom.photographica.client.AutoCamera;
-import dev.hitom.photographica.client.PhotoCapture;
-import dev.hitom.photographica.client.render.EvfBlurRenderer;
-import dev.hitom.photographica.component.CameraSettings;
-import dev.hitom.photographica.component.FilmKind;
-import dev.hitom.photographica.component.FilmRollData;
-import dev.hitom.photographica.component.LensKind;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.item.MirrorlessCameraItem;
+import dev.shunti.photographica.client.AutoCamera;
+import dev.shunti.photographica.client.PhotoCapture;
+import dev.shunti.photographica.client.render.EvfBlurRenderer;
+import dev.shunti.photographica.component.CameraSettings;
+import dev.shunti.photographica.component.FilmKind;
+import dev.shunti.photographica.component.FilmRollData;
+import dev.shunti.photographica.component.LensKind;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.item.MirrorlessCameraItem;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
@@ -180,7 +180,7 @@ public final class ViewfinderHud {
 		renderExposureMeter(ctx, s, fx, fx2, fy2);
 
 		// Scroll hint (bottom-right, inside frame) — two lines
-		boolean isZoom = dev.hitom.photographica.component.LensKind.isZoom(s.lensType());
+		boolean isZoom = dev.shunti.photographica.component.LensKind.isZoom(s.lensType());
 		String hint1 = isZoom ? "⟳ zoom  Ctrl⟳ F値  Alt⟳ SS" : "Ctrl⟳ F値  Alt⟳ SS";
 		String hint2 = "Ctrl+Alt⟳ MF距離";
 		int hint1W = tr.getWidth(hint1);
@@ -291,7 +291,7 @@ public final class ViewfinderHud {
 	 *   Yellow : ±0.7 – ±1.7 EV (slight under/over)
 	 *   Red    : beyond ±1.7 EV  (significant under/over)
 	 */
-	private static void renderExposureMeter(DrawContext ctx, dev.hitom.photographica.component.CameraSettings s,
+	private static void renderExposureMeter(DrawContext ctx, dev.shunti.photographica.component.CameraSettings s,
 	                                        int fx, int fx2, int fy2) {
 		final int METER_W = 120;
 		int meterX  = (fx + fx2 - METER_W) / 2;
@@ -345,15 +345,15 @@ public final class ViewfinderHud {
 	 *   Yellow : moderately off
 	 *   White  : lens not attached, or aperture too narrow to matter (f/8+)
 	 */
-	private static int focusReticleColor(dev.hitom.photographica.component.CameraSettings s) {
-		if (!dev.hitom.photographica.component.LensKind.hasLens(s.lensType())) return COLOR_FRAME;
+	private static int focusReticleColor(dev.shunti.photographica.component.CameraSettings s) {
+		if (!dev.shunti.photographica.component.LensKind.hasLens(s.lensType())) return COLOR_FRAME;
 		if (s.aperture() >= 8.0f) return COLOR_FRAME; // deep DoF, colour unnecessary
 		float focus = s.focusDistance();
 		boolean atInf = focus >= CameraSettings.FOCUS_INFINITY
 				|| (s.focusMode() != CameraSettings.FOCUS_MF && AutoCamera.afAtInfinity);
 		if (atInf) return COLOR_FRAME;       // infinity focus
 
-		float sceneDepth = dev.hitom.photographica.client.PhotoCapture.lastSceneDepthBlocks;
+		float sceneDepth = dev.shunti.photographica.client.PhotoCapture.lastSceneDepthBlocks;
 		if (sceneDepth >= CameraSettings.FOCUS_INFINITY) return 0xFFE04040; // sky / beyond range — always out of focus
 		// DoF tolerance: wider aperture → tighter zone (real cameras behave this way)
 		float tolerance = focus * s.aperture() * 0.08f;

@@ -1,9 +1,9 @@
-package dev.hitom.photographica.block.entity;
+package dev.shunti.photographica.block.entity;
 
-import dev.hitom.photographica.item.PhotoItem;
-import dev.hitom.photographica.registry.ModBlockEntities;
-import dev.hitom.photographica.screen.FaxMachineScreenHandler;
-import dev.hitom.photographica.screen.FaxOpenData;
+import dev.shunti.photographica.item.PhotoItem;
+import dev.shunti.photographica.registry.ModBlockEntities;
+import dev.shunti.photographica.screen.FaxMachineScreenHandler;
+import dev.shunti.photographica.screen.FaxOpenData;
 import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;

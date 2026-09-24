@@ -1,4 +1,4 @@
-package dev.hitom.photographica.component;
+package dev.shunti.photographica.component;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -40,7 +40,7 @@ public record SdCardData(List<PhotoData> photos, int capacity) {
     /** A blank card of whatever capacity the given card item's tier provides. Used when a card
      *  is fitted that has never been written to and so carries no component yet. */
     public static SdCardData forCard(net.minecraft.item.ItemStack card) {
-        return new SdCardData(List.of(), dev.hitom.photographica.item.SdCardItem.capacityOf(card));
+        return new SdCardData(List.of(), dev.shunti.photographica.item.SdCardItem.capacityOf(card));
     }
 
     public boolean isFull() { return photos.size() >= capacity; }

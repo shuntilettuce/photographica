@@ -1,7 +1,7 @@
 {
 	"required": true,
 	"refmap": "photographica.refmap.json",
-	"package": "dev.hitom.photographica.mixin",
+	"package": "dev.shunti.photographica.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [],
 	"injectors": {

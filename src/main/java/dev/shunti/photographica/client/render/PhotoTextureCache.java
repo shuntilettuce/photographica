@@ -1,7 +1,7 @@
-package dev.hitom.photographica.client.render;
+package dev.shunti.photographica.client.render;
 
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.network.RequestPhotoPayload;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.network.RequestPhotoPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;

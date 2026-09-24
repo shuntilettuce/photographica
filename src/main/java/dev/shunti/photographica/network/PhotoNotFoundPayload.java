@@ -1,6 +1,6 @@
-package dev.hitom.photographica.network;
+package dev.shunti.photographica.network;
 
-import dev.hitom.photographica.Photographica;
+import dev.shunti.photographica.Photographica;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.packet.CustomPayload;

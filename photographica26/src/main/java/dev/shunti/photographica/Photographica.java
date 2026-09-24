@@ -1,36 +1,36 @@
-package dev.hitom.photographica;
+package dev.shunti.photographica;
 
-import dev.hitom.photographica.component.CameraSettings;
-import dev.hitom.photographica.component.FilmKind;
-import dev.hitom.photographica.component.FilmRollData;
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.PhotoData;
-import dev.hitom.photographica.component.SdCardData;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.item.FilmRollItem;
-import dev.hitom.photographica.item.MirrorlessCameraItem;
-import dev.hitom.photographica.item.SdCardItem;
-import dev.hitom.photographica.item.VideoCameraItem;
-import dev.hitom.photographica.network.CreatePhotoFromArmorStandPayload;
-import dev.hitom.photographica.network.CreatePhotoPayload;
-import dev.hitom.photographica.network.EquipCameraToArmorStandPayload;
-import dev.hitom.photographica.network.DeleteSdPhotoPayload;
-import dev.hitom.photographica.network.DevelopFilmPayload;
-import dev.hitom.photographica.network.LoadFilmPayload;
-import dev.hitom.photographica.network.LoadSdCardPayload;
-import dev.hitom.photographica.network.TakeFilmPhotoFromArmorStandPayload;
-import dev.hitom.photographica.network.TakeFilmPhotoPayload;
-import dev.hitom.photographica.network.UnequipCameraFromArmorStandPayload;
-import dev.hitom.photographica.network.UnloadFilmPayload;
-import dev.hitom.photographica.network.UnloadSdCardPayload;
-import dev.hitom.photographica.network.UpdateArmorStandCameraPayload;
-import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
-import dev.hitom.photographica.network.WindFilmPayload;
-import dev.hitom.photographica.registry.ModBlockEntities;
-import dev.hitom.photographica.registry.ModBlocks;
-import dev.hitom.photographica.registry.ModItems;
-import dev.hitom.photographica.registry.ModScreenHandlers;
+import dev.shunti.photographica.component.CameraSettings;
+import dev.shunti.photographica.component.FilmKind;
+import dev.shunti.photographica.component.FilmRollData;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.PhotoData;
+import dev.shunti.photographica.component.SdCardData;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.item.FilmRollItem;
+import dev.shunti.photographica.item.MirrorlessCameraItem;
+import dev.shunti.photographica.item.SdCardItem;
+import dev.shunti.photographica.item.VideoCameraItem;
+import dev.shunti.photographica.network.CreatePhotoFromArmorStandPayload;
+import dev.shunti.photographica.network.CreatePhotoPayload;
+import dev.shunti.photographica.network.EquipCameraToArmorStandPayload;
+import dev.shunti.photographica.network.DeleteSdPhotoPayload;
+import dev.shunti.photographica.network.DevelopFilmPayload;
+import dev.shunti.photographica.network.LoadFilmPayload;
+import dev.shunti.photographica.network.LoadSdCardPayload;
+import dev.shunti.photographica.network.TakeFilmPhotoFromArmorStandPayload;
+import dev.shunti.photographica.network.TakeFilmPhotoPayload;
+import dev.shunti.photographica.network.UnequipCameraFromArmorStandPayload;
+import dev.shunti.photographica.network.UnloadFilmPayload;
+import dev.shunti.photographica.network.UnloadSdCardPayload;
+import dev.shunti.photographica.network.UpdateArmorStandCameraPayload;
+import dev.shunti.photographica.network.UpdateCameraSettingsPayload;
+import dev.shunti.photographica.network.WindFilmPayload;
+import dev.shunti.photographica.registry.ModBlockEntities;
+import dev.shunti.photographica.registry.ModBlocks;
+import dev.shunti.photographica.registry.ModItems;
+import dev.shunti.photographica.registry.ModScreenHandlers;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -517,12 +517,12 @@ public class Photographica implements ModInitializer {
 	/** Finds and damages the developer tank in the player's main or off hand by 1. */
 	private static void damageDeveloperTank(ServerPlayer player) {
 		ItemStack main = player.getItemInHand(InteractionHand.MAIN_HAND);
-		if (main.getItem() instanceof dev.hitom.photographica.item.DeveloperTankItem) {
+		if (main.getItem() instanceof dev.shunti.photographica.item.DeveloperTankItem) {
 			main.hurtAndBreak(1, player, EquipmentSlot.MAINHAND);
 			return;
 		}
 		ItemStack off = player.getItemInHand(InteractionHand.OFF_HAND);
-		if (off.getItem() instanceof dev.hitom.photographica.item.DeveloperTankItem) {
+		if (off.getItem() instanceof dev.shunti.photographica.item.DeveloperTankItem) {
 			off.hurtAndBreak(1, player, EquipmentSlot.OFFHAND);
 		}
 	}
@@ -557,10 +557,10 @@ public class Photographica implements ModInitializer {
 	/** Returns the correct FilmRollItem stack for a given filmType when unloading an unused roll. */
 	private static ItemStack filmRollItemForType(int filmType) {
 		net.minecraft.world.item.Item rollItem = switch (filmType) {
-			case dev.hitom.photographica.component.FilmKind.COLOR_100    -> ModItems.FILM_ROLL_COLOR_100;
-			case dev.hitom.photographica.component.FilmKind.COLOR_1600   -> ModItems.FILM_ROLL_COLOR_1600;
-			case dev.hitom.photographica.component.FilmKind.BW_400       -> ModItems.FILM_ROLL_BW;
-			case dev.hitom.photographica.component.FilmKind.COLOR_400_24 -> ModItems.FILM_ROLL_COLOR_24;
+			case dev.shunti.photographica.component.FilmKind.COLOR_100    -> ModItems.FILM_ROLL_COLOR_100;
+			case dev.shunti.photographica.component.FilmKind.COLOR_1600   -> ModItems.FILM_ROLL_COLOR_1600;
+			case dev.shunti.photographica.component.FilmKind.BW_400       -> ModItems.FILM_ROLL_BW;
+			case dev.shunti.photographica.component.FilmKind.COLOR_400_24 -> ModItems.FILM_ROLL_COLOR_24;
 			default                                                       -> ModItems.FILM_ROLL_COLOR;
 		};
 		return FilmRollItem.stackOf(rollItem, filmType);

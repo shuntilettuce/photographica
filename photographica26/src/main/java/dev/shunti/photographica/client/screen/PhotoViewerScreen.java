@@ -1,9 +1,9 @@
-package dev.hitom.photographica.client.screen;
+package dev.shunti.photographica.client.screen;
 
-import dev.hitom.photographica.client.render.PhotoTextureCache;
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.client.ClipboardUtil;
-import dev.hitom.photographica.component.PhotoData;
+import dev.shunti.photographica.client.render.PhotoTextureCache;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.client.ClipboardUtil;
+import dev.shunti.photographica.component.PhotoData;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;

@@ -1,19 +1,19 @@
-package dev.hitom.photographica.client;
+package dev.shunti.photographica.client;
 
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.component.CameraSettings;
-import dev.hitom.photographica.component.FilmKind;
-import dev.hitom.photographica.component.FilmRollData;
-import dev.hitom.photographica.component.LensKind;
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.SdCardData;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.item.MirrorlessCameraItem;
-import dev.hitom.photographica.network.CreatePhotoFromArmorStandPayload;
-import dev.hitom.photographica.network.CreatePhotoPayload;
-import dev.hitom.photographica.network.TakeFilmPhotoFromArmorStandPayload;
-import dev.hitom.photographica.network.TakeFilmPhotoPayload;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.component.CameraSettings;
+import dev.shunti.photographica.component.FilmKind;
+import dev.shunti.photographica.component.FilmRollData;
+import dev.shunti.photographica.component.LensKind;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.SdCardData;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.item.MirrorlessCameraItem;
+import dev.shunti.photographica.network.CreatePhotoFromArmorStandPayload;
+import dev.shunti.photographica.network.CreatePhotoPayload;
+import dev.shunti.photographica.network.TakeFilmPhotoFromArmorStandPayload;
+import dev.shunti.photographica.network.TakeFilmPhotoPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -404,13 +404,13 @@ public final class PhotoCapture {
 				// accurate when a LOD mod (Voxy, DH) extends the projection.
 				MinecraftClient mc2 = MinecraftClient.getInstance();
 				if (mc2 != null && mc2.gameRenderer != null) {
-					dev.hitom.photographica.client.render.EvfBlurRenderer.updateDepthFar(
+					dev.shunti.photographica.client.render.EvfBlurRenderer.updateDepthFar(
 							mc2.gameRenderer.getBasicProjectionMatrix(70.0f),
 							Math.max(mc2.options.getViewDistance().getValue() * 64f, 256f));
 				}
 				// EVF: GPU-side copy (no CPU readback — fast enough for every frame)
 				if (evfActive) {
-					dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(vpW, vpH);
+					dev.shunti.photographica.client.render.EvfBlurRenderer.captureDepth(vpW, vpH);
 				}
 				//? if <1.21.11 {
 				// Photo capture: CPU depth readback for per-pixel DoF.
@@ -425,7 +425,7 @@ public final class PhotoCapture {
 					GL11.glReadPixels(0, 0, vpW, vpH, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, buf);
 					float[] depth = new float[vpW * vpH];
 					final float near = 0.05f;
-					final float far = dev.hitom.photographica.client.render.EvfBlurRenderer.currentDepthFar;
+					final float far = dev.shunti.photographica.client.render.EvfBlurRenderer.currentDepthFar;
 					for (int i = 0; i < depth.length; i++) {
 						float d = buf.get(i);
 						float ndc = 2.0f * d - 1.0f;
@@ -445,7 +445,7 @@ public final class PhotoCapture {
 		// (see DroneEntity#createBuiltInCamera) needs the same live depth-of-field preview a
 		// handheld mirrorless gets (see DroneSignalHud), just never gated on sneaking-with-a-
 		// camera-in-hand the way the handheld case is, since piloting has neither concept.
-		if (dev.hitom.photographica.client.DronePilot.isActive()) return true;
+		if (dev.shunti.photographica.client.DronePilot.isActive()) return true;
 		if (mc.player == null || !mc.player.isSneaking() || mc.currentScreen != null) return false;
 		ItemStack stack = mc.player.getMainHandStack();
 		if (stack.getItem() instanceof MirrorlessCameraItem) return true;
@@ -544,7 +544,7 @@ public final class PhotoCapture {
 		if (captureStandId >= 0 && wasDrone) {
 			// Always digital: the drone's camera is fixed built-in equipment, never a film body
 			// (see DroneEntity#createBuiltInCamera), so there is no film branch to take here.
-			ClientPlayNetworking.send(new dev.hitom.photographica.network.CreatePhotoFromDronePayload(id, settings, captureStandId));
+			ClientPlayNetworking.send(new dev.shunti.photographica.network.CreatePhotoFromDronePayload(id, settings, captureStandId));
 			if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (ドローン)"), true);
 			droneCapturePending = false;
 			armorStandFocalLength = 0;
@@ -631,7 +631,7 @@ public final class PhotoCapture {
 
 	/**
 	 * Sends this photo's just-written PNG to the server in chunks, so it becomes readable by
-	 * anyone (not just this client) — see {@link dev.hitom.photographica.network.UploadPhotoChunkPayload}.
+	 * anyone (not just this client) — see {@link dev.shunti.photographica.network.UploadPhotoChunkPayload}.
 	 * Fire-and-forget: the server persists the canonical copy independently of the
 	 * CreatePhotoPayload/TakeFilmPhotoPayload metadata payload sent separately, so a failure
 	 * here only means other players can't view this one photo, nothing about the local item
@@ -640,9 +640,9 @@ public final class PhotoCapture {
 	private static void uploadPhotoToServer(UUID id, File outFile) {
 		try {
 			byte[] data = java.nio.file.Files.readAllBytes(outFile.toPath());
-			boolean sent = dev.hitom.photographica.network.PhotoChunkAssembler.split(data,
+			boolean sent = dev.shunti.photographica.network.PhotoChunkAssembler.split(data,
 					(chunkIndex, totalChunks, chunk) ->
-							ClientPlayNetworking.send(new dev.hitom.photographica.network.UploadPhotoChunkPayload(
+							ClientPlayNetworking.send(new dev.shunti.photographica.network.UploadPhotoChunkPayload(
 									id, chunkIndex, totalChunks, chunk)));
 			if (!sent) {
 				Photographica.LOGGER.warn("Photo {} is {} bytes — too large to upload; it stays local only",
@@ -790,7 +790,7 @@ public final class PhotoCapture {
 		}
 
 		if (finalStandId >= 0 && wasDrone) {
-			ClientPlayNetworking.send(new dev.hitom.photographica.network.CreatePhotoFromDronePayload(id, settings, finalStandId));
+			ClientPlayNetworking.send(new dev.shunti.photographica.network.CreatePhotoFromDronePayload(id, settings, finalStandId));
 			if (mc.player != null) mc.player.sendMessage(Text.literal("📸 撮影 (ドローン)"), true);
 			droneCapturePending = false;
 			armorStandFocalLength = 0;
@@ -1215,7 +1215,7 @@ public final class PhotoCapture {
 		// at all (see DroneEntity#createBuiltInCamera); the server just hands finished photos
 		// straight to the pilot's inventory in that case (see the CreatePhotoFromDronePayload
 		// receiver), so there's nothing here to validate.
-		boolean isDrone = mc.world.getEntityById(entityId) instanceof dev.hitom.photographica.entity.DroneEntity;
+		boolean isDrone = mc.world.getEntityById(entityId) instanceof dev.shunti.photographica.entity.DroneEntity;
 		if (!isFilm && !isDrone) {
 			if (!cameraStack.contains(ModDataComponents.SD_CARD)) {
 				mc.player.sendMessage(Text.literal("⚠ SDカードが装填されていません"), true);
@@ -1275,7 +1275,7 @@ public final class PhotoCapture {
 	                               boolean isFilm, long now) {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.world == null) return;
-		if (mc.world.getEntityById(entityId) instanceof dev.hitom.photographica.entity.DroneEntity) {
+		if (mc.world.getEntityById(entityId) instanceof dev.shunti.photographica.entity.DroneEntity) {
 			armDroneCapture(entityId, cameraStack, settings, isFilm, now);
 		} else {
 			armArmorStandCapture(entityId, cameraStack, settings, isFilm, now);
@@ -1292,7 +1292,7 @@ public final class PhotoCapture {
 	                                    CameraSettings settings, boolean isFilm, long now) {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.world == null) return;
-		if (!(mc.world.getEntityById(entityId) instanceof dev.hitom.photographica.entity.DroneEntity)) return;
+		if (!(mc.world.getEntityById(entityId) instanceof dev.shunti.photographica.entity.DroneEntity)) return;
 
 		lastCaptureMs = now;
 		motionBlurEnabled = true; // hovering drone ~= stable enough to treat like a tripod shot
@@ -1880,10 +1880,10 @@ public final class PhotoCapture {
 			float s = buf.get(i);
 			if (s > 0.001f && s < rawD) rawD = s;
 		}
-		if (rawD >= 0.999999f) { lastSceneDepthBlocks = dev.hitom.photographica.component.CameraSettings.FOCUS_INFINITY; return; }
+		if (rawD >= 0.999999f) { lastSceneDepthBlocks = dev.shunti.photographica.component.CameraSettings.FOCUS_INFINITY; return; }
 		if (rawD < 0.001f) return;
 		final float near = 0.05f;
-		final float far  = dev.hitom.photographica.client.render.EvfBlurRenderer.currentDepthFar;
+		final float far  = dev.shunti.photographica.client.render.EvfBlurRenderer.currentDepthFar;
 		float ndc = 2.0f * rawD - 1.0f;
 		lastSceneDepthBlocks = 2.0f * near * far / (far + near - ndc * (far - near));
 	}
@@ -2177,7 +2177,7 @@ public final class PhotoCapture {
 	private static NativeImage cropTo3to2(NativeImage src) {
 		int w = src.getWidth();
 		int h = src.getHeight();
-		float targetAspect = dev.hitom.photographica.client.hud.ViewfinderHud.portraitOrientation ? 2f / 3f : 3f / 2f;
+		float targetAspect = dev.shunti.photographica.client.hud.ViewfinderHud.portraitOrientation ? 2f / 3f : 3f / 2f;
 		float aspect = targetAspect;
 		int targetW, targetH;
 		if ((float) w / h > aspect) {

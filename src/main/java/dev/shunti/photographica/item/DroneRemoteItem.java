@@ -1,7 +1,7 @@
-package dev.hitom.photographica.item;
+package dev.shunti.photographica.item;
 
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.entity.DroneEntity;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.entity.DroneEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;

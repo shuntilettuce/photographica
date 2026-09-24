@@ -1,20 +1,20 @@
-package dev.hitom.photographica.client;
+package dev.shunti.photographica.client;
 
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.component.CameraSettings;
-import dev.hitom.photographica.component.FilmKind;
-import dev.hitom.photographica.component.FilmRollData;
-import dev.hitom.photographica.component.LensKind;
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.PhotoData;
-import dev.hitom.photographica.component.SdCardData;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.item.MirrorlessCameraItem;
-import dev.hitom.photographica.network.CreatePhotoFromArmorStandPayload;
-import dev.hitom.photographica.network.CreatePhotoPayload;
-import dev.hitom.photographica.network.TakeFilmPhotoFromArmorStandPayload;
-import dev.hitom.photographica.network.TakeFilmPhotoPayload;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.component.CameraSettings;
+import dev.shunti.photographica.component.FilmKind;
+import dev.shunti.photographica.component.FilmRollData;
+import dev.shunti.photographica.component.LensKind;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.PhotoData;
+import dev.shunti.photographica.component.SdCardData;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.item.MirrorlessCameraItem;
+import dev.shunti.photographica.network.CreatePhotoFromArmorStandPayload;
+import dev.shunti.photographica.network.CreatePhotoPayload;
+import dev.shunti.photographica.network.TakeFilmPhotoFromArmorStandPayload;
+import dev.shunti.photographica.network.TakeFilmPhotoPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -332,16 +332,16 @@ public final class PhotoCapture {
 				if (mc.gameRenderer != null) {
 					net.minecraft.client.renderer.state.level.CameraRenderState camSt_ =
 							mc.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState;
-					dev.hitom.photographica.client.render.EvfBlurRenderer.updateDepthFar(
+					dev.shunti.photographica.client.render.EvfBlurRenderer.updateDepthFar(
 							camSt_ != null ? camSt_.projectionMatrix : null,
 							Math.max(mc.options.renderDistance().get() * 64f, 256f));
 				}
-				dev.hitom.photographica.client.render.EvfBlurRenderer.captureDepth(fbW, fbH);
+				dev.shunti.photographica.client.render.EvfBlurRenderer.captureDepth(fbW, fbH);
 
 				if (pendingId != null) {
 					// GPU→CPU readback for software DoF in applyDepthOfField().
 					// One-shot stall per shutter press — acceptable latency.
-					float[] depth = dev.hitom.photographica.client.render.EvfBlurRenderer
+					float[] depth = dev.shunti.photographica.client.render.EvfBlurRenderer
 							.readLinearDepthCpu(fbW, fbH);
 					if (depth != null) {
 						pendingLinearDepth = depth;
@@ -361,7 +361,7 @@ public final class PhotoCapture {
 	public static void applyEvfBlur() {
 		Minecraft mc = Minecraft.getInstance();
 		if (!isEvfActive(mc)) return;
-		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur(isCapturePending());
+		dev.shunti.photographica.client.render.EvfBlurRenderer.applyScheduledBlur(isCapturePending());
 	}
 
 	private static boolean isEvfActive(Minecraft mc) {
@@ -1398,7 +1398,7 @@ public final class PhotoCapture {
 	private static NativeImage cropTo3to2(NativeImage src) {
 		int w = src.getWidth();
 		int h = src.getHeight();
-		float aspect = dev.hitom.photographica.client.hud.ViewfinderHud.portraitOrientation ? 2f / 3f : 3f / 2f;
+		float aspect = dev.shunti.photographica.client.hud.ViewfinderHud.portraitOrientation ? 2f / 3f : 3f / 2f;
 		int targetW, targetH;
 		if ((float) w / h > aspect) {
 			targetH = h;

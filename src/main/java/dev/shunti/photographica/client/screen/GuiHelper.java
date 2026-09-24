@@ -1,4 +1,4 @@
-package dev.hitom.photographica.client.screen;
+package dev.shunti.photographica.client.screen;
 
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;

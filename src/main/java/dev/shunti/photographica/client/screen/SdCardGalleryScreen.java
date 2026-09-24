@@ -1,11 +1,11 @@
-package dev.hitom.photographica.client.screen;
+package dev.shunti.photographica.client.screen;
 
-import dev.hitom.photographica.client.ClipboardUtil;
-import dev.hitom.photographica.client.render.PhotoTextureCache;
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.PhotoData;
-import dev.hitom.photographica.component.SdCardData;
-import dev.hitom.photographica.network.DeleteSdPhotoPayload;
+import dev.shunti.photographica.client.ClipboardUtil;
+import dev.shunti.photographica.client.render.PhotoTextureCache;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.PhotoData;
+import dev.shunti.photographica.component.SdCardData;
+import dev.shunti.photographica.network.DeleteSdPhotoPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -25,7 +25,7 @@ import java.util.UUID;
 /**
  * SD card photo gallery: a thumbnail grid (tap a cell to open it full-screen) rather than the
  * old page-by-page {@code SdCardBrowserScreen} it replaces. Reachable both directly from
- * {@link dev.hitom.photographica.item.SdCardItem#use} (right-click the card itself) and from
+ * {@link dev.shunti.photographica.item.SdCardItem#use} (right-click the card itself) and from
  * the camera settings screen's "SDカード" button.
  *
  * <p>Thumbnails go through {@link PhotoTextureCache}, so a photo someone else took is fetched

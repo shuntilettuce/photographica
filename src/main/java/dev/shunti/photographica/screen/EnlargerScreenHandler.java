@@ -1,12 +1,12 @@
-package dev.hitom.photographica.screen;
+package dev.shunti.photographica.screen;
 
-import dev.hitom.photographica.component.FilmRollData;
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.PhotoData;
-import dev.hitom.photographica.item.DevelopedFilmItem;
-import dev.hitom.photographica.item.PhotoPaperItem;
-import dev.hitom.photographica.registry.ModItems;
-import dev.hitom.photographica.registry.ModScreenHandlers;
+import dev.shunti.photographica.component.FilmRollData;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.PhotoData;
+import dev.shunti.photographica.item.DevelopedFilmItem;
+import dev.shunti.photographica.item.PhotoPaperItem;
+import dev.shunti.photographica.registry.ModItems;
+import dev.shunti.photographica.registry.ModScreenHandlers;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.Inventory;

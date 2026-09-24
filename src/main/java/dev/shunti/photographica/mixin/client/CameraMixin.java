@@ -1,7 +1,7 @@
-package dev.hitom.photographica.mixin.client;
+package dev.shunti.photographica.mixin.client;
 
-import dev.hitom.photographica.client.DronePilot;
-import dev.hitom.photographica.client.PhotoCapture;
+import dev.shunti.photographica.client.DronePilot;
+import dev.shunti.photographica.client.PhotoCapture;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Vec3d;

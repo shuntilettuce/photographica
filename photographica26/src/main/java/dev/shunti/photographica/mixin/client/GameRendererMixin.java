@@ -1,14 +1,14 @@
-package dev.hitom.photographica.mixin.client;
+package dev.shunti.photographica.mixin.client;
 
-import dev.hitom.photographica.client.PhotoCapture;
-import dev.hitom.photographica.client.VideoRecorder;
-import dev.hitom.photographica.client.hud.ViewfinderHud;
-import dev.hitom.photographica.client.render.EvfBlurRenderer;
-import dev.hitom.photographica.component.CameraSettings;
-import dev.hitom.photographica.component.LensKind;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.item.VideoCameraItem;
+import dev.shunti.photographica.client.PhotoCapture;
+import dev.shunti.photographica.client.VideoRecorder;
+import dev.shunti.photographica.client.hud.ViewfinderHud;
+import dev.shunti.photographica.client.render.EvfBlurRenderer;
+import dev.shunti.photographica.component.CameraSettings;
+import dev.shunti.photographica.component.LensKind;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.item.VideoCameraItem;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;

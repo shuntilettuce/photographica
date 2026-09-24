@@ -1,7 +1,7 @@
-package dev.hitom.photographica.mixin.client;
+package dev.shunti.photographica.mixin.client;
 
-import dev.hitom.photographica.client.PhotoCapture;
-import dev.hitom.photographica.client.VideoRecorder;
+import dev.shunti.photographica.client.PhotoCapture;
+import dev.shunti.photographica.client.VideoRecorder;
 import net.minecraft.client.renderer.ItemInHandRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

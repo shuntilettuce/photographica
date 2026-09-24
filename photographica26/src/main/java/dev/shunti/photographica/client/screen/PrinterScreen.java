@@ -1,8 +1,8 @@
-package dev.hitom.photographica.client.screen;
+package dev.shunti.photographica.client.screen;
 
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.SdCardData;
-import dev.hitom.photographica.screen.PrinterScreenHandler;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.SdCardData;
+import dev.shunti.photographica.screen.PrinterScreenHandler;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.gui.GuiGraphicsExtractor;

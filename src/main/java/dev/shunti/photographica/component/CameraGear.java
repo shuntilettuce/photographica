@@ -1,12 +1,12 @@
-package dev.hitom.photographica.component;
+package dev.shunti.photographica.component;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.item.FilmRollItem;
-import dev.hitom.photographica.item.LensItem;
-import dev.hitom.photographica.item.SdCardItem;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.item.FilmRollItem;
+import dev.shunti.photographica.item.LensItem;
+import dev.shunti.photographica.item.SdCardItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;

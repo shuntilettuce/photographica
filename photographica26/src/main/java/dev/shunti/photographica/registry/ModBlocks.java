@@ -1,11 +1,11 @@
-package dev.hitom.photographica.registry;
+package dev.shunti.photographica.registry;
 
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.block.DarkroomBlock;
-import dev.hitom.photographica.block.EnlargerBlock;
-import dev.hitom.photographica.block.PhotoFrameBlock;
-import dev.hitom.photographica.block.PhotoStandBlock;
-import dev.hitom.photographica.block.PrinterBlock;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.block.DarkroomBlock;
+import dev.shunti.photographica.block.EnlargerBlock;
+import dev.shunti.photographica.block.PhotoFrameBlock;
+import dev.shunti.photographica.block.PhotoStandBlock;
+import dev.shunti.photographica.block.PrinterBlock;
 import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.level.block.Block;

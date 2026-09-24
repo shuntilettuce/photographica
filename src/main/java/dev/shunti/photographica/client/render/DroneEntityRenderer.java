@@ -1,6 +1,6 @@
-package dev.hitom.photographica.client.render;
+package dev.shunti.photographica.client.render;
 
-import dev.hitom.photographica.entity.DroneEntity;
+import dev.shunti.photographica.entity.DroneEntity;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.model.ModelPart;
@@ -51,8 +51,8 @@ import net.minecraft.util.Identifier;
     @Override
     public boolean shouldRender(DroneEntity entity, net.minecraft.client.render.Frustum frustum,
                                 double x, double y, double z) {
-        if (dev.hitom.photographica.client.DronePilot.isActive()
-                && dev.hitom.photographica.client.DronePilot.droneEntityId() == entity.getId()) {
+        if (dev.shunti.photographica.client.DronePilot.isActive()
+                && dev.shunti.photographica.client.DronePilot.droneEntityId() == entity.getId()) {
             return false;
         }
         return super.shouldRender(entity, frustum, x, y, z);
@@ -93,8 +93,8 @@ import net.minecraft.util.Identifier;
     @Override
     public boolean shouldRender(DroneEntity entity, net.minecraft.client.render.Frustum frustum,
                                 double x, double y, double z) {
-        if (dev.hitom.photographica.client.DronePilot.isActive()
-                && dev.hitom.photographica.client.DronePilot.droneEntityId() == entity.getId()) {
+        if (dev.shunti.photographica.client.DronePilot.isActive()
+                && dev.shunti.photographica.client.DronePilot.droneEntityId() == entity.getId()) {
             return false;
         }
         return super.shouldRender(entity, frustum, x, y, z);
@@ -135,8 +135,8 @@ public class DroneEntityRenderer extends EntityRenderer<DroneEntity> {
     @Override
     public boolean shouldRender(DroneEntity entity, net.minecraft.client.render.Frustum frustum,
                                 double x, double y, double z) {
-        if (dev.hitom.photographica.client.DronePilot.isActive()
-                && dev.hitom.photographica.client.DronePilot.droneEntityId() == entity.getId()) {
+        if (dev.shunti.photographica.client.DronePilot.isActive()
+                && dev.shunti.photographica.client.DronePilot.droneEntityId() == entity.getId()) {
             return false;
         }
         return super.shouldRender(entity, frustum, x, y, z);

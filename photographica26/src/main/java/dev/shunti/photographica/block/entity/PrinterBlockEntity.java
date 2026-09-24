@@ -1,7 +1,7 @@
-package dev.hitom.photographica.block.entity;
+package dev.shunti.photographica.block.entity;
 
-import dev.hitom.photographica.registry.ModBlockEntities;
-import dev.hitom.photographica.screen.PrinterScreenHandler;
+import dev.shunti.photographica.registry.ModBlockEntities;
+import dev.shunti.photographica.screen.PrinterScreenHandler;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.entity.player.Player;

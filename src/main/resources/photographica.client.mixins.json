@@ -1,6 +1,6 @@
 {
 	"required": true,
-	"package": "dev.hitom.photographica.mixin.client",
+	"package": "dev.shunti.photographica.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"CameraMixin",

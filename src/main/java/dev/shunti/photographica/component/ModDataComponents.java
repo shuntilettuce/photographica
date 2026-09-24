@@ -1,6 +1,6 @@
-package dev.hitom.photographica.component;
+package dev.shunti.photographica.component;
 
-import dev.hitom.photographica.Photographica;
+import dev.shunti.photographica.Photographica;
 import net.minecraft.component.ComponentType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;

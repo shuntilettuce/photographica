@@ -1,7 +1,7 @@
-package dev.hitom.photographica.block;
+package dev.shunti.photographica.block;
 
 import com.mojang.serialization.MapCodec;
-import dev.hitom.photographica.block.entity.FaxMachineBlockEntity;
+import dev.shunti.photographica.block.entity.FaxMachineBlockEntity;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockRenderType;
 import net.minecraft.block.BlockState;

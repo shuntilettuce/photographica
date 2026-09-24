@@ -1,12 +1,12 @@
-package dev.hitom.photographica.client;
+package dev.shunti.photographica.client;
 
-import dev.hitom.photographica.component.CameraSettings;
-import dev.hitom.photographica.component.LensKind;
-import dev.hitom.photographica.entity.DroneEntity;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.network.UpdateArmorStandCameraPayload;
-import dev.hitom.photographica.network.UpdateDronePositionPayload;
+import dev.shunti.photographica.component.CameraSettings;
+import dev.shunti.photographica.component.LensKind;
+import dev.shunti.photographica.entity.DroneEntity;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.network.UpdateArmorStandCameraPayload;
+import dev.shunti.photographica.network.UpdateDronePositionPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -28,7 +28,7 @@ import org.lwjgl.glfw.GLFW;
  * <p>Unlike a pure client-side freecam, this is tied to a real {@link DroneEntity} — every tick
  * the tracked position is sent to the server (see {@link UpdateDronePositionPayload}), which
  * moves the entity to match, so every other player sees the drone actually fly where the pilot
- * is looking. The camera itself is repositioned by {@link dev.hitom.photographica.mixin.client.CameraMixin}
+ * is looking. The camera itself is repositioned by {@link dev.shunti.photographica.mixin.client.CameraMixin}
  * cancelling {@code Camera.update()}, exactly like the old Freecam's mixin did.
  */
 @Environment(EnvType.CLIENT)
@@ -417,7 +417,7 @@ public final class DronePilot {
                 if (noSignalTicks == 0) {
                     // Hands over the velocity it was flying at, so the airframe coasts on under
                     // its own momentum rather than stopping dead and dropping straight down.
-                    ClientPlayNetworking.send(new dev.hitom.photographica.network.DroneSignalLostPayload(
+                    ClientPlayNetworking.send(new dev.shunti.photographica.network.DroneSignalLostPayload(
                             droneEntityId, velocity.x, velocity.y, velocity.z));
                 }
                 noSignalTicks++;

@@ -1,7 +1,7 @@
-package dev.hitom.photographica.block.entity;
+package dev.shunti.photographica.block.entity;
 
-import dev.hitom.photographica.registry.ModBlockEntities;
-import dev.hitom.photographica.screen.EnlargerScreenHandler;
+import dev.shunti.photographica.registry.ModBlockEntities;
+import dev.shunti.photographica.screen.EnlargerScreenHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.player.PlayerEntity;

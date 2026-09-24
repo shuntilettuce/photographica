@@ -1,4 +1,4 @@
-package dev.hitom.photographica.network;
+package dev.shunti.photographica.network;
 
 import java.util.Map;
 import java.util.UUID;

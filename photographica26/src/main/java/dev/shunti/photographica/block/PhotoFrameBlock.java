@@ -1,11 +1,11 @@
-package dev.hitom.photographica.block;
+package dev.shunti.photographica.block;
 
 import com.mojang.serialization.MapCodec;
-import dev.hitom.photographica.block.entity.PhotoFrameBlockEntity;
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.PhotoData;
-import dev.hitom.photographica.item.PhotoItem;
-import dev.hitom.photographica.registry.ModItems;
+import dev.shunti.photographica.block.entity.PhotoFrameBlockEntity;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.PhotoData;
+import dev.shunti.photographica.item.PhotoItem;
+import dev.shunti.photographica.registry.ModItems;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.RenderShape;

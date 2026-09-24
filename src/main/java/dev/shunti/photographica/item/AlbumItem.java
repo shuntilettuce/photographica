@@ -1,7 +1,7 @@
-package dev.hitom.photographica.item;
+package dev.shunti.photographica.item;
 
-import dev.hitom.photographica.component.AlbumData;
-import dev.hitom.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.AlbumData;
+import dev.shunti.photographica.component.ModDataComponents;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -73,7 +73,7 @@ public class AlbumItem extends Item {
             @Override
             public net.minecraft.screen.ScreenHandler createMenu(int syncId,
                     net.minecraft.entity.player.PlayerInventory inv, PlayerEntity player) {
-                return new dev.hitom.photographica.screen.AlbumScreenHandler(syncId, inv);
+                return new dev.shunti.photographica.screen.AlbumScreenHandler(syncId, inv);
             }
         });
     }

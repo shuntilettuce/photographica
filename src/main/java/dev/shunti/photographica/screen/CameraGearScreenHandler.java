@@ -1,7 +1,7 @@
-package dev.hitom.photographica.screen;
+package dev.shunti.photographica.screen;
 
-import dev.hitom.photographica.component.CameraGear;
-import dev.hitom.photographica.registry.ModScreenHandlers;
+import dev.shunti.photographica.component.CameraGear;
+import dev.shunti.photographica.registry.ModScreenHandlers;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.SimpleInventory;
@@ -103,7 +103,7 @@ public class CameraGearScreenHandler extends ScreenHandler {
     public boolean canUse(PlayerEntity player) {
         // The body being edited is the one in hand, so putting it away closes the screen —
         // otherwise the slots would keep editing a camera the player is no longer holding.
-        return !camera().isEmpty() && dev.hitom.photographica.component.CameraGear.isCamera(camera());
+        return !camera().isEmpty() && dev.shunti.photographica.component.CameraGear.isCamera(camera());
     }
 
     @Override

@@ -1,4 +1,4 @@
-package dev.hitom.photographica.component;
+package dev.shunti.photographica.component;
 
 public final class FilmKind {
 	public static final int DIGITAL      = 0;

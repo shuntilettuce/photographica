@@ -1,12 +1,12 @@
-package dev.hitom.photographica.mixin.client;
+package dev.shunti.photographica.mixin.client;
 
-import dev.hitom.photographica.client.PhotoCapture;
-import dev.hitom.photographica.client.VideoRecorder;
-import dev.hitom.photographica.component.CameraSettings;
-import dev.hitom.photographica.component.LensKind;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.item.VideoCameraItem;
+import dev.shunti.photographica.client.PhotoCapture;
+import dev.shunti.photographica.client.VideoRecorder;
+import dev.shunti.photographica.component.CameraSettings;
+import dev.shunti.photographica.component.LensKind;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.item.VideoCameraItem;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
@@ -126,7 +126,7 @@ public class GameRendererMixin {
 	@Inject(method = "bobView(Lnet/minecraft/client/util/math/MatrixStack;F)V", at = @At("HEAD"), cancellable = true)
 	private void photographica$suppressBobDuringTripod(net.minecraft.client.util.math.MatrixStack matrices,
 			float tickDelta, CallbackInfo ci) {
-		if (VideoRecorder.isTripodRecording() || dev.hitom.photographica.client.DronePilot.isActive()) ci.cancel();
+		if (VideoRecorder.isTripodRecording() || dev.shunti.photographica.client.DronePilot.isActive()) ci.cancel();
 	}
 
 	// After updateCamera() completes, reset mc.cameraEntity back to the player.
@@ -206,8 +206,8 @@ public class GameRendererMixin {
 		// applies continuously across the whole 24-200mm range, exactly matching the capture
 		// branch above. Digital zoom is a SHARPNESS cost, not a framing one — the detail loss
 		// is applied as a separate pass (see DroneSignalHud / EvfBlurRenderer#applyDigitalZoom).
-		if (dev.hitom.photographica.client.DronePilot.isActive()) {
-			int f = dev.hitom.photographica.client.DronePilot.getMountedFocalLength(MinecraftClient.getInstance());
+		if (dev.shunti.photographica.client.DronePilot.isActive()) {
+			int f = dev.shunti.photographica.client.DronePilot.getMountedFocalLength(MinecraftClient.getInstance());
 			if (f > 0) {
 				double vFovDegrees = Math.toDegrees(2.0 * Math.atan(12.0 / f));
 				//? if >=1.21.4 {
@@ -252,7 +252,7 @@ public class GameRendererMixin {
 		int f = settings.focalLengthMm();
 		if (f <= 0) return;
 
-		double halfSensorMm = dev.hitom.photographica.client.hud.ViewfinderHud.portraitOrientation ? 18.0 : 12.0;
+		double halfSensorMm = dev.shunti.photographica.client.hud.ViewfinderHud.portraitOrientation ? 18.0 : 12.0;
 		double vFovDegrees = Math.toDegrees(2.0 * Math.atan(halfSensorMm / f));
 		//? if >=1.21.4 {
 		/*cir.setReturnValue((float) vFovDegrees);
@@ -345,14 +345,14 @@ public class GameRendererMixin {
 		// Apply EVF blur BEFORE capture so the screenshot contains GPU bokeh (1.21.11).
 		// No-op on <1.21.11 (blurScheduled is never set; blur is drawn directly from HUD).
 		// forCapture=true → blur the full framebuffer so the photo's edges are covered.
-		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledBlur(PhotoCapture.isCapturePending());
+		dev.shunti.photographica.client.render.EvfBlurRenderer.applyScheduledBlur(PhotoCapture.isCapturePending());
 		// Focus peaking is a viewfinder-only manual-focus aid; applyScheduledPeaking() is a
 		// no-op whenever forCapture is true, so it can never end up baked into a saved photo.
-		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledPeaking(PhotoCapture.isCapturePending());
+		dev.shunti.photographica.client.render.EvfBlurRenderer.applyScheduledPeaking(PhotoCapture.isCapturePending());
 		// Drone digital zoom is a live-viewfinder-only crop+pixelate — the saved photo gets its
 		// own independent crop baked in CPU-side (PhotoCapture#applyDigitalZoom), so this must
 		// never also run on a capture frame or the zoom would effectively double up.
-		dev.hitom.photographica.client.render.EvfBlurRenderer.applyScheduledDigitalZoom(PhotoCapture.isCapturePending());
+		dev.shunti.photographica.client.render.EvfBlurRenderer.applyScheduledDigitalZoom(PhotoCapture.isCapturePending());
 		PhotoCapture.captureIfPending();
 		VideoRecorder.captureFrameIfRecording();
 		// Restore renderHand for the vanilla renderHand() call that follows. isRidingDrone()/
@@ -375,7 +375,7 @@ public class GameRendererMixin {
 	 *  "using" at that moment, so the first-person hand/held-item render is never appropriate,
 	 *  the same way it's suppressed during any other capture-adjacent state. */
 	private static boolean photographica$isPilotingDrone() {
-		return dev.hitom.photographica.client.DronePilot.isActive();
+		return dev.shunti.photographica.client.DronePilot.isActive();
 	}
 
 	/** True while looking through a mirrorless camera's live EVF (sneaking, lens attached, no
@@ -388,9 +388,9 @@ public class GameRendererMixin {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.player == null || mc.currentScreen != null || !mc.player.isSneaking()) return false;
 		ItemStack stack = mc.player.getMainHandStack();
-		if (!(stack.getItem() instanceof dev.hitom.photographica.item.MirrorlessCameraItem)) {
+		if (!(stack.getItem() instanceof dev.shunti.photographica.item.MirrorlessCameraItem)) {
 			stack = mc.player.getOffHandStack();
-			if (!(stack.getItem() instanceof dev.hitom.photographica.item.MirrorlessCameraItem)) return false;
+			if (!(stack.getItem() instanceof dev.shunti.photographica.item.MirrorlessCameraItem)) return false;
 		}
 		CameraSettings s = CameraItem.getSettings(stack);
 		return LensKind.hasLens(s.lensType());

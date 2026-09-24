@@ -1,7 +1,7 @@
-package dev.hitom.photographica.block.entity;
+package dev.shunti.photographica.block.entity;
 
-import dev.hitom.photographica.component.PhotoData;
-import dev.hitom.photographica.registry.ModBlockEntities;
+import dev.shunti.photographica.component.PhotoData;
+import dev.shunti.photographica.registry.ModBlockEntities;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;

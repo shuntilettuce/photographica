@@ -1,10 +1,10 @@
-package dev.hitom.photographica.entity;
+package dev.shunti.photographica.entity;
 
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.DroneRemoteItem;
-import dev.hitom.photographica.registry.ModEntities;
-import dev.hitom.photographica.registry.ModItems;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.DroneRemoteItem;
+import dev.shunti.photographica.registry.ModEntities;
+import dev.shunti.photographica.registry.ModItems;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.player.PlayerEntity;
@@ -27,7 +27,7 @@ import net.minecraft.storage.WriteView;
  * stays visible in the shot, the way snapmatica's freecam does.
  *
  * <p>The mounted camera is a {@link TrackedData} field so every client (not just the pilot) sees
- * which camera — if any — is aboard, and {@link dev.hitom.photographica.client.render.DroneEntityRenderer}
+ * which camera — if any — is aboard, and {@link dev.shunti.photographica.client.render.DroneEntityRenderer}
  * can draw it.
  */
 public class DroneEntity extends Entity {
@@ -259,14 +259,14 @@ public class DroneEntity extends Entity {
      *  at — it's never actually in anyone's inventory. */
     private static ItemStack createBuiltInCamera() {
         ItemStack stack = new ItemStack(ModItems.CAMERA);
-        dev.hitom.photographica.component.CameraSettings profiled = new dev.hitom.photographica.component.CameraSettings(
-                2.8f, dev.hitom.photographica.component.CameraSettings.DEFAULT.shutterSpeedIdx(),
-                dev.hitom.photographica.component.CameraSettings.DEFAULT.iso(),
-                dev.hitom.photographica.component.CameraSettings.DEFAULT.focusDistance(),
-                dev.hitom.photographica.component.LensKind.defaultFocalLength(dev.hitom.photographica.component.LensKind.DRONE_ZOOM),
-                dev.hitom.photographica.component.LensKind.DRONE_ZOOM,
-                0, 0, dev.hitom.photographica.component.CameraSettings.EXP_M,
-                dev.hitom.photographica.component.CameraSettings.FOCUS_AF,
+        dev.shunti.photographica.component.CameraSettings profiled = new dev.shunti.photographica.component.CameraSettings(
+                2.8f, dev.shunti.photographica.component.CameraSettings.DEFAULT.shutterSpeedIdx(),
+                dev.shunti.photographica.component.CameraSettings.DEFAULT.iso(),
+                dev.shunti.photographica.component.CameraSettings.DEFAULT.focusDistance(),
+                dev.shunti.photographica.component.LensKind.defaultFocalLength(dev.shunti.photographica.component.LensKind.DRONE_ZOOM),
+                dev.shunti.photographica.component.LensKind.DRONE_ZOOM,
+                0, 0, dev.shunti.photographica.component.CameraSettings.EXP_M,
+                dev.shunti.photographica.component.CameraSettings.FOCUS_AF,
                 false, 0, false, false);
         CameraItem.setSettings(stack, profiled);
         return stack;

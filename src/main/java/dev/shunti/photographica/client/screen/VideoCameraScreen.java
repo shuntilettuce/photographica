@@ -1,9 +1,9 @@
-package dev.hitom.photographica.client.screen;
+package dev.shunti.photographica.client.screen;
 
-import dev.hitom.photographica.client.VideoRecorder;
-import dev.hitom.photographica.component.VideoSettings;
-import dev.hitom.photographica.item.VideoCameraItem;
-import dev.hitom.photographica.network.UnequipCameraFromArmorStandPayload;
+import dev.shunti.photographica.client.VideoRecorder;
+import dev.shunti.photographica.component.VideoSettings;
+import dev.shunti.photographica.item.VideoCameraItem;
+import dev.shunti.photographica.network.UnequipCameraFromArmorStandPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;

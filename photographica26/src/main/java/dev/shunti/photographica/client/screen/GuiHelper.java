@@ -1,4 +1,4 @@
-package dev.hitom.photographica.client.screen;
+package dev.shunti.photographica.client.screen;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;

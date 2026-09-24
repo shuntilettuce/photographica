@@ -4,15 +4,15 @@
 	"version": "${version}",
 	"name": "Photographica",
 	"description": "A photography mod with realistic camera simulation.",
-	"authors": ["hitom"],
+	"authors": ["shunti"],
 	"license": "MIT",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"dev.hitom.photographica.Photographica"
+			"dev.shunti.photographica.Photographica"
 		],
 		"client": [
-			"dev.hitom.photographica.client.PhotographicaClient"
+			"dev.shunti.photographica.client.PhotographicaClient"
 		]
 	},
 	"mixins": [

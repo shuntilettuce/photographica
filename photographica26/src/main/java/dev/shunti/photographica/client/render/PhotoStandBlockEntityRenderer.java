@@ -1,8 +1,8 @@
-package dev.hitom.photographica.client.render;
+package dev.shunti.photographica.client.render;
 
-import dev.hitom.photographica.block.PhotoStandBlock;
-import dev.hitom.photographica.block.entity.PhotoStandBlockEntity;
-import dev.hitom.photographica.component.PhotoData;
+import dev.shunti.photographica.block.PhotoStandBlock;
+import dev.shunti.photographica.block.entity.PhotoStandBlockEntity;
+import dev.shunti.photographica.component.PhotoData;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.renderer.SubmitNodeCollector;

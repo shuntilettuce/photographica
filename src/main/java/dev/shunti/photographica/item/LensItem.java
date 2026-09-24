@@ -1,10 +1,10 @@
-package dev.hitom.photographica.item;
+package dev.shunti.photographica.item;
 
 import net.minecraft.item.Item;
 
 /**
  * Cosmetic/inventory lens item. The actual "mounted lens" is stored in
- * {@link dev.hitom.photographica.component.CameraSettings#lensType()} on the camera ItemStack.
+ * {@link dev.shunti.photographica.component.CameraSettings#lensType()} on the camera ItemStack.
  *
  * For this iteration the lens item exists so the player can have it in inventory and
  * craft it; mounting/unmounting is performed via the camera dial GUI.

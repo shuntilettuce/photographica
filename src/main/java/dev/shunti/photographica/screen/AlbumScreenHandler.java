@@ -1,10 +1,10 @@
-package dev.hitom.photographica.screen;
+package dev.shunti.photographica.screen;
 
-import dev.hitom.photographica.component.AlbumData;
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.item.AlbumItem;
-import dev.hitom.photographica.item.PhotoItem;
-import dev.hitom.photographica.registry.ModScreenHandlers;
+import dev.shunti.photographica.component.AlbumData;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.item.AlbumItem;
+import dev.shunti.photographica.item.PhotoItem;
+import dev.shunti.photographica.registry.ModScreenHandlers;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.SimpleInventory;

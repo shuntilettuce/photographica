@@ -1,9 +1,9 @@
-package dev.hitom.photographica.client;
+package dev.shunti.photographica.client;
 
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.client.render.EvfBlurRenderer;
-import dev.hitom.photographica.component.VideoSettings;
-import dev.hitom.photographica.item.VideoCameraItem;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.client.render.EvfBlurRenderer;
+import dev.shunti.photographica.component.VideoSettings;
+import dev.shunti.photographica.item.VideoCameraItem;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.texture.NativeImage;
@@ -337,8 +337,8 @@ public final class VideoRecorder {
         // during ordinary handheld recording, but automatically follows wherever the shot is
         // actually coming from otherwise — a drone-mode flight, or a tripod recording where
         // mc.setCameraEntity() has already redirected the camera to the armor stand.
-        net.minecraft.util.math.Vec3d eye = dev.hitom.photographica.client.RenderCamera.pos(mc);
-        net.minecraft.util.math.Vec3d look = dev.hitom.photographica.client.RenderCamera.look(mc);
+        net.minecraft.util.math.Vec3d eye = dev.shunti.photographica.client.RenderCamera.pos(mc);
+        net.minecraft.util.math.Vec3d look = dev.shunti.photographica.client.RenderCamera.look(mc);
         final double maxDist = 1000.0;
         net.minecraft.util.math.Vec3d end = eye.add(look.multiply(maxDist));
         net.minecraft.util.hit.BlockHitResult blockHit = mc.world.raycast(

@@ -1,4 +1,4 @@
-package dev.hitom.photographica.network;
+package dev.shunti.photographica.network;
 
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;

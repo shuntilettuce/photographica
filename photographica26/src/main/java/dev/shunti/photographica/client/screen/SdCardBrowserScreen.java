@@ -1,12 +1,12 @@
-package dev.hitom.photographica.client.screen;
+package dev.shunti.photographica.client.screen;
 
-import dev.hitom.photographica.client.render.PhotoTextureCache;
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.client.ClipboardUtil;
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.PhotoData;
-import dev.hitom.photographica.component.SdCardData;
-import dev.hitom.photographica.network.DeleteSdPhotoPayload;
+import dev.shunti.photographica.client.render.PhotoTextureCache;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.client.ClipboardUtil;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.PhotoData;
+import dev.shunti.photographica.component.SdCardData;
+import dev.shunti.photographica.network.DeleteSdPhotoPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;

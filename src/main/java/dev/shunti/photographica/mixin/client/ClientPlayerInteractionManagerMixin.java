@@ -1,13 +1,13 @@
-package dev.hitom.photographica.mixin.client;
+package dev.shunti.photographica.mixin.client;
 
-import dev.hitom.photographica.client.VideoRecorder;
-import dev.hitom.photographica.client.screen.CameraScreen;
-import dev.hitom.photographica.client.screen.FilmCameraScreen;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.item.MirrorlessCameraItem;
-import dev.hitom.photographica.item.VideoCameraItem;
-import dev.hitom.photographica.client.screen.VideoCameraScreen;
+import dev.shunti.photographica.client.VideoRecorder;
+import dev.shunti.photographica.client.screen.CameraScreen;
+import dev.shunti.photographica.client.screen.FilmCameraScreen;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.item.MirrorlessCameraItem;
+import dev.shunti.photographica.item.VideoCameraItem;
+import dev.shunti.photographica.client.screen.VideoCameraScreen;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.entity.Entity;

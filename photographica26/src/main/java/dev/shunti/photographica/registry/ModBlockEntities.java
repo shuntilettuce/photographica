@@ -1,11 +1,11 @@
-package dev.hitom.photographica.registry;
+package dev.shunti.photographica.registry;
 
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.block.entity.DarkroomBlockEntity;
-import dev.hitom.photographica.block.entity.EnlargerBlockEntity;
-import dev.hitom.photographica.block.entity.PhotoFrameBlockEntity;
-import dev.hitom.photographica.block.entity.PhotoStandBlockEntity;
-import dev.hitom.photographica.block.entity.PrinterBlockEntity;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.block.entity.DarkroomBlockEntity;
+import dev.shunti.photographica.block.entity.EnlargerBlockEntity;
+import dev.shunti.photographica.block.entity.PhotoFrameBlockEntity;
+import dev.shunti.photographica.block.entity.PhotoStandBlockEntity;
+import dev.shunti.photographica.block.entity.PrinterBlockEntity;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.core.registries.BuiltInRegistries;

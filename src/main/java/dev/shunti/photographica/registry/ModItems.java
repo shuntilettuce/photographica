@@ -1,22 +1,22 @@
-package dev.hitom.photographica.registry;
+package dev.shunti.photographica.registry;
 
-import dev.hitom.photographica.Photographica;
-import dev.hitom.photographica.component.FilmKind;
-import dev.hitom.photographica.component.LensKind;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.DeveloperTankItem;
-import dev.hitom.photographica.item.DevelopedFilmItem;
-import dev.hitom.photographica.item.DroneItem;
-import dev.hitom.photographica.item.DroneRemoteItem;
-import dev.hitom.photographica.item.ExposedFilmItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.item.FilmRollItem;
-import dev.hitom.photographica.item.LensItem;
-import dev.hitom.photographica.item.MirrorlessCameraItem;
-import dev.hitom.photographica.item.PhotoItem;
-import dev.hitom.photographica.item.PhotoPaperItem;
-import dev.hitom.photographica.item.SdCardItem;
-import dev.hitom.photographica.item.VideoCameraItem;
+import dev.shunti.photographica.Photographica;
+import dev.shunti.photographica.component.FilmKind;
+import dev.shunti.photographica.component.LensKind;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.DeveloperTankItem;
+import dev.shunti.photographica.item.DevelopedFilmItem;
+import dev.shunti.photographica.item.DroneItem;
+import dev.shunti.photographica.item.DroneRemoteItem;
+import dev.shunti.photographica.item.ExposedFilmItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.item.FilmRollItem;
+import dev.shunti.photographica.item.LensItem;
+import dev.shunti.photographica.item.MirrorlessCameraItem;
+import dev.shunti.photographica.item.PhotoItem;
+import dev.shunti.photographica.item.PhotoPaperItem;
+import dev.shunti.photographica.item.SdCardItem;
+import dev.shunti.photographica.item.VideoCameraItem;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroups;
@@ -69,7 +69,7 @@ public final class ModItems {
 	public static final Item PHOTO_PAPER         = reg("photo_paper",          s -> new PhotoPaperItem(s));
 	// A physical binder for printed photos — the paper counterpart to an SD card. See AlbumData
 	// for why it holds real ItemStacks rather than flattened metadata.
-	public static final Item ALBUM               = reg("album",                s -> new dev.hitom.photographica.item.AlbumItem(s));
+	public static final Item ALBUM               = reg("album",                s -> new dev.shunti.photographica.item.AlbumItem(s));
 	public static final Item DRONE               = reg("drone",                s -> new DroneItem(s));
 	public static final Item DRONE_CONTROLLER    = reg("drone_controller",     s -> new DroneRemoteItem(s));
 

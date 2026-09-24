@@ -1,7 +1,7 @@
 {
   "required": true,
   "refmap": "photographica.refmap.json",
-  "package": "dev.hitom.photographica.mixin.client",
+  "package": "dev.shunti.photographica.mixin.client",
   "compatibilityLevel": "JAVA_25",
   "client": [
     "ClientPlayerInteractionManagerMixin",

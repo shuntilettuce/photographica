@@ -1,7 +1,7 @@
-package dev.hitom.photographica.mixin.client;
+package dev.shunti.photographica.mixin.client;
 
-import dev.hitom.photographica.client.PhotoCapture;
-import dev.hitom.photographica.client.VideoRecorder;
+import dev.shunti.photographica.client.PhotoCapture;
+import dev.shunti.photographica.client.VideoRecorder;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
@@ -40,7 +40,7 @@ public class WorldRendererMixin {
 	@org.spongepowered.asm.mixin.Unique
 	private static boolean photographica$shouldHideOutline() {
 		return PhotoCapture.isCapturePending() || VideoRecorder.isRecording()
-				|| dev.hitom.photographica.client.DronePilot.isActive();
+				|| dev.shunti.photographica.client.DronePilot.isActive();
 	}
 	//? if >=1.21.11 {
 	/*@Inject(

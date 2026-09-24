@@ -1,7 +1,7 @@
-package dev.hitom.photographica.client.screen;
+package dev.shunti.photographica.client.screen;
 
-import dev.hitom.photographica.component.FilmKind;
-import dev.hitom.photographica.network.LoadFilmPayload;
+import dev.shunti.photographica.component.FilmKind;
+import dev.shunti.photographica.network.LoadFilmPayload;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;

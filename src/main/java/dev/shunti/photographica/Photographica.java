@@ -1,41 +1,41 @@
-package dev.hitom.photographica;
+package dev.shunti.photographica;
 
-import dev.hitom.photographica.component.CameraSettings;
-import dev.hitom.photographica.component.FilmKind;
-import dev.hitom.photographica.component.FilmRollData;
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.PhotoData;
-import dev.hitom.photographica.component.SdCardData;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.item.FilmRollItem;
-import dev.hitom.photographica.item.MirrorlessCameraItem;
-import dev.hitom.photographica.item.SdCardItem;
-import dev.hitom.photographica.item.VideoCameraItem;
-import dev.hitom.photographica.network.CreatePhotoFromArmorStandPayload;
-import dev.hitom.photographica.network.CreatePhotoPayload;
-import dev.hitom.photographica.network.DownloadPhotoChunkPayload;
-import dev.hitom.photographica.network.EquipCameraToArmorStandPayload;
-import dev.hitom.photographica.network.DeleteSdPhotoPayload;
-import dev.hitom.photographica.network.DevelopFilmPayload;
-import dev.hitom.photographica.network.LoadFilmPayload;
-import dev.hitom.photographica.network.LoadSdCardPayload;
-import dev.hitom.photographica.network.PhotoChunkAssembler;
-import dev.hitom.photographica.network.PhotoNotFoundPayload;
-import dev.hitom.photographica.network.RequestPhotoPayload;
-import dev.hitom.photographica.network.TakeFilmPhotoFromArmorStandPayload;
-import dev.hitom.photographica.network.TakeFilmPhotoPayload;
-import dev.hitom.photographica.network.UnequipCameraFromArmorStandPayload;
-import dev.hitom.photographica.network.UnloadFilmPayload;
-import dev.hitom.photographica.network.UnloadSdCardPayload;
-import dev.hitom.photographica.network.UpdateArmorStandCameraPayload;
-import dev.hitom.photographica.network.UpdateCameraSettingsPayload;
-import dev.hitom.photographica.network.UploadPhotoChunkPayload;
-import dev.hitom.photographica.network.WindFilmPayload;
-import dev.hitom.photographica.registry.ModBlockEntities;
-import dev.hitom.photographica.registry.ModBlocks;
-import dev.hitom.photographica.registry.ModItems;
-import dev.hitom.photographica.registry.ModScreenHandlers;
+import dev.shunti.photographica.component.CameraSettings;
+import dev.shunti.photographica.component.FilmKind;
+import dev.shunti.photographica.component.FilmRollData;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.PhotoData;
+import dev.shunti.photographica.component.SdCardData;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.item.FilmRollItem;
+import dev.shunti.photographica.item.MirrorlessCameraItem;
+import dev.shunti.photographica.item.SdCardItem;
+import dev.shunti.photographica.item.VideoCameraItem;
+import dev.shunti.photographica.network.CreatePhotoFromArmorStandPayload;
+import dev.shunti.photographica.network.CreatePhotoPayload;
+import dev.shunti.photographica.network.DownloadPhotoChunkPayload;
+import dev.shunti.photographica.network.EquipCameraToArmorStandPayload;
+import dev.shunti.photographica.network.DeleteSdPhotoPayload;
+import dev.shunti.photographica.network.DevelopFilmPayload;
+import dev.shunti.photographica.network.LoadFilmPayload;
+import dev.shunti.photographica.network.LoadSdCardPayload;
+import dev.shunti.photographica.network.PhotoChunkAssembler;
+import dev.shunti.photographica.network.PhotoNotFoundPayload;
+import dev.shunti.photographica.network.RequestPhotoPayload;
+import dev.shunti.photographica.network.TakeFilmPhotoFromArmorStandPayload;
+import dev.shunti.photographica.network.TakeFilmPhotoPayload;
+import dev.shunti.photographica.network.UnequipCameraFromArmorStandPayload;
+import dev.shunti.photographica.network.UnloadFilmPayload;
+import dev.shunti.photographica.network.UnloadSdCardPayload;
+import dev.shunti.photographica.network.UpdateArmorStandCameraPayload;
+import dev.shunti.photographica.network.UpdateCameraSettingsPayload;
+import dev.shunti.photographica.network.UploadPhotoChunkPayload;
+import dev.shunti.photographica.network.WindFilmPayload;
+import dev.shunti.photographica.registry.ModBlockEntities;
+import dev.shunti.photographica.registry.ModBlocks;
+import dev.shunti.photographica.registry.ModItems;
+import dev.shunti.photographica.registry.ModScreenHandlers;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -85,7 +85,7 @@ public class Photographica implements ModInitializer {
 		ModItems.register();
 		ModBlocks.register();
 		ModBlockEntities.register();
-		dev.hitom.photographica.registry.ModEntities.register();
+		dev.shunti.photographica.registry.ModEntities.register();
 		ModScreenHandlers.register();
 
 		if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
@@ -105,20 +105,20 @@ public class Photographica implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(UpdateArmorStandCameraPayload.ID,        UpdateArmorStandCameraPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(CreatePhotoFromArmorStandPayload.ID,    CreatePhotoFromArmorStandPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(TakeFilmPhotoFromArmorStandPayload.ID,  TakeFilmPhotoFromArmorStandPayload.CODEC);
-		PayloadTypeRegistry.playC2S().register(dev.hitom.photographica.network.CreatePhotoFromDronePayload.ID,
-				dev.hitom.photographica.network.CreatePhotoFromDronePayload.CODEC);
-		PayloadTypeRegistry.playC2S().register(dev.hitom.photographica.network.UpdateDronePositionPayload.ID,
-				dev.hitom.photographica.network.UpdateDronePositionPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(dev.shunti.photographica.network.CreatePhotoFromDronePayload.ID,
+				dev.shunti.photographica.network.CreatePhotoFromDronePayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(dev.shunti.photographica.network.UpdateDronePositionPayload.ID,
+				dev.shunti.photographica.network.UpdateDronePositionPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(EquipCameraToArmorStandPayload.ID,      EquipCameraToArmorStandPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(UnequipCameraFromArmorStandPayload.ID, UnequipCameraFromArmorStandPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(UploadPhotoChunkPayload.ID,            UploadPhotoChunkPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(RequestPhotoPayload.ID,                RequestPhotoPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(DownloadPhotoChunkPayload.ID,          DownloadPhotoChunkPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(PhotoNotFoundPayload.ID,               PhotoNotFoundPayload.CODEC);
-		PayloadTypeRegistry.playC2S().register(dev.hitom.photographica.network.SendFaxPayload.ID,
-				dev.hitom.photographica.network.SendFaxPayload.CODEC);
-		PayloadTypeRegistry.playC2S().register(dev.hitom.photographica.network.DroneSignalLostPayload.ID,
-				dev.hitom.photographica.network.DroneSignalLostPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(dev.shunti.photographica.network.SendFaxPayload.ID,
+				dev.shunti.photographica.network.SendFaxPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(dev.shunti.photographica.network.DroneSignalLostPayload.ID,
+				dev.shunti.photographica.network.DroneSignalLostPayload.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(UpdateCameraSettingsPayload.ID, (payload, context) -> {
 			context.server().execute(() -> {
@@ -161,7 +161,7 @@ public class Photographica implements ModInitializer {
 				// Onto the fitted card if there's room. storePhoto writes the card ITEM in the
 				// gear slot, not just the camera's mirror of it, so pulling the card back out
 				// takes the photos with it.
-				if (dev.hitom.photographica.component.CameraGear.storePhoto(camera, photoData)) return;
+				if (dev.shunti.photographica.component.CameraGear.storePhoto(camera, photoData)) return;
 				// Otherwise create a Photo item
 				ItemStack photo = new ItemStack(ModItems.PHOTO);
 				photo.set(ModDataComponents.PHOTO_DATA, photoData);
@@ -450,7 +450,7 @@ public class Photographica implements ModInitializer {
 				// regardless of what the payload claims, since DroneEntity#applyDroneCameraProfile
 				// is the only legitimate source of truth for "this camera is mounted on a drone"
 				// and a client could in principle send anything.
-				if (entity instanceof dev.hitom.photographica.entity.DroneEntity drone) {
+				if (entity instanceof dev.shunti.photographica.entity.DroneEntity drone) {
 					// A COPY, not the tracked stack itself — DataTracker.set() only actually
 					// syncs to clients when the new value differs from the stored one, and
 					// mutating the already-stored ItemStack in place (as an earlier version of
@@ -461,11 +461,11 @@ public class Photographica implements ModInitializer {
 					ItemStack camera = drone.getEquippedCamera().copy();
 					if (camera.isEmpty()) return;
 					CameraSettings incoming = payload.settings();
-					int focal = Math.max(dev.hitom.photographica.component.LensKind.DRONE_FOCAL_MIN,
-							Math.min(dev.hitom.photographica.component.LensKind.DRONE_FOCAL_MAX, incoming.focalLengthMm()));
+					int focal = Math.max(dev.shunti.photographica.component.LensKind.DRONE_FOCAL_MIN,
+							Math.min(dev.shunti.photographica.component.LensKind.DRONE_FOCAL_MAX, incoming.focalLengthMm()));
 					CameraSettings forced = new CameraSettings(
 							2.8f, incoming.shutterSpeedIdx(), incoming.iso(), incoming.focusDistance(),
-							focal, dev.hitom.photographica.component.LensKind.DRONE_ZOOM,
+							focal, dev.shunti.photographica.component.LensKind.DRONE_ZOOM,
 							incoming.filmType(), incoming.remainingShots(), incoming.exposureMode(),
 							incoming.focusMode(), incoming.autoWind(), incoming.timerSeconds(),
 							incoming.motionBlur(), incoming.focusPeaking());
@@ -556,7 +556,7 @@ public class Photographica implements ModInitializer {
 
 		// CreatePhotoFromDronePayload: same idea as the armor-stand version above, but the
 		// camera lives in the drone's own TrackedData field rather than a vanilla equipment slot.
-		ServerPlayNetworking.registerGlobalReceiver(dev.hitom.photographica.network.CreatePhotoFromDronePayload.ID, (payload, context) -> {
+		ServerPlayNetworking.registerGlobalReceiver(dev.shunti.photographica.network.CreatePhotoFromDronePayload.ID, (payload, context) -> {
 			ServerPlayerEntity player = context.player();
 			context.server().execute(() -> {
 				//? if >=1.21.11 {
@@ -564,7 +564,7 @@ public class Photographica implements ModInitializer {
 				//?} else {
 				net.minecraft.entity.Entity entity = player.getServerWorld().getEntityById(payload.droneEntityId());
 				//?}
-				if (!(entity instanceof dev.hitom.photographica.entity.DroneEntity drone)) return;
+				if (!(entity instanceof dev.shunti.photographica.entity.DroneEntity drone)) return;
 				// Copy before mutating — see the UpdateArmorStandCameraPayload receiver above
 				// for why mutating the tracked stack in place silently breaks sync.
 				ItemStack camera = drone.getEquippedCamera().copy();
@@ -600,14 +600,14 @@ public class Photographica implements ModInitializer {
 		// this tick — see DronePilot. No ownership check for v1 (anyone could in principle
 		// spoof another player's drone's position with a crafted packet); acceptable for now,
 		// same trust level as the rest of this mod's client-authoritative state.
-		ServerPlayNetworking.registerGlobalReceiver(dev.hitom.photographica.network.UpdateDronePositionPayload.ID, (payload, context) -> {
+		ServerPlayNetworking.registerGlobalReceiver(dev.shunti.photographica.network.UpdateDronePositionPayload.ID, (payload, context) -> {
 			context.server().execute(() -> {
 				//? if >=1.21.11 {
 				/*net.minecraft.entity.Entity entity = ((ServerWorld) context.player().getEntityWorld()).getEntityById(payload.droneEntityId());*/
 				//?} else {
 				net.minecraft.entity.Entity entity = context.player().getServerWorld().getEntityById(payload.droneEntityId());
 				//?}
-				if (!(entity instanceof dev.hitom.photographica.entity.DroneEntity drone)) return;
+				if (!(entity instanceof dev.shunti.photographica.entity.DroneEntity drone)) return;
 				// A pilot actively steering it again (this packet only ever comes from
 				// DronePilot.tick()'s normal flight branch) means any in-progress signal-loss
 				// fall is over — cancel it before applying the packet's own position so the two
@@ -631,14 +631,14 @@ public class Photographica implements ModInitializer {
 		// zero (see DronePilot.tick()) — this just tells the server to actually start the
 		// crash-fall. No ownership check for v1, same trust level as the position payload
 		// above; the worst a spoofed packet could do is crash someone's drone early.
-		ServerPlayNetworking.registerGlobalReceiver(dev.hitom.photographica.network.DroneSignalLostPayload.ID, (payload, context) -> {
+		ServerPlayNetworking.registerGlobalReceiver(dev.shunti.photographica.network.DroneSignalLostPayload.ID, (payload, context) -> {
 			context.server().execute(() -> {
 				//? if >=1.21.11 {
 				/*net.minecraft.entity.Entity entity = ((ServerWorld) context.player().getEntityWorld()).getEntityById(payload.droneEntityId());*/
 				//?} else {
 				net.minecraft.entity.Entity entity = context.player().getServerWorld().getEntityById(payload.droneEntityId());
 				//?}
-				if (!(entity instanceof dev.hitom.photographica.entity.DroneEntity drone)) return;
+				if (!(entity instanceof dev.shunti.photographica.entity.DroneEntity drone)) return;
 				drone.startFalling(new net.minecraft.util.math.Vec3d(payload.vx(), payload.vy(), payload.vz()));
 			});
 		});
@@ -647,7 +647,7 @@ public class Photographica implements ModInitializer {
 		// a stack sent over the wire) and deliver it to the target machine's in-tray — see
 		// FaxMachineBlockEntity.find(). Never trusts pos to actually be a fax machine, or the
 		// target number to resolve to anything: both are re-validated server-side.
-		ServerPlayNetworking.registerGlobalReceiver(dev.hitom.photographica.network.SendFaxPayload.ID, (payload, context) -> {
+		ServerPlayNetworking.registerGlobalReceiver(dev.shunti.photographica.network.SendFaxPayload.ID, (payload, context) -> {
 			net.minecraft.server.network.ServerPlayerEntity player = context.player();
 			context.server().execute(() -> {
 				//? if >=1.21.11 {
@@ -655,16 +655,16 @@ public class Photographica implements ModInitializer {
 				//?} else {
 				net.minecraft.block.entity.BlockEntity be = player.getServerWorld().getBlockEntity(payload.pos());
 				//?}
-				if (!(be instanceof dev.hitom.photographica.block.entity.FaxMachineBlockEntity sender)) return;
+				if (!(be instanceof dev.shunti.photographica.block.entity.FaxMachineBlockEntity sender)) return;
 
-				net.minecraft.item.ItemStack out = sender.getStack(dev.hitom.photographica.block.entity.FaxMachineBlockEntity.SLOT_OUT);
-				if (out.isEmpty() || !(out.getItem() instanceof dev.hitom.photographica.item.PhotoItem)) {
+				net.minecraft.item.ItemStack out = sender.getStack(dev.shunti.photographica.block.entity.FaxMachineBlockEntity.SLOT_OUT);
+				if (out.isEmpty() || !(out.getItem() instanceof dev.shunti.photographica.item.PhotoItem)) {
 					player.sendMessage(net.minecraft.text.Text.literal("送信する写真がありません"), true);
 					return;
 				}
 
-				dev.hitom.photographica.block.entity.FaxMachineBlockEntity target =
-						dev.hitom.photographica.block.entity.FaxMachineBlockEntity.find(context.server(), payload.targetNumber());
+				dev.shunti.photographica.block.entity.FaxMachineBlockEntity target =
+						dev.shunti.photographica.block.entity.FaxMachineBlockEntity.find(context.server(), payload.targetNumber());
 				if (target == null) {
 					player.sendMessage(net.minecraft.text.Text.literal("その番号のFAX機は見つかりませんでした"), true);
 					return;
@@ -678,7 +678,7 @@ public class Photographica implements ModInitializer {
 				// v1 limitation: the in-tray is a single slot — a fax that arrives before the
 				// last one was collected overwrites it, same as a real machine's paper jamming
 				// if nobody empties the tray.
-				target.setStack(dev.hitom.photographica.block.entity.FaxMachineBlockEntity.SLOT_IN, incoming);
+				target.setStack(dev.shunti.photographica.block.entity.FaxMachineBlockEntity.SLOT_IN, incoming);
 				out.decrement(1);
 				sender.markDirty();
 				player.sendMessage(net.minecraft.text.Text.literal("送信しました (#" + payload.targetNumber() + ")"), true);
@@ -803,12 +803,12 @@ public class Photographica implements ModInitializer {
 	/** Finds and damages the developer tank in the player's main or off hand by 1. */
 	private static void damageDeveloperTank(ServerPlayerEntity player) {
 		ItemStack main = player.getStackInHand(Hand.MAIN_HAND);
-		if (main.getItem() instanceof dev.hitom.photographica.item.DeveloperTankItem) {
+		if (main.getItem() instanceof dev.shunti.photographica.item.DeveloperTankItem) {
 			main.damage(1, player, EquipmentSlot.MAINHAND);
 			return;
 		}
 		ItemStack off = player.getStackInHand(Hand.OFF_HAND);
-		if (off.getItem() instanceof dev.hitom.photographica.item.DeveloperTankItem) {
+		if (off.getItem() instanceof dev.shunti.photographica.item.DeveloperTankItem) {
 			off.damage(1, player, EquipmentSlot.OFFHAND);
 		}
 	}
@@ -845,10 +845,10 @@ public class Photographica implements ModInitializer {
 	/** Returns the correct FilmRollItem stack for a given filmType when unloading an unused roll. */
 	private static ItemStack filmRollItemForType(int filmType) {
 		net.minecraft.item.Item rollItem = switch (filmType) {
-			case dev.hitom.photographica.component.FilmKind.COLOR_100    -> ModItems.FILM_ROLL_COLOR_100;
-			case dev.hitom.photographica.component.FilmKind.COLOR_1600   -> ModItems.FILM_ROLL_COLOR_1600;
-			case dev.hitom.photographica.component.FilmKind.BW_400       -> ModItems.FILM_ROLL_BW;
-			case dev.hitom.photographica.component.FilmKind.COLOR_400_24 -> ModItems.FILM_ROLL_COLOR_24;
+			case dev.shunti.photographica.component.FilmKind.COLOR_100    -> ModItems.FILM_ROLL_COLOR_100;
+			case dev.shunti.photographica.component.FilmKind.COLOR_1600   -> ModItems.FILM_ROLL_COLOR_1600;
+			case dev.shunti.photographica.component.FilmKind.BW_400       -> ModItems.FILM_ROLL_BW;
+			case dev.shunti.photographica.component.FilmKind.COLOR_400_24 -> ModItems.FILM_ROLL_COLOR_24;
 			default                                                       -> ModItems.FILM_ROLL_COLOR;
 		};
 		return FilmRollItem.stackOf(rollItem, filmType);

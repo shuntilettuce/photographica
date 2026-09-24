@@ -1,14 +1,14 @@
-package dev.hitom.photographica.client.hud;
+package dev.shunti.photographica.client.hud;
 
-import dev.hitom.photographica.client.PhotoCapture;
-import dev.hitom.photographica.client.render.EvfBlurRenderer;
-import dev.hitom.photographica.component.CameraSettings;
-import dev.hitom.photographica.component.FilmKind;
-import dev.hitom.photographica.component.FilmRollData;
-import dev.hitom.photographica.component.LensKind;
-import dev.hitom.photographica.item.CameraItem;
-import dev.hitom.photographica.item.FilmCameraItem;
-import dev.hitom.photographica.item.MirrorlessCameraItem;
+import dev.shunti.photographica.client.PhotoCapture;
+import dev.shunti.photographica.client.render.EvfBlurRenderer;
+import dev.shunti.photographica.component.CameraSettings;
+import dev.shunti.photographica.component.FilmKind;
+import dev.shunti.photographica.component.FilmRollData;
+import dev.shunti.photographica.component.LensKind;
+import dev.shunti.photographica.item.CameraItem;
+import dev.shunti.photographica.item.FilmCameraItem;
+import dev.shunti.photographica.item.MirrorlessCameraItem;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
@@ -150,7 +150,7 @@ public final class ViewfinderHud {
 		renderExposureMeter(ctx, s, fx, fx2, fy2);
 
 		// Scroll hint (bottom-right, inside frame) — two lines
-		boolean isZoom = dev.hitom.photographica.component.LensKind.isZoom(s.lensType());
+		boolean isZoom = dev.shunti.photographica.component.LensKind.isZoom(s.lensType());
 		String hint1 = isZoom ? "⟳ zoom  Ctrl⟳ F値  Alt⟳ SS" : "Ctrl⟳ F値  Alt⟳ SS";
 		String hint2 = "Ctrl+Alt⟳ MF距離";
 		int hint1W = tr.width(hint1);
@@ -239,7 +239,7 @@ public final class ViewfinderHud {
 	/**
 	 * Renders a classic camera exposure meter at the bottom of the viewfinder.
 	 */
-	private static void renderExposureMeter(GuiGraphicsExtractor ctx, dev.hitom.photographica.component.CameraSettings s,
+	private static void renderExposureMeter(GuiGraphicsExtractor ctx, dev.shunti.photographica.component.CameraSettings s,
 	                                        int fx, int fx2, int fy2) {
 		final int METER_W = 120;
 		int meterX  = (fx + fx2 - METER_W) / 2;
@@ -288,13 +288,13 @@ public final class ViewfinderHud {
 	/**
 	 * Reticle colour based on how well the scene centre aligns with the focus distance.
 	 */
-	private static int focusReticleColor(dev.hitom.photographica.component.CameraSettings s) {
-		if (!dev.hitom.photographica.component.LensKind.hasLens(s.lensType())) return COLOR_FRAME;
+	private static int focusReticleColor(dev.shunti.photographica.component.CameraSettings s) {
+		if (!dev.shunti.photographica.component.LensKind.hasLens(s.lensType())) return COLOR_FRAME;
 		if (s.aperture() >= 8.0f) return COLOR_FRAME; // deep DoF, colour unnecessary
 		float focus = s.focusDistance();
 		if (focus >= CameraSettings.FOCUS_INFINITY) return COLOR_FRAME;       // infinity focus
 
-		float sceneDepth = dev.hitom.photographica.client.PhotoCapture.lastSceneDepthBlocks;
+		float sceneDepth = dev.shunti.photographica.client.PhotoCapture.lastSceneDepthBlocks;
 		if (sceneDepth >= CameraSettings.FOCUS_INFINITY) return 0xFFE04040; // sky / beyond range — always out of focus
 		float tolerance = focus * s.aperture() * 0.08f;
 		float diff = Math.abs(sceneDepth - focus);

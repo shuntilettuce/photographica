@@ -1,7 +1,7 @@
-package dev.hitom.photographica.item;
+package dev.shunti.photographica.item;
 
-import dev.hitom.photographica.component.ModDataComponents;
-import dev.hitom.photographica.component.VideoSettings;
+import dev.shunti.photographica.component.ModDataComponents;
+import dev.shunti.photographica.component.VideoSettings;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;

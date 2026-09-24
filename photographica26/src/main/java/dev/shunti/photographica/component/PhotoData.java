@@ -1,4 +1,4 @@
-package dev.hitom.photographica.component;
+package dev.shunti.photographica.component;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
