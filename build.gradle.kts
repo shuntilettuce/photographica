@@ -55,6 +55,8 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.withType<ProcessResources>().configureEach {
+    // Declared so a version bump reruns this task; expand() alone is not an input.
+    inputs.property("mod_version", modVersion)
     filesMatching("META-INF/neoforge.mods.toml") {
         expand(
             "minecraft_version_range" to "[1.21,1.22)",
