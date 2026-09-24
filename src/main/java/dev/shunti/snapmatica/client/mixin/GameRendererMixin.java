@@ -93,6 +93,27 @@ public class GameRendererMixin {
     }
 
     /**
+     * The roll, on 1.20.1. That version builds the view in {@code renderLevel} from yaw and pitch
+     * -- {@code multiply(POSITIVE_X(pitch))} then {@code multiply(POSITIVE_Y(yaw + 180))} -- and
+     * never reads the camera's quaternion, so turning the quaternion (what CameraMixin does on
+     * 1.21+, where the view IS that quaternion) would move nothing on screen. The turn goes into
+     * the same stack instead, just before the pitch: view = Rz(roll) * Rx(pitch) * Ry(yaw), which
+     * is exactly the 1.21 view with the same roll. The frustum is built from this stack a few
+     * calls later, so culling follows the turned frame for free.
+     */
+    @Inject(method = "renderLevel",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;getXRot()F"))
+    private void snapmatica$rollView(float tickDelta, long limitTime,
+                                     com.mojang.blaze3d.vertex.PoseStack matrices,
+                                     CallbackInfo ci) {
+        float deg = dev.shunti.snapmatica.client.CameraRoll.effectiveDeg(
+                net.minecraft.client.Minecraft.getInstance());
+        if (deg != 0f) {
+            matrices.mulPose(com.mojang.math.Axis.ZP.rotationDegrees(deg));
+        }
+    }
+
+    /**
      * Freecam already cancels {@code Camera.setup()} outright — see {@link CameraMixin} — so
      * the render camera itself sits still while it's active, locked or not. View bobbing is a
      * separate matrix transform applied here, driven by the player's own walk distance rather
