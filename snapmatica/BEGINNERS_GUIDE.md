@@ -92,8 +92,14 @@ P・Av・Tv では、写真はだいたい**見たままの明るさ**になり�
 写真の**色み**の調整です。AWB（自動）のままで大丈夫です。夕方っぽく暖かくしたい、
 青っぽく冷たくしたいときに変えます。
 
-#### 縦位置・横位置
-**V** キーで、写真を縦長にするか横長にするかを切り替えます。高い建物は縦がおすすめです。
+#### 縦位置・横位置と、傾き
+**Alt を押しながら右ボタンで左右にドラッグ**すると、カメラが傾きます。**45度を超えると
+縦長の写真**になります。高い建物は縦がおすすめです。さらに回すと、天地が逆さの写真も
+撮れます。まっすぐ（0度・90度・180度）のところで少し止まるので、水平に戻すのは簡単です。
+
+#### 露出補正
+Av や P でも「もうちょっと明るく（暗く）したい」ときは、**Alt + ホイール**
+（Tv のときは Ctrl + ホイール）で明るさをずらせます。画面の下に `+1/3 EV` のように出ます。
 
 ---
 
@@ -240,8 +246,15 @@ see.** Off to one side means too bright or too dark. You watch it in M.
 The **colour tint** of the photo. AWB (auto) is fine. Change it to make a shot warmer, like
 evening light, or cooler and bluer.
 
-#### Portrait / landscape
-**V** switches between a tall and a wide photo. Tall suits tall buildings.
+#### Portrait, landscape and tilt
+**Hold Alt and drag sideways with the right button** to tilt the camera. **Past 45 degrees
+the photo turns tall.** Tall suits tall buildings. Keep turning and you can even shoot
+upside down. The camera pauses briefly when it is straight (0, 90 and 180 degrees), so
+getting level again is easy.
+
+#### Exposure compensation
+In Av or P, when you want the shot a little brighter or darker, use **Alt + wheel**
+(Ctrl + wheel in Tv). The amount shows at the bottom, like `+1/3 EV`.
 
 ---
 

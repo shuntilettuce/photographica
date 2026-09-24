@@ -51,7 +51,6 @@ Snapmatica は、Minecraft の中で「本物のカメラで撮る」ための�
 | **スニーク（しゃがむ）** | ファインダーを覗く（しゃがんでいる間だけ） |
 | **Enter** | シャッター |
 | **G** | カメラ設定を開く |
-| **V** | 縦位置 ／ 横位置 の切り替え |
 | **R** | 動画設定を開く（録画中は停止） |
 | **,（カンマ）** | 「しゃがむとファインダー」の ON/OFF |
 | **Z** | カメラパスのメニュー（フリーカム中のみ） |
@@ -63,10 +62,14 @@ Snapmatica は、Minecraft の中で「本物のカメラで撮る」ための�
 | 操作 | 動作 |
 |---|---|
 | ホイール | ズーム（8mm〜800mm） |
-| **Ctrl** + ホイール | 絞り（F1.4〜F22） |
-| **Alt** + ホイール | シャッター速度（M / Tv のとき） |
+| **Ctrl** + ホイール | 絞り（F1.4〜F22）。Tv / P では露出補正 |
+| **Alt** + ホイール | シャッター速度（M / Tv のとき）。Av / P では露出補正 |
 | **Ctrl + Alt** + ホイール | ピント距離（MF のとき） |
+| **Alt** + 右ドラッグ | カメラを傾ける（→ 4章） |
 | **矢印キー** | AF 点を動かす |
+
+縦位置のキーはありません。カメラを **45度より大きく傾けると縦位置**になります。本物の
+カメラを縦に構えるのと同じです。
 
 ### 3. 最初の一枚
 
@@ -88,8 +91,17 @@ Snapmatica は、Minecraft の中で「本物のカメラで撮る」ための�
   AF なら被写体までの距離になります。括弧の中はスケール（→ 8章）で換算した実寸。
 - **中央** ― AF 点。三分割のガイド線も出ます。AF 点を動かすと、元の位置に薄い灰色の
   目印が出ます。
-- **下** ― F値、シャッター速度、ISO、焦点距離。その下の目盛りが**露出計**で、中央から
-  ずれているほど明るすぎ／暗すぎです。
+- **下** ― F値、シャッター速度、ISO、焦点距離（露出補正をかけているときはその値も、
+  例 `+1 1/3 EV`）。その下の目盛りが**露出計**で、中央からずれているほど明るすぎ／暗すぎです。
+- **水準器** ― カメラを傾けている間、または Alt + 右ドラッグで握っている間だけ、中央に
+  地平線の線と角度が出ます。水平に戻ると緑になります。写真には写りません。
+
+**カメラを傾ける**：Alt を押しながら右ボタンでドラッグし、左右に動かします（フリーカム中は
+Alt なしの右ドラッグ）。どこまでも回せます。
+
+- 水平の位置（0度・90度・180度）には**引っかかり**があって、少し押し込むまで止まります。
+- **45度を超えると縦位置**、**135度を超えると横位置で天地が逆さ**になります。
+- 設定画面の「傾き」ボタンを押すと、今の向きのまま水平に戻ります。
 
 ### 5. カメラ設定（G キー）
 
@@ -160,6 +172,11 @@ Snapmatica は、Minecraft の中で「本物のカメラで撮る」ための�
 
 露出計の針が中央に来るように合わせるのが基本です。
 
+**露出補正**（Av / Tv / P）：カメラ任せの明るさを、1/3 段ずつ ±3 段まで明るく／暗く
+ずらせます。Av では Alt + ホイール、Tv では Ctrl + ホイール、P ではどちらでも。雪景色や
+逆光など、カメラの判断より明るく（暗く）撮りたいときに使います。設定画面の
+「露出補正」でも変えられます。写真の Exif にも記録されます。M では使いません。
+
 ### 8. スケール ― ボケの大きさを決めるもの
 
 Minecraft の1ブロックが何 cm かは決まっていません。スケールは「このワールドを何分の1で
@@ -215,6 +232,7 @@ Minecraft の1ブロックが何 cm かは決まっていません。スケー�
 - **C** ― カメラをその場に固定し、プレイヤーを操作できるようにします。自分を写したい
   ときの三脚です。もう一度押すとカメラ操作に戻ります。
 - **プレイヤー非表示**（設定）― 自分の体を写さないようにします。
+- **右ドラッグ** ― カメラを傾けます（Alt は要りません）。
 
 **ドローンモード**（設定で ON）にすると、慣性のある空撮向けの操作になります。
 **X** で、十字の先にあるものを中心に置くと、WASD でその周りを回れます（オービット）。
@@ -314,7 +332,6 @@ Every key can be rebound under Options → Controls → Snapmatica.
 | **Sneak** | Look through the viewfinder (while sneaking) |
 | **Enter** | Shutter |
 | **G** | Open camera settings |
-| **V** | Switch portrait / landscape |
 | **R** | Open video settings (stops recording while recording) |
 | **, (comma)** | Turn "sneak to open the viewfinder" on or off |
 | **Z** | Camera path menu (freecam only) |
@@ -326,10 +343,14 @@ While you look through the viewfinder, the mouse wheel works the lens.
 | Input | Action |
 |---|---|
 | Wheel | Zoom (8 mm – 800 mm) |
-| **Ctrl** + wheel | Aperture (f/1.4 – f/22) |
-| **Alt** + wheel | Shutter speed (in M / Tv) |
+| **Ctrl** + wheel | Aperture (f/1.4 – f/22); exposure compensation in Tv / P |
+| **Alt** + wheel | Shutter speed (in M / Tv); exposure compensation in Av / P |
 | **Ctrl + Alt** + wheel | Focus distance (in MF) |
+| **Alt** + right-drag | Tilt the camera (see 4) |
 | **Arrow keys** | Move the AF point |
+
+There is no portrait key. **Tilt the camera past 45 degrees and the frame goes portrait**,
+just as it does when you turn a real camera on its side.
 
 ### 3. Your first shot
 
@@ -353,9 +374,21 @@ good-looking photo needs no setup at all.
   converted with the scale (see 8).
 - **Centre**: the AF point, over rule-of-thirds guides. When the AF point is moved, a faint
   grey mark stays where it started.
-- **Bottom**: f-number, shutter speed, ISO, focal length. The scale under them is the
+- **Bottom**: f-number, shutter speed, ISO, focal length, and the exposure compensation
+  when some is dialled in (e.g. `+1 1/3 EV`). The scale under them is the
   **exposure meter**: the further the needle is from the centre, the brighter or darker
   than correct the shot will be.
+- **Level**: while the camera is tilted, or held with Alt + right-drag, a horizon line and
+  its angle appear in the centre. It turns green at level. It never appears in the photo.
+
+**Tilting the camera**: hold Alt and drag sideways with the right button (in freecam, just
+right-drag). It turns all the way round.
+
+- Each level position (0, 90 and 180 degrees) has a **notch** that holds until you push a
+  little past it.
+- **Past 45 degrees the frame goes portrait**; **past 135 degrees it is landscape again,
+  upside down**.
+- The Tilt button in the settings screen levels the camera, keeping its orientation.
 
 ### 5. Camera settings (G)
 
@@ -428,6 +461,11 @@ Check focus with the **rangefinder** (top right) and with **focus peaking**.
 
 Aim for the meter needle in the centre.
 
+**Exposure compensation** (Av / Tv / P): shifts the camera's own choice brighter or darker,
+in thirds of a stop, up to 3 stops either way. Alt + wheel in Av, Ctrl + wheel in Tv,
+either in P. Use it when the camera's idea of right is not yours: snow, backlight. It is
+also in the settings screen, and written to the photo's Exif. M has no use for it.
+
 ### 8. Scale: what decides how much blurs
 
 Minecraft never says how big a block is. The scale says what you are photographing it as
@@ -488,6 +526,7 @@ the G settings screen (the same button leaves it). Freecam always shows the view
 - **C**: holds the camera where it is and hands control back to the player, like a tripod,
   so you can walk into your own shot. Press again to fly the camera.
 - **Hide Player** (setting): keeps your own body out of the picture.
+- **Right-drag**: tilts the camera (no Alt needed).
 
 **Drone Mode** (a setting) makes the flight feel like an aerial drone, with inertia. Press
 **X** to pin whatever is under the cross, and WASD orbits around it.
