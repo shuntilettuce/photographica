@@ -42,11 +42,16 @@ public class Snapmatica {
     private void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
             SnapmaticaClient.onWorldRenderEnd(event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
-        } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
-            // Tripwire is rendered after translucent blocks, so this stage fires right
-            // before the translucent pass in NeoForge's stage ordering — the point where
-            // Fabric's BEFORE_TRANSLUCENT / BEFORE_DEBUG_RENDER fired. Depth is captured
-            // here so glass does not stamp its own distance over the view through it.
+        } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
+            // The last stage before the translucent pass -- where Fabric's
+            // BEFORE_TRANSLUCENT / BEFORE_DEBUG_RENDER fire. Depth is captured here so glass
+            // does not stamp its own distance over the view through it.
+            //
+            // Not AFTER_TRIPWIRE_BLOCKS, which the earlier NeoForge and Forge ports used on
+            // the belief that tripwire draws before translucent. It is the other way round:
+            // LevelRenderer renders the translucent layer and THEN tripwire, and that stage
+            // is keyed to RenderType.tripwire(), so it fired after the glass had already
+            // written its depth.
             SnapmaticaClient.onBeforeTranslucent(event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
         }
     }
