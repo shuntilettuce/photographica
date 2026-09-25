@@ -675,6 +675,7 @@ public class SnapmaticaClient {
         updateMetering(minecraft);
         updateAmbientFocus(minecraft);
         // Keep auto exposure values current every tick
+        updateAutoValues();
     }
 
     /**
