@@ -550,7 +550,7 @@ public final class EvfBlurRenderer {
                 net.minecraft.client.Minecraft.getInstance().getMainRenderTarget();
         if (mainFb_ == null) return;
         com.mojang.blaze3d.textures.GpuTexture depthGpu_ = mainFb_.getDepthTexture();
-        if (!(depthGpu_ instanceof com.mojang.blaze3d.opengl.GlTexture glDepth_)) return;
+        if (!(SnapGl.unwrap(depthGpu_) instanceof com.mojang.blaze3d.opengl.GlTexture glDepth_)) return;
         int srcDepthId_ = glDepth_.glId();
         if (srcDepthId_ <= 0) return;
         int fw_ = mainFb_.width;
@@ -671,11 +671,11 @@ public final class EvfBlurRenderer {
         Minecraft mc = Minecraft.getInstance();
         RenderTarget mainFb = mc.getMainRenderTarget();
         com.mojang.blaze3d.textures.GpuTexture gpuTex = mainFb.getColorTexture();
-        if (!(gpuTex instanceof com.mojang.blaze3d.opengl.GlTexture glTex)) return;
+        if (!(SnapGl.unwrap(gpuTex) instanceof com.mojang.blaze3d.opengl.GlTexture glTex)) return;
         int mainTex = glTex.glId();
         if (mainTex == 0) return;
 
-        int liveDepthTex = (mainFb.getDepthTexture()
+        int liveDepthTex = (SnapGl.unwrap(mainFb.getDepthTexture())
                 instanceof com.mojang.blaze3d.opengl.GlTexture glDepthLive)
                 ? glDepthLive.glId() : 0;
 

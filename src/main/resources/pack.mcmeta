@@ -1,7 +1,9 @@
 {
   "pack": {
     "description": "Snapmatica resources",
-    "min_format": [75, 0],
-    "max_format": [94, 1]
+    "min_format": [64, 0],
+    "max_format": [94, 1],
+    "supported_formats": [64, 94],
+    "pack_format": 64
   }
 }

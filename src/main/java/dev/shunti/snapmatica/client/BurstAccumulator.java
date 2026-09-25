@@ -242,7 +242,7 @@ final class BurstAccumulator {
     private static int mainColorTex(Minecraft mc) {
         RenderTarget fb = mc.getMainRenderTarget();
         com.mojang.blaze3d.textures.GpuTexture gpuTex = fb.getColorTexture();
-        return (gpuTex instanceof com.mojang.blaze3d.opengl.GlTexture glTex) ? glTex.glId() : 0;
+        return (SnapGl.unwrap(gpuTex) instanceof com.mojang.blaze3d.opengl.GlTexture glTex) ? glTex.glId() : 0;
     }
 
     private static boolean initProgram() {
