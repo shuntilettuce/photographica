@@ -50,6 +50,7 @@ public final class CameraPathRenderer {
 
     public static void render(net.minecraft.client.gui.GuiGraphicsExtractor ctx,
                               net.minecraft.client.DeltaTracker tickCounter) {
+        if (!SnapmaticaClient.showCameraPath) return;
         if (!Freecam.isActive() || Freecam.isPathPlaying()) return;
         List<Freecam.Keyframe> path = Freecam.getPath();
         if (path.isEmpty()) return;

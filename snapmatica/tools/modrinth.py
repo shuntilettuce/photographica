@@ -65,8 +65,10 @@ JARS = [
     ('1.21.11',       ['1.21.11'],          os.path.join(ROOT, 'versions/1.21.11/build/libs'), ['fabric']),
     ('26.1.2',        ['26.1.2'],           os.path.join(SIBLING26, 'build/libs'),             ['fabric']),
     ('26.3',          ['26.3'],             os.path.join(SIBLING263, 'build/libs'),            ['fabric']),
-    ('forge-1.20.1',    ['1.20.1'], os.path.join(SIBLING_FORGE, 'build/libs'),    ['forge']),
-    ('neoforge-1.21.1', ['1.21.1'], os.path.join(SIBLING_NEOFORGE, 'build/libs'), ['neoforge']),
+    ('forge-1.20.1',     ['1.20.1'],  os.path.join(SIBLING_FORGE, 'build/libs'),         ['forge']),
+    ('neoforge-1.21.1',  ['1.21.1'],  os.path.join(SIBLING_NEOFORGE, 'build/libs'),      ['neoforge']),
+    ('neoforge-1.21.4',  ['1.21.4'],  os.path.join(SIBLING_NEOFORGE + '-1.21.4', 'build/libs'),  ['neoforge']),
+    ('neoforge-1.21.11', ['1.21.11'], os.path.join(SIBLING_NEOFORGE + '-1.21.11', 'build/libs'), ['neoforge']),
 ]
 
 
@@ -125,7 +127,7 @@ def sha512(path):
     return h.hexdigest()
 
 
-def collect(version, loaders=None):
+def collect(version, loaders=None, only=None):
     """Every jar for a release, or an explanation of which one is missing.
 
     `loaders` narrows it. The loader ports do not share the Fabric jars' release
@@ -135,6 +137,10 @@ def collect(version, loaders=None):
     out, missing = [], []
     for suffix, game_versions, d, ldrs in JARS:
         if loaders and not set(ldrs) & set(loaders):
+            continue
+        # Narrower than --loaders: a release that adds a loader port to a version
+        # already out must not also try to publish the jars that are out already.
+        if only and suffix not in only:
             continue
         name = 'snapmatica-%s+%s.jar' % (version, suffix)
         p = os.path.join(d, name)
@@ -148,10 +154,10 @@ def collect(version, loaders=None):
     return out
 
 
-def payloads(version, loaders=None, version_type=None):
+def payloads(version, loaders=None, version_type=None, only=None):
     logs = changelogs()
     out = []
-    for i, j in enumerate(collect(version, loaders)):
+    for i, j in enumerate(collect(version, loaders, only)):
         number = '%s+%s' % (version, j['suffix'])
         out.append({
             'name': number,
@@ -178,8 +184,8 @@ def payloads(version, loaders=None, version_type=None):
     return out
 
 
-def show_release(version, loaders=None, version_type=None):
-    ps = payloads(version, loaders, version_type)
+def show_release(version, loaders=None, version_type=None, only=None):
+    ps = payloads(version, loaders, version_type, only)
     print('RELEASE %s -- %d version entries would be CREATED on Modrinth\n' % (version, len(ps)))
     for p in ps:
         print('  %-24s %-9s %-22s %s' % (p['version_number'], p['version_type'],
@@ -195,10 +201,10 @@ def show_release(version, loaders=None, version_type=None):
         print()
 
 
-def do_release(version, loaders=None, version_type=None):
+def do_release(version, loaders=None, version_type=None, only=None):
     s = session()
     have = {v['version_number'] for v in existing(s)}
-    ps = payloads(version, loaders, version_type)
+    ps = payloads(version, loaders, version_type, only)
     clash = [p['version_number'] for p in ps if p['version_number'] in have]
     if clash:
         sys.exit('already published, refusing to duplicate:\n  ' + '\n  '.join(clash))
@@ -373,6 +379,8 @@ def main():
     ap.add_argument('action', choices=['plan', 'plan-repair', 'plan-swap', 'release',
                                        'repair-deps', 'repair-changelogs', 'swap'])
     ap.add_argument('version', nargs='?')
+    ap.add_argument('--only', default=None,
+                    help='comma-separated jar suffixes, e.g. neoforge-1.21.4. Narrower than --loaders.')
     ap.add_argument('--loaders', default=None,
                     help='comma-separated: fabric,forge,neoforge. Default: all of them.')
     ap.add_argument('--version-type', choices=['release', 'beta', 'alpha'], default=None,
@@ -382,12 +390,13 @@ def main():
                     help='actually send. Without it nothing leaves this machine.')
     a = ap.parse_args()
     loaders = [x.strip() for x in a.loaders.split(',')] if a.loaders else None
+    only = [x.strip() for x in a.only.split(',')] if a.only else None
 
     if a.action in ('plan', 'release', 'plan-swap', 'swap') and not a.version:
         sys.exit('which version?  e.g.  python tools/modrinth.py plan 1.3.1')
 
     if a.action == 'plan':
-        show_release(a.version, loaders, a.version_type)
+        show_release(a.version, loaders, a.version_type, only)
     elif a.action == 'plan-repair':
         show_repair()
     elif a.action == 'plan-swap':
@@ -395,13 +404,13 @@ def main():
     elif not a.publish:
         print('--publish not given, so nothing was sent. This is what it would do:\n')
         if a.action == 'release':
-            show_release(a.version, loaders, a.version_type)
+            show_release(a.version, loaders, a.version_type, only)
         elif a.action == 'swap':
             show_swap(a.version)
         else:
             show_repair()
     elif a.action == 'release':
-        do_release(a.version, loaders, a.version_type)
+        do_release(a.version, loaders, a.version_type, only)
     elif a.action == 'swap':
         do_swap(a.version)
     elif a.action == 'repair-deps':

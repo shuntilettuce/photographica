@@ -106,6 +106,7 @@
   "snapmatica.camera.chromatic_aberration": "倍率色収差",
   "snapmatica.camera.focus_breathing": "フォーカスブリージング",
   "snapmatica.path.focus_lock": "再生中にフォーカスを固定",
+  "snapmatica.path.show": "軌跡を表示",
   "snapmatica.camera.sec_aperture_int": "絞り積分",
   "snapmatica.camera.aperture_integration": "絞りを積分する",
   "snapmatica.camera.aperture_samples": "瞳サンプル数",

@@ -106,6 +106,7 @@
   "snapmatica.camera.chromatic_aberration": "Chromatic Aberr.",
   "snapmatica.camera.focus_breathing": "Focus Breathing",
   "snapmatica.path.focus_lock": "Lock Focus During Playback",
+  "snapmatica.path.show": "Show Path",
   "snapmatica.camera.sec_aperture_int": "APERTURE INTEGRATION",
   "snapmatica.camera.aperture_integration": "Integrate Aperture",
   "snapmatica.camera.aperture_samples": "Pupil Samples",
