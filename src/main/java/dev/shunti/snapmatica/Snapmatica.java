@@ -47,9 +47,15 @@ public class Snapmatica {
     private void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
             SnapmaticaClient.onWorldRenderEnd();
-        } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
-            // Tripwire renders after the opaque terrain and before anything translucent,
-            // so this is where Fabric's BEFORE_DEBUG_RENDER sat.
+        } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
+            // The last stage before the translucent pass -- where Fabric's BEFORE_TRANSLUCENT /
+            // BEFORE_DEBUG_RENDER fire. Depth is captured here so glass and water do not stamp
+            // their own distance over the view through them.
+            //
+            // Not AFTER_TRIPWIRE_BLOCKS, which this used until 1.3.4 on the belief that tripwire
+            // draws first. It is the other way round: LevelRenderer renders the translucent
+            // layer and then tripwire, and that stage is keyed to RenderType.tripwire(), so it
+            // fired after the glass had already written its depth.
             SnapmaticaClient.onBeforeTranslucent();
         }
     }

@@ -63,6 +63,16 @@ mixin {
     add(sourceSets.main.get(), "snapmatica.refmap.json")
 }
 
+// Forge 47 finds a mod's mixin config through the jar manifest, and only there.
+// [[mixins]] in mods.toml is a NeoForge feature that Forge ignores, and the dev run
+// hid that by passing --mixin.config on the command line -- so every shipped Forge
+// jar up to 1.3.4 loaded with no mixins applied at all.
+tasks.named<Jar>("jar") {
+    manifest {
+        attributes("MixinConfigs" to "snapmatica.mixins.json")
+    }
+}
+
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
 }
