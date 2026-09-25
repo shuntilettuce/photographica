@@ -78,7 +78,6 @@ void main() {
     if (BlurDir.x < 0.5) {
         float d = linearDepth(texture(DepthSampler, texCoord).r);
         float c = max(computeCoc(d) - 1.5, 0.0);
-        c = max(c, smoothstep(200.0, 600.0, d) * 5.0);
         if (c < 2.0) { fragColor = texture(InSampler, texCoord); return; }
         vec3 sum = vec3(0.0);
         for (int dy = -2; dy <= 2; dy++)
@@ -92,12 +91,16 @@ void main() {
     float depthM = linearDepth(texture(DepthSampler, texCoord).r);
     float cocP   = max(computeCoc(depthM) - 1.5, 0.0);
 
-    // Atmospheric softness floor: the most distant LOD terrain is low-detail and, left
-    // razor-sharp (e.g. when the focus is racked all the way out), aliases into harsh
-    // blocky chunks. A gentle minimum blur that grows with distance keeps far terrain
-    // soft even when it is the focus subject. Near / mid subjects are untouched. This
-    // pushes hazed pixels out of the sharp FOCUS layer into FAR, so they get blurred.
-    cocP = max(cocP, smoothstep(200.0, 600.0, depthM) * 5.0);
+    // No atmospheric softness floor. It forced a minimum of 5 px of blur on anything past a
+    // few hundred blocks, ramped in over 200..600 blocks, to stand in for aerial perspective
+    // and to hide LOD popping. It is neither of those: a lens does not defocus a mountain for
+    // being far away, and haze takes contrast rather than resolution. Because the amount came
+    // from a constant instead of from the optics it did not move when the aperture did, and
+    // because it applied to a pixel as itself but not as anybody's neighbour the circle of
+    // confusion disagreed with itself from one site to the next. Worst of all it applied even
+    // when the far field WAS the focus subject, so a telephoto shot of a distant subject came
+    // back soft at the focus plane and stopping down could not recover it. The far field now
+    // follows the same thin-lens formula as everything else.
 
     // Does a closer, out-of-focus pixel bloom over this one? (Run for every pixel: the
     // in-focus subject sits right at the focus distance, so some of its pixels read as
