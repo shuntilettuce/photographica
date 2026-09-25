@@ -269,6 +269,10 @@ public class SnapmaticaClient {
      */
     public static boolean ambientDof = false;
 
+    /** Draw the keyframe camera path overlay (CameraPathRenderer). Off saves its per-frame cost,
+     *  which is high with many keyframes: every curve segment is ray-cast for occlusion. */
+    public static boolean showCameraPath = true;
+
     /**
      * The ambient mode's own f-number. Nothing to do with {@link #aperture}.
      *

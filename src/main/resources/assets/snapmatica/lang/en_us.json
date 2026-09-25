@@ -92,6 +92,7 @@
   "snapmatica.camera.path_duration": "Path Duration",
   "snapmatica.path.fps": "Recording FPS",
   "snapmatica.path.focus_lock": "Lock Focus During Playback",
+  "snapmatica.path.show": "Show Path",
   "snapmatica.path.title": "Camera Path",
   "snapmatica.path.add": "Add Keyframe",
   "snapmatica.path.play": "Play",
