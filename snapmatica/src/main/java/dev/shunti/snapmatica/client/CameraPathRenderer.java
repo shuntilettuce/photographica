@@ -59,6 +59,7 @@ public final class CameraPathRenderer {
     //?} else {
     /*public static void render(net.minecraft.client.gui.DrawContext ctx, float tickDelta) {
     *///?}
+        if (!SnapmaticaClient.showCameraPath) return;
         if (!Freecam.isActive() || Freecam.isPathPlaying()) return;
         List<Freecam.Keyframe> path = Freecam.getPath();
         if (path.isEmpty()) return;

@@ -36,7 +36,7 @@ public class CameraPathScreen extends Screen {
         int btnWidth = 130;
         // Same rhythm CameraScreen's own rows use: a fixed row height, a little breathing
         // room before the action row, and a status line reserved above it all.
-        int top = Math.max(40, (height - (6 * rowHeight + 16 + 20)) / 2);
+        int top = Math.max(40, (height - (7 * rowHeight + 16 + 20)) / 2);
         int row = 0;
 
         addRow(cx, top + row++ * rowHeight, "snapmatica.camera.path_duration",
@@ -58,6 +58,11 @@ public class CameraPathScreen extends Screen {
                 btnWidth,
                 step -> { MinecraftClient mc = MinecraftClient.getInstance();
                     if (mc != null) Freecam.togglePathFocusLock(mc); });
+        addRow(cx, top + row++ * rowHeight, "snapmatica.path.show",
+                () -> SnapmaticaClient.showCameraPath ? "ON" : "OFF",
+                btnWidth,
+                step -> { SnapmaticaClient.showCameraPath = !SnapmaticaClient.showCameraPath;
+                    SnapmaticaConfig.save(); });
         row++; // breathing room before the action buttons
 
         int gap = 4;
