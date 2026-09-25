@@ -32,8 +32,8 @@ import java.util.List;
  * last legitimately fired. Building both matrices here directly needs no mixin and can never
  * observe anything other than the real camera.
  *
- * <p>1.21.11 only for now — see [[snapmatica-iterate-1-21-11-only]] in the session's own
- * workflow.
+ * <p>Every version: below 1.21.6 the line stamp uses MatrixStack, and below 1.21 the view is
+ * rebuilt in 1.21's camera basis (see render).
  */
 @Environment(EnvType.CLIENT)
 public final class CameraPathRenderer {
@@ -52,9 +52,13 @@ public final class CameraPathRenderer {
     private static final int FRUSTUM_COLOR = 0xFFFF5A46;
     private static final int LINE_PX = 3;
 
-    //? if >=1.21.10 {
+    // Split at 1.21 like FreecamHud.render (RenderTickCounter vs float).
+    //? if >=1.21 {
     public static void render(net.minecraft.client.gui.DrawContext ctx,
                               net.minecraft.client.render.RenderTickCounter tickCounter) {
+    //?} else {
+    /*public static void render(net.minecraft.client.gui.DrawContext ctx, float tickDelta) {
+    *///?}
         if (!Freecam.isActive() || Freecam.isPathPlaying()) return;
         List<Freecam.Keyframe> path = Freecam.getPath();
         if (path.isEmpty()) return;
@@ -63,14 +67,27 @@ public final class CameraPathRenderer {
         if (mc.player == null || mc.options.hudHidden || mc.currentScreen != null) return;
 
         net.minecraft.client.render.Camera camera = mc.gameRenderer.getCamera();
+        //? if >=1.21.10 {
         Vec3d camPos = camera.getCameraPos();
+        //?} else {
+        /*Vec3d camPos = camera.getPos();
+        *///?}
         int sw = ctx.getScaledWindowWidth(), sh = ctx.getScaledWindowHeight();
 
         // View: the camera's own live rotation, conjugated — the same transform Minecraft's
         // own renderer builds its modelview matrix from (Camera.getRotation() is "camera
         // orientation in world space"; a world→view transform needs its inverse, and a unit
         // quaternion's inverse is its conjugate).
+        //? if >=1.21 {
         org.joml.Quaternionf view = camera.getRotation().conjugate(new org.joml.Quaternionf());
+        //?} else {
+        /*// 1.20.1's Camera.getRotation() is rotationYXZ(-yaw, pitch, 0) and looks down +Z; the
+        // projection below expects 1.21's basis, rotationYXZ(PI - yaw, -pitch, 0), looking down
+        // -Z. Built here in the 1.21 form, or every point in front would read as behind.
+        org.joml.Quaternionf view = new org.joml.Quaternionf().rotationYXZ(
+                (float) Math.PI - (float) Math.toRadians(camera.getYaw()),
+                -(float) Math.toRadians(camera.getPitch()), 0f).conjugate();
+        *///?}
 
         // Projection: the exact FOV GameRendererMixin puts on screen right now, so this can
         // never drift out of step with it — focal-length-derived while a lens is on (matching
@@ -79,7 +96,13 @@ public final class CameraPathRenderer {
                 / Math.max(1, mc.getWindow().getFramebufferHeight());
         double fovDeg;
         if (VideoRecorder.isRecording() || SnapmaticaClient.lensType != 0) {
+            //? if >=1.21.10 {
             float focal = Freecam.currentFocalLengthMm(tickCounter.getTickProgress(true));
+            //?} else if >=1.21 {
+            /*float focal = Freecam.currentFocalLengthMm(tickCounter.getTickDelta(true));
+            *///?} else {
+            /*float focal = Freecam.currentFocalLengthMm(tickDelta);
+            *///?}
             fovDeg = focal > 0 ? frameFovDegrees(focal, aspect) : mc.options.getFov().getValue();
         } else {
             fovDeg = mc.options.getFov().getValue();
@@ -239,18 +262,22 @@ public final class CameraPathRenderer {
         int half = LINE_PX / 2;
         int halfLen = (int) Math.round(len / 2.0);
 
+        //? if >=1.21.6 {
         org.joml.Matrix3x2fStack m = ctx.getMatrices();
         m.pushMatrix();
         m.translate((float) ((x0 + x1) / 2.0), (float) ((y0 + y1) / 2.0));
         m.rotate(angle);
         ctx.fill(-halfLen, -half, halfLen, -half + LINE_PX, color);
         m.popMatrix();
+        //?} else {
+        /*net.minecraft.client.util.math.MatrixStack m = ctx.getMatrices();
+        m.push();
+        m.translate((float) ((x0 + x1) / 2.0), (float) ((y0 + y1) / 2.0), 0f);
+        m.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_Z.rotation(angle));
+        ctx.fill(-halfLen, -half, halfLen, -half + LINE_PX, color);
+        m.pop();
+        *///?}
     }
-    //?} else {
-    /*public static void render(net.minecraft.client.gui.DrawContext ctx, Object tickCounter) {
-        // Not yet ported below 1.21.10 — see the class doc.
-    }
-    *///?}
 
     private static Vec3d catmullRom(Vec3d p0, Vec3d p1, Vec3d p2, Vec3d p3, double t) {
         double t2 = t * t, t3 = t2 * t;
