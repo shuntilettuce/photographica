@@ -53,6 +53,7 @@ public final class SnapmaticaConfig {
         SnapmaticaClient.afPointY               = getFloat(p, "afPointY", SnapmaticaClient.afPointY);
         SnapmaticaClient.apertureDebugSamples   = getBool(p, "apertureDebugSamples",  SnapmaticaClient.apertureDebugSamples);
         SnapmaticaClient.ambientDof             = getBool(p, "ambientDof",            SnapmaticaClient.ambientDof);
+        SnapmaticaClient.showCameraPath         = getBool(p, "showCameraPath",        SnapmaticaClient.showCameraPath);
         SnapmaticaClient.ambientAperture        = getFloat(p, "ambientAperture",      SnapmaticaClient.ambientAperture);
         SnapmaticaClient.ambientDofScaleMm      = getFloat(p, "ambientDofScaleMm",    SnapmaticaClient.ambientDofScaleMm);
         SnapmaticaClient.ambientQuality         = getInt (p, "ambientQuality",        SnapmaticaClient.ambientQuality);
@@ -108,6 +109,7 @@ public final class SnapmaticaConfig {
         p.setProperty("afPointY",               Float.toString(SnapmaticaClient.afPointY));
         p.setProperty("apertureDebugSamples",   Boolean.toString(SnapmaticaClient.apertureDebugSamples));
         p.setProperty("ambientDof",             Boolean.toString(SnapmaticaClient.ambientDof));
+        p.setProperty("showCameraPath",         Boolean.toString(SnapmaticaClient.showCameraPath));
         p.setProperty("ambientAperture",        Float.toString(SnapmaticaClient.ambientAperture));
         p.setProperty("ambientDofScaleMm",      Float.toString(SnapmaticaClient.ambientDofScaleMm));
         p.setProperty("ambientQuality",         Integer.toString(SnapmaticaClient.ambientQuality));

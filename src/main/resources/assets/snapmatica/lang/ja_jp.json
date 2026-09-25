@@ -92,6 +92,7 @@
   "snapmatica.camera.path_duration": "パス再生時間",
   "snapmatica.path.fps": "録画FPS",
   "snapmatica.path.focus_lock": "再生中にフォーカスを固定",
+  "snapmatica.path.show": "軌跡を表示",
   "snapmatica.path.title": "カメラパス",
   "snapmatica.path.add": "キーフレーム追加",
   "snapmatica.path.play": "再生",
