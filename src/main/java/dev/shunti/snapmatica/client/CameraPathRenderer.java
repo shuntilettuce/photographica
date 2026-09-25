@@ -67,7 +67,12 @@ public final class CameraPathRenderer {
         // own renderer builds its modelview matrix from (Camera.rotation() is "camera
         // orientation in world space"; a world→view transform needs its inverse, and a unit
         // quaternion's inverse is its conjugate).
-        org.joml.Quaternionf view = camera.rotation().conjugate(new org.joml.Quaternionf());
+        // 1.20.1's Camera.rotation() is rotationYXZ(-yaw, pitch, 0) and looks down +Z; the
+        // projection below expects 1.21's basis, rotationYXZ(PI - yaw, -pitch, 0), looking down
+        // -Z. Built here in the 1.21 form, or every point in front would read as behind.
+        org.joml.Quaternionf view = new org.joml.Quaternionf().rotationYXZ(
+                (float) Math.PI - (float) Math.toRadians(camera.getYRot()),
+                -(float) Math.toRadians(camera.getXRot()), 0f).conjugate();
 
         // Projection: the exact FOV GameRendererMixin puts on screen right now, so this can
         // never drift out of step with it — focal-length-derived while a lens is on (matching
